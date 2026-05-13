@@ -209,7 +209,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
 
             graphics.draw_text(Font::Inter, 70, 60, 20.0, 0xffffff, "ManaOS");
 
-            graphics.draw_text(Font::Inter, 100, 180, 32.0, 0x00aaff, "graphics !!");
+            graphics.draw_text(Font::Inter, 100, 180, 32.0, 0x00aaff, "test ");
 
             graphics.draw_text(Font::NotoSansJP, 100, 300, 20.0, 0xffffff, "日本語");
 
