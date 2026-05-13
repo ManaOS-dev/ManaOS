@@ -1,0 +1,16 @@
+# Rust
+/target/
+
+# UEFI / QEMU
+/OVMF.fd
+/esp/EFI/
+/esp/bootx64.efi
+
+# Logs
+*.log
+
+# Fonts (Binary fonts should generally be ignored if they are large, but you might want to keep them if they are essential for the OS build)
+# /esp/*.ttf
+
+# Files
+GEMINI.md

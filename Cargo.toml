@@ -1,0 +1,36 @@
+[package]
+name = "mana_os"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mana_os"
+path = "src/main.rs"
+
+[dependencies]
+# UEFI（アロケータ・ロガーは自前で用意するため default-features = false）
+uefi = { version = "0.20", default-features = false, features = ["alloc"] }
+# ログインターフェース
+log = "0.4"
+# スピンロック（no_std用Mutex）
+spin = "0.9"
+# COM1シリアルポート
+uart_16550 = "0.3"
+# ヒープアロケータ
+linked_list_allocator = "0.10"
+# ページテーブル・アドレス型など
+x86_64 = "0.14"
+# フォントラスタライザ
+ab_glyph = { version = "0.2", default-features = false, features = ["libm"] }
+# 割り込みコントローラ
+pic8259 = "0.10"
+# キーボードデコーダ
+pc-keyboard = "0.7"
+
+[profile.dev]
+opt-level = 1
+panic = "abort"
+
+[profile.release]
+opt-level = "s"
+panic = "abort"
