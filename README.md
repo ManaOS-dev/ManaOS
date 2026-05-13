@@ -1,6 +1,6 @@
 # ManaOS
 
-**ManaOS** is a monolithic x86_64 UEFI kernel developed in Rust, designed with a focus on scalability and contributor friendliness—truly an **"OS for Developers."**
+**[ManaOS](https://discord.gg/FXTV344M94)** is a monolithic x86_64 UEFI kernel developed in Rust, designed with a focus on scalability and contributor friendliness—truly an **"OS for Developers."**
 
 ## 🚀 Key Features
 
