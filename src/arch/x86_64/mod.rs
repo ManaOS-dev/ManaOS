@@ -1,6 +1,13 @@
 pub mod global_descriptor_table;
 pub mod interrupt_descriptor_table;
 
+/// Check if the CPU supports APIC.
+#[allow(dead_code)]
+pub fn has_apic() -> bool {
+    let cpuid = core::arch::x86_64::__cpuid(1);
+    (cpuid.edx & (1 << 9)) != 0
+}
+
 /// `x86_64` specific implementations.
 /// `x86_64` specific initialization.
 pub fn init() {
