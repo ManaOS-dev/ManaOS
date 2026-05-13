@@ -1,14 +1,14 @@
-//! # kernel::serial
+//! # `kernel::serial`
 //!
 //! ## Owns
 //! - COM1 serial output after boot services exit
 //!
 //! ## Does NOT own
-//! - UEFI boot phase logging (-> kernel::logger)
+//! - UEFI boot phase logging (-> `kernel::logger`)
 //!
 //! ## Public API
 //! - [`init`] - Initialize COM1
-//! - [`_print`] - Internal formatting backend for serial macros
+//! - [`print`] - Internal formatting backend for serial macros
 
 use core::fmt;
 use spin::Mutex;
@@ -25,7 +25,7 @@ pub fn init() {
 
 /// Print formatted arguments through COM1.
 #[doc(hidden)]
-pub fn _print(args: fmt::Arguments) {
+pub fn print(args: fmt::Arguments) {
     use fmt::Write;
     use x86_64::instructions::interrupts;
 
@@ -37,7 +37,7 @@ pub fn _print(args: fmt::Arguments) {
 /// Print formatted text to the serial port.
 #[macro_export]
 macro_rules! serial_print {
-    ($($arg:tt)*) => ($crate::kernel::serial::_print(format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::kernel::serial::print(format_args!($($arg)*)));
 }
 
 /// Print formatted text to the serial port with a trailing newline.

@@ -1,11 +1,11 @@
-//! # kernel::driver
+//! # `kernel::driver`
 //!
 //! ## Owns
 //! - Kernel device driver module boundaries
 //!
 //! ## Does NOT own
-//! - Architecture-specific interrupt setup (-> arch)
-//! - Device-independent memory management (-> kernel::memory)
+//! - Architecture-specific interrupt setup (-> `arch`)
+//! - Device-independent memory management (-> `kernel::memory`)
 //!
 //! ## Public API
 //! - [`display`] - Display and framebuffer drivers

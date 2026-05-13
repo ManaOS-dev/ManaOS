@@ -1,10 +1,10 @@
-//! # kernel::driver::input
+//! # `kernel::driver::input`
 //!
 //! ## Owns
 //! - Input device module boundaries
 //!
 //! ## Does NOT own
-//! - Cursor rendering primitives (-> kernel::driver::display)
+//! - Cursor rendering primitives (-> `kernel::driver::display`)
 //!
 //! ## Public API
 //! - [`keyboard`] - PS/2 keyboard input

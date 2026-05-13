@@ -21,9 +21,10 @@ pub unsafe fn init<'a>(
         level_four_table_physical_address
     );
 
-    if level_four_table_physical_address == 0 {
-        panic!("PML4 allocated at physical address 0, which is treated as null!");
-    }
+    assert!(
+        level_four_table_physical_address != 0,
+        "PML4 allocated at physical address 0, which is treated as null!"
+    );
 
     let level_four_table_ptr = level_four_table_physical_address as *mut PageTable;
 
@@ -68,7 +69,7 @@ pub unsafe fn init<'a>(
                         e,
                         x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)
                     ) {
-                        panic!("Failed to map page {:#x}: {:?}", page_start, e);
+                        panic!("Failed to map page {page_start:#x}: {e:?}");
                     }
                 }
             }
@@ -110,9 +111,8 @@ pub unsafe fn init<'a>(
                     x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)
                 ) {
                     panic!(
-                        "Failed to map frame buffer page {:#x}: {:?}",
-                        page.start_address().as_u64(),
-                        e
+                        "Failed to map frame buffer page {:#x}: {e:?}",
+                        page.start_address().as_u64()
                     );
                 }
             }
@@ -134,7 +134,7 @@ pub unsafe fn init<'a>(
     crate::serial_println!("[paging] Identity mapping complete.");
 }
 
-/// A wrapper to use our BumpFrameAllocator with x86_64's FrameAllocator trait.
+/// A wrapper to use our `BumpFrameAllocator` with `x86_64`'s `FrameAllocator` trait.
 struct FrameAllocWrapper<'a> {
     frame_allocator: &'a mut BumpFrameAllocator,
 }

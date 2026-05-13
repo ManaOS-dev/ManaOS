@@ -1,3 +1,4 @@
+use crate::kernel::driver::display::color::Color;
 use ab_glyph::{point, Font as GlyphFont, FontRef, PxScale, ScaleFont};
 use uefi::proto::console::gop::{GraphicsOutput, PixelFormat};
 
@@ -167,6 +168,7 @@ impl GraphicsDriver {
     }
 
     /// Draw a pixel at the specified coordinates (to BACKBUFFER).
+    #[allow(clippy::many_single_char_names)]
     pub fn put_pixel(&self, x: usize, y: usize, color: u32) {
         if x >= self.info.horizontal_resolution || y >= self.info.vertical_resolution {
             return;
@@ -202,27 +204,24 @@ impl GraphicsDriver {
 
     /// Fill the screen with a vertical gradient (to BACKBUFFER).
     pub fn clear_gradient(&self) {
-        for y in 0..self.info.vertical_resolution {
-            for x in 0..self.info.horizontal_resolution {
+        let v_res = self.info.vertical_resolution;
+        let h_res = self.info.horizontal_resolution;
+        for y in 0..v_res {
+            for x in 0..h_res {
                 let r = 0;
                 let g = 0;
-                let b = (34 * (self.info.vertical_resolution - y) / self.info.vertical_resolution)
-                    as u32;
+                let b = u32::from(
+                    u8::try_from(34 * (v_res - y) / v_res).unwrap_or(255),
+                );
                 let color = (r << 16) | (g << 8) | b;
                 self.put_pixel(x, y, color);
             }
         }
     }
 
-    /// Draw a filled rectangle into the backbuffer.
-    pub fn draw_filled_rectangle(
-        &self,
-        x: usize,
-        y: usize,
-        width: usize,
-        height: usize,
-        color: u32,
-    ) {
+    /// Draw a filled rectangle with a color.
+    pub fn draw_filled_rectangle(&self, x: usize, y: usize, width: usize, height: usize, color: Color) {
+        let color = color.to_u32();
         for py in y..(y + height) {
             for px in x..(x + width) {
                 self.put_pixel(px, py, color);
@@ -230,8 +229,9 @@ impl GraphicsDriver {
         }
     }
 
-    /// Draw a rectangle outline into the backbuffer.
-    pub fn draw_rectangle(&self, x: usize, y: usize, width: usize, height: usize, color: u32) {
+    /// Draw a rectangle outline with a color.
+    pub fn draw_rectangle(&self, x: usize, y: usize, width: usize, height: usize, color: Color) {
+        let color = color.to_u32();
         for px in x..(x + width) {
             self.put_pixel(px, y, color);
             self.put_pixel(px, y + height - 1, color);
@@ -243,7 +243,8 @@ impl GraphicsDriver {
     }
 
     /// Draw a line into the backbuffer using Bresenham's algorithm.
-    pub fn draw_line(&self, x1: i32, y1: i32, x2: i32, y2: i32, color: u32) {
+    pub fn draw_line(&self, x1: i32, y1: i32, x2: i32, y2: i32, color: Color) {
+        let color = color.to_u32();
         let dx = (x2 - x1).abs();
         let dy = -(y2 - y1).abs();
         let sx = if x1 < x2 { 1 } else { -1 };
@@ -254,7 +255,13 @@ impl GraphicsDriver {
         let mut y = y1;
 
         loop {
-            self.put_pixel(x as usize, y as usize, color);
+            if x >= 0 && y >= 0 {
+                self.put_pixel(
+                    usize::try_from(x).unwrap_or(0),
+                    usize::try_from(y).unwrap_or(0),
+                    color,
+                );
+            }
             if x == x2 && y == y2 {
                 break;
             }
@@ -271,14 +278,14 @@ impl GraphicsDriver {
     }
 
     /// Draw a raw RGB image (3 bytes per pixel).
-    #[allow(dead_code)]
+    #[allow(dead_code, clippy::many_single_char_names)]
     pub fn draw_image(&self, x: usize, y: usize, width: usize, height: usize, data: &[u8]) {
         for py in 0..height {
             for px in 0..width {
                 let offset = (py * width + px) * 3;
-                let r = data[offset] as u32;
-                let g = data[offset + 1] as u32;
-                let b = data[offset + 2] as u32;
+                let r = u32::from(data[offset]);
+                let g = u32::from(data[offset + 1]);
+                let b = u32::from(data[offset + 2]);
                 let color = (r << 16) | (g << 8) | b;
                 self.put_pixel(x + px, y + py, color);
             }
@@ -286,6 +293,7 @@ impl GraphicsDriver {
     }
 
     /// Get pixel color from BACKBUFFER.
+    #[allow(clippy::many_single_char_names)]
     pub fn get_pixel(&self, x: usize, y: usize) -> u32 {
         if x >= self.info.horizontal_resolution || y >= self.info.vertical_resolution {
             return 0;
@@ -297,15 +305,15 @@ impl GraphicsDriver {
             let ptr = self.backbuffer_ptr.add(offset);
             match self.info.format {
                 ColorFormat::Rgb => {
-                    let r = *ptr as u32;
-                    let g = *ptr.add(1) as u32;
-                    let b = *ptr.add(2) as u32;
+                    let r = u32::from(*ptr);
+                    let g = u32::from(*ptr.add(1));
+                    let b = u32::from(*ptr.add(2));
                     (r << 16) | (g << 8) | b
                 }
                 ColorFormat::Bgr => {
-                    let b = *ptr as u32;
-                    let g = *ptr.add(1) as u32;
-                    let r = *ptr.add(2) as u32;
+                    let b = u32::from(*ptr);
+                    let g = u32::from(*ptr.add(1));
+                    let r = u32::from(*ptr.add(2));
                     (r << 16) | (g << 8) | b
                 }
             }
@@ -313,13 +321,14 @@ impl GraphicsDriver {
     }
 
     /// Draw text at the specified coordinates with proper alpha blending (to BACKBUFFER).
+    #[allow(clippy::many_single_char_names, clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn draw_text(
         &self,
         font_kind: Font,
         x: usize,
         y: usize,
         scale: f32,
-        color: u32,
+        color: Color,
         text: &str,
     ) {
         let font_data = match font_kind {
@@ -362,9 +371,10 @@ impl GraphicsDriver {
                                 // Blend the text color with the background.
                                 // Formula: result = (text * alpha) + (bg * (1 - alpha))
                                 // v is the glyph alpha (0.0 to 1.0).
-                                let text_r = ((color >> 16) & 0xFF) as u32;
-                                let text_g = ((color >> 8) & 0xFF) as u32;
-                                let text_b = (color & 0xFF) as u32;
+                                let text_color = color.to_u32();
+                                let text_r = (text_color >> 16) & 0xFF;
+                                let text_g = (text_color >> 8) & 0xFF;
+                                let text_b = text_color & 0xFF;
 
                                 let bg_r = (bg_color >> 16) & 0xFF;
                                 let bg_g = (bg_color >> 8) & 0xFF;
@@ -396,8 +406,7 @@ pub fn get_info(graphics_output: &mut GraphicsOutput) -> FrameBufferInfo {
     let (width, height) = mode_info.resolution();
     let format = match mode_info.pixel_format() {
         PixelFormat::Rgb => ColorFormat::Rgb,
-        PixelFormat::Bgr => ColorFormat::Bgr,
-        _ => ColorFormat::Rgb,
+        _ => ColorFormat::Bgr,
     };
 
     let mut framebuffer = graphics_output.frame_buffer();
