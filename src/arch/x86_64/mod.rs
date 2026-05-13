@@ -4,7 +4,9 @@ pub mod interrupt_descriptor_table;
 /// x86_64 specific implementations.
 /// x86_64 specific initialization.
 pub fn init() {
+    crate::serial_println!("[arch] Initializing GDT...");
     global_descriptor_table::init();
+    crate::serial_println!("[arch] Initializing IDT...");
     interrupt_descriptor_table::initialize();
     // SAFETY: The interrupt controllers are initialized while interrupts are
     // disabled during early architecture setup.
@@ -18,9 +20,11 @@ pub fn init() {
     }
 
     // Initialize PIT (Programmable Interval Timer)
+    crate::serial_println!("[arch] Initializing PIT...");
     init_pit(1000);
 
     // Initialize Drivers (while interrupts are still disabled)
+    crate::serial_println!("[arch] Initializing Mouse...");
     crate::kernel::driver::input::mouse::init();
     crate::serial_println!("[ok   ] Mouse initialized.");
 

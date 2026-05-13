@@ -12,13 +12,14 @@ pub type TaskEntry = extern "C" fn() -> !;
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct TaskContext {
-    stack_pointer: u64,
-    register_15: u64,
-    register_14: u64,
-    register_13: u64,
-    register_12: u64,
-    register_base: u64,
-    base_pointer: u64,
+    stack_pointer: u64, // rsp (offset 0)
+    register_15: u64,   // r15 (offset 8)
+    register_14: u64,   // r14 (offset 16)
+    register_13: u64,   // r13 (offset 24)
+    register_12: u64,   // r12 (offset 32)
+    register_bx: u64,   // rbx (offset 40)
+    base_pointer: u64,  // rbp (offset 48)
+    flags: u64,         // rflags (offset 56)
 }
 
 impl TaskContext {
@@ -30,8 +31,9 @@ impl TaskContext {
             register_14: 0,
             register_13: 0,
             register_12: 0,
-            register_base: 0,
+            register_bx: 0,
             base_pointer: 0,
+            flags: 0x202, // IF (Interrupt Enable) bit set
         }
     }
 
@@ -75,4 +77,4 @@ impl Default for TaskContext {
     }
 }
 
-const _: () = assert!(mem::size_of::<TaskContext>() == 56);
+const _: () = assert!(mem::size_of::<TaskContext>() == 64);

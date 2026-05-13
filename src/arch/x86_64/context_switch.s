@@ -13,6 +13,8 @@ context_switch:
     mov qword ptr [rcx + 32], r12
     mov qword ptr [rcx + 40], rbx
     mov qword ptr [rcx + 48], rbp
+    pushfq
+    pop qword ptr [rcx + 56]
 
     mov rsp, qword ptr [rdx + 0]
     mov r15, qword ptr [rdx + 8]
@@ -21,4 +23,6 @@ context_switch:
     mov r12, qword ptr [rdx + 32]
     mov rbx, qword ptr [rdx + 40]
     mov rbp, qword ptr [rdx + 48]
+    push qword ptr [rdx + 56]
+    popfq
     ret

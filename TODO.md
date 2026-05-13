@@ -24,8 +24,8 @@
 - [x] RDTSC Profiling & Calibration
 
 ## 🔄 Phase 4: Process Management
-- [ ] Task Structure & Context Switching
-- [ ] Cooperative / Preemptive Scheduler
+- [x] Task Structure & Context Switching
+- [x] Cooperative / Preemptive Scheduler
 - [ ] Transition to User Space (Ring 3)
 
 ## 💾 Phase 5: Filesystem & Storage
