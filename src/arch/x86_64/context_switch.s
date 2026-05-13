@@ -1,0 +1,24 @@
+.text
+.def context_switch
+.scl 2
+.type 32
+.endef
+.globl context_switch
+
+context_switch:
+    mov qword ptr [rcx + 0], rsp
+    mov qword ptr [rcx + 8], r15
+    mov qword ptr [rcx + 16], r14
+    mov qword ptr [rcx + 24], r13
+    mov qword ptr [rcx + 32], r12
+    mov qword ptr [rcx + 40], rbx
+    mov qword ptr [rcx + 48], rbp
+
+    mov rsp, qword ptr [rdx + 0]
+    mov r15, qword ptr [rdx + 8]
+    mov r14, qword ptr [rdx + 16]
+    mov r13, qword ptr [rdx + 24]
+    mov r12, qword ptr [rdx + 32]
+    mov rbx, qword ptr [rdx + 40]
+    mov rbp, qword ptr [rdx + 48]
+    ret
