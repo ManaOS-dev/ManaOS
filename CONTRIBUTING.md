@@ -7,10 +7,24 @@ Welcome! ManaOS is an "OS for Developers," and we value your contributions. This
 We follow a **Pull Request (PR) first** development model.
 
 1. **Fork** the repository.
-2. **Create a branch** for your feature or bug fix: `git checkout -b feature/your-awesome-feature`.
+2. **Create a branch** for your feature or bug fix: `git checkout -b feature/your-awesome-feature` or `git checkout -b fix/your-bug`.
 3. **Commit** your changes with clear messages.
 4. **Format & Lint** your code (see below).
 5. **Push** to your fork and **Open a Pull Request**.
+
+## 🌿 Branch Policy
+
+| Branch | Purpose |
+|---|---|
+| `main` | Always builds and boots with all features fully working |
+| `dev` | Integration branch for non-experimental work |
+| `feature/xxx` | Single feature unit |
+| `fix/xxx` | Bug fix |
+| `experimental/xxx` | Experimental work — breaking changes allowed |
+
+- PRs from `feature/xxx` and `fix/xxx` target `dev`.
+- `dev` is merged into `main` only when fully verified.
+- `experimental/xxx` branches are never merged into `main` directly.
 
 ---
 

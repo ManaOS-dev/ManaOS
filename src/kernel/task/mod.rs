@@ -1,4 +1,4 @@
-//! # kernel::task
+//! # `kernel::task`
 //!
 //! ## Owns
 //! - Kernel task metadata

@@ -1,4 +1,4 @@
-//! ManaOS kernel and UEFI entry point.
+//! `ManaOS` kernel and UEFI entry point.
 
 #![no_main]
 #![no_std]
@@ -13,12 +13,16 @@ extern crate alloc;
 mod arch;
 mod kernel;
 
+use alloc::format;
+use crate::kernel::driver::display::color::Color;
+use crate::kernel::driver::display::framebuffer::Font;
 use uefi::prelude::*;
 use uefi::proto::console::gop::GraphicsOutput;
 use uefi::proto::media::file::{File, FileAttribute, FileMode};
 use uefi::proto::media::fs::SimpleFileSystem;
 
 extern "C" fn idle_task() -> ! {
+
     loop {
         x86_64::instructions::hlt();
     }
@@ -62,7 +66,7 @@ fn load_file(st: &SystemTable<Boot>, path: &str) -> &'static mut [u8] {
     let info = file
         .get_info::<FileInfo>(&mut info_buf)
         .expect("Failed to get file info");
-    let size = info.file_size() as usize;
+    let size = usize::try_from(info.file_size()).expect("File too large");
 
     // Allocate memory from UEFI pool
     let ptr = st
@@ -148,16 +152,17 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
     serial_println!("[paging] Page table switched.");
 
     // Allocate Backbuffer (same size as framebuffer)
-    let backbuffer_pages = (framebuffer_size + 4095) / 4096;
+    let backbuffer_pages = framebuffer_size.div_ceil(4096);
     let backbuffer_physical_address = frame_allocator
         .allocate_frames(backbuffer_pages)
         .expect("OOM: failed to allocate framebuffer backbuffer");
     let backbuffer_ptr = backbuffer_physical_address as *mut u8;
 
     // Initialize Kernel Heap
-    let heap_start = frame_allocator
+    let heap_start_raw = frame_allocator
         .allocate_frames(kernel::memory::heap::HEAP_PAGES)
-        .expect("OOM: failed to allocate pages for kernel heap") as usize;
+        .expect("OOM: failed to allocate pages for kernel heap");
+    let heap_start = usize::try_from(heap_start_raw).expect("Failed to convert heap address");
 
     // SAFETY: heap_start was allocated from the frame allocator and is exclusively
     // reserved for the kernel heap.
@@ -188,7 +193,6 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
     // Initialize Drivers
 
     // Initialize Graphics with Double Buffering
-    use kernel::driver::display::framebuffer::Font;
     kernel::driver::display::framebuffer::init_global_graphics(
         framebuffer_info,
         kernel::driver::display::framebuffer::FontAssets {
@@ -203,15 +207,15 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
             graphics.clear_gradient();
 
             // Draw Sample UI using primitives
-            graphics.draw_filled_rectangle(50, 50, 400, 250, 0x111111);
-            graphics.draw_rectangle(50, 50, 400, 250, 0x444444);
-            graphics.draw_line(50, 80, 450, 80, 0x444444);
+            graphics.draw_filled_rectangle(50, 50, 400, 250, Color::rgb(0x11, 0x11, 0x11));
+            graphics.draw_rectangle(50, 50, 400, 250, Color::rgb(0x44, 0x44, 0x44));
+            graphics.draw_line(50, 80, 450, 80, Color::rgb(0x44, 0x44, 0x44));
 
-            graphics.draw_text(Font::Inter, 70, 60, 20.0, 0xffffff, "ManaOS");
+            graphics.draw_text(Font::Inter, 70, 60, 20.0, Color::WHITE, "ManaOS");
 
-            graphics.draw_text(Font::Inter, 100, 180, 32.0, 0x00aaff, "test ");
+            graphics.draw_text(Font::Inter, 100, 180, 32.0, Color::rgb(0x00, 0xAA, 0xFF), "graphics !!");
 
-            graphics.draw_text(Font::NotoSansJP, 100, 300, 20.0, 0xffffff, "日本語");
+            graphics.draw_text(Font::NotoSansJP, 100, 300, 20.0, Color::WHITE, "日本語");
 
             // Final flush to show initial screen
             graphics.flush();
@@ -252,17 +256,16 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
                 10,
                 140,
                 30,
-                0x000000,
+                Color::BLACK,
             );
 
-            use alloc::format;
-            let fps_text = format!("FPS: {}", fps);
+            let fps_text = format!("FPS: {fps}");
             graphics.draw_text(
-                kernel::driver::display::framebuffer::Font::Inter,
+                Font::Inter,
                 graphics.info.horizontal_resolution - 140,
                 15,
                 16.0,
-                0x00ff00,
+                Color::rgb(0x00, 0xFF, 0x00),
                 &fps_text,
             );
 

@@ -36,7 +36,7 @@ pub fn calibrate_tsc() {
 
     // Calculate frequency (cycles per second)
     // (tsc_end - tsc_start) / (actual_ticks / 1000)
-    let freq = (tsc_end - tsc_start) * 1000 / actual_ticks as u64;
+    let freq = (tsc_end - tsc_start) * 1000 / actual_ticks;
     TSC_FREQUENCY.store(freq, Ordering::Relaxed);
 
     crate::serial_println!("[prof ] TSC Frequency calibrated: {} MHz", freq / 1_000_000);

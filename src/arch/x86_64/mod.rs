@@ -1,8 +1,15 @@
 pub mod global_descriptor_table;
 pub mod interrupt_descriptor_table;
 
-/// x86_64 specific implementations.
-/// x86_64 specific initialization.
+/// Check if the CPU supports APIC.
+#[allow(dead_code)]
+pub fn has_apic() -> bool {
+    let cpuid = core::arch::x86_64::__cpuid(1);
+    (cpuid.edx & (1 << 9)) != 0
+}
+
+/// `x86_64` specific implementations.
+/// `x86_64` specific initialization.
 pub fn init() {
     crate::serial_println!("[arch] Initializing GDT...");
     global_descriptor_table::init();
@@ -31,10 +38,10 @@ pub fn init() {
     x86_64::instructions::interrupts::enable();
 }
 
-/// Set PIT frequency to target_hz
+/// Set PIT frequency to `target_hz`
 fn init_pit(target_hz: u32) {
     use x86_64::instructions::port::Port;
-    let divider = 1193182 / target_hz;
+    let divider = 1_193_182 / target_hz;
     let mut command_port = Port::<u8>::new(0x43);
     let mut data_port = Port::<u8>::new(0x40);
 
@@ -47,6 +54,7 @@ fn init_pit(target_hz: u32) {
     }
 }
 
+#[allow(dead_code)]
 pub fn hlt_loop() -> ! {
     loop {
         x86_64::instructions::hlt();

@@ -83,7 +83,7 @@ extern "x86-interrupt" fn general_protection_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: u64,
 ) {
-    panic!("[EXCPT] GPF\nCode: {:#x}\n{:#?}", error_code, stack_frame);
+    panic!("[EXCPT] GPF\nCode: {error_code:#x}\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
@@ -94,7 +94,7 @@ extern "x86-interrupt" fn double_fault_handler(
     stack_frame: InterruptStackFrame,
     _error_code: u64,
 ) -> ! {
-    panic!("[EXCPT] DOUBLE FAULT\n{:#?}", stack_frame);
+    panic!("[EXCPT] DOUBLE FAULT\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
@@ -115,11 +115,9 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
         let scancode = unsafe { Port::<u8>::new(0x60).read() };
         crate::kernel::driver::input::keyboard::push_scancode(scancode);
     }
-    if let Some(mut interrupt_controllers) = INTERRUPT_CONTROLLERS.try_lock() {
-        // SAFETY: End-of-interrupt is required after servicing the keyboard interrupt.
-        unsafe {
-            interrupt_controllers.notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
-        }
+    // SAFETY: Notify EOI to the PIC to allow future interrupts.
+    unsafe {
+        INTERRUPT_CONTROLLERS.lock().notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
     }
 }
 
@@ -129,13 +127,10 @@ extern "x86-interrupt" fn mouse_interrupt_handler(_stack_frame: InterruptStackFr
         // SAFETY: Port 0x60 is the PS/2 data port and status bit indicates mouse data.
         let packet = unsafe { Port::<u8>::new(0x60).read() };
         crate::kernel::driver::input::mouse::push_byte(packet);
-        // serial_println!("[intr] mouse packet: {:#02x}", packet); // debug
     }
-    if let Some(mut interrupt_controllers) = INTERRUPT_CONTROLLERS.try_lock() {
-        // SAFETY: End-of-interrupt is required after servicing the mouse interrupt.
-        unsafe {
-            interrupt_controllers.notify_end_of_interrupt(InterruptIndex::Mouse.as_u8());
-        }
+    // SAFETY: Notify EOI to the PIC to allow future interrupts.
+    unsafe {
+        INTERRUPT_CONTROLLERS.lock().notify_end_of_interrupt(InterruptIndex::Mouse.as_u8());
     }
 }
 

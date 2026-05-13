@@ -18,9 +18,9 @@ static TSS: Lazy<TaskStateSegment> = Lazy::new(|| {
 });
 
 struct Selectors {
-    code_selector: SegmentSelector,
-    data_selector: SegmentSelector,
-    tss_selector: SegmentSelector,
+    code: SegmentSelector,
+    data: SegmentSelector,
+    tss: SegmentSelector,
 }
 
 static GLOBAL_DESCRIPTOR_TABLE: Lazy<(GlobalDescriptorTable, Selectors)> = Lazy::new(|| {
@@ -31,9 +31,9 @@ static GLOBAL_DESCRIPTOR_TABLE: Lazy<(GlobalDescriptorTable, Selectors)> = Lazy:
     (
         table,
         Selectors {
-            code_selector,
-            data_selector,
-            tss_selector,
+            code: code_selector,
+            data: data_selector,
+            tss: tss_selector,
         },
     )
 });
@@ -46,10 +46,10 @@ pub fn init() {
     // SAFETY: Selectors come from the loaded global descriptor table and the task
     // state segment descriptor is initialized above.
     unsafe {
-        CS::set_reg(GLOBAL_DESCRIPTOR_TABLE.1.code_selector);
-        DS::set_reg(GLOBAL_DESCRIPTOR_TABLE.1.data_selector);
-        ES::set_reg(GLOBAL_DESCRIPTOR_TABLE.1.data_selector);
-        SS::set_reg(GLOBAL_DESCRIPTOR_TABLE.1.data_selector);
-        load_tss(GLOBAL_DESCRIPTOR_TABLE.1.tss_selector);
+        CS::set_reg(GLOBAL_DESCRIPTOR_TABLE.1.code);
+        DS::set_reg(GLOBAL_DESCRIPTOR_TABLE.1.data);
+        ES::set_reg(GLOBAL_DESCRIPTOR_TABLE.1.data);
+        SS::set_reg(GLOBAL_DESCRIPTOR_TABLE.1.data);
+        load_tss(GLOBAL_DESCRIPTOR_TABLE.1.tss);
     }
 }

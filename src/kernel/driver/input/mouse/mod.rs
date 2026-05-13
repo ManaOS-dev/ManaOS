@@ -1,12 +1,12 @@
-//! # kernel::driver::input::mouse
+//! # `kernel::driver::input::mouse`
 //!
 //! ## Owns
 //! - PS/2 mouse byte queue from interrupt handler to main loop
 //! - Mouse packet processing and state updates
 //!
 //! ## Does NOT own
-//! - Cursor drawing primitives (-> kernel::driver::display::framebuffer)
-//! - Interrupt routing (-> arch::x86_64::interrupt_descriptor_table)
+//! - Cursor drawing primitives (-> `kernel::driver::display::framebuffer`)
+//! - Interrupt routing (-> `arch::x86_64::interrupt_descriptor_table`)
 //!
 //! ## Public API
 //! - [`init`] - Initialize PS/2 mouse hardware
@@ -53,7 +53,7 @@ pub fn process_packets() {
             }
             2 => {
                 if let Some(packet) = MousePacket::parse(b0, b1, byte) {
-                    process_packet(packet);
+                    process_packet(&packet);
                 }
                 count = 0;
             }
