@@ -13,16 +13,13 @@ extern crate alloc;
 mod arch;
 mod kernel;
 
-use alloc::format;
-use crate::kernel::driver::display::color::Color;
-use crate::kernel::driver::display::framebuffer::Font;
 use uefi::prelude::*;
 use uefi::proto::console::gop::GraphicsOutput;
 use uefi::proto::media::file::{File, FileAttribute, FileMode};
 use uefi::proto::media::fs::SimpleFileSystem;
+use uefi::table::boot::MemoryDescriptor;
 
 extern "C" fn idle_task() -> ! {
-
     loop {
         x86_64::instructions::hlt();
     }
@@ -74,14 +71,87 @@ fn load_file(st: &SystemTable<Boot>, path: &str) -> &'static mut [u8] {
         .allocate_pool(MemoryType::LOADER_DATA, size)
         .expect("Failed to allocate pool for file");
 
+    // SAFETY: allocate_pool returned a valid pointer to a LOADER_DATA buffer of
+    // exactly size bytes, and the buffer remains owned by the boot phase.
     let buffer = unsafe { core::slice::from_raw_parts_mut(ptr, size) };
     file.read(buffer).expect("Failed to read file");
 
     buffer
 }
 
+fn get_framebuffer_info(
+    st: &SystemTable<Boot>,
+) -> kernel::driver::display::framebuffer::FrameBufferInfo {
+    let graphics_output_handle = st
+        .boot_services()
+        .get_handle_for_protocol::<GraphicsOutput>()
+        .expect("GraphicsOutput handle is required for ManaOS framebuffer setup");
+    let mut graphics_output = st
+        .boot_services()
+        .open_protocol_exclusive::<GraphicsOutput>(graphics_output_handle)
+        .expect("GraphicsOutput protocol is required for ManaOS framebuffer setup");
+    kernel::driver::display::framebuffer::get_info(&mut graphics_output)
+}
+
+fn add_conventional_memory_regions<'a>(
+    frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator,
+    memory_descriptors: impl Iterator<Item = &'a MemoryDescriptor>,
+) {
+    for descriptor in memory_descriptors {
+        if descriptor.ty == uefi::table::boot::MemoryType::CONVENTIONAL {
+            frame_allocator.add_region(descriptor.phys_start, descriptor.page_count);
+        }
+    }
+}
+
+fn get_framebuffer_size(
+    framebuffer_info: kernel::driver::display::framebuffer::FrameBufferInfo,
+) -> u64 {
+    (framebuffer_info.stride * framebuffer_info.vertical_resolution * 4) as u64
+}
+
+fn allocate_backbuffer(
+    frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator,
+    framebuffer_size: u64,
+) -> *mut u8 {
+    let backbuffer_pages = framebuffer_size.div_ceil(4096);
+    let backbuffer_physical_address = frame_allocator
+        .allocate_frames(backbuffer_pages)
+        .expect("OOM: failed to allocate framebuffer backbuffer");
+    backbuffer_physical_address as *mut u8
+}
+
+fn initialize_scheduler() {
+    kernel::task::initialize();
+    kernel::task::spawn(idle_task);
+    let task_id = kernel::task::get_current_task_id()
+        .expect("scheduler must expose a bootstrap task after initialization");
+    crate::serial_println!("[ok   ] Scheduler initialized. current task: {}", task_id);
+}
+
+fn initialize_architecture_and_drivers() {
+    arch::init();
+    crate::serial_println!("[ok   ] Architecture initialized.");
+
+    arch::x86_64::interrupt_descriptor_table::register_processors(
+        arch::x86_64::interrupt_descriptor_table::InterruptProcessors {
+            timer_tick: kernel::interrupt::process_timer_tick,
+            keyboard_byte: kernel::interrupt::push_keyboard_byte,
+            mouse_byte: kernel::interrupt::push_mouse_byte,
+        },
+    );
+
+    crate::serial_println!("[driver] Initializing mouse...");
+    kernel::driver::input::mouse::init();
+    crate::serial_println!("[ok   ] Mouse initialized.");
+
+    arch::x86_64::enable_interrupts();
+}
+
 #[entry]
 fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
+    let _ = image;
+
     // ────────────────────────────────────────────────
     // Boot Phase (UEFI Services available)
     // ────────────────────────────────────────────────
@@ -89,18 +159,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
 
     log::info!("ManaOS booting (HAL edition)...");
 
-    // Acquire UEFI graphics output protocol.
-    let framebuffer_info = {
-        let graphics_output_handle = st
-            .boot_services()
-            .get_handle_for_protocol::<GraphicsOutput>()
-            .expect("GraphicsOutput handle is required for ManaOS framebuffer setup");
-        let mut graphics_output = st
-            .boot_services()
-            .open_protocol_exclusive::<GraphicsOutput>(graphics_output_handle)
-            .expect("GraphicsOutput protocol is required for ManaOS framebuffer setup");
-        kernel::driver::display::framebuffer::get_info(&mut graphics_output)
-    };
+    let framebuffer_info = get_framebuffer_info(&st);
 
     // Get Memory Map and save CONVENTIONAL regions
     let mmap_buf = &mut [0u8; 4096 * 4];
@@ -110,12 +169,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         .expect("Failed to get memory map");
 
     let mut frame_allocator = kernel::memory::frame_allocator::BumpFrameAllocator::new();
-
-    for desc in mmap.entries() {
-        if desc.ty == uefi::table::boot::MemoryType::CONVENTIONAL {
-            frame_allocator.add_region(desc.phys_start, desc.page_count);
-        }
-    }
+    add_conventional_memory_regions(&mut frame_allocator, mmap.entries());
 
     log::info!("Calling ExitBootServices...");
 
@@ -135,65 +189,17 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
     kernel::serial::init();
     crate::serial_println!("[serial] ExitBootServices OK.");
 
-    // Initialize Paging (Identity Mapping)
-    let framebuffer_base = framebuffer_info.base_ptr as u64;
-    let framebuffer_size =
-        (framebuffer_info.stride * framebuffer_info.vertical_resolution * 4) as u64;
-    // SAFETY: The frame allocator owns conventional memory from the boot memory map,
-    // and the framebuffer range comes from the active UEFI graphics mode.
-    unsafe {
-        kernel::memory::paging::init(
-            &mut frame_allocator,
-            mmap.entries(),
-            framebuffer_base,
-            framebuffer_size,
-        );
-    }
-    serial_println!("[paging] Page table switched.");
-
-    // Allocate Backbuffer (same size as framebuffer)
-    let backbuffer_pages = framebuffer_size.div_ceil(4096);
-    let backbuffer_physical_address = frame_allocator
-        .allocate_frames(backbuffer_pages)
-        .expect("OOM: failed to allocate framebuffer backbuffer");
-    let backbuffer_ptr = backbuffer_physical_address as *mut u8;
-
-    // Initialize Kernel Heap
-    let heap_start_raw = frame_allocator
-        .allocate_frames(kernel::memory::heap::HEAP_PAGES)
-        .expect("OOM: failed to allocate pages for kernel heap");
-    let heap_start = usize::try_from(heap_start_raw).expect("Failed to convert heap address");
-
-    // SAFETY: heap_start was allocated from the frame allocator and is exclusively
-    // reserved for the kernel heap.
-    unsafe {
-        kernel::memory::heap::init(heap_start);
-    }
-    crate::serial_println!(
-        "[heap ] Initialized at {:#010x}, size: {} MB",
-        heap_start,
-        kernel::memory::heap::HEAP_SIZE / (1024 * 1024)
-    );
-
     // ────────────────────────────────────────────────
     // Kernel Phase (UEFI Services unavailable)
     // ────────────────────────────────────────────────
     crate::serial_println!("[info ] ManaOS Kernel phase started.");
 
-    kernel::task::initialize();
-    kernel::task::spawn(idle_task);
-    let task_id = kernel::task::get_current_task_id()
-        .expect("scheduler must expose a bootstrap task after initialization");
-    crate::serial_println!("[ok   ] Scheduler initialized. current task: {}", task_id);
+    let framebuffer_size = get_framebuffer_size(framebuffer_info);
+    let backbuffer_ptr = allocate_backbuffer(&mut frame_allocator, framebuffer_size);
 
-    // Initialize Architecture (descriptor tables, interrupt controller, interrupts)
-    arch::init();
-    crate::serial_println!("[ok   ] Architecture initialized.");
-
-    // Initialize Drivers
-
-    // Initialize Graphics with Double Buffering
-    kernel::driver::display::framebuffer::init_global_graphics(
+    kernel::boot::initialize(
+        &mut frame_allocator,
+        mmap.entries(),
         framebuffer_info,
         kernel::driver::display::framebuffer::FontAssets {
             inter: font_inter,
@@ -201,76 +207,19 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         },
         backbuffer_ptr,
     );
-
-    {
-        kernel::driver::display::framebuffer::with_graphics(|graphics| {
-            graphics.clear_gradient();
-
-            // Draw Sample UI using primitives
-            graphics.draw_filled_rectangle(50, 50, 400, 250, Color::rgb(0x11, 0x11, 0x11));
-            graphics.draw_rectangle(50, 50, 400, 250, Color::rgb(0x44, 0x44, 0x44));
-            graphics.draw_line(50, 80, 450, 80, Color::rgb(0x44, 0x44, 0x44));
-
-            graphics.draw_text(Font::Inter, 70, 60, 20.0, Color::WHITE, "ManaOS");
-
-            graphics.draw_text(Font::Inter, 100, 180, 32.0, Color::rgb(0x00, 0xAA, 0xFF), "graphics !!");
-
-            graphics.draw_text(Font::NotoSansJP, 100, 300, 20.0, Color::WHITE, "日本語");
-
-            // Final flush to show initial screen
-            graphics.flush();
-        });
-    }
+    initialize_scheduler();
+    initialize_architecture_and_drivers();
 
     crate::serial_println!("[ok   ] ManaOS Kernel is alive.");
 
     // Calibrate TSC for profiling
     kernel::profiler::calibrate_tsc();
 
-    let mut frame_count = 0;
-    let mut last_fps_ticks = arch::x86_64::interrupt_descriptor_table::get_ticks();
-    let mut fps = 0;
+    kernel::runtime::initialize();
 
     // Main Loop
     loop {
-        kernel::driver::input::keyboard::process_input();
-        kernel::driver::input::mouse::process_packets();
-        kernel::driver::input::mouse::draw_cursor();
-
-        frame_count += 1;
-
-        let current_ticks = arch::x86_64::interrupt_descriptor_table::get_ticks();
-
-        // Update FPS every 500ms
-        if current_ticks - last_fps_ticks >= 500 {
-            fps = frame_count * 1000 / (current_ticks - last_fps_ticks);
-            frame_count = 0;
-            last_fps_ticks = current_ticks;
-        }
-
-        // Draw HUD (FPS counter) to backbuffer
-        let _ = kernel::driver::display::framebuffer::try_with_graphics_mut(|graphics| {
-            // Clear a small area for FPS
-            graphics.draw_filled_rectangle(
-                graphics.info.horizontal_resolution - 150,
-                10,
-                140,
-                30,
-                Color::BLACK,
-            );
-
-            let fps_text = format!("FPS: {fps}");
-            graphics.draw_text(
-                Font::Inter,
-                graphics.info.horizontal_resolution - 140,
-                15,
-                16.0,
-                Color::rgb(0x00, 0xFF, 0x00),
-                &fps_text,
-            );
-
-            graphics.flush_rect(graphics.info.horizontal_resolution - 150, 10, 140, 30);
-        });
+        kernel::runtime::tick();
 
         // For maximum performance testing, we don't hlt.
         // x86_64::instructions::hlt();

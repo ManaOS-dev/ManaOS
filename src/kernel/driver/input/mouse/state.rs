@@ -30,7 +30,11 @@ pub fn process_packet(packet: &MousePacket) {
     state.y += packet.delta_y;
 }
 
-#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 pub fn draw_cursor() {
     let state = STATE.lock();
     let _ = crate::kernel::driver::display::framebuffer::try_with_graphics_mut(|graphics| {

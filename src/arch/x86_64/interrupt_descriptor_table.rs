@@ -1,5 +1,5 @@
 use crate::serial_println;
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use pic8259::ChainedPics;
 use spin::Lazy;
 use spin::Mutex;
@@ -17,15 +17,36 @@ pub(super) static INTERRUPT_CONTROLLERS: Mutex<ChainedPics> =
     });
 
 static TICKS: AtomicU64 = AtomicU64::new(0);
+static TIMER_TICK_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
+static KEYBOARD_BYTE_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
+static MOUSE_BYTE_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
+
+/// Kernel callbacks invoked by architecture interrupt handlers.
+#[derive(Clone, Copy)]
+pub struct InterruptProcessors {
+    /// Called after each timer interrupt is acknowledged.
+    pub timer_tick: fn(),
+    /// Called with each keyboard byte received from hardware.
+    pub keyboard_byte: fn(u8),
+    /// Called with each mouse byte received from hardware.
+    pub mouse_byte: fn(u8),
+}
 
 /// Return the number of timer ticks since interrupt initialization.
 pub fn get_ticks() -> u64 {
     TICKS.load(Ordering::Relaxed)
 }
 
+/// Register kernel callbacks invoked by architecture interrupt handlers.
+pub fn register_processors(processors: InterruptProcessors) {
+    TIMER_TICK_PROCESSOR.store(processors.timer_tick as usize, Ordering::Release);
+    KEYBOARD_BYTE_PROCESSOR.store(processors.keyboard_byte as usize, Ordering::Release);
+    MOUSE_BYTE_PROCESSOR.store(processors.mouse_byte as usize, Ordering::Release);
+}
+
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub enum InterruptIndex {
+enum InterruptIndex {
     Timer = INTERRUPT_CONTROLLER_1_OFFSET,
     Keyboard,
     Mouse = INTERRUPT_CONTROLLER_1_OFFSET + 12,
@@ -105,7 +126,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
             interrupt_controllers.notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
         }
     }
-    crate::kernel::task::process_timer_tick();
+    call_timer_tick_processor();
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
@@ -113,11 +134,13 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     if (status & 0x20) == 0 {
         // SAFETY: Port 0x60 is the PS/2 data port and status bit indicates keyboard data.
         let scancode = unsafe { Port::<u8>::new(0x60).read() };
-        crate::kernel::driver::input::keyboard::push_scancode(scancode);
+        call_keyboard_byte_processor(scancode);
     }
     // SAFETY: Notify EOI to the PIC to allow future interrupts.
     unsafe {
-        INTERRUPT_CONTROLLERS.lock().notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
+        INTERRUPT_CONTROLLERS
+            .lock()
+            .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
     }
 }
 
@@ -126,15 +149,50 @@ extern "x86-interrupt" fn mouse_interrupt_handler(_stack_frame: InterruptStackFr
     if (status & 0x20) != 0 {
         // SAFETY: Port 0x60 is the PS/2 data port and status bit indicates mouse data.
         let packet = unsafe { Port::<u8>::new(0x60).read() };
-        crate::kernel::driver::input::mouse::push_byte(packet);
+        call_mouse_byte_processor(packet);
     }
     // SAFETY: Notify EOI to the PIC to allow future interrupts.
     unsafe {
-        INTERRUPT_CONTROLLERS.lock().notify_end_of_interrupt(InterruptIndex::Mouse.as_u8());
+        INTERRUPT_CONTROLLERS
+            .lock()
+            .notify_end_of_interrupt(InterruptIndex::Mouse.as_u8());
     }
 }
 
 fn status_read() -> u8 {
     // SAFETY: Port 0x64 is the PS/2 controller status port.
     unsafe { Port::<u8>::new(0x64).read() }
+}
+
+fn call_timer_tick_processor() {
+    let processor = TIMER_TICK_PROCESSOR.load(Ordering::Acquire);
+    if processor == 0 {
+        return;
+    }
+
+    // SAFETY: register_processors stores only valid fn() pointers.
+    let processor: fn() = unsafe { core::mem::transmute(processor) };
+    processor();
+}
+
+fn call_keyboard_byte_processor(byte: u8) {
+    let processor = KEYBOARD_BYTE_PROCESSOR.load(Ordering::Acquire);
+    if processor == 0 {
+        return;
+    }
+
+    // SAFETY: register_processors stores only valid fn(u8) pointers.
+    let processor: fn(u8) = unsafe { core::mem::transmute(processor) };
+    processor(byte);
+}
+
+fn call_mouse_byte_processor(byte: u8) {
+    let processor = MOUSE_BYTE_PROCESSOR.load(Ordering::Acquire);
+    if processor == 0 {
+        return;
+    }
+
+    // SAFETY: register_processors stores only valid fn(u8) pointers.
+    let processor: fn(u8) = unsafe { core::mem::transmute(processor) };
+    processor(byte);
 }

@@ -65,6 +65,7 @@ pub enum Font {
     /// Inter Latin font.
     Inter,
     /// Noto Sans Japanese font.
+    #[allow(dead_code)]
     NotoSansJP,
 }
 
@@ -87,6 +88,10 @@ pub struct GraphicsDriver {
     cursor_backup: [u32; 16 * 16],
     /// Last cursor position used for restoring the background.
     pub last_cursor_pos: (usize, usize),
+    /// Stride in bytes.
+    stride_bytes: usize,
+    /// Whether the pixel format is BGR.
+    is_bgr: bool,
 }
 
 // SAFETY: The driver is accessed through a spin mutex, and raw framebuffer
@@ -104,10 +109,13 @@ impl GraphicsDriver {
             backbuffer_ptr,
             cursor_backup: [0; 16 * 16],
             last_cursor_pos: (0, 0),
+            stride_bytes: info.stride * 4,
+            is_bgr: matches!(info.format, ColorFormat::Bgr),
         }
     }
 
     /// Copy the backbuffer to the actual VRAM (GOP Framebuffer).
+    #[allow(dead_code)]
     pub fn flush(&self) {
         let size = self.info.stride * self.info.vertical_resolution * 4;
         // SAFETY: base_ptr and backbuffer_ptr point to valid buffers of at least
@@ -174,7 +182,7 @@ impl GraphicsDriver {
             return;
         }
 
-        let pixel_offset = y * self.info.stride + x;
+        let pixel_offset = y * self.stride_bytes + x * 4;
         let base = self.backbuffer_ptr;
 
         let (r, g, b) = (
@@ -186,23 +194,21 @@ impl GraphicsDriver {
         // SAFETY: Coordinates were checked against framebuffer bounds, and every
         // pixel is represented by four bytes in the configured framebuffer mode.
         unsafe {
-            let ptr = base.add(pixel_offset * 4);
-            match self.info.format {
-                ColorFormat::Rgb => {
-                    *ptr.add(0) = r;
-                    *ptr.add(1) = g;
-                    *ptr.add(2) = b;
-                }
-                ColorFormat::Bgr => {
-                    *ptr.add(0) = b;
-                    *ptr.add(1) = g;
-                    *ptr.add(2) = r;
-                }
+            let ptr = base.add(pixel_offset);
+            if self.is_bgr {
+                *ptr.add(0) = b;
+                *ptr.add(1) = g;
+                *ptr.add(2) = r;
+            } else {
+                *ptr.add(0) = r;
+                *ptr.add(1) = g;
+                *ptr.add(2) = b;
             }
         }
     }
 
     /// Fill the screen with a vertical gradient (to BACKBUFFER).
+    #[allow(dead_code)]
     pub fn clear_gradient(&self) {
         let v_res = self.info.vertical_resolution;
         let h_res = self.info.horizontal_resolution;
@@ -210,9 +216,7 @@ impl GraphicsDriver {
             for x in 0..h_res {
                 let r = 0;
                 let g = 0;
-                let b = u32::from(
-                    u8::try_from(34 * (v_res - y) / v_res).unwrap_or(255),
-                );
+                let b = u32::from(u8::try_from(34 * (v_res - y) / v_res).unwrap_or(255));
                 let color = (r << 16) | (g << 8) | b;
                 self.put_pixel(x, y, color);
             }
@@ -220,7 +224,14 @@ impl GraphicsDriver {
     }
 
     /// Draw a filled rectangle with a color.
-    pub fn draw_filled_rectangle(&self, x: usize, y: usize, width: usize, height: usize, color: Color) {
+    pub fn draw_filled_rectangle(
+        &self,
+        x: usize,
+        y: usize,
+        width: usize,
+        height: usize,
+        color: Color,
+    ) {
         let color = color.to_u32();
         for py in y..(y + height) {
             for px in x..(x + width) {
@@ -230,6 +241,7 @@ impl GraphicsDriver {
     }
 
     /// Draw a rectangle outline with a color.
+    #[allow(dead_code)]
     pub fn draw_rectangle(&self, x: usize, y: usize, width: usize, height: usize, color: Color) {
         let color = color.to_u32();
         for px in x..(x + width) {
@@ -321,7 +333,12 @@ impl GraphicsDriver {
     }
 
     /// Draw text at the specified coordinates with proper alpha blending (to BACKBUFFER).
-    #[allow(clippy::many_single_char_names, clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::many_single_char_names,
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     pub fn draw_text(
         &self,
         font_kind: Font,
