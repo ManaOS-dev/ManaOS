@@ -87,6 +87,10 @@ pub struct GraphicsDriver {
     cursor_backup: [u32; 16 * 16],
     /// Last cursor position used for restoring the background.
     pub last_cursor_pos: (usize, usize),
+    /// Stride in bytes.
+    stride_bytes: usize,
+    /// Whether the pixel format is BGR.
+    is_bgr: bool,
 }
 
 // SAFETY: The driver is accessed through a spin mutex, and raw framebuffer
@@ -104,6 +108,8 @@ impl GraphicsDriver {
             backbuffer_ptr,
             cursor_backup: [0; 16 * 16],
             last_cursor_pos: (0, 0),
+            stride_bytes: info.stride * 4,
+            is_bgr: matches!(info.format, ColorFormat::Bgr),
         }
     }
 
@@ -174,7 +180,7 @@ impl GraphicsDriver {
             return;
         }
 
-        let pixel_offset = y * self.info.stride + x;
+        let pixel_offset = y * self.stride_bytes + x * 4;
         let base = self.backbuffer_ptr;
 
         let (r, g, b) = (
@@ -186,18 +192,15 @@ impl GraphicsDriver {
         // SAFETY: Coordinates were checked against framebuffer bounds, and every
         // pixel is represented by four bytes in the configured framebuffer mode.
         unsafe {
-            let ptr = base.add(pixel_offset * 4);
-            match self.info.format {
-                ColorFormat::Rgb => {
-                    *ptr.add(0) = r;
-                    *ptr.add(1) = g;
-                    *ptr.add(2) = b;
-                }
-                ColorFormat::Bgr => {
-                    *ptr.add(0) = b;
-                    *ptr.add(1) = g;
-                    *ptr.add(2) = r;
-                }
+            let ptr = base.add(pixel_offset);
+            if self.is_bgr {
+                *ptr.add(0) = b;
+                *ptr.add(1) = g;
+                *ptr.add(2) = r;
+            } else {
+                *ptr.add(0) = r;
+                *ptr.add(1) = g;
+                *ptr.add(2) = b;
             }
         }
     }

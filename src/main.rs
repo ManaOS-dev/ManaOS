@@ -13,16 +13,15 @@ extern crate alloc;
 mod arch;
 mod kernel;
 
-use alloc::format;
 use crate::kernel::driver::display::color::Color;
 use crate::kernel::driver::display::framebuffer::Font;
+use alloc::format;
 use uefi::prelude::*;
 use uefi::proto::console::gop::GraphicsOutput;
 use uefi::proto::media::file::{File, FileAttribute, FileMode};
 use uefi::proto::media::fs::SimpleFileSystem;
 
 extern "C" fn idle_task() -> ! {
-
     loop {
         x86_64::instructions::hlt();
     }
@@ -213,7 +212,14 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
 
             graphics.draw_text(Font::Inter, 70, 60, 20.0, Color::WHITE, "ManaOS");
 
-            graphics.draw_text(Font::Inter, 100, 180, 32.0, Color::rgb(0x00, 0xAA, 0xFF), "graphics !!");
+            graphics.draw_text(
+                Font::Inter,
+                100,
+                180,
+                32.0,
+                Color::rgb(0x00, 0xAA, 0xFF),
+                "graphics !!",
+            );
 
             graphics.draw_text(Font::NotoSansJP, 100, 300, 20.0, Color::WHITE, "日本語");
 
@@ -229,7 +235,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
 
     let mut frame_count = 0;
     let mut last_fps_ticks = arch::x86_64::interrupt_descriptor_table::get_ticks();
-    let mut fps = 0;
+    let mut fps: u64;
 
     // Main Loop
     loop {
@@ -241,36 +247,44 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
 
         let current_ticks = arch::x86_64::interrupt_descriptor_table::get_ticks();
 
-        // Update FPS every 500ms
+        // Update FPS and UI every 500ms
         if current_ticks - last_fps_ticks >= 500 {
             fps = frame_count * 1000 / (current_ticks - last_fps_ticks);
             frame_count = 0;
             last_fps_ticks = current_ticks;
+
+            // Queue FPS HUD draw commands
+            let res_w = kernel::driver::display::framebuffer::with_graphics(|g| {
+                g.info.horizontal_resolution
+            });
+            kernel::driver::display::command::push_command(
+                kernel::driver::display::command::DrawCommand::FillRect(
+                    res_w - 150,
+                    10,
+                    140,
+                    30,
+                    Color::BLACK,
+                ),
+            );
+
+            let fps_text = format!("FPS: {}", fps);
+            kernel::driver::display::command::push_command(
+                kernel::driver::display::command::DrawCommand::Text(
+                    Font::Inter,
+                    res_w - 140,
+                    15,
+                    16.0,
+                    Color::rgb(0x00, 0xFF, 0x00),
+                    fps_text,
+                ),
+            );
+
+            kernel::driver::display::command::push_command(
+                kernel::driver::display::command::DrawCommand::FlushRect(res_w - 150, 10, 140, 30),
+            );
         }
 
-        // Draw HUD (FPS counter) to backbuffer
-        let _ = kernel::driver::display::framebuffer::try_with_graphics_mut(|graphics| {
-            // Clear a small area for FPS
-            graphics.draw_filled_rectangle(
-                graphics.info.horizontal_resolution - 150,
-                10,
-                140,
-                30,
-                Color::BLACK,
-            );
-
-            let fps_text = format!("FPS: {fps}");
-            graphics.draw_text(
-                Font::Inter,
-                graphics.info.horizontal_resolution - 140,
-                15,
-                16.0,
-                Color::rgb(0x00, 0xFF, 0x00),
-                &fps_text,
-            );
-
-            graphics.flush_rect(graphics.info.horizontal_resolution - 150, 10, 140, 30);
-        });
+        kernel::driver::display::command::process_commands();
 
         // For maximum performance testing, we don't hlt.
         // x86_64::instructions::hlt();

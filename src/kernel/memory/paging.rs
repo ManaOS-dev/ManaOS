@@ -1,7 +1,7 @@
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use x86_64::{
     registers::control::Cr3,
-    structures::paging::{Mapper, OffsetPageTable, PageTable, PageTableFlags, PhysFrame, Size4KiB},
+    structures::paging::{Mapper, OffsetPageTable, PageTable, PageTableFlags, PhysFrame, Size4KiB, Translate},
     PhysAddr, VirtAddr,
 };
 
@@ -12,126 +12,88 @@ pub unsafe fn init<'a>(
     framebuffer_base: u64,
     framebuffer_size: u64,
 ) {
-    // Allocate a frame for the new PML4 table
-    let level_four_table_physical_address = frame_allocator
+    let pml4_frame = create_pml4(frame_allocator);
+    let pml4_table_ptr = pml4_frame.start_address().as_u64() as *mut PageTable;
+    let pml4_table = &mut *pml4_table_ptr;
+
+    let mut mapper = OffsetPageTable::new(pml4_table, VirtAddr::new(0));
+
+    map_memory_regions(&mut mapper, frame_allocator, mmap_iter);
+    map_framebuffer(&mut mapper, frame_allocator, framebuffer_base, framebuffer_size);
+
+    // Switch to the new page table
+    Cr3::write(pml4_frame, x86_64::registers::control::Cr3Flags::empty());
+    crate::serial_println!("[paging] Identity mapping complete.");
+}
+
+unsafe fn create_pml4(frame_allocator: &mut BumpFrameAllocator) -> PhysFrame {
+    let addr = frame_allocator
         .allocate_frame()
-        .expect("OOM: failed to allocate level four page table frame");
-    crate::serial_println!(
-        "[paging] New PML4 at physical address: {:#x}",
-        level_four_table_physical_address
-    );
+        .expect("OOM: failed to allocate PML4 frame");
+    let frame = PhysFrame::containing_address(PhysAddr::new(addr));
+    let ptr = frame.start_address().as_u64() as *mut PageTable;
+    core::ptr::write_bytes(ptr, 0, 1);
+    frame
+}
 
-    assert!(
-        level_four_table_physical_address != 0,
-        "PML4 allocated at physical address 0, which is treated as null!"
-    );
-
-    let level_four_table_ptr = level_four_table_physical_address as *mut PageTable;
-
-    // Initialize PML4 to zero
-    unsafe {
-        core::ptr::write_bytes(level_four_table_ptr, 0, 1);
-    }
-    let level_four_table = unsafe { &mut *level_four_table_ptr };
-
-    // Create an OffsetPageTable (with offset 0 for identity mapping)
-    let mut mapper = OffsetPageTable::new(level_four_table, VirtAddr::new(0));
-
-    // Identity map all relevant regions from the UEFI memory map
+unsafe fn map_memory_regions<'a>(
+    mapper: &mut OffsetPageTable,
+    frame_allocator: &mut BumpFrameAllocator,
+    mmap_iter: impl Iterator<Item = &'a uefi::table::boot::MemoryDescriptor>,
+) {
+    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
     for desc in mmap_iter {
         let start = desc.phys_start;
-        let pages = desc.page_count;
-        let end = start + pages * 4096;
+        let end = start + desc.page_count * 4096;
 
-        // Determine flags based on memory type (simplified)
-        let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+        let mut current_start = start;
+        while current_start < end {
+            if current_start % 0x200_000 == 0 && current_start + 0x200_000 <= end {
+                let page = x86_64::structures::paging::Page::<x86_64::structures::paging::Size2MiB>::containing_address(VirtAddr::new(current_start));
+                let frame = x86_64::structures::paging::PhysFrame::<x86_64::structures::paging::Size2MiB>::containing_address(PhysAddr::new(current_start));
 
-        // For now, we identity map everything in the memory map
-        // to ensure we don't lose access to anything UEFI provided.
-        for page_start in (start..end).step_by(4096) {
-            let page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
-                VirtAddr::new(page_start),
-            );
-            let frame = PhysFrame::containing_address(PhysAddr::new(page_start));
-
-            // Map the page. We need to allocate frames for sub-tables (PDPT, PD, PT).
-            let map_to_result = mapper.map_to(
-                page,
-                frame,
-                flags,
-                &mut FrameAllocWrapper { frame_allocator },
-            );
-
-            match map_to_result {
-                Ok(t) => t.flush(),
-                Err(e) => {
-                    if !matches!(
-                        e,
-                        x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)
-                    ) {
-                        panic!("Failed to map page {page_start:#x}: {e:?}");
-                    }
+                match mapper.map_to(page, frame, flags | PageTableFlags::HUGE_PAGE, &mut FrameAllocWrapper { frame_allocator }) {
+                    Ok(t) => t.flush(),
+                    Err(e) => assert!(matches!(e, x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)), "Failed to map 2MiB page {current_start:#x}: {e:?}"),
                 }
+                current_start += 0x200_000;
+            } else {
+                let page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(VirtAddr::new(current_start));
+                let frame = PhysFrame::containing_address(PhysAddr::new(current_start));
+
+                match mapper.map_to(page, frame, flags, &mut FrameAllocWrapper { frame_allocator }) {
+                    Ok(t) => t.flush(),
+                    Err(e) => assert!(matches!(e, x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)), "Failed to map 4KiB page {current_start:#x}: {e:?}"),
+                }
+                current_start += 4096;
             }
         }
     }
+}
 
-    // Identity map the frame buffer
-    crate::serial_println!(
-        "[paging] Mapping frame buffer: {:#x} (size: {} bytes)",
-        framebuffer_base,
-        framebuffer_size
-    );
-    let framebuffer_start_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
-        VirtAddr::new(framebuffer_base),
-    );
-    let framebuffer_end_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
-        VirtAddr::new(framebuffer_base + framebuffer_size - 1),
-    );
+unsafe fn map_framebuffer(
+    mapper: &mut OffsetPageTable,
+    frame_allocator: &mut BumpFrameAllocator,
+    framebuffer_base: u64,
+    framebuffer_size: u64,
+) {
+    crate::serial_println!("[paging] Mapping frame buffer: {:#x} (size: {} bytes)", framebuffer_base, framebuffer_size);
+    let start_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(VirtAddr::new(framebuffer_base));
+    let end_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(VirtAddr::new(framebuffer_base + framebuffer_size - 1));
 
-    for page in x86_64::structures::paging::Page::range_inclusive(
-        framebuffer_start_page,
-        framebuffer_end_page,
-    ) {
+    for page in x86_64::structures::paging::Page::range_inclusive(start_page, end_page) {
         let frame = PhysFrame::containing_address(PhysAddr::new(page.start_address().as_u64()));
         let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
 
-        let map_to_result = mapper.map_to(
-            page,
-            frame,
-            flags,
-            &mut FrameAllocWrapper { frame_allocator },
-        );
+        if let x86_64::structures::paging::mapper::TranslateResult::Mapped { .. } = mapper.translate(page.start_address()) {
+            continue;
+        }
 
-        match map_to_result {
+        match mapper.map_to(page, frame, flags, &mut FrameAllocWrapper { frame_allocator }) {
             Ok(t) => t.flush(),
-            Err(e) => {
-                if !matches!(
-                    e,
-                    x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)
-                ) {
-                    panic!(
-                        "Failed to map frame buffer page {:#x}: {e:?}",
-                        page.start_address().as_u64()
-                    );
-                }
-            }
+            Err(e) => assert!(matches!(e, x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)), "Failed to map frame buffer page {:#x}: {e:?}", page.start_address().as_u64()),
         }
     }
-
-    // Switch to the new page table
-    let (old_level_four_table, flags) = Cr3::read();
-    crate::serial_println!(
-        "[paging] Switching page table: {:#x} -> {:#x}",
-        old_level_four_table.start_address().as_u64(),
-        level_four_table_physical_address
-    );
-
-    Cr3::write(
-        PhysFrame::containing_address(PhysAddr::new(level_four_table_physical_address)),
-        flags,
-    );
-    crate::serial_println!("[paging] Identity mapping complete.");
 }
 
 /// A wrapper to use our `BumpFrameAllocator` with `x86_64`'s `FrameAllocator` trait.
