@@ -6,10 +6,10 @@ use x86_64::VirtAddr;
 
 /// Interrupt stack table index used for double-fault handling.
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
-/// Ring 3 code segment selector.
-pub const USER_CODE_SELECTOR: u16 = 0x1b;
 /// Ring 3 data segment selector.
-pub const USER_DATA_SELECTOR: u16 = 0x23;
+pub const USER_DATA_SELECTOR: u16 = 0x1b;
+/// Ring 3 code segment selector.
+pub const USER_CODE_SELECTOR: u16 = 0x23;
 
 static TSS: LazyLock<TaskStateSegment> = LazyLock::new(|| {
     let mut tss = TaskStateSegment::new();
@@ -43,10 +43,10 @@ static GLOBAL_DESCRIPTOR_TABLE: LazyLock<(GlobalDescriptorTable, Selectors)> =
         let mut table = GlobalDescriptorTable::new();
         let code_selector = table.append(Descriptor::kernel_code_segment());
         let data_selector = table.append(Descriptor::kernel_data_segment());
-        let mut user_code_selector = table.append(Descriptor::user_code_segment());
         let mut user_data_selector = table.append(Descriptor::user_data_segment());
-        user_code_selector.set_rpl(PrivilegeLevel::Ring3);
+        let mut user_code_selector = table.append(Descriptor::user_code_segment());
         user_data_selector.set_rpl(PrivilegeLevel::Ring3);
+        user_code_selector.set_rpl(PrivilegeLevel::Ring3);
         let tss_selector = table.append(Descriptor::tss_segment(&TSS));
         (
             table,
