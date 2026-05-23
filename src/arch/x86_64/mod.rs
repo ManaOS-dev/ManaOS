@@ -1,3 +1,21 @@
+//! # `arch::x86_64`
+//!
+//! ## Owns
+//! - `x86_64` descriptor table setup
+//! - `x86_64` interrupt controller and timer setup
+//! - CPU interrupt enablement
+//! - Low-level context switching entry point
+//!
+//! ## Does NOT own
+//! - Kernel scheduler policy
+//! - Device driver state
+//! - Input event queues
+//!
+//! ## Public API
+//! - [`init`] - Initialize `x86_64` architecture state
+//! - [`enable_interrupts`] - Enable CPU interrupts after wiring
+//! - [`switch_context`] - Switch between saved task contexts
+
 pub mod global_descriptor_table;
 pub mod interrupt_descriptor_table;
 
@@ -29,12 +47,10 @@ pub fn init() {
     // Initialize PIT (Programmable Interval Timer)
     crate::serial_println!("[arch] Initializing PIT...");
     init_pit(1000);
+}
 
-    // Initialize Drivers (while interrupts are still disabled)
-    crate::serial_println!("[arch] Initializing Mouse...");
-    crate::kernel::driver::input::mouse::init();
-    crate::serial_println!("[ok   ] Mouse initialized.");
-
+/// Enable CPU interrupts after architecture and driver initialization.
+pub fn enable_interrupts() {
     x86_64::instructions::interrupts::enable();
 }
 
@@ -72,9 +88,9 @@ extern "C" {
 ///
 /// # Safety
 ///
-/// `current_context` and `next_context` must point to valid
-/// [`crate::kernel::task::context::TaskContext`] storage with the layout expected
-/// by `context_switch.s`. The pointed tasks must remain alive across the switch.
+/// `current_context` and `next_context` must point to valid task context storage
+/// with the layout expected by `context_switch.s`. The pointed tasks must remain
+/// alive across the switch.
 #[cfg(target_os = "uefi")]
 pub unsafe fn switch_context(current_context: *mut u64, next_context: *const u64) {
     context_switch(current_context, next_context);

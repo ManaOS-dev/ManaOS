@@ -5,6 +5,8 @@
 ## 🚀 Key Features
 
 - **HAL Architecture**: Strict separation between hardware-specific and generic kernel logic.
+- **Callback-Based Interrupt Wiring**: `arch/` handles hardware interrupts without directly depending on `kernel/`.
+- **Boot/Runtime Split**: `main.rs` wires the system together while boot and runtime modules own focused initialization and tick processing.
 - **Developer-First API**: Ergonomic and intuitive APIs (e.g., `graphics.DrawText`).
 - **Global Collaboration**: English-first documentation and standard PR-based workflow.
 - **Modern Tooling**: Seamless build and run experience with `just` and `qemu`.
@@ -33,6 +35,9 @@ Alternatively, use the provided scripts:
 ## 🤝 Contributing
 
 We welcome contributors from all over the world! Please check our **[CONTRIBUTING.md](CONTRIBUTING.md)** for guidelines on coding standards, language policy, design principles, and our roadmap.
+
+For architecture and module ownership details, see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+For the current roadmap and known refactoring tasks, see **[TODO.md](TODO.md)**.
 
 ---
 

@@ -65,6 +65,7 @@ pub enum Font {
     /// Inter Latin font.
     Inter,
     /// Noto Sans Japanese font.
+    #[allow(dead_code)]
     NotoSansJP,
 }
 
@@ -114,6 +115,7 @@ impl GraphicsDriver {
     }
 
     /// Copy the backbuffer to the actual VRAM (GOP Framebuffer).
+    #[allow(dead_code)]
     pub fn flush(&self) {
         let size = self.info.stride * self.info.vertical_resolution * 4;
         // SAFETY: base_ptr and backbuffer_ptr point to valid buffers of at least
@@ -206,6 +208,7 @@ impl GraphicsDriver {
     }
 
     /// Fill the screen with a vertical gradient (to BACKBUFFER).
+    #[allow(dead_code)]
     pub fn clear_gradient(&self) {
         let v_res = self.info.vertical_resolution;
         let h_res = self.info.horizontal_resolution;
@@ -213,9 +216,7 @@ impl GraphicsDriver {
             for x in 0..h_res {
                 let r = 0;
                 let g = 0;
-                let b = u32::from(
-                    u8::try_from(34 * (v_res - y) / v_res).unwrap_or(255),
-                );
+                let b = u32::from(u8::try_from(34 * (v_res - y) / v_res).unwrap_or(255));
                 let color = (r << 16) | (g << 8) | b;
                 self.put_pixel(x, y, color);
             }
@@ -223,7 +224,14 @@ impl GraphicsDriver {
     }
 
     /// Draw a filled rectangle with a color.
-    pub fn draw_filled_rectangle(&self, x: usize, y: usize, width: usize, height: usize, color: Color) {
+    pub fn draw_filled_rectangle(
+        &self,
+        x: usize,
+        y: usize,
+        width: usize,
+        height: usize,
+        color: Color,
+    ) {
         let color = color.to_u32();
         for py in y..(y + height) {
             for px in x..(x + width) {
@@ -233,6 +241,7 @@ impl GraphicsDriver {
     }
 
     /// Draw a rectangle outline with a color.
+    #[allow(dead_code)]
     pub fn draw_rectangle(&self, x: usize, y: usize, width: usize, height: usize, color: Color) {
         let color = color.to_u32();
         for px in x..(x + width) {
@@ -324,7 +333,12 @@ impl GraphicsDriver {
     }
 
     /// Draw text at the specified coordinates with proper alpha blending (to BACKBUFFER).
-    #[allow(clippy::many_single_char_names, clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::many_single_char_names,
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     pub fn draw_text(
         &self,
         font_kind: Font,

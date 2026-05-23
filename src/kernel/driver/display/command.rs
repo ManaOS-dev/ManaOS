@@ -39,12 +39,18 @@ pub fn process_commands() {
     use crate::kernel::driver::display::framebuffer;
 
     while let Some(cmd) = COMMAND_QUEUE.pop() {
-        framebuffer::try_with_graphics_mut(|graphics| {
-            match cmd {
-                DrawCommand::FillRect(x, y, w, h, c) => graphics.draw_filled_rectangle(x, y, w, h, c),
-                DrawCommand::Line(x1, y1, x2, y2, c) => graphics.draw_line(x1, y1, x2, y2, c),
-                DrawCommand::FlushRect(x, y, w, h) => graphics.flush_rect(x, y, w, h),
-                DrawCommand::Text(f, x, y, s, c, t) => graphics.draw_text(f, x, y, s, c, &t),
+        framebuffer::try_with_graphics_mut(|graphics| match cmd {
+            DrawCommand::FillRect(x, y, width, height, color) => {
+                graphics.draw_filled_rectangle(x, y, width, height, color);
+            }
+            DrawCommand::Line(x1, y1, x2, y2, color) => {
+                graphics.draw_line(x1, y1, x2, y2, color);
+            }
+            DrawCommand::FlushRect(x, y, width, height) => {
+                graphics.flush_rect(x, y, width, height);
+            }
+            DrawCommand::Text(font, x, y, scale, color, text) => {
+                graphics.draw_text(font, x, y, scale, color, &text);
             }
         });
     }

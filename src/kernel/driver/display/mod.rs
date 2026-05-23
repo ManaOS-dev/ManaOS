@@ -11,5 +11,5 @@
 //! - [`framebuffer`] - Framebuffer graphics driver
 
 pub mod color;
-pub mod framebuffer;
 pub mod command;
+pub mod framebuffer;

@@ -1,7 +1,9 @@
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use x86_64::{
     registers::control::Cr3,
-    structures::paging::{Mapper, OffsetPageTable, PageTable, PageTableFlags, PhysFrame, Size4KiB, Translate},
+    structures::paging::{
+        Mapper, OffsetPageTable, PageTable, PageTableFlags, PhysFrame, Size4KiB, Translate,
+    },
     PhysAddr, VirtAddr,
 };
 
@@ -19,7 +21,12 @@ pub unsafe fn init<'a>(
     let mut mapper = OffsetPageTable::new(pml4_table, VirtAddr::new(0));
 
     map_memory_regions(&mut mapper, frame_allocator, mmap_iter);
-    map_framebuffer(&mut mapper, frame_allocator, framebuffer_base, framebuffer_size);
+    map_framebuffer(
+        &mut mapper,
+        frame_allocator,
+        framebuffer_base,
+        framebuffer_size,
+    );
 
     // Switch to the new page table
     Cr3::write(pml4_frame, x86_64::registers::control::Cr3Flags::empty());
@@ -50,20 +57,46 @@ unsafe fn map_memory_regions<'a>(
         while current_start < end {
             if current_start % 0x200_000 == 0 && current_start + 0x200_000 <= end {
                 let page = x86_64::structures::paging::Page::<x86_64::structures::paging::Size2MiB>::containing_address(VirtAddr::new(current_start));
-                let frame = x86_64::structures::paging::PhysFrame::<x86_64::structures::paging::Size2MiB>::containing_address(PhysAddr::new(current_start));
+                let frame = x86_64::structures::paging::PhysFrame::<
+                    x86_64::structures::paging::Size2MiB,
+                >::containing_address(PhysAddr::new(current_start));
 
-                match mapper.map_to(page, frame, flags | PageTableFlags::HUGE_PAGE, &mut FrameAllocWrapper { frame_allocator }) {
+                match mapper.map_to(
+                    page,
+                    frame,
+                    flags | PageTableFlags::HUGE_PAGE,
+                    &mut FrameAllocWrapper { frame_allocator },
+                ) {
                     Ok(t) => t.flush(),
-                    Err(e) => assert!(matches!(e, x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)), "Failed to map 2MiB page {current_start:#x}: {e:?}"),
+                    Err(e) => assert!(
+                        matches!(
+                            e,
+                            x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)
+                        ),
+                        "Failed to map 2MiB page {current_start:#x}: {e:?}"
+                    ),
                 }
                 current_start += 0x200_000;
             } else {
-                let page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(VirtAddr::new(current_start));
+                let page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
+                    VirtAddr::new(current_start),
+                );
                 let frame = PhysFrame::containing_address(PhysAddr::new(current_start));
 
-                match mapper.map_to(page, frame, flags, &mut FrameAllocWrapper { frame_allocator }) {
+                match mapper.map_to(
+                    page,
+                    frame,
+                    flags,
+                    &mut FrameAllocWrapper { frame_allocator },
+                ) {
                     Ok(t) => t.flush(),
-                    Err(e) => assert!(matches!(e, x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)), "Failed to map 4KiB page {current_start:#x}: {e:?}"),
+                    Err(e) => assert!(
+                        matches!(
+                            e,
+                            x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)
+                        ),
+                        "Failed to map 4KiB page {current_start:#x}: {e:?}"
+                    ),
                 }
                 current_start += 4096;
             }
@@ -77,21 +110,43 @@ unsafe fn map_framebuffer(
     framebuffer_base: u64,
     framebuffer_size: u64,
 ) {
-    crate::serial_println!("[paging] Mapping frame buffer: {:#x} (size: {} bytes)", framebuffer_base, framebuffer_size);
-    let start_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(VirtAddr::new(framebuffer_base));
-    let end_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(VirtAddr::new(framebuffer_base + framebuffer_size - 1));
+    crate::serial_println!(
+        "[paging] Mapping frame buffer: {:#x} (size: {} bytes)",
+        framebuffer_base,
+        framebuffer_size
+    );
+    let start_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
+        VirtAddr::new(framebuffer_base),
+    );
+    let end_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(VirtAddr::new(
+        framebuffer_base + framebuffer_size - 1,
+    ));
 
     for page in x86_64::structures::paging::Page::range_inclusive(start_page, end_page) {
         let frame = PhysFrame::containing_address(PhysAddr::new(page.start_address().as_u64()));
         let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
 
-        if let x86_64::structures::paging::mapper::TranslateResult::Mapped { .. } = mapper.translate(page.start_address()) {
+        if let x86_64::structures::paging::mapper::TranslateResult::Mapped { .. } =
+            mapper.translate(page.start_address())
+        {
             continue;
         }
 
-        match mapper.map_to(page, frame, flags, &mut FrameAllocWrapper { frame_allocator }) {
+        match mapper.map_to(
+            page,
+            frame,
+            flags,
+            &mut FrameAllocWrapper { frame_allocator },
+        ) {
             Ok(t) => t.flush(),
-            Err(e) => assert!(matches!(e, x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)), "Failed to map frame buffer page {:#x}: {e:?}", page.start_address().as_u64()),
+            Err(e) => assert!(
+                matches!(
+                    e,
+                    x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)
+                ),
+                "Failed to map frame buffer page {:#x}: {e:?}",
+                page.start_address().as_u64()
+            ),
         }
     }
 }

@@ -83,6 +83,7 @@ Strictly separate architecture-dependent code from generic logic to support futu
 - **`kernel/`**: Platform-independent logic (scheduler, filesystem, network stack, etc.).
 - **`arch/x86_64/`**: CPU-specific implementations (GDT, IDT, page table manipulation, context switching, etc.).
 - **Interface**: Kernel core interacts only through abstraction APIs provided by the `arch::` module.
+- **Interrupt Boundary**: `arch/` must not call `kernel::...` directly. Interrupt handlers dispatch to callbacks registered by `main.rs`.
 
 ### 2. Trait-Driven Driver Design
 Abstract device drivers using traits to allow modular expansion.
@@ -108,3 +109,4 @@ Distinguish between physical and virtual addresses at the type level to prevent 
 ## 📅 Roadmap & TODOs
 
 Please refer to **[TODO.md](TODO.md)** for the current project status and future roadmap.
+For module ownership and interrupt wiring details, see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.

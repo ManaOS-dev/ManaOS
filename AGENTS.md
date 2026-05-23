@@ -17,9 +17,13 @@ src/
 │       ├── interrupt_controller.rs
 │       └── interval_timer.rs
 └── kernel/
+    ├── boot/
+    │   └── mod.rs
     ├── driver/
     │   ├── display/
     │   │   ├── mod.rs
+    │   │   ├── color.rs
+    │   │   ├── command.rs
     │   │   ├── framebuffer.rs
     │   │   ├── renderer.rs
     │   │   ├── font.rs
@@ -32,16 +36,20 @@ src/
     │       └── mouse/
     │           ├── mod.rs
     │           ├── packet.rs
+    │           ├── hardware.rs
     │           └── state.rs
     ├── memory/
     │   ├── frame_allocator.rs
     │   ├── heap.rs
     │   └── paging.rs
+    ├── interrupt.rs
     ├── sync/
     │   └── ring_buffer.rs
     ├── task/
     │   ├── mod.rs
     │   └── context.rs
+    ├── runtime/
+    │   └── mod.rs
     └── profiler.rs
 ```
 
@@ -125,6 +133,37 @@ kernel/driver/  →  may depend on kernel/memory/ and kernel/sync/
 main.rs  →  the only file that wires everything together
 ```
 
+### Interrupt Wiring
+
+`arch/` interrupt handlers must never call `kernel::...` directly.
+They may only read hardware state, acknowledge the interrupt controller, and call
+a function pointer or callback registered by `main.rs`.
+
+```rust
+// ✅ Correct: arch handler dispatches through a registered callback
+extern "x86-interrupt" fn mouse_interrupt_handler(_: InterruptStackFrame) {
+    let byte = read_mouse_byte();
+    call_mouse_byte_processor(byte);
+    // SAFETY: interrupt controller EOI must be sent after every hardware interrupt.
+    unsafe { notify_end_of_interrupt(InterruptIndex::Mouse) };
+}
+```
+
+`main.rs` owns the wiring from architecture callbacks to kernel processors:
+
+```rust
+interrupt_descriptor_table::register_processors(
+    interrupt_descriptor_table::InterruptProcessors {
+        timer_tick: kernel::interrupt::process_timer_tick,
+        keyboard_byte: kernel::interrupt::push_keyboard_byte,
+        mouse_byte: kernel::interrupt::push_mouse_byte,
+    },
+);
+```
+
+`kernel::interrupt` owns kernel-side interrupt event routing. It may call
+`kernel::task` and `kernel::driver::input`, but it must not depend on `arch/`.
+
 ---
 
 ## 4. Static Variables
@@ -201,7 +240,7 @@ Interrupt handlers must do the MINIMUM possible work:
 // ✅ Correct: push to queue and return
 extern "x86-interrupt" fn mouse_interrupt_handler(_: InterruptStackFrame) {
     let byte = unsafe { Port::<u8>::new(0x60).read() };
-    crate::kernel::driver::input::mouse::push_byte(byte);
+    call_mouse_byte_processor(byte);
     // SAFETY: PIC EOI must be sent after every hardware interrupt.
     unsafe { send_eoi(InterruptIndex::Mouse) };
 }
