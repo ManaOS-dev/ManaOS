@@ -52,7 +52,6 @@ pub unsafe extern "C" fn syscall_entry() {
         "pop rcx",
         "sysretq",
         "2:",
-        "sub rsp, 32",
         "call {get_return_stack}",
         "mov rsp, rax",
         "ret",
