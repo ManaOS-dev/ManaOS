@@ -83,6 +83,7 @@ enter_user_mode_returnable:
     iretq
 
 enter_user_mode_returnable_exit:
+    sti
     pop rbx
     pop rbp
     pop rdi
