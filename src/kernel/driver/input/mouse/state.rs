@@ -32,6 +32,14 @@ pub fn process_packet(packet: &MousePacket) {
     state.middle = packet.middle_button;
     state.x += packet.delta_x;
     state.y += packet.delta_y;
+
+    crate::kernel::driver::display::framebuffer::with_graphics(|graphics| {
+        let width = i32::try_from(graphics.info.horizontal_resolution).unwrap_or(0);
+        let height = i32::try_from(graphics.info.vertical_resolution).unwrap_or(0);
+
+        state.x = state.x.clamp(0, (width - 16).max(0));
+        state.y = state.y.clamp(0, (height - 16).max(0));
+    });
 }
 
 /// Return a snapshot of the current mouse state.

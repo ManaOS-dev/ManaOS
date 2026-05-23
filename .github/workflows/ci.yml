@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "dev" ]
   pull_request:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "dev" ]
   workflow_dispatch:
 
 env:
@@ -29,14 +29,43 @@ jobs:
       - name: Install just
         uses: taiki-e/install-action@just
 
+      - name: Install audit tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit,cargo-deny,cargo-license,cargo-machete,typos-cli
+
       - name: Check Formatting
         run: just fmt
 
       - name: Run Clippy
         run: just lint
 
+      - name: Check Workspace
+        run: cargo check --workspace --all-targets --all-features
+
+      - name: Run Tests
+        run: cargo test --workspace --all-features
+
       - name: Build Kernel
         run: cargo build --target x86_64-unknown-uefi
+
+      - name: Audit Dependencies
+        run: cargo audit
+
+      - name: Check Dependency Policy
+        run: cargo deny check
+
+      - name: Check Unused Dependencies
+        run: cargo machete
+
+      - name: Check Typos
+        run: typos
+
+      - name: Regenerate Third-Party Licenses
+        run: pwsh -File scripts/generate_third_party_licenses.ps1
+
+      - name: Check Third-Party License Inventory
+        run: git diff --exit-code THIRD_PARTY_LICENSES.md
 
       - name: Upload EFI Artifact
         uses: actions/upload-artifact@v4

@@ -1,30 +1,23 @@
-//! # [DriverName] Driver
+//! # `kernel::driver::[driver_name]`
 //!
-//! Brief description of what this driver does.
+//! ## Owns
+//! - Replace with the single resource or workflow this driver owns.
 //!
-//! ## Responsibilities
-//! - What this module owns
+//! ## Does NOT own
+//! - Replace with adjacent responsibilities owned by other modules.
 //!
-//! ## NOT Responsibilities  
-//! - What this module does NOT do (important!)
+//! ## Public API
+//! - [`init`] - Initialize the driver.
+//! - [`process`] - Process pending driver work from the main loop.
 
-use crate::kernel::sync::ring_buffer::LockFreeRingBuffer;
-use spin::Mutex;
-
-// ─── Internal State ──────────────────────────────────────────────
-
-// RULE: All statics must be private. Expose only through functions.
-
-// ─── Public Interface ─────────────────────────────────────────────
+// Keep all static variables private. Expose state only through functions.
 
 /// Initialize the driver. Must be called once before use.
 pub fn init() {
-    todo!()
+    // Add hardware or state initialization here.
 }
 
 /// Process pending input/events. Call this from the main loop.
 pub fn process() {
-    todo!()
+    // Add main-loop processing here.
 }
-
-// ─── Private Implementation ───────────────────────────────────────

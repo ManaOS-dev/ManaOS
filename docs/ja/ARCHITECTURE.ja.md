@@ -52,7 +52,7 @@ architecture 側は `InterruptProcessors` 構造体と `register_processors(...)
 ## 現在の既知の設計負債
 
 - Local APIC timer と IOAPIC routing は architecture backend として表現されていますが、ACPI MADT parsing が入るまでは legacy programmable interval timer と 8259 interrupt controller を使います。
-- Ring 3 selector は GDT に登録され、kernel から参照できますが、実際に user mode へ入るには `iretq` transition path と user stack が必要です。
+- Ring 3 selector、初回の `iretq` transition path、固定 user stack mapping、最小の `SYSCALL`/`SYSRET` MSR setup は入っています。実際の syscall dispatch、ELF loading、process ごとの address space は Phase 6 の作業です。
 - cursor rendering は display 側の責務になりましたが、cursor shape はまだ単純な placeholder rectangle です。
 
 ## 新しいドライバの追加 (チェックリスト)

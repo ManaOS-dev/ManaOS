@@ -1,4 +1,5 @@
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
+use uefi::mem::memory_map::MemoryDescriptor;
 use x86_64::{
     registers::control::Cr3,
     structures::paging::{
@@ -16,7 +17,7 @@ use x86_64::{
 /// mapped, and the framebuffer range must come from the active graphics mode.
 pub unsafe fn init<'a>(
     frame_allocator: &mut BumpFrameAllocator,
-    mmap_iter: impl Iterator<Item = &'a uefi::table::boot::MemoryDescriptor>,
+    mmap_iter: impl Iterator<Item = &'a MemoryDescriptor>,
     framebuffer_base: u64,
     framebuffer_size: u64,
 ) {
@@ -67,16 +68,25 @@ unsafe fn create_pml4(frame_allocator: &mut BumpFrameAllocator) -> PhysFrame {
 unsafe fn map_memory_regions<'a>(
     mapper: &mut OffsetPageTable,
     frame_allocator: &mut BumpFrameAllocator,
-    mmap_iter: impl Iterator<Item = &'a uefi::table::boot::MemoryDescriptor>,
+    mmap_iter: impl Iterator<Item = &'a MemoryDescriptor>,
 ) {
     let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
     for desc in mmap_iter {
         let start = desc.phys_start;
-        let end = start + desc.page_count * 4096;
+        let size = desc
+            .page_count
+            .checked_mul(4096)
+            .expect("memory map region size overflowed");
+        let end = start
+            .checked_add(size)
+            .expect("memory map region end address overflowed");
 
         let mut current_start = start;
         while current_start < end {
-            if current_start % 0x200_000 == 0 && current_start + 0x200_000 <= end {
+            let next_huge_page_start = current_start
+                .checked_add(0x200_000)
+                .expect("2MiB mapping address overflowed");
+            if current_start % 0x200_000 == 0 && next_huge_page_start <= end {
                 let page = x86_64::structures::paging::Page::<x86_64::structures::paging::Size2MiB>::containing_address(VirtAddr::new(current_start));
                 let frame = x86_64::structures::paging::PhysFrame::<
                     x86_64::structures::paging::Size2MiB,
@@ -97,7 +107,7 @@ unsafe fn map_memory_regions<'a>(
                         "Failed to map 2MiB page {current_start:#x}: {e:?}"
                     ),
                 }
-                current_start += 0x200_000;
+                current_start = next_huge_page_start;
             } else {
                 let page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
                     VirtAddr::new(current_start),
@@ -119,7 +129,9 @@ unsafe fn map_memory_regions<'a>(
                         "Failed to map 4KiB page {current_start:#x}: {e:?}"
                     ),
                 }
-                current_start += 4096;
+                current_start = current_start
+                    .checked_add(4096)
+                    .expect("4KiB mapping address overflowed");
             }
         }
     }
@@ -136,11 +148,18 @@ unsafe fn map_framebuffer(
         framebuffer_base,
         framebuffer_size
     );
+    assert!(
+        framebuffer_size > 0,
+        "framebuffer size must be non-zero before paging setup"
+    );
     let start_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
         VirtAddr::new(framebuffer_base),
     );
+    let end_address = framebuffer_base
+        .checked_add(framebuffer_size - 1)
+        .expect("framebuffer end address overflowed");
     let end_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(VirtAddr::new(
-        framebuffer_base + framebuffer_size - 1,
+        end_address,
     ));
 
     for page in x86_64::structures::paging::Page::range_inclusive(start_page, end_page) {

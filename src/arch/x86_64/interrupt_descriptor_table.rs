@@ -1,6 +1,6 @@
 use crate::serial_println;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use spin::Lazy;
+use spin::LazyLock;
 use x86_64::instructions::port::Port;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
@@ -46,12 +46,9 @@ impl InterruptIndex {
     fn as_u8(self) -> u8 {
         self as u8
     }
-    fn as_usize(self) -> usize {
-        usize::from(self.as_u8())
-    }
 }
 
-static INTERRUPT_DESCRIPTOR_TABLE: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
+static INTERRUPT_DESCRIPTOR_TABLE: LazyLock<InterruptDescriptorTable> = LazyLock::new(|| {
     let mut table = InterruptDescriptorTable::new();
     table.breakpoint.set_handler_fn(breakpoint_handler);
     // SAFETY: The double fault stack index is initialized in the global
@@ -67,9 +64,9 @@ static INTERRUPT_DESCRIPTOR_TABLE: Lazy<InterruptDescriptorTable> = Lazy::new(||
         .general_protection_fault
         .set_handler_fn(general_protection_fault_handler);
 
-    table[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
-    table[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
-    table[InterruptIndex::Mouse.as_usize()].set_handler_fn(mouse_interrupt_handler);
+    table[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
+    table[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
+    table[InterruptIndex::Mouse.as_u8()].set_handler_fn(mouse_interrupt_handler);
     table
 });
 
@@ -83,7 +80,7 @@ extern "x86-interrupt" fn page_fault_handler(
 ) {
     use x86_64::registers::control::Cr2;
     panic!(
-        "[EXCPT] PAGE FAULT\nAddr: {:?}\nCode: {:?}\n{:#?}",
+        "[EXCEPT] PAGE FAULT\nAddr: {:?}\nCode: {:?}\n{:#?}",
         Cr2::read(),
         error_code,
         stack_frame
@@ -94,29 +91,27 @@ extern "x86-interrupt" fn general_protection_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: u64,
 ) {
-    panic!("[EXCPT] GPF\nCode: {error_code:#x}\n{stack_frame:#?}");
+    panic!("[EXCEPT] GPF\nCode: {error_code:#x}\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
-    serial_println!("[EXCPT] BREAKPOINT\n{:#?}", stack_frame);
+    serial_println!("[EXCEPT] BREAKPOINT\n{:#?}", stack_frame);
 }
 
 extern "x86-interrupt" fn double_fault_handler(
     stack_frame: InterruptStackFrame,
     _error_code: u64,
 ) -> ! {
-    panic!("[EXCPT] DOUBLE FAULT\n{stack_frame:#?}");
+    panic!("[EXCEPT] DOUBLE FAULT\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     TICKS.fetch_add(1, Ordering::Relaxed);
-    if let Some(mut interrupt_controllers) =
-        crate::arch::x86_64::interrupt_controller::LEGACY_INTERRUPT_CONTROLLERS.try_lock()
-    {
-        // SAFETY: End-of-interrupt is required after servicing the timer interrupt.
-        unsafe {
-            interrupt_controllers.notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
-        }
+    // SAFETY: Notify EOI to the PIC to allow future interrupts.
+    unsafe {
+        crate::arch::x86_64::interrupt_controller::notify_legacy_end_of_interrupt(
+            InterruptIndex::Timer.as_u8(),
+        );
     }
     call_timer_tick_processor();
 }

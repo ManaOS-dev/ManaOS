@@ -216,8 +216,11 @@ impl GraphicsDriver {
         color: Color,
     ) {
         let color = color.to_u32();
-        for py in y..(y + height) {
-            for px in x..(x + width) {
+        let end_x = x.saturating_add(width).min(self.info.horizontal_resolution);
+        let end_y = y.saturating_add(height).min(self.info.vertical_resolution);
+
+        for py in y.min(end_y)..end_y {
+            for px in x.min(end_x)..end_x {
                 self.put_pixel(px, py, color);
             }
         }
@@ -226,14 +229,27 @@ impl GraphicsDriver {
     /// Draw a rectangle outline with a color.
     #[allow(dead_code)]
     pub fn draw_rectangle(&self, x: usize, y: usize, width: usize, height: usize, color: Color) {
-        let color = color.to_u32();
-        for px in x..(x + width) {
-            self.put_pixel(px, y, color);
-            self.put_pixel(px, y + height - 1, color);
+        if width == 0 || height == 0 {
+            return;
         }
-        for py in y..(y + height) {
+
+        let color = color.to_u32();
+        let end_x = x.saturating_add(width).min(self.info.horizontal_resolution);
+        let end_y = y.saturating_add(height).min(self.info.vertical_resolution);
+        if x >= end_x || y >= end_y {
+            return;
+        }
+
+        let last_x = end_x - 1;
+        let last_y = end_y - 1;
+
+        for px in x..end_x {
+            self.put_pixel(px, y, color);
+            self.put_pixel(px, last_y, color);
+        }
+        for py in y..end_y {
             self.put_pixel(x, py, color);
-            self.put_pixel(x + width - 1, py, color);
+            self.put_pixel(last_x, py, color);
         }
     }
 
@@ -275,9 +291,22 @@ impl GraphicsDriver {
     /// Draw a raw RGB image (3 bytes per pixel).
     #[allow(dead_code, clippy::many_single_char_names)]
     pub fn draw_image(&self, x: usize, y: usize, width: usize, height: usize, data: &[u8]) {
-        for py in 0..height {
-            for px in 0..width {
-                let offset = (py * width + px) * 3;
+        let end_x = x.saturating_add(width).min(self.info.horizontal_resolution);
+        let end_y = y.saturating_add(height).min(self.info.vertical_resolution);
+        let draw_width = end_x.saturating_sub(x);
+        let draw_height = end_y.saturating_sub(y);
+        let available_pixels = data.len() / 3;
+        let requested_pixels = width.saturating_mul(height);
+        let pixels_to_draw = available_pixels.min(requested_pixels);
+
+        for py in 0..draw_height {
+            for px in 0..draw_width {
+                let source_index = py.saturating_mul(width).saturating_add(px);
+                if source_index >= pixels_to_draw {
+                    return;
+                }
+
+                let offset = source_index * 3;
                 let r = u32::from(data[offset]);
                 let g = u32::from(data[offset + 1]);
                 let b = u32::from(data[offset + 2]);

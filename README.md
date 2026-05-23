@@ -49,7 +49,7 @@ For the current roadmap and known refactoring tasks, see **[TODO.md](TODO.md)**.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details (or choice of your license).
+See the [LICENSE](LICENSE) file for the current project license.
 
 ---
 

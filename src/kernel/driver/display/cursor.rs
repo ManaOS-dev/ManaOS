@@ -5,20 +5,19 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
-/// Draw the cursor from the current input mouse state.
+/// Draw the cursor at the provided screen position.
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss
 )]
-pub fn draw_cursor() {
-    let state = crate::kernel::driver::input::mouse::get_state();
+pub fn draw_cursor(x: i32, y: i32) {
     let _ = crate::kernel::driver::display::framebuffer::try_with_graphics_mut(|graphics| {
         let width = i32::try_from(graphics.info.horizontal_resolution).unwrap_or(0);
         let height = i32::try_from(graphics.info.vertical_resolution).unwrap_or(0);
 
-        let x = state.x.clamp(0, width - 16);
-        let y = state.y.clamp(0, height - 16);
+        let x = x.clamp(0, (width - 16).max(0));
+        let y = y.clamp(0, (height - 16).max(0));
 
         if INITIALIZED.load(Ordering::Acquire) {
             let (old_x, old_y) = graphics.last_cursor_pos;
