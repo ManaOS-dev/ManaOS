@@ -14,18 +14,36 @@ const PAGE_SIZE: u64 = 4096;
 const PAGE_SIZE_USIZE: usize = 4096;
 const USER_PROGRAM_BASE: u64 = 0x0000_4000_0000_0000;
 const USER_STACK_BASE: u64 = 0x0000_7fff_f000_0000;
-const USER_WRITE_DEMO_PROGRAM: &[u8] = &[
+const USER_FILE_DEMO_PROGRAM: &[u8] = &[
+    0xb8, 0x03, 0x00, 0x00, 0x00, // mov eax, SYS_OPEN
+    0x48, 0x8d, 0x3d, 0x44, 0x00, 0x00, 0x00, // lea rdi, [rip + PATH]
+    0x0f, 0x05, // syscall
+    0x89, 0xc3, // mov ebx, eax
+    0xb8, 0x05, 0x00, 0x00, 0x00, // mov eax, SYS_READ
+    0x89, 0xdf, // mov edi, ebx
+    0x48, 0x8d, 0x35, 0x49, 0x00, 0x00, 0x00, // lea rsi, [rip + BUFFER]
+    0xba, 0x40, 0x00, 0x00, 0x00, // mov edx, BUFFER_LEN
+    0x0f, 0x05, // syscall
+    0x89, 0xc5, // mov ebp, eax
+    0xb8, 0x04, 0x00, 0x00, 0x00, // mov eax, SYS_CLOSE
+    0x89, 0xdf, // mov edi, ebx
+    0x0f, 0x05, // syscall
     0xb8, 0x01, 0x00, 0x00, 0x00, // mov eax, SYS_WRITE
     0xbf, 0x01, 0x00, 0x00, 0x00, // mov edi, STDOUT
-    0x48, 0x8d, 0x35, 0x12, 0x00, 0x00, 0x00, // lea rsi, [rip + MESSAGE]
-    0xba, 0x14, 0x00, 0x00, 0x00, // mov edx, MESSAGE_LEN
+    0x48, 0x8d, 0x35, 0x26, 0x00, 0x00, 0x00, // lea rsi, [rip + BUFFER]
+    0x89, 0xea, // mov edx, ebp
     0x0f, 0x05, // syscall
     0xb8, 0x02, 0x00, 0x00, 0x00, // mov eax, SYS_EXIT
     0x31, 0xff, // xor edi, edi
     0x0f, 0x05, // syscall
     0xeb, 0xfe, // jump to self if SYS_EXIT returns unexpectedly
-    b'h', b'e', b'l', b'l', b'o', b' ', b'f', b'r', b'o', b'm', b' ', b'u', b's', b'e', b'r', b'l',
-    b'a', b'n', b'd', b'\n',
+    b'/', b'h', b'e', b'l', b'l', b'o', b'.', b't', b'x', b't', 0x00, 0x90, 0x90, 0x90, 0x90, 0x90,
+    0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, // BUFFER starts here.
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 ];
 
 /// Allocate and map a fixed-base user-space stack.
@@ -61,7 +79,7 @@ pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64)
         .expect("user stack top address overflowed")
 }
 
-/// Allocate and map the built-in user-space write demo program.
+/// Allocate and map the built-in user-space file syscall demo program.
 ///
 /// Returns the virtual entry point of the mapped program.
 ///
@@ -69,9 +87,9 @@ pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64)
 ///
 /// Panics if a physical frame cannot be allocated or the program page cannot be
 /// mapped.
-pub fn allocate_user_write_demo(frame_allocator: &mut BumpFrameAllocator) -> u64 {
+pub fn allocate_user_file_demo(frame_allocator: &mut BumpFrameAllocator) -> u64 {
     assert!(
-        USER_WRITE_DEMO_PROGRAM.len() <= PAGE_SIZE_USIZE,
+        USER_FILE_DEMO_PROGRAM.len() <= PAGE_SIZE_USIZE,
         "built-in user program must fit in one page"
     );
 
@@ -85,9 +103,9 @@ pub fn allocate_user_write_demo(frame_allocator: &mut BumpFrameAllocator) -> u64
     unsafe {
         core::ptr::write_bytes(program_page, 0, PAGE_SIZE_USIZE);
         core::ptr::copy_nonoverlapping(
-            USER_WRITE_DEMO_PROGRAM.as_ptr(),
+            USER_FILE_DEMO_PROGRAM.as_ptr(),
             program_page,
-            USER_WRITE_DEMO_PROGRAM.len(),
+            USER_FILE_DEMO_PROGRAM.len(),
         );
         map_user_range(
             frame_allocator,

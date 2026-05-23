@@ -247,7 +247,7 @@ fn main() -> Status {
 
     let user_stack_top = kernel::memory::user_stack::allocate_user_stack(&mut frame_allocator, 4);
     let user_entry_point =
-        kernel::memory::user_stack::allocate_user_write_demo(&mut frame_allocator);
+        kernel::memory::user_stack::allocate_user_file_demo(&mut frame_allocator);
     let user_task_id = kernel::task::spawn_user_task(user_entry_point, user_stack_top);
     crate::serial_println!("[ok   ] User task spawned.");
     crate::serial_println!("[ok   ] User demo started.");
