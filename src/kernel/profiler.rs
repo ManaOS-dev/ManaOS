@@ -18,6 +18,8 @@ pub fn read_tsc() -> u64 {
 /// Calibrate TSC frequency using PIT.
 /// This should be called after PIT is initialized and interrupts are enabled.
 pub fn calibrate_tsc() {
+    crate::kernel::task::set_preemption_enabled(false);
+
     let start_ticks = crate::arch::x86_64::interrupt_descriptor_table::get_ticks();
 
     // Wait for the next tick to start measuring
@@ -38,6 +40,8 @@ pub fn calibrate_tsc() {
     // (tsc_end - tsc_start) / (actual_ticks / 1000)
     let freq = (tsc_end - tsc_start) * 1000 / actual_ticks;
     TSC_FREQUENCY.store(freq, Ordering::Relaxed);
+
+    crate::kernel::task::set_preemption_enabled(true);
 
     crate::serial_println!("[prof ] TSC Frequency calibrated: {} MHz", freq / 1_000_000);
 }

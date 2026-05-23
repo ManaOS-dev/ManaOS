@@ -23,11 +23,13 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 use context::{TaskContext, TaskEntry, UserTaskContext};
+use core::sync::atomic::{AtomicBool, Ordering};
 use spin::Mutex;
 
 const TASK_STACK_SIZE: usize = 16 * 1024;
 
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
+static PREEMPTION_ENABLED: AtomicBool = AtomicBool::new(true);
 
 #[derive(Debug, Clone, Copy)]
 enum TaskKind {
@@ -219,8 +221,17 @@ pub fn spawn_user_task(entry_point: u64, user_stack_top: u64) -> u64 {
         .spawn_user_task(entry_point, user_stack_top)
 }
 
+/// Enable or disable timer-driven task switching.
+pub fn set_preemption_enabled(enabled: bool) {
+    PREEMPTION_ENABLED.store(enabled, Ordering::Release);
+}
+
 /// Process one timer tick and switch to the next runnable task when possible.
 pub fn process_timer_tick() {
+    if !PREEMPTION_ENABLED.load(Ordering::Acquire) {
+        return;
+    }
+
     let switch_action = {
         let Some(mut scheduler) = SCHEDULER.try_lock() else {
             return;
