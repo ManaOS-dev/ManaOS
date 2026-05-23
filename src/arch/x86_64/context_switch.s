@@ -56,7 +56,9 @@ enter_user_mode_returnable:
     push rbx
     mov rbx, rcx
     lea rcx, [rsp + 8]
+    sub rsp, 32
     call set_user_exit_return_stack
+    add rsp, 32
     mov rcx, rbx
     pop rbx
 
