@@ -20,6 +20,8 @@ static TSS: Lazy<TaskStateSegment> = Lazy::new(|| {
 struct Selectors {
     code: SegmentSelector,
     data: SegmentSelector,
+    user_data: SegmentSelector,
+    user_code: SegmentSelector,
     tss: SegmentSelector,
 }
 
@@ -27,12 +29,16 @@ static GLOBAL_DESCRIPTOR_TABLE: Lazy<(GlobalDescriptorTable, Selectors)> = Lazy:
     let mut table = GlobalDescriptorTable::new();
     let code_selector = table.add_entry(Descriptor::kernel_code_segment());
     let data_selector = table.add_entry(Descriptor::kernel_data_segment());
+    let user_data_selector = table.add_entry(Descriptor::user_data_segment());
+    let user_code_selector = table.add_entry(Descriptor::user_code_segment());
     let tss_selector = table.add_entry(Descriptor::tss_segment(&TSS));
     (
         table,
         Selectors {
             code: code_selector,
             data: data_selector,
+            user_data: user_data_selector,
+            user_code: user_code_selector,
             tss: tss_selector,
         },
     )
@@ -52,4 +58,14 @@ pub fn init() {
         SS::set_reg(GLOBAL_DESCRIPTOR_TABLE.1.data);
         load_tss(GLOBAL_DESCRIPTOR_TABLE.1.tss);
     }
+}
+
+/// Return the user data segment selector.
+pub fn get_user_data_selector() -> SegmentSelector {
+    GLOBAL_DESCRIPTOR_TABLE.1.user_data
+}
+
+/// Return the user code segment selector.
+pub fn get_user_code_selector() -> SegmentSelector {
+    GLOBAL_DESCRIPTOR_TABLE.1.user_code
 }

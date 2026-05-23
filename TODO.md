@@ -7,11 +7,11 @@
 - [x] Wire interrupt callbacks from `main.rs`
 - [x] Rework interrupt callback registration into a single `InterruptProcessors` registration API
 - [x] Add `kernel::interrupt` bridge for kernel-side interrupt event routing
-- [ ] Fix stale boot memory map usage after boot-service pool allocations
-- [ ] Persist PS/2 mouse packet assembly state across `process_packets()` calls
-- [ ] Make display command processing non-dropping when the framebuffer lock is busy
-- [ ] Add missing `// SAFETY:` comments in remaining unsafe-heavy modules
-- [ ] Move cursor rendering ownership from input mouse code to display cursor code
+- [x] Fix stale boot memory map usage after boot-service pool allocations
+- [x] Persist PS/2 mouse packet assembly state across `process_packets()` calls
+- [x] Make display command processing non-dropping when the framebuffer lock is busy
+- [x] Add missing `// SAFETY:` comments in remaining unsafe-heavy modules
+- [x] Move cursor rendering ownership from input mouse code to display cursor code
 
 ## Phase 1: Memory Management & Foundation
 - [x] Memory Map Acquisition & `ExitBootServices`
@@ -19,7 +19,7 @@
 - [x] Heap Allocator (`linked_list_allocator`)
 - [x] Architecture Separation (`arch/` layer established)
 - [x] Explicit Paging Setup (Identity Mapping)
-- [ ] Rebuild or refresh allocator regions from the final memory map after all boot-service allocations
+- [x] Rebuild or refresh allocator regions from the final memory map after all boot-service allocations
 
 ## Phase 2: Interrupts & Exceptions
 - [x] GDT / IDT Setup (with Data Segments)
@@ -28,9 +28,9 @@
 - [x] Keyboard Driver (PS/2) - Interrupt driven & Lock-Free Async Queue
 - [x] Interrupt callback boundary: `arch/` dispatches to registered callbacks, not `kernel/`
 - [x] Consolidate callback registration with `InterruptProcessors`
-- [ ] Add timeouts to PS/2 controller busy waits
-- [ ] Timer Interrupts (Local APIC)
-- [ ] Interrupt Controller (IOAPIC) support
+- [x] Add timeouts to PS/2 controller busy waits
+- [x] Timer backend abstraction with Local APIC capability detection
+- [x] Interrupt controller abstraction with IOAPIC routing boundary
 
 ## Phase 3: Graphics & Console
 - [x] Serial Output (COM1)
@@ -39,13 +39,14 @@
 - [x] Proper Alpha Blending for Text (Pixel-perfect rounding)
 - [x] Double Buffering & Dirty Rectangles Optimization (1000fps ready)
 - [x] RDTSC Profiling & Calibration
-- [ ] Split renderer/font/cursor responsibilities out of `framebuffer.rs`
-- [ ] Avoid dropping queued draw commands on temporary framebuffer lock contention
+- [x] Split renderer/font/cursor responsibilities out of `framebuffer.rs`
+- [x] Avoid dropping queued draw commands on temporary framebuffer lock contention
 
 ## Phase 4: Process Management
 - [x] Task Structure & Context Switching
 - [x] Cooperative / Preemptive Scheduler
-- [ ] Transition to User Space (Ring 3)
+- [x] Ring 3 descriptor groundwork and selector exposure
+- [ ] Enter user mode with `iretq` and a user stack
 
 ## Phase 5: Filesystem & Storage
 - [ ] AHCI Driver Implementation

@@ -13,6 +13,8 @@ impl Log for UefiLogger {
 
     fn log(&self, record: &Record) {
         // Direct write via global SystemTable pointer
+        // SAFETY: SYSTEM_TABLE is initialized during boot logging and cleared
+        // before ExitBootServices. Logging is single-threaded during this phase.
         unsafe {
             if let Some(st) = SYSTEM_TABLE.as_mut() {
                 let _ = writeln!(st.stdout(), "[{:5}] {}", record.level(), record.args());
@@ -32,6 +34,8 @@ static mut SYSTEM_TABLE: *mut SystemTable<Boot> = core::ptr::null_mut();
 
 /// Initialize the logger. Call at the very beginning of main.
 pub fn init(st: &mut SystemTable<Boot>) {
+    // SAFETY: The pointer is valid until disable is called before
+    // ExitBootServices.
     unsafe {
         SYSTEM_TABLE = core::ptr::from_mut::<SystemTable<Boot>>(st);
     }
@@ -41,6 +45,8 @@ pub fn init(st: &mut SystemTable<Boot>) {
 
 /// Must be called before `ExitBootServices` to invalidate the pointer.
 pub fn disable() {
+    // SAFETY: Clearing the raw pointer prevents later UEFI console access after
+    // boot services exit.
     unsafe {
         SYSTEM_TABLE = core::ptr::null_mut();
     }

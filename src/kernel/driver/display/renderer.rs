@@ -1,7 +1,8 @@
 //! Display scene rendering helpers.
 
 use crate::kernel::driver::display::color::Color;
-use crate::kernel::driver::display::framebuffer::{self, Font};
+use crate::kernel::driver::display::font::Font;
+use crate::kernel::driver::display::framebuffer;
 
 /// Draw the initial boot screen after the framebuffer driver is initialized.
 pub fn draw_boot_screen() {

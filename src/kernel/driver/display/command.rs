@@ -9,7 +9,7 @@
 //! - [`process_commands`] to render from queue
 
 use crate::kernel::driver::display::color::Color;
-use crate::kernel::driver::display::framebuffer::Font;
+use crate::kernel::driver::display::font::Font;
 use crate::kernel::sync::ring_buffer::LockFreeRingBuffer;
 use alloc::string::String;
 
@@ -38,20 +38,29 @@ pub fn push_command(cmd: DrawCommand) {
 pub fn process_commands() {
     use crate::kernel::driver::display::framebuffer;
 
-    while let Some(cmd) = COMMAND_QUEUE.pop() {
-        framebuffer::try_with_graphics_mut(|graphics| match cmd {
-            DrawCommand::FillRect(x, y, width, height, color) => {
-                graphics.draw_filled_rectangle(x, y, width, height, color);
-            }
-            DrawCommand::Line(x1, y1, x2, y2, color) => {
-                graphics.draw_line(x1, y1, x2, y2, color);
-            }
-            DrawCommand::FlushRect(x, y, width, height) => {
-                graphics.flush_rect(x, y, width, height);
-            }
-            DrawCommand::Text(font, x, y, scale, color, text) => {
-                graphics.draw_text(font, x, y, scale, color, &text);
-            }
-        });
+    let _ = framebuffer::try_with_graphics_mut(|graphics| {
+        while let Some(cmd) = COMMAND_QUEUE.pop() {
+            process_command(graphics, cmd);
+        }
+    });
+}
+
+fn process_command(
+    graphics: &mut crate::kernel::driver::display::framebuffer::GraphicsDriver,
+    cmd: DrawCommand,
+) {
+    match cmd {
+        DrawCommand::FillRect(x, y, width, height, color) => {
+            graphics.draw_filled_rectangle(x, y, width, height, color);
+        }
+        DrawCommand::Line(x1, y1, x2, y2, color) => {
+            graphics.draw_line(x1, y1, x2, y2, color);
+        }
+        DrawCommand::FlushRect(x, y, width, height) => {
+            graphics.flush_rect(x, y, width, height);
+        }
+        DrawCommand::Text(font, x, y, scale, color, text) => {
+            graphics.draw_text(font, x, y, scale, color, &text);
+        }
     }
 }

@@ -17,7 +17,9 @@
 //! - [`switch_context`] - Switch between saved task contexts
 
 pub mod global_descriptor_table;
+pub mod interrupt_controller;
 pub mod interrupt_descriptor_table;
+pub mod interval_timer;
 
 /// Check if the CPU supports APIC.
 #[allow(dead_code)]
@@ -33,41 +35,29 @@ pub fn init() {
     global_descriptor_table::init();
     crate::serial_println!("[arch] Initializing IDT...");
     interrupt_descriptor_table::initialize();
+    crate::serial_println!(
+        "[arch] Preferred interrupt controller: {:?}, IOAPIC routing: {}",
+        interrupt_controller::get_preferred_kind(),
+        interrupt_controller::has_ioapic_routing()
+    );
     // SAFETY: The interrupt controllers are initialized while interrupts are
     // disabled during early architecture setup.
     unsafe {
-        let mut interrupt_controllers = interrupt_descriptor_table::INTERRUPT_CONTROLLERS.lock();
-        interrupt_controllers.initialize();
-
-        // 0xf8: 11111000 (Timer, Keyboard, Cascade enabled)
-        // 0xef: 11101111 (Mouse enabled)
-        interrupt_controllers.write_masks(0xf8, 0xef);
+        interrupt_controller::initialize_legacy();
     }
 
     // Initialize PIT (Programmable Interval Timer)
-    crate::serial_println!("[arch] Initializing PIT...");
-    init_pit(1000);
+    crate::serial_println!(
+        "[arch] Initializing PIT... preferred timer: {:?}, local APIC timer: {}",
+        interval_timer::get_preferred_kind(),
+        interval_timer::has_local_apic_timer()
+    );
+    interval_timer::initialize_programmable_interval_timer(1000);
 }
 
 /// Enable CPU interrupts after architecture and driver initialization.
 pub fn enable_interrupts() {
     x86_64::instructions::interrupts::enable();
-}
-
-/// Set PIT frequency to `target_hz`
-fn init_pit(target_hz: u32) {
-    use x86_64::instructions::port::Port;
-    let divider = 1_193_182 / target_hz;
-    let mut command_port = Port::<u8>::new(0x43);
-    let mut data_port = Port::<u8>::new(0x40);
-
-    // SAFETY: Ports 0x43 and 0x40 are the interval timer command and channel 0
-    // data ports, used during single-threaded architecture initialization.
-    unsafe {
-        command_port.write(0x36); // Square wave, Lo/Hi byte
-        data_port.write((divider & 0xFF) as u8);
-        data_port.write(((divider >> 8) & 0xFF) as u8);
-    }
 }
 
 #[allow(dead_code)]

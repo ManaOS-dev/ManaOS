@@ -12,7 +12,8 @@
 //! ## Public API
 //! - [`initialize`] - Initialize memory and display subsystems
 
-use crate::kernel::driver::display::framebuffer::{self, FontAssets, FrameBufferInfo};
+use crate::kernel::driver::display::font::FontAssets;
+use crate::kernel::driver::display::framebuffer::{self, FrameBufferInfo};
 use crate::kernel::driver::display::renderer;
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use crate::kernel::memory::heap;

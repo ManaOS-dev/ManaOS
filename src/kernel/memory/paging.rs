@@ -8,28 +8,46 @@ use x86_64::{
 };
 
 /// Initialize a new page table with identity mapping and switch to it.
+///
+/// # Safety
+///
+/// The provided frame allocator must return valid, unused, page-aligned physical
+/// frames. The memory map iterator must describe memory that can be identity
+/// mapped, and the framebuffer range must come from the active graphics mode.
 pub unsafe fn init<'a>(
     frame_allocator: &mut BumpFrameAllocator,
     mmap_iter: impl Iterator<Item = &'a uefi::table::boot::MemoryDescriptor>,
     framebuffer_base: u64,
     framebuffer_size: u64,
 ) {
-    let pml4_frame = create_pml4(frame_allocator);
+    // SAFETY: The caller guarantees that the frame allocator returns valid page
+    // table frames.
+    let pml4_frame = unsafe { create_pml4(frame_allocator) };
     let pml4_table_ptr = pml4_frame.start_address().as_u64() as *mut PageTable;
-    let pml4_table = &mut *pml4_table_ptr;
+    // SAFETY: pml4_frame was freshly allocated and zeroed by create_pml4.
+    let pml4_table = unsafe { &mut *pml4_table_ptr };
 
-    let mut mapper = OffsetPageTable::new(pml4_table, VirtAddr::new(0));
+    // SAFETY: ManaOS uses identity-mapped physical memory during early paging
+    // setup, so a zero physical memory offset is valid here.
+    let mut mapper = unsafe { OffsetPageTable::new(pml4_table, VirtAddr::new(0)) };
 
-    map_memory_regions(&mut mapper, frame_allocator, mmap_iter);
-    map_framebuffer(
-        &mut mapper,
-        frame_allocator,
-        framebuffer_base,
-        framebuffer_size,
-    );
+    // SAFETY: The caller provides the boot memory map and a valid allocator for
+    // page-table frames.
+    unsafe {
+        map_memory_regions(&mut mapper, frame_allocator, mmap_iter);
+        map_framebuffer(
+            &mut mapper,
+            frame_allocator,
+            framebuffer_base,
+            framebuffer_size,
+        );
+    }
 
     // Switch to the new page table
-    Cr3::write(pml4_frame, x86_64::registers::control::Cr3Flags::empty());
+    // SAFETY: pml4_frame points to a valid level-4 page table built above.
+    unsafe {
+        Cr3::write(pml4_frame, x86_64::registers::control::Cr3Flags::empty());
+    }
     crate::serial_println!("[paging] Identity mapping complete.");
 }
 
@@ -39,7 +57,10 @@ unsafe fn create_pml4(frame_allocator: &mut BumpFrameAllocator) -> PhysFrame {
         .expect("OOM: failed to allocate PML4 frame");
     let frame = PhysFrame::containing_address(PhysAddr::new(addr));
     let ptr = frame.start_address().as_u64() as *mut PageTable;
-    core::ptr::write_bytes(ptr, 0, 1);
+    // SAFETY: ptr points to a freshly allocated 4KiB page table frame.
+    unsafe {
+        core::ptr::write_bytes(ptr, 0, 1);
+    }
     frame
 }
 
@@ -156,6 +177,8 @@ struct FrameAllocWrapper<'a> {
     frame_allocator: &'a mut BumpFrameAllocator,
 }
 
+// SAFETY: FrameAllocWrapper delegates to BumpFrameAllocator, which returns each
+// frame at most once from registered conventional memory regions.
 unsafe impl x86_64::structures::paging::FrameAllocator<Size4KiB> for FrameAllocWrapper<'_> {
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
         self.frame_allocator

@@ -1,14 +1,18 @@
-use crate::kernel::driver::display::color::Color;
 use crate::kernel::driver::input::mouse::packet::MousePacket;
-use core::sync::atomic::{AtomicBool, Ordering};
 use spin::Mutex;
 
+/// Current PS/2 mouse position and button state.
 #[derive(Debug, Clone, Copy)]
 pub struct MouseState {
+    /// Horizontal cursor position in pixels.
     pub x: i32,
+    /// Vertical cursor position in pixels.
     pub y: i32,
+    /// Whether the left button is pressed.
     pub left: bool,
+    /// Whether the right button is pressed.
     pub right: bool,
+    /// Whether the middle button is pressed.
     pub middle: bool,
 }
 
@@ -19,8 +23,8 @@ static STATE: Mutex<MouseState> = Mutex::new(MouseState {
     right: false,
     middle: false,
 });
-static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
+/// Apply one decoded mouse packet to the current mouse state.
 pub fn process_packet(packet: &MousePacket) {
     let mut state = STATE.lock();
     state.left = packet.left_button;
@@ -30,35 +34,7 @@ pub fn process_packet(packet: &MousePacket) {
     state.y += packet.delta_y;
 }
 
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss
-)]
-pub fn draw_cursor() {
-    let state = STATE.lock();
-    let _ = crate::kernel::driver::display::framebuffer::try_with_graphics_mut(|graphics| {
-        let width = i32::try_from(graphics.info.horizontal_resolution).unwrap_or(0);
-        let height = i32::try_from(graphics.info.vertical_resolution).unwrap_or(0);
-
-        let mut x = state.x;
-        let mut y = state.y;
-
-        x = x.clamp(0, width - 16);
-        y = y.clamp(0, height - 16);
-
-        if INITIALIZED.load(Ordering::Acquire) {
-            let (old_x, old_y) = graphics.last_cursor_pos;
-            graphics.restore_cursor_area();
-            graphics.flush_rect(old_x, old_y, 16, 16);
-        }
-
-        let ux = usize::try_from(x).unwrap_or(0);
-        let uy = usize::try_from(y).unwrap_or(0);
-
-        graphics.save_cursor_area(ux, uy);
-        graphics.draw_filled_rectangle(ux, uy, 5, 5, Color::rgb(0xFF, 0, 0));
-        graphics.flush_rect(ux, uy, 16, 16);
-        INITIALIZED.store(true, Ordering::Release);
-    });
+/// Return a snapshot of the current mouse state.
+pub fn get_state() -> MouseState {
+    *STATE.lock()
 }

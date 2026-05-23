@@ -51,11 +51,9 @@ architecture 側は `InterruptProcessors` 構造体と `register_processors(...)
 
 ## 現在の既知の設計負債
 
-- boot-service のファイル割り当て前に memory region を収集しているため、最終 memory map から allocator region を更新する必要があります。
-- PS/2 mouse packet の組み立て状態は `process_packets()` 呼び出しをまたいで保持する必要があります。
-- display command は graphics lock が一時的に取れない場合でも失われないようにする必要があります。
-- cursor rendering は `kernel::driver::input::mouse` から display cursor module へ移すべきです。
-- unsafe が多いモジュールでは、`// SAFETY:` コメントと unsafe block の粒度をさらに整える必要があります。
+- Local APIC timer と IOAPIC routing は architecture backend として表現されていますが、ACPI MADT parsing が入るまでは legacy programmable interval timer と 8259 interrupt controller を使います。
+- Ring 3 selector は GDT に登録され、kernel から参照できますが、実際に user mode へ入るには `iretq` transition path と user stack が必要です。
+- cursor rendering は display 側の責務になりましたが、cursor shape はまだ単純な placeholder rectangle です。
 
 ## 新しいドライバの追加 (チェックリスト)
 

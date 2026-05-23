@@ -56,16 +56,13 @@ the only composition root. `kernel::interrupt` provides thin bridge functions so
 
 ## Current Known Design Debt
 
-- Boot memory regions are collected before boot-service file allocations. Refresh
-  allocator regions from the final memory map to avoid treating font buffers as
-  free memory.
-- Mouse packet assembly state should persist across `process_packets()` calls.
-- Display command processing should not pop and lose a command if the graphics
-  lock is temporarily unavailable.
-- Cursor rendering should move from `kernel::driver::input::mouse` to a display
-  cursor module.
-- Remaining unsafe-heavy modules need tighter `// SAFETY:` comments and smaller
-  unsafe blocks.
+- Local APIC timer and IOAPIC routing are represented as architecture backends,
+  but the boot path still uses the legacy programmable interval timer and 8259
+  interrupt controllers until ACPI MADT parsing is added.
+- Ring 3 selectors are installed and exposed, but entering user mode still needs
+  an `iretq` transition path and a dedicated user stack.
+- Cursor rendering is display-owned, but the cursor shape is still a simple
+  placeholder rectangle.
 
 ## Adding a New Driver (Checklist)
 
