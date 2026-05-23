@@ -24,7 +24,14 @@
 - [x] exit 時に current user task を finished にする
 - [x] one-shot user demo runner
 - [x] user exit 後に UI を再開
-- [ ] syscall read/open/close
+- [x] Phase 5B-3: file syscalls
+- [x] syscall open/read/close
+- [x] user から C string をコピー
+- [x] read buffer を user へコピー
+- [x] userland open/read/close demo
+- [x] Phase 5B-4: user pointer のページテーブル検証
+- [x] user range を mapped page 単位で検証
+- [x] 未マップの read/write syscall buffer を拒否
 - [ ] 最小 shell 風 task
 - [ ] Phase 5C: Real Storage
 - [ ] GPT パーティションテーブル解析

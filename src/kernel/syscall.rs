@@ -14,16 +14,29 @@
 //! - [`dispatch`] - Dispatch one syscall from architecture entry code
 //! - [`SYS_WRITE`] - Write syscall number
 //! - [`SYS_EXIT`] - Exit syscall number
+//! - [`SYS_OPEN`] - Open syscall number
+//! - [`SYS_CLOSE`] - Close syscall number
+//! - [`SYS_READ`] - Read syscall number
 
+use alloc::string::String;
+
+const ERROR_NOT_FOUND: u64 = u64::MAX - 1;
 const ERROR_BAD_FILE_DESCRIPTOR: u64 = u64::MAX - 8;
 const ERROR_BAD_ADDRESS: u64 = u64::MAX - 13;
 const ERROR_NOT_IMPLEMENTED: u64 = u64::MAX - 37;
+const MAX_USER_STRING_LENGTH: usize = 256;
 const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 
 /// Write syscall number.
 pub const SYS_WRITE: u64 = 1;
 /// Exit syscall number.
 pub const SYS_EXIT: u64 = 2;
+/// Open syscall number.
+pub const SYS_OPEN: u64 = 3;
+/// Close syscall number.
+pub const SYS_CLOSE: u64 = 4;
+/// Read syscall number.
+pub const SYS_READ: u64 = 5;
 /// Internal sentinel telling the syscall entry code to return to the kernel.
 pub const USER_EXIT_SENTINEL: u64 = u64::MAX;
 
@@ -44,6 +57,9 @@ pub extern "C" fn syscall_dispatch(
     match syscall_number {
         SYS_WRITE => sys_write(first_argument, second_argument, third_argument),
         SYS_EXIT => sys_exit(first_argument),
+        SYS_OPEN => sys_open(first_argument),
+        SYS_CLOSE => sys_close(first_argument),
+        SYS_READ => sys_read(first_argument, second_argument, third_argument),
         _ => ERROR_NOT_IMPLEMENTED,
     }
 }
@@ -69,6 +85,54 @@ fn sys_write(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
     }
 }
 
+fn sys_open(user_path_pointer: u64) -> u64 {
+    let Ok(user_path_pointer) = usize::try_from(user_path_pointer) else {
+        return ERROR_BAD_ADDRESS;
+    };
+
+    let Some(path) = copy_cstr_from_user(user_path_pointer) else {
+        return ERROR_BAD_ADDRESS;
+    };
+
+    match crate::kernel::filesystem::open(&path) {
+        Ok(file_descriptor) => u64::try_from(file_descriptor).unwrap_or(u64::MAX),
+        Err(crate::kernel::filesystem::FileSystemError::NotFound) => ERROR_NOT_FOUND,
+        Err(_) => ERROR_BAD_FILE_DESCRIPTOR,
+    }
+}
+
+fn sys_close(file_descriptor: u64) -> u64 {
+    let Ok(file_descriptor) = usize::try_from(file_descriptor) else {
+        return ERROR_BAD_FILE_DESCRIPTOR;
+    };
+
+    match crate::kernel::filesystem::close(file_descriptor) {
+        Ok(()) => 0,
+        Err(_) => ERROR_BAD_FILE_DESCRIPTOR,
+    }
+}
+
+fn sys_read(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
+    let Ok(file_descriptor) = usize::try_from(file_descriptor) else {
+        return ERROR_BAD_FILE_DESCRIPTOR;
+    };
+    let Ok(user_pointer) = usize::try_from(user_pointer) else {
+        return ERROR_BAD_ADDRESS;
+    };
+    let Ok(length) = usize::try_from(length) else {
+        return ERROR_BAD_ADDRESS;
+    };
+
+    let Some(buffer) = copy_to_user(user_pointer, length) else {
+        return ERROR_BAD_ADDRESS;
+    };
+
+    match crate::kernel::filesystem::read(file_descriptor, buffer) {
+        Ok(bytes_read) => u64::try_from(bytes_read).unwrap_or(u64::MAX),
+        Err(_) => ERROR_BAD_FILE_DESCRIPTOR,
+    }
+}
+
 fn sys_exit(exit_code: u64) -> u64 {
     if let Some(task_id) = crate::kernel::task::finish_current_task(exit_code) {
         crate::serial_println!(
@@ -83,9 +147,9 @@ fn sys_exit(exit_code: u64) -> u64 {
     USER_EXIT_SENTINEL
 }
 
-fn copy_from_user(user_pointer: usize, length: usize) -> Option<&'static [u8]> {
+fn validate_user_range(user_pointer: usize, length: usize) -> Option<()> {
     if length == 0 {
-        return Some(&[]);
+        return Some(());
     }
 
     let end = user_pointer.checked_add(length)?;
@@ -93,8 +157,50 @@ fn copy_from_user(user_pointer: usize, length: usize) -> Option<&'static [u8]> {
         return None;
     }
 
-    // SAFETY: This is the Phase 5B-1 bootstrap validator. It only accepts
-    // canonical lower-half user addresses and relies on current shared page
-    // tables to make mapped user memory readable by the kernel.
+    Some(())
+}
+
+fn copy_from_user(user_pointer: usize, length: usize) -> Option<&'static [u8]> {
+    if length == 0 {
+        return Some(&[]);
+    }
+
+    validate_user_range(user_pointer, length)?;
+    if !crate::kernel::memory::paging::is_user_range_mapped_readable(user_pointer, length) {
+        return None;
+    }
+
+    // SAFETY: The range has been bounds-checked and page-table validated as
+    // present user-accessible memory before creating the kernel slice.
     Some(unsafe { core::slice::from_raw_parts(user_pointer as *const u8, length) })
+}
+
+fn copy_to_user(user_pointer: usize, length: usize) -> Option<&'static mut [u8]> {
+    if length == 0 {
+        return Some(&mut []);
+    }
+
+    validate_user_range(user_pointer, length)?;
+    if !crate::kernel::memory::paging::is_user_range_mapped_writable(user_pointer, length) {
+        return None;
+    }
+
+    // SAFETY: The range has been bounds-checked and page-table validated as
+    // present writable user-accessible memory before creating the kernel slice.
+    Some(unsafe { core::slice::from_raw_parts_mut(user_pointer as *mut u8, length) })
+}
+
+fn copy_cstr_from_user(user_pointer: usize) -> Option<String> {
+    let bytes = copy_from_user(user_pointer, MAX_USER_STRING_LENGTH)?;
+
+    let mut path = String::new();
+    for byte in bytes {
+        if *byte == 0 {
+            return Some(path);
+        }
+
+        path.push(char::from(*byte));
+    }
+
+    None
 }
