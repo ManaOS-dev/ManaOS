@@ -19,6 +19,11 @@
 - [x] user pointer validation の仮実装
 - [x] userland write wrapper
 - [x] `hello from userland` 出力
+- [x] Phase 5B-2: SYS_EXIT plus one-shot user demo
+- [x] SYS_EXIT 実装
+- [x] exit 時に current user task を finished にする
+- [x] one-shot user demo runner
+- [x] user exit 後に UI を再開
 - [ ] syscall read/open/close
 - [ ] 最小 shell 風 task
 - [ ] Phase 5C: Real Storage

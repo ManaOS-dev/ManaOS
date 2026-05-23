@@ -33,7 +33,7 @@ foreach ($package in $packages) {
 $lines.Add("")
 $lines.Add("## Binary Assets")
 $lines.Add("")
-$lines.Add("The repository includes `esp/Inter.ttf` and `esp/NotoSansJP.ttf`.")
+$lines.Add('The repository includes esp/Inter.ttf and esp/NotoSansJP.ttf.')
 $lines.Add("Before redistribution, verify the exact upstream source and font license text for these files.")
 
 [System.IO.File]::WriteAllText(

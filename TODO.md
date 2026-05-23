@@ -19,6 +19,11 @@
 - [x] temporary user pointer validation
 - [x] userland write wrapper
 - [x] `hello from userland` output
+- [x] Phase 5B-2: SYS_EXIT plus one-shot user demo
+- [x] SYS_EXIT implementation
+- [x] mark current user task finished on exit
+- [x] one-shot user demo runner
+- [x] resume UI after user exit
 - [ ] syscall read/open/close
 - [ ] minimal shell-style task
 - [ ] Phase 5C: Real Storage
