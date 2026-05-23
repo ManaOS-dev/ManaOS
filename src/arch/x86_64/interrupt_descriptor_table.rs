@@ -1,6 +1,6 @@
 use crate::serial_println;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use spin::Lazy;
+use spin::LazyLock;
 use x86_64::instructions::port::Port;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
@@ -46,12 +46,9 @@ impl InterruptIndex {
     fn as_u8(self) -> u8 {
         self as u8
     }
-    fn as_usize(self) -> usize {
-        usize::from(self.as_u8())
-    }
 }
 
-static INTERRUPT_DESCRIPTOR_TABLE: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
+static INTERRUPT_DESCRIPTOR_TABLE: LazyLock<InterruptDescriptorTable> = LazyLock::new(|| {
     let mut table = InterruptDescriptorTable::new();
     table.breakpoint.set_handler_fn(breakpoint_handler);
     // SAFETY: The double fault stack index is initialized in the global
@@ -67,9 +64,9 @@ static INTERRUPT_DESCRIPTOR_TABLE: Lazy<InterruptDescriptorTable> = Lazy::new(||
         .general_protection_fault
         .set_handler_fn(general_protection_fault_handler);
 
-    table[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
-    table[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
-    table[InterruptIndex::Mouse.as_usize()].set_handler_fn(mouse_interrupt_handler);
+    table[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
+    table[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
+    table[InterruptIndex::Mouse.as_u8()].set_handler_fn(mouse_interrupt_handler);
     table
 });
 

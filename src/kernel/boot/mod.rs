@@ -18,11 +18,12 @@ use crate::kernel::driver::display::renderer;
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use crate::kernel::memory::heap;
 use crate::kernel::memory::paging;
+use uefi::mem::memory_map::MemoryDescriptor;
 
 /// Initialize kernel memory and framebuffer-backed display subsystems.
 pub fn initialize<'a>(
     frame_allocator: &mut BumpFrameAllocator,
-    mmap_entries: impl Iterator<Item = &'a uefi::table::boot::MemoryDescriptor>,
+    mmap_entries: impl Iterator<Item = &'a MemoryDescriptor>,
     framebuffer_info: FrameBufferInfo,
     fonts: FontAssets,
     backbuffer_ptr: *mut u8,

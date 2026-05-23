@@ -1,4 +1,5 @@
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
+use uefi::mem::memory_map::MemoryDescriptor;
 use x86_64::{
     registers::control::Cr3,
     structures::paging::{
@@ -16,7 +17,7 @@ use x86_64::{
 /// mapped, and the framebuffer range must come from the active graphics mode.
 pub unsafe fn init<'a>(
     frame_allocator: &mut BumpFrameAllocator,
-    mmap_iter: impl Iterator<Item = &'a uefi::table::boot::MemoryDescriptor>,
+    mmap_iter: impl Iterator<Item = &'a MemoryDescriptor>,
     framebuffer_base: u64,
     framebuffer_size: u64,
 ) {
@@ -67,7 +68,7 @@ unsafe fn create_pml4(frame_allocator: &mut BumpFrameAllocator) -> PhysFrame {
 unsafe fn map_memory_regions<'a>(
     mapper: &mut OffsetPageTable,
     frame_allocator: &mut BumpFrameAllocator,
-    mmap_iter: impl Iterator<Item = &'a uefi::table::boot::MemoryDescriptor>,
+    mmap_iter: impl Iterator<Item = &'a MemoryDescriptor>,
 ) {
     let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
     for desc in mmap_iter {

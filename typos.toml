@@ -1,0 +1,12 @@
+[default]
+extend-ignore-re = [
+  "0x[0-9A-Fa-f_]+",
+]
+
+[files]
+extend-exclude = [
+  "target",
+  "esp/*.ttf",
+  "OVMF.fd",
+]
+
