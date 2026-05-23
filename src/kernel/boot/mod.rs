@@ -13,6 +13,7 @@
 //! - [`initialize`] - Initialize memory and display subsystems
 
 use crate::kernel::driver::display::framebuffer::{self, FontAssets, FrameBufferInfo};
+use crate::kernel::driver::display::renderer;
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use crate::kernel::memory::heap;
 use crate::kernel::memory::paging;
@@ -58,4 +59,5 @@ pub fn initialize<'a>(
     );
 
     framebuffer::init_global_graphics(framebuffer_info, fonts, backbuffer_ptr);
+    renderer::draw_boot_screen();
 }
