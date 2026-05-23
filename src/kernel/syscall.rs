@@ -13,6 +13,7 @@
 //! ## Public API
 //! - [`dispatch`] - Dispatch one syscall from architecture entry code
 //! - [`SYS_WRITE`] - Write syscall number
+//! - [`SYS_EXIT`] - Exit syscall number
 
 const ERROR_BAD_FILE_DESCRIPTOR: u64 = u64::MAX - 8;
 const ERROR_BAD_ADDRESS: u64 = u64::MAX - 13;
@@ -21,6 +22,10 @@ const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 
 /// Write syscall number.
 pub const SYS_WRITE: u64 = 1;
+/// Exit syscall number.
+pub const SYS_EXIT: u64 = 2;
+/// Internal sentinel telling the syscall entry code to return to the kernel.
+pub const USER_EXIT_SENTINEL: u64 = u64::MAX;
 
 /// Dispatch one syscall using the `ManaOS` syscall ABI.
 ///
@@ -38,6 +43,7 @@ pub extern "C" fn syscall_dispatch(
 ) -> u64 {
     match syscall_number {
         SYS_WRITE => sys_write(first_argument, second_argument, third_argument),
+        SYS_EXIT => sys_exit(first_argument),
         _ => ERROR_NOT_IMPLEMENTED,
     }
 }
@@ -61,6 +67,20 @@ fn sys_write(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
         Ok(bytes_written) => u64::try_from(bytes_written).unwrap_or(u64::MAX),
         Err(_) => ERROR_BAD_FILE_DESCRIPTOR,
     }
+}
+
+fn sys_exit(exit_code: u64) -> u64 {
+    if let Some(task_id) = crate::kernel::task::finish_current_task(exit_code) {
+        crate::serial_println!(
+            "[ok   ] User task exited: code={} task={}",
+            exit_code,
+            task_id
+        );
+    } else {
+        crate::serial_println!("[warn ] SYS_EXIT called without a running task");
+    }
+
+    USER_EXIT_SENTINEL
 }
 
 fn copy_from_user(user_pointer: usize, length: usize) -> Option<&'static [u8]> {

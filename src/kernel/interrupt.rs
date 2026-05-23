@@ -44,9 +44,17 @@ pub unsafe extern "C" fn syscall_entry() {
         "mov rsi, rdi",
         "mov rdi, rax",
         "call {dispatcher}",
+        "cmp rax, {exit_sentinel}",
+        "je 2f",
         "pop r11",
         "pop rcx",
         "sysretq",
+        "2:",
+        "call {get_return_stack}",
+        "mov rsp, rax",
+        "ret",
         dispatcher = sym crate::kernel::syscall::syscall_dispatch,
+        get_return_stack = sym crate::kernel::task::get_user_exit_return_stack,
+        exit_sentinel = const crate::kernel::syscall::USER_EXIT_SENTINEL,
     );
 }

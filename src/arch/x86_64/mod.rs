@@ -121,6 +121,8 @@ extern "C" {
     pub fn context_switch(current_context: *mut u64, next_context: *const u64);
     /// Enter Ring 3 by building an `iretq` frame from a user task context.
     pub fn enter_user_mode(context: *const u64) -> !;
+    /// Enter Ring 3 and return when the user task exits through `SYS_EXIT`.
+    pub fn enter_user_mode_returnable(context: *const u64);
 }
 
 /// Switch from one saved task context to another.
@@ -135,6 +137,17 @@ pub unsafe fn switch_context(current_context: *mut u64, next_context: *const u64
     context_switch(current_context, next_context);
 }
 
+/// Enter Ring 3 and return when the user task exits through `SYS_EXIT`.
+///
+/// # Safety
+///
+/// `context` must point to a valid user-mode transition frame whose code and
+/// stack addresses are mapped as user-accessible pages.
+#[cfg(target_os = "uefi")]
+pub unsafe fn enter_user_mode_once(context: *const u64) {
+    enter_user_mode_returnable(context);
+}
+
 /// Switch from one saved task context to another.
 ///
 /// # Safety
@@ -142,3 +155,11 @@ pub unsafe fn switch_context(current_context: *mut u64, next_context: *const u64
 /// This host-build stub is never used by the UEFI kernel runtime.
 #[cfg(not(target_os = "uefi"))]
 pub unsafe fn switch_context(_current_context: *mut u64, _next_context: *const u64) {}
+
+/// Enter Ring 3 and return when the user task exits through `SYS_EXIT`.
+///
+/// # Safety
+///
+/// This host-build stub is never used by the UEFI kernel runtime.
+#[cfg(not(target_os = "uefi"))]
+pub unsafe fn enter_user_mode_once(_context: *const u64) {}

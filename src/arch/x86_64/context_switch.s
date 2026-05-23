@@ -45,3 +45,29 @@ enter_user_mode:
     mov rax, qword ptr [rcx + 0]
     push rax
     iretq
+
+.def enter_user_mode_returnable
+.scl 2
+.type 32
+.endef
+.globl enter_user_mode_returnable
+
+enter_user_mode_returnable:
+    push rbx
+    mov rbx, rcx
+    lea rcx, [rsp + 8]
+    call set_user_exit_return_stack
+    mov rcx, rbx
+    pop rbx
+
+    mov rax, qword ptr [rcx + 32]
+    push rax
+    mov rax, qword ptr [rcx + 24]
+    push rax
+    mov rax, qword ptr [rcx + 16]
+    push rax
+    mov rax, qword ptr [rcx + 8]
+    push rax
+    mov rax, qword ptr [rcx + 0]
+    push rax
+    iretq
