@@ -46,7 +46,8 @@
 - [x] Task Structure & Context Switching
 - [x] Cooperative / Preemptive Scheduler
 - [x] Ring 3 descriptor groundwork and selector exposure
-- [ ] Enter user mode with `iretq` and a user stack
+- [x] Enter user mode with `iretq` and a user stack
+- [x] Minimal `SYSCALL`/`SYSRET` MSR setup and syscall bridge stub
 
 ## Phase 5: Filesystem & Storage
 - [ ] AHCI Driver Implementation

@@ -1,12 +1,25 @@
 use spin::Lazy;
 use x86_64::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector};
 use x86_64::structures::tss::TaskStateSegment;
+use x86_64::PrivilegeLevel;
 use x86_64::VirtAddr;
 
+/// Interrupt stack table index used for double-fault handling.
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
+/// Ring 3 code segment selector.
+pub const USER_CODE_SELECTOR: u16 = 0x1b;
+/// Ring 3 data segment selector.
+pub const USER_DATA_SELECTOR: u16 = 0x23;
 
 static TSS: Lazy<TaskStateSegment> = Lazy::new(|| {
     let mut tss = TaskStateSegment::new();
+    tss.privilege_stack_table[0] = {
+        const STACK_SIZE: usize = 4096 * 5;
+        static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
+
+        let stack_start = VirtAddr::from_ptr(&raw const STACK);
+        stack_start + STACK_SIZE
+    };
     tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
         const STACK_SIZE: usize = 4096 * 5;
         static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
@@ -20,8 +33,8 @@ static TSS: Lazy<TaskStateSegment> = Lazy::new(|| {
 struct Selectors {
     code: SegmentSelector,
     data: SegmentSelector,
-    user_data: SegmentSelector,
     user_code: SegmentSelector,
+    user_data: SegmentSelector,
     tss: SegmentSelector,
 }
 
@@ -29,16 +42,18 @@ static GLOBAL_DESCRIPTOR_TABLE: Lazy<(GlobalDescriptorTable, Selectors)> = Lazy:
     let mut table = GlobalDescriptorTable::new();
     let code_selector = table.add_entry(Descriptor::kernel_code_segment());
     let data_selector = table.add_entry(Descriptor::kernel_data_segment());
-    let user_data_selector = table.add_entry(Descriptor::user_data_segment());
-    let user_code_selector = table.add_entry(Descriptor::user_code_segment());
+    let mut user_code_selector = table.add_entry(Descriptor::user_code_segment());
+    let mut user_data_selector = table.add_entry(Descriptor::user_data_segment());
+    user_code_selector.set_rpl(PrivilegeLevel::Ring3);
+    user_data_selector.set_rpl(PrivilegeLevel::Ring3);
     let tss_selector = table.add_entry(Descriptor::tss_segment(&TSS));
     (
         table,
         Selectors {
             code: code_selector,
             data: data_selector,
-            user_data: user_data_selector,
             user_code: user_code_selector,
+            user_data: user_data_selector,
             tss: tss_selector,
         },
     )

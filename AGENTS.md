@@ -41,7 +41,8 @@ src/
     ├── memory/
     │   ├── frame_allocator.rs
     │   ├── heap.rs
-    │   └── paging.rs
+    │   ├── paging.rs
+    │   └── user_stack.rs
     ├── interrupt.rs
     ├── sync/
     │   └── ring_buffer.rs

@@ -59,8 +59,9 @@ the only composition root. `kernel::interrupt` provides thin bridge functions so
 - Local APIC timer and IOAPIC routing are represented as architecture backends,
   but the boot path still uses the legacy programmable interval timer and 8259
   interrupt controllers until ACPI MADT parsing is added.
-- Ring 3 selectors are installed and exposed, but entering user mode still needs
-  an `iretq` transition path and a dedicated user stack.
+- Ring 3 selectors, the initial `iretq` transition path, a fixed user stack
+  mapping, and minimal `SYSCALL`/`SYSRET` MSR setup are present. Real syscall
+  dispatch, ELF loading, and per-process address spaces are still Phase 6 work.
 - Cursor rendering is display-owned, but the cursor shape is still a simple
   placeholder rectangle.
 

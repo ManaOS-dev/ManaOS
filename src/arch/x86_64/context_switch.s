@@ -26,3 +26,22 @@ context_switch:
     push qword ptr [rdx + 56]
     popfq
     ret
+
+.def enter_user_mode
+.scl 2
+.type 32
+.endef
+.globl enter_user_mode
+
+enter_user_mode:
+    mov rax, qword ptr [rcx + 32]
+    push rax
+    mov rax, qword ptr [rcx + 24]
+    push rax
+    mov rax, qword ptr [rcx + 16]
+    push rax
+    mov rax, qword ptr [rcx + 8]
+    push rax
+    mov rax, qword ptr [rcx + 0]
+    push rax
+    iretq

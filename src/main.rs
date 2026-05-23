@@ -25,6 +25,12 @@ extern "C" fn idle_task() -> ! {
     }
 }
 
+extern "C" fn user_hello() -> ! {
+    loop {
+        core::hint::spin_loop();
+    }
+}
+
 /// Panic handler: dump to serial and halt.
 #[cfg(not(test))]
 #[panic_handler]
@@ -130,7 +136,7 @@ fn initialize_scheduler() {
 }
 
 fn initialize_architecture_and_drivers() {
-    arch::init();
+    arch::init(kernel::interrupt::syscall_entry as *const () as u64);
     crate::serial_println!("[ok   ] Architecture initialized.");
     let user_selectors = kernel::task::user_mode::get_selectors();
     crate::serial_println!(
@@ -207,6 +213,12 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
     );
     initialize_scheduler();
     initialize_architecture_and_drivers();
+
+    let user_stack_top = kernel::memory::user_stack::allocate_user_stack(&mut frame_allocator, 4);
+    let user_entry_point = user_hello as *const () as u64;
+    kernel::memory::user_stack::allow_user_access_to_existing_page(user_entry_point);
+    kernel::task::spawn_user_task(user_entry_point, user_stack_top);
+    crate::serial_println!("[ok   ] User task spawned.");
 
     crate::serial_println!("[ok   ] ManaOS Kernel is alive.");
 

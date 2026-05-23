@@ -12,6 +12,7 @@
 //! - [`process_timer_tick`] - Route timer ticks to the scheduler
 //! - [`push_keyboard_byte`] - Route keyboard bytes to the keyboard queue
 //! - [`push_mouse_byte`] - Route mouse bytes to the mouse queue
+//! - [`syscall_entry`] - Minimal Ring 3 syscall entry stub
 
 /// Route one timer interrupt tick to the kernel scheduler.
 pub fn process_timer_tick() {
@@ -26,4 +27,15 @@ pub fn push_keyboard_byte(byte: u8) {
 /// Route one mouse byte to the mouse input queue.
 pub fn push_mouse_byte(byte: u8) {
     crate::kernel::driver::input::mouse::push_byte(byte);
+}
+
+/// Kernel entry point for the `SYSCALL` instruction from Ring 3.
+///
+/// # Safety
+///
+/// Called directly by the CPU on `SYSCALL`; register state is raw.
+#[unsafe(naked)]
+pub unsafe extern "C" fn syscall_entry() {
+    // TODO(phase6): dispatch table.
+    core::arch::naked_asm!("swapgs", "sysretq");
 }
