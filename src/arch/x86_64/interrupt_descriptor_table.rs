@@ -1,20 +1,10 @@
 use crate::serial_println;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use pic8259::ChainedPics;
 use spin::Lazy;
-use spin::Mutex;
 use x86_64::instructions::port::Port;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
 const INTERRUPT_CONTROLLER_1_OFFSET: u8 = 32;
-const INTERRUPT_CONTROLLER_2_OFFSET: u8 = INTERRUPT_CONTROLLER_1_OFFSET + 8;
-
-pub(super) static INTERRUPT_CONTROLLERS: Mutex<ChainedPics> =
-    // SAFETY: The offsets reserve CPU exception vectors and match the configured
-    // interrupt descriptor table entries.
-    Mutex::new(unsafe {
-        ChainedPics::new(INTERRUPT_CONTROLLER_1_OFFSET, INTERRUPT_CONTROLLER_2_OFFSET)
-    });
 
 static TICKS: AtomicU64 = AtomicU64::new(0);
 static TIMER_TICK_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
@@ -120,7 +110,9 @@ extern "x86-interrupt" fn double_fault_handler(
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     TICKS.fetch_add(1, Ordering::Relaxed);
-    if let Some(mut interrupt_controllers) = INTERRUPT_CONTROLLERS.try_lock() {
+    if let Some(mut interrupt_controllers) =
+        crate::arch::x86_64::interrupt_controller::LEGACY_INTERRUPT_CONTROLLERS.try_lock()
+    {
         // SAFETY: End-of-interrupt is required after servicing the timer interrupt.
         unsafe {
             interrupt_controllers.notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
@@ -138,9 +130,9 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     }
     // SAFETY: Notify EOI to the PIC to allow future interrupts.
     unsafe {
-        INTERRUPT_CONTROLLERS
-            .lock()
-            .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
+        crate::arch::x86_64::interrupt_controller::notify_legacy_end_of_interrupt(
+            InterruptIndex::Keyboard.as_u8(),
+        );
     }
 }
 
@@ -153,9 +145,9 @@ extern "x86-interrupt" fn mouse_interrupt_handler(_stack_frame: InterruptStackFr
     }
     // SAFETY: Notify EOI to the PIC to allow future interrupts.
     unsafe {
-        INTERRUPT_CONTROLLERS
-            .lock()
-            .notify_end_of_interrupt(InterruptIndex::Mouse.as_u8());
+        crate::arch::x86_64::interrupt_controller::notify_legacy_end_of_interrupt(
+            InterruptIndex::Mouse.as_u8(),
+        );
     }
 }
 

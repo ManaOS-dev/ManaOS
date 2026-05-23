@@ -12,7 +12,7 @@
 //! - [`init`] - Initialize PS/2 mouse hardware
 //! - [`push_byte`] - Called from interrupt handler only
 //! - [`process_packets`] - Called from main loop only
-//! - [`draw_cursor`] - Draw the cursor from the current mouse state
+//! - [`get_state`] - Read current mouse state
 
 mod hardware;
 mod packet;
@@ -21,43 +21,72 @@ mod state;
 use crate::kernel::driver::input::mouse::packet::MousePacket;
 use crate::kernel::driver::input::mouse::state::process_packet;
 use crate::kernel::sync::ring_buffer::LockFreeRingBuffer;
+use spin::Mutex;
 
-pub use state::draw_cursor;
+#[allow(unused_imports)]
+pub use state::{get_state, MouseState};
 
 static MOUSE_QUEUE: LockFreeRingBuffer<u8, 1024> = LockFreeRingBuffer::new();
+static PACKET_DECODER: Mutex<PacketDecoder> = Mutex::new(PacketDecoder::new());
 
+/// Push one raw PS/2 mouse byte from the interrupt path.
 pub fn push_byte(byte: u8) {
     let _ = MOUSE_QUEUE.push(byte);
 }
 
+/// Initialize PS/2 mouse hardware.
 pub fn init() {
     crate::kernel::driver::input::mouse::hardware::init();
 }
 
+/// Process queued mouse bytes into packets and update mouse state.
 pub fn process_packets() {
-    let mut b0 = 0;
-    let mut b1 = 0;
-    let mut count = 0;
+    let mut decoder = PACKET_DECODER.lock();
 
     while let Some(byte) = MOUSE_QUEUE.pop() {
-        match count {
+        if let Some(packet) = decoder.push_byte(byte) {
+            process_packet(&packet);
+        }
+    }
+}
+
+struct PacketDecoder {
+    first_byte: u8,
+    second_byte: u8,
+    count: u8,
+}
+
+impl PacketDecoder {
+    const fn new() -> Self {
+        Self {
+            first_byte: 0,
+            second_byte: 0,
+            count: 0,
+        }
+    }
+
+    fn push_byte(&mut self, byte: u8) -> Option<MousePacket> {
+        match self.count {
             0 => {
                 if (byte & 0x08) != 0 {
-                    b0 = byte;
-                    count = 1;
+                    self.first_byte = byte;
+                    self.count = 1;
                 }
+                None
             }
             1 => {
-                b1 = byte;
-                count = 2;
+                self.second_byte = byte;
+                self.count = 2;
+                None
             }
             2 => {
-                if let Some(packet) = MousePacket::parse(b0, b1, byte) {
-                    process_packet(&packet);
-                }
-                count = 0;
+                self.count = 0;
+                MousePacket::parse(self.first_byte, self.second_byte, byte)
             }
-            _ => count = 0,
+            _ => {
+                self.count = 0;
+                None
+            }
         }
     }
 }

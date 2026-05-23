@@ -25,7 +25,7 @@ pub fn initialize() {
 pub fn tick() {
     kernel::driver::input::keyboard::process_input();
     kernel::driver::input::mouse::process_packets();
-    kernel::driver::input::mouse::draw_cursor();
+    kernel::driver::display::cursor::draw_cursor();
 
     FRAME_COUNT.fetch_add(1, Ordering::Relaxed);
 
@@ -55,7 +55,7 @@ pub fn tick() {
         let fps_text = alloc::format!("FPS: {fps}");
         kernel::driver::display::command::push_command(
             kernel::driver::display::command::DrawCommand::Text(
-                kernel::driver::display::framebuffer::Font::Inter,
+                kernel::driver::display::font::Font::Inter,
                 res_w - 140,
                 15,
                 16.0,

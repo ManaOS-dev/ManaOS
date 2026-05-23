@@ -132,6 +132,12 @@ fn initialize_scheduler() {
 fn initialize_architecture_and_drivers() {
     arch::init();
     crate::serial_println!("[ok   ] Architecture initialized.");
+    let user_selectors = kernel::task::user_mode::get_selectors();
+    crate::serial_println!(
+        "[task ] Ring 3 selectors installed. code={:#06x}, data={:#06x}",
+        user_selectors.code,
+        user_selectors.data
+    );
 
     arch::x86_64::interrupt_descriptor_table::register_processors(
         arch::x86_64::interrupt_descriptor_table::InterruptProcessors {
@@ -161,16 +167,6 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
 
     let framebuffer_info = get_framebuffer_info(&st);
 
-    // Get Memory Map and save CONVENTIONAL regions
-    let mmap_buf = &mut [0u8; 4096 * 4];
-    let mmap = st
-        .boot_services()
-        .memory_map(mmap_buf)
-        .expect("Failed to get memory map");
-
-    let mut frame_allocator = kernel::memory::frame_allocator::BumpFrameAllocator::new();
-    add_conventional_memory_regions(&mut frame_allocator, mmap.entries());
-
     log::info!("Calling ExitBootServices...");
 
     // Pre-load fonts before exiting boot services
@@ -188,6 +184,8 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
     // ────────────────────────────────────────────────
     kernel::serial::init();
     crate::serial_println!("[serial] ExitBootServices OK.");
+    let mut frame_allocator = kernel::memory::frame_allocator::BumpFrameAllocator::new();
+    add_conventional_memory_regions(&mut frame_allocator, mmap.entries());
 
     // ────────────────────────────────────────────────
     // Kernel Phase (UEFI Services unavailable)
@@ -201,7 +199,7 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         &mut frame_allocator,
         mmap.entries(),
         framebuffer_info,
-        kernel::driver::display::framebuffer::FontAssets {
+        kernel::driver::display::font::FontAssets {
             inter: font_inter,
             noto: font_noto,
         },

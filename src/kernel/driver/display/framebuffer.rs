@@ -1,4 +1,5 @@
 use crate::kernel::driver::display::color::Color;
+use crate::kernel::driver::display::font::{Font, FontAssets};
 use ab_glyph::{point, Font as GlyphFont, FontRef, PxScale, ScaleFont};
 use uefi::proto::console::gop::{GraphicsOutput, PixelFormat};
 
@@ -57,24 +58,6 @@ pub struct FrameBufferInfo {
     pub stride: usize,
     /// Pixel byte order used by the framebuffer.
     pub format: ColorFormat,
-}
-
-/// Font face used for text rendering.
-#[derive(Debug, Clone, Copy)]
-pub enum Font {
-    /// Inter Latin font.
-    Inter,
-    /// Noto Sans Japanese font.
-    #[allow(dead_code)]
-    NotoSansJP,
-}
-
-/// Font binary assets loaded before boot services exit.
-pub struct FontAssets {
-    /// Inter font bytes.
-    pub inter: &'static [u8],
-    /// Noto Sans Japanese font bytes.
-    pub noto: &'static [u8],
 }
 
 /// Framebuffer-backed graphics driver with a software backbuffer.

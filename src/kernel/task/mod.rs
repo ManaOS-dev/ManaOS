@@ -16,6 +16,7 @@
 //! - [`get_current_task_id`] - Read the current task identifier
 
 pub mod context;
+pub mod user_mode;
 
 use alloc::boxed::Box;
 use alloc::vec;
