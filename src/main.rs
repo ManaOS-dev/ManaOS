@@ -154,6 +154,30 @@ fn initialize_architecture_and_drivers() {
     arch::x86_64::enable_interrupts();
 }
 
+fn verify_kernel_filesystem() {
+    let _ = kernel::filesystem::write(
+        kernel::filesystem::STANDARD_OUTPUT,
+        b"[fs   ] Standard output is connected to /dev/console.\n",
+    );
+    let _ = kernel::filesystem::write(kernel::filesystem::STANDARD_ERROR, b"");
+
+    kernel::filesystem::mount_ram_file("/hello.txt", b"hello from ramfs\n");
+    let descriptor =
+        kernel::filesystem::open("/hello.txt").expect("ramfs smoke test file must open");
+    let mut buffer = [0_u8; 32];
+    let bytes_read =
+        kernel::filesystem::read(descriptor, &mut buffer).expect("ramfs smoke test must read");
+    kernel::filesystem::close(descriptor).expect("ramfs smoke test descriptor must close");
+    let _ = kernel::filesystem::write(kernel::filesystem::STANDARD_OUTPUT, &buffer[..bytes_read]);
+
+    let null_descriptor =
+        kernel::filesystem::open("/dev/null").expect("null device must open during smoke test");
+    let _ = kernel::filesystem::write(null_descriptor, b"discarded");
+    kernel::filesystem::close(null_descriptor).expect("null descriptor must close");
+
+    let _ = kernel::filesystem::read(kernel::filesystem::STANDARD_INPUT, &mut buffer);
+}
+
 #[entry]
 fn main() -> Status {
     // ────────────────────────────────────────────────
@@ -205,21 +229,24 @@ fn main() -> Status {
         },
         backbuffer_ptr,
     );
+    kernel::filesystem::initialize();
+    crate::serial_println!("[fs   ] Kernel filesystem initialized.");
+    verify_kernel_filesystem();
     initialize_scheduler();
     initialize_architecture_and_drivers();
 
-    let user_stack_top = kernel::memory::user_stack::allocate_user_stack(&mut frame_allocator, 4);
-    let user_entry_point =
-        kernel::memory::user_stack::allocate_user_spin_loop(&mut frame_allocator);
-    kernel::task::spawn_user_task(user_entry_point, user_stack_top);
-    crate::serial_println!("[ok   ] User task spawned.");
-
     crate::serial_println!("[ok   ] ManaOS Kernel is alive.");
 
-    // Calibrate TSC for profiling
+    // Calibrate TSC for profiling before user tasks can preempt the bootstrap task.
     kernel::profiler::calibrate_tsc();
 
     kernel::runtime::initialize();
+
+    let user_stack_top = kernel::memory::user_stack::allocate_user_stack(&mut frame_allocator, 4);
+    let user_entry_point =
+        kernel::memory::user_stack::allocate_user_write_demo(&mut frame_allocator);
+    kernel::task::spawn_user_task(user_entry_point, user_stack_top);
+    crate::serial_println!("[ok   ] User task spawned.");
 
     // Main Loop
     loop {

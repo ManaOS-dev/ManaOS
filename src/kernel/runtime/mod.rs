@@ -24,8 +24,6 @@ pub fn initialize() {
 pub fn tick() {
     kernel::driver::input::keyboard::process_input();
     kernel::driver::input::mouse::process_packets();
-    let mouse_state = kernel::driver::input::mouse::get_state();
-    kernel::driver::display::cursor::draw_cursor(mouse_state.x, mouse_state.y);
 
     FRAME_COUNT.fetch_add(1, Ordering::Relaxed);
 
@@ -78,4 +76,7 @@ pub fn tick() {
     }
 
     kernel::driver::display::command::process_commands();
+
+    let mouse_state = kernel::driver::input::mouse::get_state();
+    kernel::driver::display::cursor::draw_cursor(mouse_state.x, mouse_state.y);
 }
