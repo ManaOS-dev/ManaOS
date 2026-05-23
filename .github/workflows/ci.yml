@@ -32,7 +32,7 @@ jobs:
       - name: Install audit tools
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-audit,cargo-deny,cargo-machete,typos-cli
+          tool: cargo-audit,cargo-deny,cargo-license,cargo-machete,typos-cli
 
       - name: Check Formatting
         run: just fmt
@@ -60,6 +60,12 @@ jobs:
 
       - name: Check Typos
         run: typos
+
+      - name: Regenerate Third-Party Licenses
+        run: pwsh -File scripts/generate_third_party_licenses.ps1
+
+      - name: Check Third-Party License Inventory
+        run: git diff --exit-code THIRD_PARTY_LICENSES.md
 
       - name: Upload EFI Artifact
         uses: actions/upload-artifact@v4
