@@ -6,10 +6,25 @@
 - [x] Guard FPS division against zero in `runtime::tick()`
 
 ## Phase 5: Filesystem & Storage
+- [x] Phase 5A: Kernel-side file abstraction
+- [x] VFS abstraction layer
+- [x] ramfs
+- [x] `/dev/console`
+- [x] `/dev/null`
+- [x] FileDescriptor table
+- [ ] Phase 5B: Userland I/O
+- [x] Phase 5B-1: SYS_WRITE only
+- [x] syscall ABI
+- [x] SYS_WRITE implementation
+- [x] temporary user pointer validation
+- [x] userland write wrapper
+- [x] `hello from userland` output
+- [ ] syscall read/open/close
+- [ ] minimal shell-style task
+- [ ] Phase 5C: Real Storage
+- [ ] GPT partition table parsing
 - [ ] AHCI Driver Implementation
 - [ ] FAT32 Parser & File APIs
-- [ ] VFS abstraction layer
-- [ ] GPT partition table parsing
 
 ## Phase 6: Userland
 - [ ] ELF Loader

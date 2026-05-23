@@ -12,7 +12,7 @@
 //! - [`process_timer_tick`] - Route timer ticks to the scheduler
 //! - [`push_keyboard_byte`] - Route keyboard bytes to the keyboard queue
 //! - [`push_mouse_byte`] - Route mouse bytes to the mouse queue
-//! - [`syscall_entry`] - Minimal Ring 3 syscall entry stub
+//! - [`syscall_entry`] - Ring 3 syscall entry
 
 /// Route one timer interrupt tick to the kernel scheduler.
 pub fn process_timer_tick() {
@@ -36,6 +36,17 @@ pub fn push_mouse_byte(byte: u8) {
 /// Called directly by the CPU on `SYSCALL`; register state is raw.
 #[unsafe(naked)]
 pub unsafe extern "C" fn syscall_entry() {
-    // TODO(phase6): dispatch table.
-    core::arch::naked_asm!("sysretq");
+    core::arch::naked_asm!(
+        "push rcx",
+        "push r11",
+        "mov rcx, rdx",
+        "mov rdx, rsi",
+        "mov rsi, rdi",
+        "mov rdi, rax",
+        "call {dispatcher}",
+        "pop r11",
+        "pop rcx",
+        "sysretq",
+        dispatcher = sym crate::kernel::syscall::syscall_dispatch,
+    );
 }

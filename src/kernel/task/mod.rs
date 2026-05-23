@@ -28,6 +28,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use spin::Mutex;
 
 const TASK_STACK_SIZE: usize = 16 * 1024;
+const USER_TASK_PREEMPTION_ENABLED: bool = true;
 
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
 static PREEMPTION_ENABLED: AtomicBool = AtomicBool::new(true);
@@ -185,6 +186,12 @@ impl Scheduler {
 
         for offset in 1..=self.tasks.len() {
             let index = (self.current_index + offset) % self.tasks.len();
+            if !USER_TASK_PREEMPTION_ENABLED && matches!(self.tasks[index].kind, TaskKind::User(_))
+            {
+                // TODO(phase7): enable this after timer interrupts save and
+                // restore a full user trap frame.
+                continue;
+            }
             if self.tasks[index].state == TaskState::Ready {
                 return Some(index);
             }

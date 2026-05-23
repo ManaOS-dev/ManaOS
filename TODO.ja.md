@@ -6,10 +6,25 @@
 - [x] `runtime::tick()` の FPS 計算でゼロ除算を防止
 
 ## Phase 5: Filesystem & Storage
+- [x] Phase 5A: kernel-side file abstraction
+- [x] VFS 抽象化レイヤー
+- [x] ramfs
+- [x] `/dev/console`
+- [x] `/dev/null`
+- [x] FileDescriptor table
+- [ ] Phase 5B: Userland I/O
+- [x] Phase 5B-1: SYS_WRITE only
+- [x] syscall ABI
+- [x] SYS_WRITE 実装
+- [x] user pointer validation の仮実装
+- [x] userland write wrapper
+- [x] `hello from userland` 出力
+- [ ] syscall read/open/close
+- [ ] 最小 shell 風 task
+- [ ] Phase 5C: Real Storage
+- [ ] GPT パーティションテーブル解析
 - [ ] AHCI ドライバー実装
 - [ ] FAT32 パーサーとファイル API
-- [ ] VFS 抽象化レイヤー
-- [ ] GPT パーティションテーブル解析
 
 ## Phase 6: Userland
 - [ ] ELF ローダー
