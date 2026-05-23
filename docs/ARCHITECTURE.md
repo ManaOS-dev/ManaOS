@@ -59,14 +59,20 @@ owns the hardware tick counter, `main.rs` registers that provider with
 `kernel::time`, and kernel subsystems read ticks through `kernel::time` rather
 than depending on `arch::x86_64` internals.
 
+Task switching and Ring 3 entry use the same pattern. The architecture layer
+owns the assembly entry points and user segment selector values, `main.rs`
+registers them with `kernel::task`, and the scheduler calls only the registered
+task architecture provider.
+
 ## Current Known Design Debt
 
 - Local APIC timer and IOAPIC routing are represented as architecture backends,
   but the boot path still uses the legacy programmable interval timer and 8259
   interrupt controllers until ACPI MADT parsing is added.
-- Ring 3 selectors, the initial `iretq` transition path, a fixed user stack
-  mapping, and minimal `SYSCALL`/`SYSRET` MSR setup are present. Real syscall
-  dispatch, ELF loading, and per-process address spaces are still Phase 6 work.
+- Ring 3 has selector registration, the initial `iretq` transition path, a
+  fixed user stack mapping, and minimal `SYSCALL`/`SYSRET` MSR setup. Real
+  syscall dispatch, ELF loading, and per-process address spaces are still Phase
+  6 work.
 - Cursor rendering is display-owned, but the cursor shape is still a simple
   placeholder rectangle.
 

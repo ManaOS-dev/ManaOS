@@ -16,6 +16,7 @@
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
 
+pub mod architecture;
 pub mod context;
 pub mod user_mode;
 
@@ -263,14 +264,14 @@ pub fn process_timer_tick() {
             // Task stacks are retained by their task objects and switching
             // occurs on one CPU.
             unsafe {
-                crate::arch::x86_64::switch_context(current_context, next_context);
+                architecture::switch_context(current_context, next_context);
             }
         }
         SwitchAction::EnterUser(user_context) => {
             // SAFETY: The user task context was created from a mapped entry
             // point and stack, and the assembly stub consumes it immediately.
             unsafe {
-                crate::arch::x86_64::enter_user_mode(user_context.as_pointer());
+                architecture::enter_user_mode(user_context.as_pointer());
             }
         }
     }

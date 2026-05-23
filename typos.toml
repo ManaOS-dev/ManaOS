@@ -3,10 +3,12 @@ extend-ignore-re = [
   "0x[0-9A-Fa-f_]+",
 ]
 
+[default.extend-words]
+IST = "IST"
+
 [files]
 extend-exclude = [
   "target",
   "esp/*.ttf",
   "OVMF.fd",
 ]
-

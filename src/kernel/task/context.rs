@@ -109,16 +109,18 @@ impl UserTaskContext {
     /// page. `entry_point` must be a valid mapped user-space instruction
     /// address.
     pub unsafe fn new(entry_point: u64, stack_top: u64) -> Self {
+        let selectors = crate::kernel::task::user_mode::get_selectors();
+        assert!(
+            selectors.code != 0 && selectors.data != 0,
+            "user-mode selectors must be registered before spawning user tasks"
+        );
+
         Self {
             instruction_pointer: entry_point,
-            code_segment: u64::from(
-                crate::arch::x86_64::global_descriptor_table::USER_CODE_SELECTOR,
-            ),
+            code_segment: u64::from(selectors.code),
             cpu_flags: 0x202,
             stack_pointer: stack_top,
-            stack_segment: u64::from(
-                crate::arch::x86_64::global_descriptor_table::USER_DATA_SELECTOR,
-            ),
+            stack_segment: u64::from(selectors.data),
         }
     }
 

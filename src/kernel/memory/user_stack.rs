@@ -27,9 +27,13 @@ const USER_SPIN_LOOP_PROGRAM: &[u8] = &[
 ///
 /// Panics if physical frames cannot be allocated or page-table mapping fails.
 pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64) -> u64 {
+    assert!(pages > 0, "user stack must contain at least one page");
     let physical_start = frame_allocator
         .allocate_frames(pages)
         .unwrap_or_else(|| panic!("OOM: failed to allocate {pages} pages for user stack"));
+    let stack_size = pages
+        .checked_mul(PAGE_SIZE)
+        .expect("user stack size overflowed");
 
     // SAFETY: The active level-4 page table is identity mapped by early paging,
     // and the provided allocator supplies page-table frames for missing levels.
@@ -43,7 +47,9 @@ pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64)
         );
     }
 
-    USER_STACK_BASE + pages * PAGE_SIZE
+    USER_STACK_BASE
+        .checked_add(stack_size)
+        .expect("user stack top address overflowed")
 }
 
 /// Allocate and map the built-in user-space spin loop program.
@@ -103,10 +109,17 @@ unsafe fn map_user_range(
     let mut wrapper = UserFrameAllocator { frame_allocator };
 
     for index in 0..pages {
-        let page =
-            Page::<Size4KiB>::containing_address(VirtAddr::new(virtual_start + index * PAGE_SIZE));
-        let frame =
-            PhysFrame::containing_address(PhysAddr::new(physical_start + index * PAGE_SIZE));
+        let offset = index
+            .checked_mul(PAGE_SIZE)
+            .expect("user mapping offset overflowed");
+        let virtual_address = virtual_start
+            .checked_add(offset)
+            .expect("user virtual address overflowed");
+        let physical_address = physical_start
+            .checked_add(offset)
+            .expect("user physical address overflowed");
+        let page = Page::<Size4KiB>::containing_address(VirtAddr::new(virtual_address));
+        let frame = PhysFrame::containing_address(PhysAddr::new(physical_address));
 
         // SAFETY: `frame` is owned by the caller for this range, `page` is in
         // the fixed user stack range, and `wrapper` allocates new page-table

@@ -125,6 +125,12 @@ fn initialize_architecture_and_drivers() {
     kernel::time::register_timer_ticks_provider(
         arch::x86_64::interrupt_descriptor_table::get_ticks,
     );
+    kernel::task::architecture::register_context_switch(arch::x86_64::switch_context);
+    kernel::task::architecture::register_user_mode_entry(arch::x86_64::enter_user_mode);
+    kernel::task::user_mode::register_selectors(kernel::task::user_mode::UserModeSelectors {
+        data: arch::x86_64::global_descriptor_table::USER_DATA_SELECTOR,
+        code: arch::x86_64::global_descriptor_table::USER_CODE_SELECTOR,
+    });
     crate::serial_println!("[ok   ] Architecture initialized.");
     let user_selectors = kernel::task::user_mode::get_selectors();
     crate::serial_println!(

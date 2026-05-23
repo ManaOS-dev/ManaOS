@@ -48,6 +48,7 @@ src/
     │   └── ring_buffer.rs
     ├── task/
     │   ├── mod.rs
+    │   ├── architecture.rs
     │   ├── context.rs
     │   └── user_mode.rs
     ├── runtime/
@@ -166,6 +167,11 @@ interrupt_descriptor_table::register_processors(
 
 `kernel::interrupt` owns kernel-side interrupt event routing. It may call
 `kernel::task` and `kernel::driver::input`, but it must not depend on `arch/`.
+
+Task switching follows the same composition-root rule. `arch/` owns assembly
+entry points and segment selectors, `main.rs` registers them with
+`kernel::task`, and scheduler code calls only the registered task architecture
+provider.
 
 ---
 

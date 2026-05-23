@@ -1,6 +1,7 @@
 [licenses]
 allow = [
   "Apache-2.0",
+  "GPL-3.0-or-later",
   "MIT",
   "MPL-2.0",
   "Unicode-3.0",
@@ -38,4 +39,3 @@ wildcards = "deny"
 
 [advisories]
 ignore = []
-

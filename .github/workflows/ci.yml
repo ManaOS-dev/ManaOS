@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "dev" ]
   pull_request:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "dev" ]
   workflow_dispatch:
 
 env:
@@ -29,6 +29,11 @@ jobs:
       - name: Install just
         uses: taiki-e/install-action@just
 
+      - name: Install audit tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit,cargo-deny,cargo-machete,typos-cli
+
       - name: Check Formatting
         run: just fmt
 
@@ -43,6 +48,18 @@ jobs:
 
       - name: Build Kernel
         run: cargo build --target x86_64-unknown-uefi
+
+      - name: Audit Dependencies
+        run: cargo audit
+
+      - name: Check Dependency Policy
+        run: cargo deny check
+
+      - name: Check Unused Dependencies
+        run: cargo machete
+
+      - name: Check Typos
+        run: typos
 
       - name: Upload EFI Artifact
         uses: actions/upload-artifact@v4

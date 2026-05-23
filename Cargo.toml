@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["ManaOS Contributors"]
 description = "A monolithic x86_64 UEFI kernel written in Rust."
-license-file = "LICENSE"
+license = "GPL-3.0-or-later"
 readme = "README.md"
 
 [[bin]]

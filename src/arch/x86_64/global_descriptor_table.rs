@@ -77,11 +77,13 @@ pub fn init() {
 }
 
 /// Return the user data segment selector.
+#[allow(dead_code)]
 pub fn get_user_data_selector() -> SegmentSelector {
     GLOBAL_DESCRIPTOR_TABLE.1.user_data
 }
 
 /// Return the user code segment selector.
+#[allow(dead_code)]
 pub fn get_user_code_selector() -> SegmentSelector {
     GLOBAL_DESCRIPTOR_TABLE.1.user_code
 }

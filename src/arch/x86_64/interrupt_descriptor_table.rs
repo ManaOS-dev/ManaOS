@@ -80,7 +80,7 @@ extern "x86-interrupt" fn page_fault_handler(
 ) {
     use x86_64::registers::control::Cr2;
     panic!(
-        "[EXCPT] PAGE FAULT\nAddr: {:?}\nCode: {:?}\n{:#?}",
+        "[EXCEPT] PAGE FAULT\nAddr: {:?}\nCode: {:?}\n{:#?}",
         Cr2::read(),
         error_code,
         stack_frame
@@ -91,18 +91,18 @@ extern "x86-interrupt" fn general_protection_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: u64,
 ) {
-    panic!("[EXCPT] GPF\nCode: {error_code:#x}\n{stack_frame:#?}");
+    panic!("[EXCEPT] GPF\nCode: {error_code:#x}\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
-    serial_println!("[EXCPT] BREAKPOINT\n{:#?}", stack_frame);
+    serial_println!("[EXCEPT] BREAKPOINT\n{:#?}", stack_frame);
 }
 
 extern "x86-interrupt" fn double_fault_handler(
     stack_frame: InterruptStackFrame,
     _error_code: u64,
 ) -> ! {
-    panic!("[EXCPT] DOUBLE FAULT\n{stack_frame:#?}");
+    panic!("[EXCEPT] DOUBLE FAULT\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
