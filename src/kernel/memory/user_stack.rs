@@ -1,8 +1,7 @@
-//! User-space stack mapping.
+//! User-space bootstrap stack and code mapping.
 
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use x86_64::{
-    instructions::tlb,
     registers::control::Cr3,
     structures::paging::{
         FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags, PhysFrame,
@@ -12,7 +11,13 @@ use x86_64::{
 };
 
 const PAGE_SIZE: u64 = 4096;
+const PAGE_SIZE_USIZE: usize = 4096;
+const USER_PROGRAM_BASE: u64 = 0x0000_4000_0000_0000;
 const USER_STACK_BASE: u64 = 0x0000_7fff_f000_0000;
+const USER_SPIN_LOOP_PROGRAM: &[u8] = &[
+    0xf3, 0x90, // pause
+    0xeb, 0xfc, // jump back to pause
+];
 
 /// Allocate and map a fixed-base user-space stack.
 ///
@@ -41,22 +46,44 @@ pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64)
     USER_STACK_BASE + pages * PAGE_SIZE
 }
 
-/// Mark an already mapped page as accessible from user space.
+/// Allocate and map the built-in user-space spin loop program.
 ///
-/// This is a temporary bridge for the built-in user stub. The ELF loader will
-/// replace it with dedicated user text mappings.
+/// Returns the virtual entry point of the mapped program.
 ///
 /// # Panics
 ///
-/// Panics if `virtual_address` is not mapped in the active page table.
-pub fn allow_user_access_to_existing_page(virtual_address: u64) {
-    let virtual_address = VirtAddr::new(virtual_address);
-    // SAFETY: The active page table is identity mapped and the requested page
-    // must already be present because the entry point is kernel text.
+/// Panics if a physical frame cannot be allocated or the program page cannot be
+/// mapped.
+pub fn allocate_user_spin_loop(frame_allocator: &mut BumpFrameAllocator) -> u64 {
+    assert!(
+        USER_SPIN_LOOP_PROGRAM.len() <= PAGE_SIZE_USIZE,
+        "built-in user program must fit in one page"
+    );
+
+    let physical_start = frame_allocator
+        .allocate_frame()
+        .expect("OOM: failed to allocate built-in user program page");
+    let program_page = physical_start as *mut u8;
+
+    // SAFETY: `physical_start` is a freshly allocated identity-mapped frame.
+    // The writes initialize the whole page before the user mapping is installed.
     unsafe {
-        mark_page_table_path_user_accessible(virtual_address);
+        core::ptr::write_bytes(program_page, 0, PAGE_SIZE_USIZE);
+        core::ptr::copy_nonoverlapping(
+            USER_SPIN_LOOP_PROGRAM.as_ptr(),
+            program_page,
+            USER_SPIN_LOOP_PROGRAM.len(),
+        );
+        map_user_range(
+            frame_allocator,
+            USER_PROGRAM_BASE,
+            physical_start,
+            1,
+            PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE,
+        );
     }
-    tlb::flush(virtual_address);
+
+    USER_PROGRAM_BASE
 }
 
 unsafe fn map_user_range(
@@ -91,52 +118,6 @@ unsafe fn map_user_range(
                 .flush();
         }
     }
-}
-
-unsafe fn mark_page_table_path_user_accessible(virtual_address: VirtAddr) {
-    let (level_4_frame, _) = Cr3::read();
-    // SAFETY: The active page table is identity mapped by early paging.
-    let level_4_table = unsafe { table_at(level_4_frame.start_address()) };
-
-    let level_4_entry = &mut level_4_table[virtual_address.p4_index()];
-    mark_entry_user_accessible(level_4_entry, "level-4 user entry page is not mapped");
-    // SAFETY: The level-4 entry points to a present lower-level page table.
-    let level_3_table = unsafe { table_at(level_4_entry.addr()) };
-
-    let level_3_entry = &mut level_3_table[virtual_address.p3_index()];
-    mark_entry_user_accessible(level_3_entry, "level-3 user entry page is not mapped");
-    if level_3_entry.flags().contains(PageTableFlags::HUGE_PAGE) {
-        return;
-    }
-    // SAFETY: The level-3 entry points to a present lower-level page table.
-    let level_2_table = unsafe { table_at(level_3_entry.addr()) };
-
-    let level_2_entry = &mut level_2_table[virtual_address.p2_index()];
-    mark_entry_user_accessible(level_2_entry, "level-2 user entry page is not mapped");
-    if level_2_entry.flags().contains(PageTableFlags::HUGE_PAGE) {
-        return;
-    }
-    // SAFETY: The level-2 entry points to a present lower-level page table.
-    let level_1_table = unsafe { table_at(level_2_entry.addr()) };
-
-    let level_1_entry = &mut level_1_table[virtual_address.p1_index()];
-    mark_entry_user_accessible(level_1_entry, "level-1 user entry page is not mapped");
-}
-
-fn mark_entry_user_accessible(
-    entry: &mut x86_64::structures::paging::page_table::PageTableEntry,
-    panic_message: &str,
-) {
-    assert!(
-        entry.flags().contains(PageTableFlags::PRESENT),
-        "{panic_message}"
-    );
-    entry.set_flags(entry.flags() | PageTableFlags::USER_ACCESSIBLE);
-}
-
-unsafe fn table_at(address: PhysAddr) -> &'static mut PageTable {
-    // SAFETY: ManaOS identity maps physical memory during early paging setup.
-    unsafe { &mut *(address.as_u64() as *mut PageTable) }
 }
 
 struct UserFrameAllocator<'a> {

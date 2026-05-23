@@ -147,6 +147,12 @@ impl Scheduler {
     }
 
     fn prepare_next_switch(&mut self) -> Option<SwitchAction> {
+        if matches!(self.tasks[self.current_index].kind, TaskKind::User(_)) {
+            // TODO(phase6): switch away from user tasks after saving a full
+            // user trap frame instead of the kernel-only callee-saved context.
+            return None;
+        }
+
         let next_index = self.get_next_ready_index()?;
         if next_index == self.current_index {
             return None;

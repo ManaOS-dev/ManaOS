@@ -37,5 +37,5 @@ pub fn push_mouse_byte(byte: u8) {
 #[unsafe(naked)]
 pub unsafe extern "C" fn syscall_entry() {
     // TODO(phase6): dispatch table.
-    core::arch::naked_asm!("swapgs", "sysretq");
+    core::arch::naked_asm!("sysretq");
 }

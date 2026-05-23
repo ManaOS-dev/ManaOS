@@ -28,12 +28,6 @@ extern "C" fn idle_task() -> ! {
     }
 }
 
-extern "C" fn user_hello() -> ! {
-    loop {
-        core::hint::spin_loop();
-    }
-}
-
 /// Panic handler: dump to serial and halt.
 #[cfg(not(test))]
 #[panic_handler]
@@ -206,8 +200,8 @@ fn main() -> Status {
     initialize_architecture_and_drivers();
 
     let user_stack_top = kernel::memory::user_stack::allocate_user_stack(&mut frame_allocator, 4);
-    let user_entry_point = user_hello as *const () as u64;
-    kernel::memory::user_stack::allow_user_access_to_existing_page(user_entry_point);
+    let user_entry_point =
+        kernel::memory::user_stack::allocate_user_spin_loop(&mut frame_allocator);
     kernel::task::spawn_user_task(user_entry_point, user_stack_top);
     crate::serial_println!("[ok   ] User task spawned.");
 
