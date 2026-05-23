@@ -32,10 +32,15 @@ pub fn tick() {
     let current_ticks = kernel::time::get_timer_ticks();
     let last_ticks = LAST_FPS_TICKS.load(Ordering::Relaxed);
 
+    let elapsed_ticks = current_ticks.saturating_sub(last_ticks);
+
     // Update FPS and UI every 500ms
-    if current_ticks - last_ticks >= 500 {
+    if elapsed_ticks >= 500 {
         let frame_count = FRAME_COUNT.swap(0, Ordering::Relaxed);
-        let fps = frame_count * 1000 / (current_ticks - last_ticks);
+        let fps = frame_count
+            .saturating_mul(1000)
+            .checked_div(elapsed_ticks)
+            .unwrap_or(0);
         FPS.store(fps, Ordering::Relaxed);
         LAST_FPS_TICKS.store(current_ticks, Ordering::Relaxed);
 

@@ -107,13 +107,11 @@ extern "x86-interrupt" fn double_fault_handler(
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     TICKS.fetch_add(1, Ordering::Relaxed);
-    if let Some(mut interrupt_controllers) =
-        crate::arch::x86_64::interrupt_controller::LEGACY_INTERRUPT_CONTROLLERS.try_lock()
-    {
-        // SAFETY: End-of-interrupt is required after servicing the timer interrupt.
-        unsafe {
-            interrupt_controllers.notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
-        }
+    // SAFETY: Notify EOI to the PIC to allow future interrupts.
+    unsafe {
+        crate::arch::x86_64::interrupt_controller::notify_legacy_end_of_interrupt(
+            InterruptIndex::Timer.as_u8(),
+        );
     }
     call_timer_tick_processor();
 }
