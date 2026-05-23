@@ -29,6 +29,9 @@
 - [x] copy C string from user
 - [x] copy read buffer to user
 - [x] userland open/read/close demo
+- [x] Phase 5B-4: user pointer page-table validation
+- [x] verify user ranges by mapped pages
+- [x] reject unmapped read/write syscall buffers
 - [ ] minimal shell-style task
 - [ ] Phase 5C: Real Storage
 - [ ] GPT partition table parsing

@@ -3,10 +3,14 @@ use uefi::mem::memory_map::MemoryDescriptor;
 use x86_64::{
     registers::control::Cr3,
     structures::paging::{
-        Mapper, OffsetPageTable, PageTable, PageTableFlags, PhysFrame, Size4KiB, Translate,
+        mapper::TranslateResult, Mapper, OffsetPageTable, PageTable, PageTableFlags, PhysFrame,
+        Size4KiB, Translate,
     },
     PhysAddr, VirtAddr,
 };
+
+const PAGE_SIZE: u64 = 4096;
+const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 
 /// Initialize a new page table with identity mapping and switch to it.
 ///
@@ -50,6 +54,81 @@ pub unsafe fn init<'a>(
         Cr3::write(pml4_frame, x86_64::registers::control::Cr3Flags::empty());
     }
     crate::serial_println!("[paging] Identity mapping complete.");
+}
+
+/// Return whether the whole user range is mapped as readable user memory.
+pub fn is_user_range_mapped_readable(user_pointer: usize, length: usize) -> bool {
+    validate_user_mapping(user_pointer, length, PageTableFlags::empty())
+}
+
+/// Return whether the whole user range is mapped as writable user memory.
+pub fn is_user_range_mapped_writable(user_pointer: usize, length: usize) -> bool {
+    validate_user_mapping(user_pointer, length, PageTableFlags::WRITABLE)
+}
+
+fn validate_user_mapping(
+    user_pointer: usize,
+    length: usize,
+    required_flags: PageTableFlags,
+) -> bool {
+    if length == 0 {
+        return true;
+    }
+
+    if user_pointer == 0 {
+        return false;
+    }
+
+    let Some(last_byte_pointer) = user_pointer.checked_add(length - 1) else {
+        return false;
+    };
+    if last_byte_pointer >= USER_SPACE_END {
+        return false;
+    }
+
+    let first_page_start = align_down_to_page(user_pointer as u64);
+    let last_page_start = align_down_to_page(last_byte_pointer as u64);
+
+    let (level_4_frame, _) = Cr3::read();
+    let level_4_table = level_4_frame.start_address().as_u64() as *mut PageTable;
+    // SAFETY: ManaOS keeps active page tables identity mapped, so the physical
+    // address from CR3 is directly usable as a kernel virtual address.
+    let level_4_table = unsafe { &mut *level_4_table };
+    // SAFETY: The active address space uses an identity physical memory offset.
+    let mapper = unsafe { OffsetPageTable::new(level_4_table, VirtAddr::new(0)) };
+
+    let mut page_start = first_page_start;
+    loop {
+        if !is_page_mapped_with_flags(&mapper, page_start, required_flags) {
+            return false;
+        }
+
+        if page_start == last_page_start {
+            return true;
+        }
+
+        let Some(next_page_start) = page_start.checked_add(PAGE_SIZE) else {
+            return false;
+        };
+        page_start = next_page_start;
+    }
+}
+
+fn align_down_to_page(address: u64) -> u64 {
+    address & !(PAGE_SIZE - 1)
+}
+
+fn is_page_mapped_with_flags(
+    mapper: &OffsetPageTable,
+    page_start: u64,
+    required_flags: PageTableFlags,
+) -> bool {
+    let required_flags = required_flags | PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+
+    match mapper.translate(VirtAddr::new(page_start)) {
+        TranslateResult::Mapped { flags, .. } => flags.contains(required_flags),
+        TranslateResult::NotMapped | TranslateResult::InvalidFrameAddress(_) => false,
+    }
 }
 
 unsafe fn create_pml4(frame_allocator: &mut BumpFrameAllocator) -> PhysFrame {

@@ -166,10 +166,12 @@ fn copy_from_user(user_pointer: usize, length: usize) -> Option<&'static [u8]> {
     }
 
     validate_user_range(user_pointer, length)?;
+    if !crate::kernel::memory::paging::is_user_range_mapped_readable(user_pointer, length) {
+        return None;
+    }
 
-    // SAFETY: This is the Phase 5B-1 bootstrap validator. It only accepts
-    // canonical lower-half user addresses and relies on current shared page
-    // tables to make mapped user memory readable by the kernel.
+    // SAFETY: The range has been bounds-checked and page-table validated as
+    // present user-accessible memory before creating the kernel slice.
     Some(unsafe { core::slice::from_raw_parts(user_pointer as *const u8, length) })
 }
 
@@ -179,24 +181,25 @@ fn copy_to_user(user_pointer: usize, length: usize) -> Option<&'static mut [u8]>
     }
 
     validate_user_range(user_pointer, length)?;
+    if !crate::kernel::memory::paging::is_user_range_mapped_writable(user_pointer, length) {
+        return None;
+    }
 
-    // SAFETY: This is the Phase 5B-3 bootstrap validator. It only accepts
-    // canonical lower-half user addresses and relies on current shared page
-    // tables to make mapped user memory writable by the kernel.
+    // SAFETY: The range has been bounds-checked and page-table validated as
+    // present writable user-accessible memory before creating the kernel slice.
     Some(unsafe { core::slice::from_raw_parts_mut(user_pointer as *mut u8, length) })
 }
 
 fn copy_cstr_from_user(user_pointer: usize) -> Option<String> {
-    validate_user_range(user_pointer, 1)?;
+    let bytes = copy_from_user(user_pointer, MAX_USER_STRING_LENGTH)?;
 
     let mut path = String::new();
-    for index in 0..MAX_USER_STRING_LENGTH {
-        let byte = *copy_from_user(user_pointer.checked_add(index)?, 1)?.first()?;
-        if byte == 0 {
+    for byte in bytes {
+        if *byte == 0 {
             return Some(path);
         }
 
-        path.push(char::from(byte));
+        path.push(char::from(*byte));
     }
 
     None
