@@ -7,9 +7,9 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 # Default: Build and run
 default: run
 
-# Build the kernel
+# Build userland demos and the kernel
 build:
-    @echo "[build] Compiling ManaOS kernel..."
+    @echo "[build] Compiling ManaOS userland demos and kernel..."
     cargo build
 
 # Setup ESP and Run QEMU
@@ -21,11 +21,14 @@ run: build
 fmt:
     @echo "[fmt] Formatting code..."
     cargo fmt --all {{ if os == "linux" { "--check" } else { "" } }}
+    cargo fmt --manifest-path userland/Cargo.toml --all {{ if os == "linux" { "--check" } else { "" } }}
 
 # Run static analysis (clippy)
 lint:
-    @echo "[lint] Running clippy..."
+    @echo "[lint] Running kernel clippy..."
     cargo clippy --target x86_64-unknown-uefi -- -D warnings
+    @echo "[lint] Running userland clippy..."
+    cargo clippy --manifest-path userland/Cargo.toml --target x86_64-unknown-none --target-dir target/userland --bin file_demo --bin bad_pointer_demo -- -D warnings
 
 # Regenerate bundled third-party license metadata
 licenses:
