@@ -1,6 +1,6 @@
 @echo off
 setlocal
-chcp 65001<nul
+chcp 65001>nul
 
 echo [build] Compiling kernel...
 cargo build --target x86_64-unknown-uefi

@@ -1,6 +1,6 @@
 /// A simple bump (linear) physical frame allocator.
-/// Conventional memory regions are registered before ExitBootServices,
-/// and physical frames (4KB units) are allocated after ExitBootServices.
+/// Conventional memory regions are registered before `ExitBootServices`,
+/// and physical frames (4KB units) are allocated after `ExitBootServices`.
 const MAX_REGIONS: usize = 128;
 
 #[derive(Clone, Copy)]
@@ -26,7 +26,7 @@ impl BumpFrameAllocator {
         }
     }
 
-    /// Register a conventional memory region (call before ExitBootServices).
+    /// Register a conventional memory region (call before `ExitBootServices`).
     pub fn add_region(&mut self, start: u64, pages: u64) {
         if self.count < MAX_REGIONS {
             self.regions[self.count] = Region { start, pages };
@@ -55,12 +55,11 @@ impl BumpFrameAllocator {
                         // Skip the first page and try the next one in the same region
                         self.offset += 1;
                         continue;
-                    } else {
-                        // Not enough space left in this region after skipping address 0
-                        self.current += 1;
-                        self.offset = 0;
-                        continue;
                     }
+                    // Not enough space left in this region after skipping address 0
+                    self.current += 1;
+                    self.offset = 0;
+                    continue;
                 }
 
                 self.offset += n;
