@@ -17,7 +17,10 @@ use uefi::prelude::*;
 use uefi::proto::console::gop::GraphicsOutput;
 use uefi::proto::media::file::{File, FileAttribute, FileMode};
 use uefi::proto::media::fs::SimpleFileSystem;
-use uefi::table::boot::MemoryDescriptor;
+use uefi::{
+    boot,
+    mem::memory_map::{MemoryDescriptor, MemoryMap, MemoryType},
+};
 
 extern "C" fn idle_task() -> ! {
     loop {
@@ -34,17 +37,12 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 /// Load a file from the EFI System Partition into memory (Boot Phase).
-fn load_file(st: &SystemTable<Boot>, path: &str) -> &'static mut [u8] {
+fn load_file(path: &str) -> &'static mut [u8] {
     use uefi::proto::media::file::FileInfo;
-    use uefi::table::boot::MemoryType;
 
-    let fs_handle = st
-        .boot_services()
-        .get_handle_for_protocol::<SimpleFileSystem>()
+    let fs_handle = boot::get_handle_for_protocol::<SimpleFileSystem>()
         .expect("Failed to get SimpleFileSystem handle");
-    let mut fs = st
-        .boot_services()
-        .open_protocol_exclusive::<SimpleFileSystem>(fs_handle)
+    let mut fs = boot::open_protocol_exclusive::<SimpleFileSystem>(fs_handle)
         .expect("Failed to open SimpleFileSystem");
 
     let mut root = fs.open_volume().expect("Failed to open volume");
@@ -66,30 +64,23 @@ fn load_file(st: &SystemTable<Boot>, path: &str) -> &'static mut [u8] {
     let size = usize::try_from(info.file_size()).expect("File too large");
 
     // Allocate memory from UEFI pool
-    let ptr = st
-        .boot_services()
-        .allocate_pool(MemoryType::LOADER_DATA, size)
+    let ptr = boot::allocate_pool(MemoryType::LOADER_DATA, size)
         .expect("Failed to allocate pool for file");
 
     // SAFETY: allocate_pool returned a valid pointer to a LOADER_DATA buffer of
     // exactly size bytes, and the buffer remains owned by the boot phase.
-    let buffer = unsafe { core::slice::from_raw_parts_mut(ptr, size) };
+    let buffer = unsafe { core::slice::from_raw_parts_mut(ptr.as_ptr(), size) };
     file.read(buffer).expect("Failed to read file");
 
     buffer
 }
 
-fn get_framebuffer_info(
-    st: &SystemTable<Boot>,
-) -> kernel::driver::display::framebuffer::FrameBufferInfo {
-    let graphics_output_handle = st
-        .boot_services()
-        .get_handle_for_protocol::<GraphicsOutput>()
+fn get_framebuffer_info() -> kernel::driver::display::framebuffer::FrameBufferInfo {
+    let graphics_output_handle = boot::get_handle_for_protocol::<GraphicsOutput>()
         .expect("GraphicsOutput handle is required for ManaOS framebuffer setup");
-    let mut graphics_output = st
-        .boot_services()
-        .open_protocol_exclusive::<GraphicsOutput>(graphics_output_handle)
-        .expect("GraphicsOutput protocol is required for ManaOS framebuffer setup");
+    let mut graphics_output =
+        boot::open_protocol_exclusive::<GraphicsOutput>(graphics_output_handle)
+            .expect("GraphicsOutput protocol is required for ManaOS framebuffer setup");
     kernel::driver::display::framebuffer::get_info(&mut graphics_output)
 }
 
@@ -98,7 +89,7 @@ fn add_conventional_memory_regions<'a>(
     memory_descriptors: impl Iterator<Item = &'a MemoryDescriptor>,
 ) {
     for descriptor in memory_descriptors {
-        if descriptor.ty == uefi::table::boot::MemoryType::CONVENTIONAL {
+        if descriptor.ty == MemoryType::CONVENTIONAL {
             frame_allocator.add_region(descriptor.phys_start, descriptor.page_count);
         }
     }
@@ -130,8 +121,23 @@ fn initialize_scheduler() {
 }
 
 fn initialize_architecture_and_drivers() {
-    arch::init();
+    arch::init(kernel::interrupt::syscall_entry as *const () as u64);
+    kernel::time::register_timer_ticks_provider(
+        arch::x86_64::interrupt_descriptor_table::get_ticks,
+    );
+    kernel::task::architecture::register_context_switch(arch::x86_64::switch_context);
+    kernel::task::architecture::register_user_mode_entry(arch::x86_64::enter_user_mode);
+    kernel::task::user_mode::register_selectors(kernel::task::user_mode::UserModeSelectors {
+        data: arch::x86_64::global_descriptor_table::USER_DATA_SELECTOR,
+        code: arch::x86_64::global_descriptor_table::USER_CODE_SELECTOR,
+    });
     crate::serial_println!("[ok   ] Architecture initialized.");
+    let user_selectors = kernel::task::user_mode::get_selectors();
+    crate::serial_println!(
+        "[task ] Ring 3 selectors installed. code={:#06x}, data={:#06x}",
+        user_selectors.code,
+        user_selectors.data
+    );
 
     arch::x86_64::interrupt_descriptor_table::register_processors(
         arch::x86_64::interrupt_descriptor_table::InterruptProcessors {
@@ -148,46 +154,62 @@ fn initialize_architecture_and_drivers() {
     arch::x86_64::enable_interrupts();
 }
 
-#[entry]
-fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
-    let _ = image;
+fn verify_kernel_filesystem() {
+    let _ = kernel::filesystem::write(
+        kernel::filesystem::STANDARD_OUTPUT,
+        b"[fs   ] Standard output is connected to /dev/console.\n",
+    );
+    let _ = kernel::filesystem::write(kernel::filesystem::STANDARD_ERROR, b"");
 
+    kernel::filesystem::mount_ram_file("/hello.txt", b"hello from ramfs\n");
+    let descriptor =
+        kernel::filesystem::open("/hello.txt").expect("ramfs smoke test file must open");
+    let mut buffer = [0_u8; 32];
+    let bytes_read =
+        kernel::filesystem::read(descriptor, &mut buffer).expect("ramfs smoke test must read");
+    kernel::filesystem::close(descriptor).expect("ramfs smoke test descriptor must close");
+    let _ = kernel::filesystem::write(kernel::filesystem::STANDARD_OUTPUT, &buffer[..bytes_read]);
+
+    let null_descriptor =
+        kernel::filesystem::open("/dev/null").expect("null device must open during smoke test");
+    let _ = kernel::filesystem::write(null_descriptor, b"discarded");
+    kernel::filesystem::close(null_descriptor).expect("null descriptor must close");
+
+    let _ = kernel::filesystem::read(kernel::filesystem::STANDARD_INPUT, &mut buffer);
+}
+
+#[entry]
+fn main() -> Status {
     // ────────────────────────────────────────────────
     // Boot Phase (UEFI Services available)
     // ────────────────────────────────────────────────
-    kernel::logger::init(&mut st);
+    kernel::logger::init();
 
     log::info!("ManaOS booting (HAL edition)...");
 
-    let framebuffer_info = get_framebuffer_info(&st);
-
-    // Get Memory Map and save CONVENTIONAL regions
-    let mmap_buf = &mut [0u8; 4096 * 4];
-    let mmap = st
-        .boot_services()
-        .memory_map(mmap_buf)
-        .expect("Failed to get memory map");
-
-    let mut frame_allocator = kernel::memory::frame_allocator::BumpFrameAllocator::new();
-    add_conventional_memory_regions(&mut frame_allocator, mmap.entries());
+    let framebuffer_info = get_framebuffer_info();
 
     log::info!("Calling ExitBootServices...");
 
     // Pre-load fonts before exiting boot services
-    let font_inter = load_file(&st, "Inter.ttf");
-    let font_noto = load_file(&st, "NotoSansJP.ttf");
+    let font_inter = load_file("Inter.ttf");
+    let font_noto = load_file("NotoSansJP.ttf");
 
     // ────────────────────────────────────────────────
     // ExitBootServices
     // ────────────────────────────────────────────────
     kernel::logger::disable();
-    let (_st_runtime, mmap) = st.exit_boot_services();
+    // SAFETY: All required boot service resources have been acquired and UEFI
+    // console logging is disabled before leaving the boot-services phase.
+    let mmap = unsafe { boot::exit_boot_services(Some(MemoryType::LOADER_DATA)) };
 
     // ────────────────────────────────────────────────
     // Kernel Phase
     // ────────────────────────────────────────────────
     kernel::serial::init();
     crate::serial_println!("[serial] ExitBootServices OK.");
+    let mut frame_allocator = kernel::memory::frame_allocator::BumpFrameAllocator::new();
+    add_conventional_memory_regions(&mut frame_allocator, mmap.entries());
 
     // ────────────────────────────────────────────────
     // Kernel Phase (UEFI Services unavailable)
@@ -201,21 +223,30 @@ fn main(image: Handle, mut st: SystemTable<Boot>) -> Status {
         &mut frame_allocator,
         mmap.entries(),
         framebuffer_info,
-        kernel::driver::display::framebuffer::FontAssets {
+        kernel::driver::display::font::FontAssets {
             inter: font_inter,
             noto: font_noto,
         },
         backbuffer_ptr,
     );
+    kernel::filesystem::initialize();
+    crate::serial_println!("[fs   ] Kernel filesystem initialized.");
+    verify_kernel_filesystem();
     initialize_scheduler();
     initialize_architecture_and_drivers();
 
     crate::serial_println!("[ok   ] ManaOS Kernel is alive.");
 
-    // Calibrate TSC for profiling
+    // Calibrate TSC for profiling before user tasks can preempt the bootstrap task.
     kernel::profiler::calibrate_tsc();
 
     kernel::runtime::initialize();
+
+    let user_stack_top = kernel::memory::user_stack::allocate_user_stack(&mut frame_allocator, 4);
+    let user_entry_point =
+        kernel::memory::user_stack::allocate_user_write_demo(&mut frame_allocator);
+    kernel::task::spawn_user_task(user_entry_point, user_stack_top);
+    crate::serial_println!("[ok   ] User task spawned.");
 
     // Main Loop
     loop {

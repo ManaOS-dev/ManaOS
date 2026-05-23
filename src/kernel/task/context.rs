@@ -69,6 +69,11 @@ impl TaskContext {
     pub fn as_pointer(&self) -> *const u64 {
         core::ptr::addr_of!(self.stack_pointer)
     }
+
+    /// Return true when this context has never been initialized with a stack.
+    pub fn is_empty(&self) -> bool {
+        self.stack_pointer == 0
+    }
 }
 
 impl Default for TaskContext {
@@ -78,3 +83,51 @@ impl Default for TaskContext {
 }
 
 const _: () = assert!(mem::size_of::<TaskContext>() == 64);
+
+/// The five values `iretq` pops from the stack, in stack order.
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct UserTaskContext {
+    /// User entry point instruction pointer.
+    pub instruction_pointer: u64,
+    /// Ring 3 code segment selector.
+    pub code_segment: u64,
+    /// Initial CPU flags with interrupts enabled and IOPL set to zero.
+    pub cpu_flags: u64,
+    /// Top of the mapped user stack.
+    pub stack_pointer: u64,
+    /// Ring 3 stack segment selector.
+    pub stack_segment: u64,
+}
+
+impl UserTaskContext {
+    /// Create an initial user-space context.
+    ///
+    /// # Safety
+    ///
+    /// `stack_top` must point one byte past a mapped, writable user-space stack
+    /// page. `entry_point` must be a valid mapped user-space instruction
+    /// address.
+    pub unsafe fn new(entry_point: u64, stack_top: u64) -> Self {
+        let selectors = crate::kernel::task::user_mode::get_selectors();
+        assert!(
+            selectors.code != 0 && selectors.data != 0,
+            "user-mode selectors must be registered before spawning user tasks"
+        );
+
+        Self {
+            instruction_pointer: entry_point,
+            code_segment: u64::from(selectors.code),
+            cpu_flags: 0x202,
+            stack_pointer: stack_top,
+            stack_segment: u64::from(selectors.data),
+        }
+    }
+
+    /// Return an immutable pointer suitable for the `enter_user_mode` stub.
+    pub fn as_pointer(&self) -> *const u64 {
+        core::ptr::addr_of!(self.instruction_pointer)
+    }
+}
+
+const _: () = assert!(mem::size_of::<UserTaskContext>() == 40);

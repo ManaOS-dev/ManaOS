@@ -1,4 +1,5 @@
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
+use uefi::mem::memory_map::MemoryDescriptor;
 use x86_64::{
     registers::control::Cr3,
     structures::paging::{
@@ -8,28 +9,46 @@ use x86_64::{
 };
 
 /// Initialize a new page table with identity mapping and switch to it.
+///
+/// # Safety
+///
+/// The provided frame allocator must return valid, unused, page-aligned physical
+/// frames. The memory map iterator must describe memory that can be identity
+/// mapped, and the framebuffer range must come from the active graphics mode.
 pub unsafe fn init<'a>(
     frame_allocator: &mut BumpFrameAllocator,
-    mmap_iter: impl Iterator<Item = &'a uefi::table::boot::MemoryDescriptor>,
+    mmap_iter: impl Iterator<Item = &'a MemoryDescriptor>,
     framebuffer_base: u64,
     framebuffer_size: u64,
 ) {
-    let pml4_frame = create_pml4(frame_allocator);
+    // SAFETY: The caller guarantees that the frame allocator returns valid page
+    // table frames.
+    let pml4_frame = unsafe { create_pml4(frame_allocator) };
     let pml4_table_ptr = pml4_frame.start_address().as_u64() as *mut PageTable;
-    let pml4_table = &mut *pml4_table_ptr;
+    // SAFETY: pml4_frame was freshly allocated and zeroed by create_pml4.
+    let pml4_table = unsafe { &mut *pml4_table_ptr };
 
-    let mut mapper = OffsetPageTable::new(pml4_table, VirtAddr::new(0));
+    // SAFETY: ManaOS uses identity-mapped physical memory during early paging
+    // setup, so a zero physical memory offset is valid here.
+    let mut mapper = unsafe { OffsetPageTable::new(pml4_table, VirtAddr::new(0)) };
 
-    map_memory_regions(&mut mapper, frame_allocator, mmap_iter);
-    map_framebuffer(
-        &mut mapper,
-        frame_allocator,
-        framebuffer_base,
-        framebuffer_size,
-    );
+    // SAFETY: The caller provides the boot memory map and a valid allocator for
+    // page-table frames.
+    unsafe {
+        map_memory_regions(&mut mapper, frame_allocator, mmap_iter);
+        map_framebuffer(
+            &mut mapper,
+            frame_allocator,
+            framebuffer_base,
+            framebuffer_size,
+        );
+    }
 
     // Switch to the new page table
-    Cr3::write(pml4_frame, x86_64::registers::control::Cr3Flags::empty());
+    // SAFETY: pml4_frame points to a valid level-4 page table built above.
+    unsafe {
+        Cr3::write(pml4_frame, x86_64::registers::control::Cr3Flags::empty());
+    }
     crate::serial_println!("[paging] Identity mapping complete.");
 }
 
@@ -39,23 +58,35 @@ unsafe fn create_pml4(frame_allocator: &mut BumpFrameAllocator) -> PhysFrame {
         .expect("OOM: failed to allocate PML4 frame");
     let frame = PhysFrame::containing_address(PhysAddr::new(addr));
     let ptr = frame.start_address().as_u64() as *mut PageTable;
-    core::ptr::write_bytes(ptr, 0, 1);
+    // SAFETY: ptr points to a freshly allocated 4KiB page table frame.
+    unsafe {
+        core::ptr::write_bytes(ptr, 0, 1);
+    }
     frame
 }
 
 unsafe fn map_memory_regions<'a>(
     mapper: &mut OffsetPageTable,
     frame_allocator: &mut BumpFrameAllocator,
-    mmap_iter: impl Iterator<Item = &'a uefi::table::boot::MemoryDescriptor>,
+    mmap_iter: impl Iterator<Item = &'a MemoryDescriptor>,
 ) {
     let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
     for desc in mmap_iter {
         let start = desc.phys_start;
-        let end = start + desc.page_count * 4096;
+        let size = desc
+            .page_count
+            .checked_mul(4096)
+            .expect("memory map region size overflowed");
+        let end = start
+            .checked_add(size)
+            .expect("memory map region end address overflowed");
 
         let mut current_start = start;
         while current_start < end {
-            if current_start % 0x200_000 == 0 && current_start + 0x200_000 <= end {
+            let next_huge_page_start = current_start
+                .checked_add(0x200_000)
+                .expect("2MiB mapping address overflowed");
+            if current_start % 0x200_000 == 0 && next_huge_page_start <= end {
                 let page = x86_64::structures::paging::Page::<x86_64::structures::paging::Size2MiB>::containing_address(VirtAddr::new(current_start));
                 let frame = x86_64::structures::paging::PhysFrame::<
                     x86_64::structures::paging::Size2MiB,
@@ -76,7 +107,7 @@ unsafe fn map_memory_regions<'a>(
                         "Failed to map 2MiB page {current_start:#x}: {e:?}"
                     ),
                 }
-                current_start += 0x200_000;
+                current_start = next_huge_page_start;
             } else {
                 let page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
                     VirtAddr::new(current_start),
@@ -98,7 +129,9 @@ unsafe fn map_memory_regions<'a>(
                         "Failed to map 4KiB page {current_start:#x}: {e:?}"
                     ),
                 }
-                current_start += 4096;
+                current_start = current_start
+                    .checked_add(4096)
+                    .expect("4KiB mapping address overflowed");
             }
         }
     }
@@ -115,11 +148,18 @@ unsafe fn map_framebuffer(
         framebuffer_base,
         framebuffer_size
     );
+    assert!(
+        framebuffer_size > 0,
+        "framebuffer size must be non-zero before paging setup"
+    );
     let start_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
         VirtAddr::new(framebuffer_base),
     );
+    let end_address = framebuffer_base
+        .checked_add(framebuffer_size - 1)
+        .expect("framebuffer end address overflowed");
     let end_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(VirtAddr::new(
-        framebuffer_base + framebuffer_size - 1,
+        end_address,
     ));
 
     for page in x86_64::structures::paging::Page::range_inclusive(start_page, end_page) {
@@ -156,6 +196,8 @@ struct FrameAllocWrapper<'a> {
     frame_allocator: &'a mut BumpFrameAllocator,
 }
 
+// SAFETY: FrameAllocWrapper delegates to BumpFrameAllocator, which returns each
+// frame at most once from registered conventional memory regions.
 unsafe impl x86_64::structures::paging::FrameAllocator<Size4KiB> for FrameAllocWrapper<'_> {
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
         self.frame_allocator

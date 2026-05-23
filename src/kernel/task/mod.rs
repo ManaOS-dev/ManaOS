@@ -12,20 +12,40 @@
 //! ## Public API
 //! - [`initialize`] - Initialize the scheduler with the bootstrap task
 //! - [`spawn`] - Add a runnable kernel task
+//! - [`spawn_user_task`] - Add a runnable user task
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
 
+pub mod architecture;
 pub mod context;
+pub mod user_mode;
 
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
-use context::{TaskContext, TaskEntry};
+use context::{TaskContext, TaskEntry, UserTaskContext};
+use core::sync::atomic::{AtomicBool, Ordering};
 use spin::Mutex;
 
 const TASK_STACK_SIZE: usize = 16 * 1024;
+const USER_TASK_PREEMPTION_ENABLED: bool = false;
 
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
+static PREEMPTION_ENABLED: AtomicBool = AtomicBool::new(true);
+
+#[derive(Debug, Clone, Copy)]
+enum TaskKind {
+    Kernel,
+    User(UserTaskContext),
+}
+
+enum SwitchAction {
+    SwitchKernel {
+        current_context: *mut u64,
+        next_context: *const u64,
+    },
+    EnterUser(UserTaskContext),
+}
 
 /// Current lifecycle state of a kernel task.
 #[allow(dead_code)]
@@ -45,6 +65,7 @@ pub enum TaskState {
 pub struct Task {
     id: u64,
     state: TaskState,
+    kind: TaskKind,
     context: TaskContext,
     _stack: Option<Box<[u8]>>,
 }
@@ -54,6 +75,7 @@ impl Task {
         Self {
             id,
             state: TaskState::Running,
+            kind: TaskKind::Kernel,
             context: TaskContext::new(),
             _stack: None,
         }
@@ -69,8 +91,19 @@ impl Task {
         Self {
             id,
             state: TaskState::Ready,
+            kind: TaskKind::Kernel,
             context,
             _stack: Some(stack),
+        }
+    }
+
+    fn user(id: u64, user_context: UserTaskContext) -> Self {
+        Self {
+            id,
+            state: TaskState::Ready,
+            kind: TaskKind::User(user_context),
+            context: TaskContext::new(),
+            _stack: None,
         }
     }
 
@@ -102,11 +135,26 @@ impl Scheduler {
         task_id
     }
 
+    fn spawn_user_task(&mut self, entry_point: u64, user_stack_top: u64) -> u64 {
+        let task_id = self.next_task_id;
+        self.next_task_id += 1;
+        // SAFETY: The caller provides a mapped user entry point and user stack.
+        let user_context = unsafe { UserTaskContext::new(entry_point, user_stack_top) };
+        self.tasks.push(Task::user(task_id, user_context));
+        task_id
+    }
+
     fn get_current_task_id(&self) -> u64 {
         self.tasks[self.current_index].get_id()
     }
 
-    fn prepare_next_switch(&mut self) -> Option<(*mut u64, *const u64)> {
+    fn prepare_next_switch(&mut self) -> Option<SwitchAction> {
+        if matches!(self.tasks[self.current_index].kind, TaskKind::User(_)) {
+            // TODO(phase6): switch away from user tasks after saving a full
+            // user trap frame instead of the kernel-only callee-saved context.
+            return None;
+        }
+
         let next_index = self.get_next_ready_index()?;
         if next_index == self.current_index {
             return None;
@@ -118,8 +166,17 @@ impl Scheduler {
         self.current_index = next_index;
 
         let current_context = self.tasks[current_index].context.as_mut_pointer();
+        if let TaskKind::User(user_context) = self.tasks[next_index].kind {
+            if self.tasks[next_index].context.is_empty() {
+                return Some(SwitchAction::EnterUser(user_context));
+            }
+        }
+
         let next_context = self.tasks[next_index].context.as_pointer();
-        Some((current_context, next_context))
+        Some(SwitchAction::SwitchKernel {
+            current_context,
+            next_context,
+        })
     }
 
     fn get_next_ready_index(&self) -> Option<usize> {
@@ -129,6 +186,12 @@ impl Scheduler {
 
         for offset in 1..=self.tasks.len() {
             let index = (self.current_index + offset) % self.tasks.len();
+            if !USER_TASK_PREEMPTION_ENABLED && matches!(self.tasks[index].kind, TaskKind::User(_))
+            {
+                // TODO(phase7): enable this after timer interrupts save and
+                // restore a full user trap frame.
+                continue;
+            }
             if self.tasks[index].state == TaskState::Ready {
                 return Some(index);
             }
@@ -159,9 +222,31 @@ pub fn spawn(entry: TaskEntry) -> u64 {
         .spawn(entry)
 }
 
+/// Add a runnable user-space task to the round-robin scheduler.
+///
+/// # Panics
+///
+/// Panics if the scheduler has not been initialized.
+pub fn spawn_user_task(entry_point: u64, user_stack_top: u64) -> u64 {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .expect("scheduler must be initialized before spawning user tasks")
+        .spawn_user_task(entry_point, user_stack_top)
+}
+
+/// Enable or disable timer-driven task switching.
+pub fn set_preemption_enabled(enabled: bool) {
+    PREEMPTION_ENABLED.store(enabled, Ordering::Release);
+}
+
 /// Process one timer tick and switch to the next runnable task when possible.
 pub fn process_timer_tick() {
-    let switch_contexts = {
+    if !PREEMPTION_ENABLED.load(Ordering::Acquire) {
+        return;
+    }
+
+    let switch_action = {
         let Some(mut scheduler) = SCHEDULER.try_lock() else {
             return;
         };
@@ -173,14 +258,29 @@ pub fn process_timer_tick() {
         scheduler.prepare_next_switch()
     };
 
-    let Some((current_context, next_context)) = switch_contexts else {
+    let Some(switch_action) = switch_action else {
         return;
     };
 
-    // SAFETY: Context pointers come from tasks stored in the scheduler. Task
-    // stacks are retained by their task objects and switching occurs on one CPU.
-    unsafe {
-        crate::arch::x86_64::switch_context(current_context, next_context);
+    match switch_action {
+        SwitchAction::SwitchKernel {
+            current_context,
+            next_context,
+        } => {
+            // SAFETY: Context pointers come from tasks stored in the scheduler.
+            // Task stacks are retained by their task objects and switching
+            // occurs on one CPU.
+            unsafe {
+                architecture::switch_context(current_context, next_context);
+            }
+        }
+        SwitchAction::EnterUser(user_context) => {
+            // SAFETY: The user task context was created from a mapped entry
+            // point and stack, and the assembly stub consumes it immediately.
+            unsafe {
+                architecture::enter_user_mode(user_context.as_pointer());
+            }
+        }
     }
 }
 

@@ -54,18 +54,27 @@ The architecture side exposes one `InterruptProcessors` struct and one
 the only composition root. `kernel::interrupt` provides thin bridge functions so
 `main.rs` does not wire directly into task or input internals.
 
+Timer tick reads follow the same composition-root rule. The architecture layer
+owns the hardware tick counter, `main.rs` registers that provider with
+`kernel::time`, and kernel subsystems read ticks through `kernel::time` rather
+than depending on `arch::x86_64` internals.
+
+Task switching and Ring 3 entry use the same pattern. The architecture layer
+owns the assembly entry points and user segment selector values, `main.rs`
+registers them with `kernel::task`, and the scheduler calls only the registered
+task architecture provider.
+
 ## Current Known Design Debt
 
-- Boot memory regions are collected before boot-service file allocations. Refresh
-  allocator regions from the final memory map to avoid treating font buffers as
-  free memory.
-- Mouse packet assembly state should persist across `process_packets()` calls.
-- Display command processing should not pop and lose a command if the graphics
-  lock is temporarily unavailable.
-- Cursor rendering should move from `kernel::driver::input::mouse` to a display
-  cursor module.
-- Remaining unsafe-heavy modules need tighter `// SAFETY:` comments and smaller
-  unsafe blocks.
+- Local APIC timer and IOAPIC routing are represented as architecture backends,
+  but the boot path still uses the legacy programmable interval timer and 8259
+  interrupt controllers until ACPI MADT parsing is added.
+- Ring 3 has selector registration, the initial `iretq` transition path, a
+  fixed user stack mapping, and minimal `SYSCALL`/`SYSRET` MSR setup. Real
+  syscall dispatch, ELF loading, and per-process address spaces are still Phase
+  6 work.
+- Cursor rendering is display-owned, but the cursor shape is still a simple
+  placeholder rectangle.
 
 ## Adding a New Driver (Checklist)
 

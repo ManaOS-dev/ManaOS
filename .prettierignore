@@ -1,0 +1,6 @@
+target/
+esp/*.ttf
+OVMF.fd
+LICENSE
+Cargo.lock
+

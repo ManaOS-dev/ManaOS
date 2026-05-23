@@ -2,6 +2,7 @@
 
 # Detect OS
 os := os_family()
+set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 
 # Default: Build and run
 default: run
@@ -25,6 +26,11 @@ fmt:
 lint:
     @echo "[lint] Running clippy..."
     cargo clippy --target x86_64-unknown-uefi -- -D warnings
+
+# Regenerate bundled third-party license metadata
+licenses:
+    @echo "[licenses] Regenerating third-party license inventory..."
+    {{ if os == "windows" { "powershell -ExecutionPolicy Bypass -File scripts/generate_third_party_licenses.ps1" } else { "pwsh -File scripts/generate_third_party_licenses.ps1" } }}
 
 # Clean build artifacts
 clean:

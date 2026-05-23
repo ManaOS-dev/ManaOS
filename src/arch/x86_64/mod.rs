@@ -17,7 +17,17 @@
 //! - [`switch_context`] - Switch between saved task contexts
 
 pub mod global_descriptor_table;
+pub mod interrupt_controller;
 pub mod interrupt_descriptor_table;
+pub mod interval_timer;
+
+const EXTENDED_FEATURE_ENABLE_REGISTER: u32 = 0xc000_0080;
+const SYSTEM_CALL_TARGET_ADDRESS_REGISTER: u32 = 0xc000_0081;
+const LONG_SYSTEM_CALL_TARGET_ADDRESS_REGISTER: u32 = 0xc000_0082;
+const SYSTEM_CALL_FLAG_MASK_REGISTER: u32 = 0xc000_0084;
+const SYSTEM_CALL_ENABLE_BIT: u64 = 1;
+const INTERRUPT_FLAG_BIT: u64 = 1 << 9;
+const KERNEL_CODE_SELECTOR: u16 = 0x08;
 
 /// Check if the CPU supports APIC.
 #[allow(dead_code)]
@@ -26,48 +36,75 @@ pub fn has_apic() -> bool {
     (cpuid.edx & (1 << 9)) != 0
 }
 
-/// `x86_64` specific implementations.
 /// `x86_64` specific initialization.
-pub fn init() {
+pub fn init(system_call_handler: u64) {
     crate::serial_println!("[arch] Initializing GDT...");
     global_descriptor_table::init();
     crate::serial_println!("[arch] Initializing IDT...");
     interrupt_descriptor_table::initialize();
+    crate::serial_println!("[arch] Initializing SYSCALL...");
+    init_syscall(system_call_handler);
+    crate::serial_println!(
+        "[arch] Preferred interrupt controller: {:?}, IOAPIC routing: {}",
+        interrupt_controller::get_preferred_kind(),
+        interrupt_controller::has_ioapic_routing()
+    );
     // SAFETY: The interrupt controllers are initialized while interrupts are
     // disabled during early architecture setup.
     unsafe {
-        let mut interrupt_controllers = interrupt_descriptor_table::INTERRUPT_CONTROLLERS.lock();
-        interrupt_controllers.initialize();
-
-        // 0xf8: 11111000 (Timer, Keyboard, Cascade enabled)
-        // 0xef: 11101111 (Mouse enabled)
-        interrupt_controllers.write_masks(0xf8, 0xef);
+        interrupt_controller::initialize_legacy();
     }
 
     // Initialize PIT (Programmable Interval Timer)
-    crate::serial_println!("[arch] Initializing PIT...");
-    init_pit(1000);
+    crate::serial_println!(
+        "[arch] Initializing PIT... preferred timer: {:?}, local APIC timer: {}",
+        interval_timer::get_preferred_kind(),
+        interval_timer::has_local_apic_timer()
+    );
+    interval_timer::initialize_programmable_interval_timer(1000);
+}
+
+/// Initialize the `x86_64` `SYSCALL`/`SYSRET` model-specific registers.
+pub fn init_syscall(handler: u64) {
+    use x86_64::registers::model_specific::Msr;
+
+    let mut extended_feature_enable_register = Msr::new(EXTENDED_FEATURE_ENABLE_REGISTER);
+    let mut system_call_target_address_register = Msr::new(SYSTEM_CALL_TARGET_ADDRESS_REGISTER);
+    let mut long_system_call_target_address_register =
+        Msr::new(LONG_SYSTEM_CALL_TARGET_ADDRESS_REGISTER);
+    let mut system_call_flag_mask_register = Msr::new(SYSTEM_CALL_FLAG_MASK_REGISTER);
+
+    // SAFETY: The EFER MSR exists on x86_64 CPUs and setting SCE enables the
+    // architectural SYSCALL/SYSRET path.
+    let extended_features = unsafe { extended_feature_enable_register.read() };
+    // SAFETY: The written value preserves all existing EFER bits and enables SCE.
+    unsafe {
+        extended_feature_enable_register.write(extended_features | SYSTEM_CALL_ENABLE_BIT);
+    }
+
+    let user_system_return_selector = global_descriptor_table::USER_CODE_SELECTOR.wrapping_sub(16);
+    let system_call_segments =
+        (u64::from(user_system_return_selector) << 48) | (u64::from(KERNEL_CODE_SELECTOR) << 32);
+    // SAFETY: STAR is the architectural segment selector MSR for
+    // SYSCALL/SYSRET, and the selectors refer to entries loaded in the GDT.
+    unsafe {
+        system_call_target_address_register.write(system_call_segments);
+    }
+    // SAFETY: LSTAR is the architectural 64-bit syscall entry target MSR, and
+    // `handler` is provided by the kernel composition root.
+    unsafe {
+        long_system_call_target_address_register.write(handler);
+    }
+    // SAFETY: SFMASK is the architectural syscall flags mask MSR; masking IF
+    // disables interrupts on syscall entry.
+    unsafe {
+        system_call_flag_mask_register.write(INTERRUPT_FLAG_BIT);
+    }
 }
 
 /// Enable CPU interrupts after architecture and driver initialization.
 pub fn enable_interrupts() {
     x86_64::instructions::interrupts::enable();
-}
-
-/// Set PIT frequency to `target_hz`
-fn init_pit(target_hz: u32) {
-    use x86_64::instructions::port::Port;
-    let divider = 1_193_182 / target_hz;
-    let mut command_port = Port::<u8>::new(0x43);
-    let mut data_port = Port::<u8>::new(0x40);
-
-    // SAFETY: Ports 0x43 and 0x40 are the interval timer command and channel 0
-    // data ports, used during single-threaded architecture initialization.
-    unsafe {
-        command_port.write(0x36); // Square wave, Lo/Hi byte
-        data_port.write((divider & 0xFF) as u8);
-        data_port.write(((divider >> 8) & 0xFF) as u8);
-    }
 }
 
 #[allow(dead_code)]
@@ -82,6 +119,8 @@ core::arch::global_asm!(include_str!("context_switch.s"));
 extern "C" {
     /// Switch from one saved task context to another.
     pub fn context_switch(current_context: *mut u64, next_context: *const u64);
+    /// Enter Ring 3 by building an `iretq` frame from a user task context.
+    pub fn enter_user_mode(context: *const u64) -> !;
 }
 
 /// Switch from one saved task context to another.

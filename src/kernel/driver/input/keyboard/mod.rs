@@ -12,15 +12,16 @@
 //! - [`process_input`] - Called from main loop
 
 use crate::kernel::sync::ring_buffer::LockFreeRingBuffer;
-use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+use pc_keyboard::{layouts, DecodedKey, HandleControl, PS2Keyboard, ScancodeSet1};
 use spin::Mutex;
 
 static SCANCODE_QUEUE: LockFreeRingBuffer<u8, 128> = LockFreeRingBuffer::new();
-static KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> = Mutex::new(Keyboard::new(
-    ScancodeSet1::new(),
-    layouts::Us104Key,
-    HandleControl::Ignore,
-));
+static KEYBOARD: Mutex<PS2Keyboard<layouts::Us104Key, ScancodeSet1>> =
+    Mutex::new(PS2Keyboard::new(
+        ScancodeSet1::new(),
+        layouts::Us104Key,
+        HandleControl::Ignore,
+    ));
 
 /// Push a raw scancode from the keyboard interrupt.
 pub fn push_scancode(scancode: u8) {

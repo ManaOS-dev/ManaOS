@@ -16,6 +16,7 @@ copy target\x86_64-unknown-uefi\debug\mana_os.efi esp\EFI\BOOT\BOOTX64.EFI /y
 
 echo [run] Starting QEMU...
 qemu-system-x86_64 ^
+  -display gtk,zoom-to-fit=on ^
   -drive if=pflash,format=raw,readonly=on,file=OVMF.fd ^
   -drive format=raw,file=fat:rw:esp ^
   -chardev stdio,id=char0,mux=on ^
