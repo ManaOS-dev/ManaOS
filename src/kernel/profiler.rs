@@ -83,12 +83,6 @@ pub fn calibrate_tsc() {
         crate::serial_println!("[prof ] TSC calibration skipped: frequency calculation overflowed");
         return;
     };
-    crate::serial_println!(
-        "[prof ] debug: elapsed_cycles={}, actual_ticks={}, scaled_cycles={}",
-        elapsed_cycles,
-        actual_ticks,
-        scaled_cycles
-    );
     let freq = scaled_cycles / actual_ticks;
     TSC_FREQUENCY.store(freq, Ordering::Relaxed);
 
