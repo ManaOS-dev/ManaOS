@@ -32,6 +32,9 @@
 - [x] Phase 5B-4: user pointer page-table validation
 - [x] verify user ranges by mapped pages
 - [x] reject unmapped read/write syscall buffers
+- [x] Phase 5B-4b: bad pointer demo mode
+- [x] switch user demo mode with a single constant
+- [x] verify bad read buffer returns `ERROR_BAD_ADDRESS`
 - [ ] minimal shell-style task
 - [ ] Phase 5C: Real Storage
 - [ ] GPT partition table parsing

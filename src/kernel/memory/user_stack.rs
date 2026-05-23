@@ -14,7 +14,17 @@ const PAGE_SIZE: u64 = 4096;
 const PAGE_SIZE_USIZE: usize = 4096;
 const USER_PROGRAM_BASE: u64 = 0x0000_4000_0000_0000;
 const USER_DATA_BASE: u64 = USER_PROGRAM_BASE + PAGE_SIZE;
+const USER_BAD_POINTER_BASE: u64 = USER_DATA_BASE + PAGE_SIZE;
 const USER_STACK_BASE: u64 = 0x0000_7fff_f000_0000;
+const USER_DEMO_MODE: UserDemoMode = UserDemoMode::Normal;
+const _: () = assert!(USER_BAD_POINTER_BASE == 0x0000_4000_0000_2000);
+
+#[allow(dead_code)]
+enum UserDemoMode {
+    Normal,
+    BadPointer,
+}
+
 const USER_FILE_DEMO_PROGRAM: &[u8] = &[
     0xb8, 0x03, 0x00, 0x00, 0x00, // mov eax, SYS_OPEN
     0x48, 0x8d, 0x3d, 0x4a, 0x00, 0x00, 0x00, // lea rdi, [rip + PATH]
@@ -36,6 +46,32 @@ const USER_FILE_DEMO_PROGRAM: &[u8] = &[
     0x0f, 0x05, // syscall
     0xb8, 0x02, 0x00, 0x00, 0x00, // mov eax, SYS_EXIT
     0x31, 0xff, // xor edi, edi
+    0x0f, 0x05, // syscall
+    0xeb, 0xfe, // jump to self if SYS_EXIT returns unexpectedly
+    b'/', b'h', b'e', b'l', b'l', b'o', b'.', b't', b'x', b't', 0x00,
+];
+const USER_BAD_POINTER_DEMO_PROGRAM: &[u8] = &[
+    0xb8, 0x03, 0x00, 0x00, 0x00, // mov eax, SYS_OPEN
+    0x48, 0x8d, 0x3d, 0x45, 0x00, 0x00, 0x00, // lea rdi, [rip + PATH]
+    0x0f, 0x05, // syscall
+    0x89, 0xc3, // mov ebx, eax
+    0xb8, 0x05, 0x00, 0x00, 0x00, // mov eax, SYS_READ
+    0x89, 0xdf, // mov edi, ebx
+    0x48, 0xbe, 0x00, 0x20, 0x00, 0x00, 0x00, 0x40, 0x00,
+    0x00, // movabs rsi, USER_BAD_POINTER_BASE
+    0xba, 0x40, 0x00, 0x00, 0x00, // mov edx, BUFFER_LEN
+    0x0f, 0x05, // syscall
+    0x48, 0x89, 0xc5, // mov rbp, rax
+    0xb8, 0x04, 0x00, 0x00, 0x00, // mov eax, SYS_CLOSE
+    0x89, 0xdf, // mov edi, ebx
+    0x0f, 0x05, // syscall
+    0x48, 0x83, 0xfd, 0xf2, // cmp rbp, ERROR_BAD_ADDRESS
+    0x75, 0x09, // jne FAILURE
+    0xb8, 0x02, 0x00, 0x00, 0x00, // mov eax, SYS_EXIT
+    0x31, 0xff, // xor edi, edi
+    0x0f, 0x05, // syscall
+    0xb8, 0x02, 0x00, 0x00, 0x00, // mov eax, SYS_EXIT
+    0xbf, 0x01, 0x00, 0x00, 0x00, // mov edi, FAILURE_EXIT_CODE
     0x0f, 0x05, // syscall
     0xeb, 0xfe, // jump to self if SYS_EXIT returns unexpectedly
     b'/', b'h', b'e', b'l', b'l', b'o', b'.', b't', b'x', b't', 0x00,
@@ -83,8 +119,9 @@ pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64)
 /// Panics if a physical frame cannot be allocated or the program page cannot be
 /// mapped.
 pub fn allocate_user_file_demo(frame_allocator: &mut BumpFrameAllocator) -> u64 {
+    let demo_program = selected_user_file_demo_program();
     assert!(
-        USER_FILE_DEMO_PROGRAM.len() <= PAGE_SIZE_USIZE,
+        demo_program.len() <= PAGE_SIZE_USIZE,
         "built-in user program must fit in one page"
     );
 
@@ -101,11 +138,7 @@ pub fn allocate_user_file_demo(frame_allocator: &mut BumpFrameAllocator) -> u64 
     // The writes initialize the whole page before the user mapping is installed.
     unsafe {
         core::ptr::write_bytes(program_page, 0, PAGE_SIZE_USIZE);
-        core::ptr::copy_nonoverlapping(
-            USER_FILE_DEMO_PROGRAM.as_ptr(),
-            program_page,
-            USER_FILE_DEMO_PROGRAM.len(),
-        );
+        core::ptr::copy_nonoverlapping(demo_program.as_ptr(), program_page, demo_program.len());
         core::ptr::write_bytes(data_page, 0, PAGE_SIZE_USIZE);
         map_user_range(
             frame_allocator,
@@ -124,6 +157,13 @@ pub fn allocate_user_file_demo(frame_allocator: &mut BumpFrameAllocator) -> u64 
     }
 
     USER_PROGRAM_BASE
+}
+
+fn selected_user_file_demo_program() -> &'static [u8] {
+    match USER_DEMO_MODE {
+        UserDemoMode::Normal => USER_FILE_DEMO_PROGRAM,
+        UserDemoMode::BadPointer => USER_BAD_POINTER_DEMO_PROGRAM,
+    }
 }
 
 unsafe fn map_user_range(

@@ -32,6 +32,9 @@
 - [x] Phase 5B-4: user pointer のページテーブル検証
 - [x] user range を mapped page 単位で検証
 - [x] 未マップの read/write syscall buffer を拒否
+- [x] Phase 5B-4b: bad pointer demo mode
+- [x] user demo mode を定数 1 個で切り替え
+- [x] 不正な read buffer が `ERROR_BAD_ADDRESS` を返すことを検証
 - [ ] 最小 shell 風 task
 - [ ] Phase 5C: Real Storage
 - [ ] GPT パーティションテーブル解析
