@@ -28,7 +28,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use spin::Mutex;
 
 const TASK_STACK_SIZE: usize = 16 * 1024;
-const USER_TASK_PREEMPTION_ENABLED: bool = true;
+const USER_TASK_PREEMPTION_ENABLED: bool = false;
 
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
 static PREEMPTION_ENABLED: AtomicBool = AtomicBool::new(true);
