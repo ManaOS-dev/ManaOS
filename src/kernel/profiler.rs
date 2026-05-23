@@ -20,21 +20,19 @@ pub fn read_tsc() -> u64 {
 pub fn calibrate_tsc() {
     crate::kernel::task::set_preemption_enabled(false);
 
-    let start_ticks = crate::arch::x86_64::interrupt_descriptor_table::get_ticks();
+    let start_ticks = crate::kernel::time::get_timer_ticks();
 
     // Wait for the next tick to start measuring
-    while crate::arch::x86_64::interrupt_descriptor_table::get_ticks() == start_ticks {}
+    while crate::kernel::time::get_timer_ticks() == start_ticks {}
 
     let tsc_start = read_tsc();
-    let measure_start_ticks = crate::arch::x86_64::interrupt_descriptor_table::get_ticks();
+    let measure_start_ticks = crate::kernel::time::get_timer_ticks();
 
     // Wait for 100ms (100 ticks at 1000Hz)
-    while crate::arch::x86_64::interrupt_descriptor_table::get_ticks() < measure_start_ticks + 100 {
-    }
+    while crate::kernel::time::get_timer_ticks() < measure_start_ticks + 100 {}
 
     let tsc_end = read_tsc();
-    let actual_ticks =
-        crate::arch::x86_64::interrupt_descriptor_table::get_ticks() - measure_start_ticks;
+    let actual_ticks = crate::kernel::time::get_timer_ticks() - measure_start_ticks;
 
     // Calculate frequency (cycles per second)
     // (tsc_end - tsc_start) / (actual_ticks / 1000)

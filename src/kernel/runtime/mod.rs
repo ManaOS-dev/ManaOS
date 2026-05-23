@@ -6,7 +6,6 @@
 //! ## Public API
 //! - [`tick`] - Run one iteration of the main loop
 
-use crate::arch;
 use crate::kernel;
 use crate::kernel::driver::display::color::Color;
 use core::sync::atomic::{AtomicU64, Ordering};
@@ -17,7 +16,7 @@ static FPS: AtomicU64 = AtomicU64::new(0);
 
 /// Initialize runtime state.
 pub fn initialize() {
-    let ticks = arch::x86_64::interrupt_descriptor_table::get_ticks();
+    let ticks = kernel::time::get_timer_ticks();
     LAST_FPS_TICKS.store(ticks, Ordering::Relaxed);
 }
 
@@ -30,7 +29,7 @@ pub fn tick() {
 
     FRAME_COUNT.fetch_add(1, Ordering::Relaxed);
 
-    let current_ticks = arch::x86_64::interrupt_descriptor_table::get_ticks();
+    let current_ticks = kernel::time::get_timer_ticks();
     let last_ticks = LAST_FPS_TICKS.load(Ordering::Relaxed);
 
     // Update FPS and UI every 500ms

@@ -122,6 +122,9 @@ fn initialize_scheduler() {
 
 fn initialize_architecture_and_drivers() {
     arch::init(kernel::interrupt::syscall_entry as *const () as u64);
+    kernel::time::register_timer_ticks_provider(
+        arch::x86_64::interrupt_descriptor_table::get_ticks,
+    );
     crate::serial_println!("[ok   ] Architecture initialized.");
     let user_selectors = kernel::task::user_mode::get_selectors();
     crate::serial_println!(

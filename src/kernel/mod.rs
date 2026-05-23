@@ -16,6 +16,7 @@
 //! - [`serial`] - Serial output
 //! - [`sync`] - Synchronization primitives
 //! - [`task`] - Task context support
+//! - [`time`] - Kernel time source boundary
 
 pub mod boot;
 pub mod driver;
@@ -27,3 +28,4 @@ pub mod runtime;
 pub mod serial;
 pub mod sync;
 pub mod task;
+pub mod time;

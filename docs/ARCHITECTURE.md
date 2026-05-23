@@ -54,6 +54,11 @@ The architecture side exposes one `InterruptProcessors` struct and one
 the only composition root. `kernel::interrupt` provides thin bridge functions so
 `main.rs` does not wire directly into task or input internals.
 
+Timer tick reads follow the same composition-root rule. The architecture layer
+owns the hardware tick counter, `main.rs` registers that provider with
+`kernel::time`, and kernel subsystems read ticks through `kernel::time` rather
+than depending on `arch::x86_64` internals.
+
 ## Current Known Design Debt
 
 - Local APIC timer and IOAPIC routing are represented as architecture backends,
