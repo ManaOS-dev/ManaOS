@@ -13,15 +13,16 @@ use x86_64::{
 const PAGE_SIZE: u64 = 4096;
 const PAGE_SIZE_USIZE: usize = 4096;
 const USER_PROGRAM_BASE: u64 = 0x0000_4000_0000_0000;
+const USER_DATA_BASE: u64 = USER_PROGRAM_BASE + PAGE_SIZE;
 const USER_STACK_BASE: u64 = 0x0000_7fff_f000_0000;
 const USER_FILE_DEMO_PROGRAM: &[u8] = &[
     0xb8, 0x03, 0x00, 0x00, 0x00, // mov eax, SYS_OPEN
-    0x48, 0x8d, 0x3d, 0x44, 0x00, 0x00, 0x00, // lea rdi, [rip + PATH]
+    0x48, 0x8d, 0x3d, 0x36, 0x00, 0x00, 0x00, // lea rdi, [rip + PATH]
     0x0f, 0x05, // syscall
     0x89, 0xc3, // mov ebx, eax
     0xb8, 0x05, 0x00, 0x00, 0x00, // mov eax, SYS_READ
     0x89, 0xdf, // mov edi, ebx
-    0x48, 0x8d, 0x35, 0x49, 0x00, 0x00, 0x00, // lea rsi, [rip + BUFFER]
+    0xbe, 0x00, 0x10, 0x00, 0x00, // mov esi, USER_DATA_BASE low dword
     0xba, 0x40, 0x00, 0x00, 0x00, // mov edx, BUFFER_LEN
     0x0f, 0x05, // syscall
     0x89, 0xc5, // mov ebp, eax
@@ -30,20 +31,14 @@ const USER_FILE_DEMO_PROGRAM: &[u8] = &[
     0x0f, 0x05, // syscall
     0xb8, 0x01, 0x00, 0x00, 0x00, // mov eax, SYS_WRITE
     0xbf, 0x01, 0x00, 0x00, 0x00, // mov edi, STDOUT
-    0x48, 0x8d, 0x35, 0x26, 0x00, 0x00, 0x00, // lea rsi, [rip + BUFFER]
+    0xbe, 0x00, 0x10, 0x00, 0x00, // mov esi, USER_DATA_BASE low dword
     0x89, 0xea, // mov edx, ebp
     0x0f, 0x05, // syscall
     0xb8, 0x02, 0x00, 0x00, 0x00, // mov eax, SYS_EXIT
     0x31, 0xff, // xor edi, edi
     0x0f, 0x05, // syscall
     0xeb, 0xfe, // jump to self if SYS_EXIT returns unexpectedly
-    b'/', b'h', b'e', b'l', b'l', b'o', b'.', b't', b'x', b't', 0x00, 0x90, 0x90, 0x90, 0x90, 0x90,
-    0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, // BUFFER starts here.
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    b'/', b'h', b'e', b'l', b'l', b'o', b'.', b't', b'x', b't', 0x00,
 ];
 
 /// Allocate and map a fixed-base user-space stack.
@@ -96,7 +91,11 @@ pub fn allocate_user_file_demo(frame_allocator: &mut BumpFrameAllocator) -> u64 
     let physical_start = frame_allocator
         .allocate_frame()
         .expect("OOM: failed to allocate built-in user program page");
+    let data_physical_start = frame_allocator
+        .allocate_frame()
+        .expect("OOM: failed to allocate built-in user data page");
     let program_page = physical_start as *mut u8;
+    let data_page = data_physical_start as *mut u8;
 
     // SAFETY: `physical_start` is a freshly allocated identity-mapped frame.
     // The writes initialize the whole page before the user mapping is installed.
@@ -107,12 +106,20 @@ pub fn allocate_user_file_demo(frame_allocator: &mut BumpFrameAllocator) -> u64 
             program_page,
             USER_FILE_DEMO_PROGRAM.len(),
         );
+        core::ptr::write_bytes(data_page, 0, PAGE_SIZE_USIZE);
         map_user_range(
             frame_allocator,
             USER_PROGRAM_BASE,
             physical_start,
             1,
             PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE,
+        );
+        map_user_range(
+            frame_allocator,
+            USER_DATA_BASE,
+            data_physical_start,
+            1,
+            PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE,
         );
     }
 
