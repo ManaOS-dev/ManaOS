@@ -127,6 +127,9 @@ fn initialize_architecture_and_drivers() {
     );
     kernel::task::architecture::register_context_switch(arch::x86_64::switch_context);
     kernel::task::architecture::register_user_mode_entry(arch::x86_64::enter_user_mode);
+    kernel::task::architecture::register_returnable_user_mode_entry(
+        arch::x86_64::enter_user_mode_once,
+    );
     kernel::task::user_mode::register_selectors(kernel::task::user_mode::UserModeSelectors {
         data: arch::x86_64::global_descriptor_table::USER_DATA_SELECTOR,
         code: arch::x86_64::global_descriptor_table::USER_CODE_SELECTOR,
@@ -245,8 +248,12 @@ fn main() -> Status {
     let user_stack_top = kernel::memory::user_stack::allocate_user_stack(&mut frame_allocator, 4);
     let user_entry_point =
         kernel::memory::user_stack::allocate_user_write_demo(&mut frame_allocator);
-    kernel::task::spawn_user_task(user_entry_point, user_stack_top);
+    let user_task_id = kernel::task::spawn_user_task(user_entry_point, user_stack_top);
     crate::serial_println!("[ok   ] User task spawned.");
+    crate::serial_println!("[ok   ] User demo started.");
+    if let Some(exit_code) = kernel::task::run_user_task_once(user_task_id) {
+        crate::serial_println!("[ok   ] UI resumed after user exit: code={}", exit_code);
+    }
 
     // Main Loop
     loop {

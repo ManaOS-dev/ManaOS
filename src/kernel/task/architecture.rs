@@ -7,9 +7,12 @@ pub type ContextSwitchFunction = unsafe fn(*mut u64, *const u64);
 
 /// Architecture function that enters user mode from a prepared context.
 pub type UserModeEntryFunction = unsafe extern "C" fn(*const u64) -> !;
+/// Architecture function that enters user mode and returns after `SYS_EXIT`.
+pub type ReturnableUserModeEntryFunction = unsafe fn(*const u64);
 
 static CONTEXT_SWITCH_FUNCTION: AtomicUsize = AtomicUsize::new(0);
 static USER_MODE_ENTRY_FUNCTION: AtomicUsize = AtomicUsize::new(0);
+static RETURNABLE_USER_MODE_ENTRY_FUNCTION: AtomicUsize = AtomicUsize::new(0);
 
 /// Register the architecture context switch entry point.
 pub fn register_context_switch(function: ContextSwitchFunction) {
@@ -19,6 +22,11 @@ pub fn register_context_switch(function: ContextSwitchFunction) {
 /// Register the architecture user-mode entry point.
 pub fn register_user_mode_entry(function: UserModeEntryFunction) {
     USER_MODE_ENTRY_FUNCTION.store(function as usize, Ordering::Release);
+}
+
+/// Register the architecture returnable user-mode entry point.
+pub fn register_returnable_user_mode_entry(function: ReturnableUserModeEntryFunction) {
+    RETURNABLE_USER_MODE_ENTRY_FUNCTION.store(function as usize, Ordering::Release);
 }
 
 /// Switch from one saved task context to another.
@@ -71,4 +79,31 @@ pub unsafe fn enter_user_mode(context: *const u64) -> ! {
     let function: UserModeEntryFunction = unsafe { core::mem::transmute(function) };
     // SAFETY: The caller upholds the user context pointer validity contract.
     unsafe { function(context) }
+}
+
+/// Enter user mode and return after the user task exits through `SYS_EXIT`.
+///
+/// # Safety
+///
+/// `context` must point to a valid user-mode transition frame whose code and
+/// stack addresses are mapped as user-accessible pages.
+///
+/// # Panics
+///
+/// Panics if the architecture returnable user-mode entry point has not been
+/// registered by the composition root.
+pub unsafe fn enter_user_mode_once(context: *const u64) {
+    let function = RETURNABLE_USER_MODE_ENTRY_FUNCTION.load(Ordering::Acquire);
+    assert!(
+        function != 0,
+        "architecture returnable user-mode entry function must be registered before running demos"
+    );
+
+    // SAFETY: The stored value came from register_returnable_user_mode_entry and
+    // zero was handled above as the unregistered state.
+    let function: ReturnableUserModeEntryFunction = unsafe { core::mem::transmute(function) };
+    // SAFETY: The caller upholds the user context pointer validity contract.
+    unsafe {
+        function(context);
+    }
 }
