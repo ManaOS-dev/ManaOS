@@ -41,6 +41,10 @@
 - [x] Rust file demo flat binary included by kernel
 - [ ] minimal shell-style task
 - [ ] Phase 5C: Real Storage
+- [x] Phase 5C-1: PCIe enumeration and AHCI controller discovery
+- [x] legacy PCI config-space access
+- [x] AHCI BAR5 discovery
+- [x] AHCI implemented port and SATA signature logging
 - [ ] GPT partition table parsing
 - [ ] AHCI Driver Implementation
 - [ ] FAT32 Parser & File APIs

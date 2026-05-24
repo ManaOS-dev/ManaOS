@@ -20,6 +20,7 @@ pub mod global_descriptor_table;
 pub mod interrupt_controller;
 pub mod interrupt_descriptor_table;
 pub mod interval_timer;
+pub mod pci_configuration;
 
 const EXTENDED_FEATURE_ENABLE_REGISTER: u32 = 0xc000_0080;
 const SYSTEM_CALL_TARGET_ADDRESS_REGISTER: u32 = 0xc000_0081;

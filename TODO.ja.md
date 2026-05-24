@@ -41,6 +41,10 @@
 - [x] Rust file demo flat binary を kernel から include
 - [ ] 最小 shell 風 task
 - [ ] Phase 5C: Real Storage
+- [x] Phase 5C-1: PCIe 列挙と AHCI コントローラ発見
+- [x] legacy PCI config-space access
+- [x] AHCI BAR5 discovery
+- [x] AHCI implemented port と SATA signature のログ出力
 - [ ] GPT パーティションテーブル解析
 - [ ] AHCI ドライバー実装
 - [ ] FAT32 パーサーとファイル API
