@@ -1,7 +1,10 @@
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use uefi::mem::memory_map::MemoryDescriptor;
 use x86_64::{
-    registers::control::Cr3,
+    registers::{
+        control::Cr3,
+        model_specific::{Efer, EferFlags},
+    },
     structures::paging::{
         mapper::TranslateResult, Mapper, OffsetPageTable, PageTable, PageTableFlags, PhysFrame,
         Size4KiB, Translate,
@@ -25,6 +28,12 @@ pub unsafe fn init<'a>(
     framebuffer_base: u64,
     framebuffer_size: u64,
 ) {
+    // SAFETY: Setting NXE enables honoring the NO_EXECUTE page-table flag while
+    // preserving all other EFER bits.
+    unsafe {
+        Efer::update(|flags| flags.insert(EferFlags::NO_EXECUTE_ENABLE));
+    }
+
     // SAFETY: The caller guarantees that the frame allocator returns valid page
     // table frames.
     let pml4_frame = unsafe { create_pml4(frame_allocator) };
@@ -89,7 +98,10 @@ pub unsafe fn map_kernel_mmio_range(
         .expect("MMIO mapping end address overflowed");
     let end_page_address = align_down_to_page(end_address);
     let page_count = ((end_page_address - start_page_address) / PAGE_SIZE) + 1;
-    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_CACHE;
+    let flags = PageTableFlags::PRESENT
+        | PageTableFlags::WRITABLE
+        | PageTableFlags::NO_CACHE
+        | PageTableFlags::NO_EXECUTE;
 
     let (level_4_frame, _) = Cr3::read();
     let level_4_table = level_4_frame.start_address().as_u64() as *mut PageTable;
@@ -333,7 +345,7 @@ unsafe fn map_framebuffer(
 
     for page in x86_64::structures::paging::Page::range_inclusive(start_page, end_page) {
         let frame = PhysFrame::containing_address(PhysAddr::new(page.start_address().as_u64()));
-        let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+        let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
 
         if let x86_64::structures::paging::mapper::TranslateResult::Mapped { .. } =
             mapper.translate(page.start_address())

@@ -1,4 +1,4 @@
-//! Peripheral Component Interconnect bus scanning for storage controllers.
+//! PCI bus scanning for storage controllers.
 
 const CONFIG_ENABLE_BIT: u32 = 1 << 31;
 const MAX_BUS: u16 = 256;
@@ -50,25 +50,25 @@ impl PciConfigurationAccess {
     }
 }
 
-/// A discovered Advanced Host Controller Interface controller on the PCI bus.
-pub struct AdvancedHostControllerInterfaceController {
-    /// Peripheral Component Interconnect bus number.
+/// A discovered AHCI controller on the PCI bus.
+pub struct AhciController {
+    /// PCI bus number.
     pub bus: u8,
-    /// Peripheral Component Interconnect device number.
+    /// PCI device number.
     pub device: u8,
-    /// Peripheral Component Interconnect function number.
+    /// PCI function number.
     pub function: u8,
     /// Fifth base address register memory base address.
     pub base_address_register5: u64,
 }
 
-/// Find the first Advanced Host Controller Interface controller exposed through PCI config space.
+/// Find the first AHCI controller exposed through PCI config space.
 pub fn find_advanced_host_controller_interface_controller(
     pci_configuration_access: PciConfigurationAccess,
-) -> Option<AdvancedHostControllerInterfaceController> {
+) -> Option<AhciController> {
     crate::log_info!(
         "pci",
-        "Starting legacy Peripheral Component Interconnect scan: buses={} devices_per_bus={} functions_per_device={}",
+        "Starting legacy PCI scan: buses={} devices={} functions={}",
         MAX_BUS,
         MAX_DEVICE,
         MAX_FUNCTION
@@ -107,7 +107,7 @@ pub fn find_advanced_host_controller_interface_controller(
                 {
                     crate::log_info!(
                         "pci",
-                        "Advanced Host Controller Interface class match: bus={} device={} function={}",
+                        "AHCI class match: bus={} device={} function={}",
                         bus,
                         device,
                         function
@@ -134,26 +134,26 @@ pub fn find_advanced_host_controller_interface_controller(
                         u64::from(raw_base_address_register5 & BAR_MEMORY_MASK);
                     crate::log_debug!(
                         "pci",
-                        "Advanced Host Controller Interface command register: before={:#010x} after={:#010x}",
+                        "AHCI command register: before={:#010x} after={:#010x}",
                         command_before,
                         command_after
                     );
                     crate::log_debug!(
                         "pci",
-                        "Advanced Host Controller Interface base address register 5: raw={:#010x} memory_base={:#010x}",
+                        "AHCI BAR5: raw={:#010x} memory_base={:#010x}",
                         raw_base_address_register5,
                         base_address_register5
                     );
                     crate::log_info!(
                         "pci",
-                        "Found Advanced Host Controller Interface controller: bus={} device={} function={} base_address_register5={:#010x}",
+                        "Found AHCI controller: bus={} device={} function={} bar5={:#010x}",
                         bus,
                         device,
                         function,
                         base_address_register5
                     );
 
-                    return Some(AdvancedHostControllerInterfaceController {
+                    return Some(AhciController {
                         bus,
                         device,
                         function,
@@ -164,10 +164,7 @@ pub fn find_advanced_host_controller_interface_controller(
         }
     }
 
-    crate::log_warn!(
-        "pci",
-        "Legacy Peripheral Component Interconnect scan complete: Advanced Host Controller Interface controller not found"
-    );
+    crate::log_warn!("pci", "Legacy PCI scan complete: AHCI controller not found");
     None
 }
 

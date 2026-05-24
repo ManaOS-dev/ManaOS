@@ -6,7 +6,7 @@
 //! - DMA command submission for 512-byte sector reads
 //!
 //! ## Does NOT own
-//! - Peripheral Component Interconnect bus discovery
+//! - PCI bus discovery
 //! - GUID partition table parsing
 //! - Filesystem parsing
 //!

@@ -1,4 +1,5 @@
 use crate::kernel::driver::display::color::Color;
+use crate::kernel::driver::display::cursor::CURSOR_SIZE;
 use crate::kernel::driver::display::font::{Font, FontAssets};
 use ab_glyph::{point, Font as GlyphFont, FontRef, PxScale, ScaleFont};
 use uefi::proto::console::gop::{GraphicsOutput, PixelFormat};
@@ -13,7 +14,11 @@ pub fn init_global_graphics(
     fonts: FontAssets,
     backbuffer_ptr: *mut u8,
 ) {
-    *GRAPHICS.lock() = Some(GraphicsDriver::new(framebuffer_info, fonts, backbuffer_ptr));
+    *GRAPHICS.lock() = Some(GraphicsDriver::new(
+        framebuffer_info,
+        &fonts,
+        backbuffer_ptr,
+    ));
 }
 
 /// Run a closure with the initialized graphics driver.
@@ -64,17 +69,39 @@ pub struct FrameBufferInfo {
 pub struct GraphicsDriver {
     /// Framebuffer geometry and pixel format.
     pub info: FrameBufferInfo,
-    /// Loaded font assets.
-    pub fonts: FontAssets,
+    fonts: ParsedFonts,
     /// Pointer to the software backbuffer.
     pub backbuffer_ptr: *mut u8,
-    cursor_backup: [u32; 16 * 16],
+    cursor_backup: [u32; CURSOR_SIZE * CURSOR_SIZE],
     /// Last cursor position used for restoring the background.
     pub last_cursor_pos: (usize, usize),
     /// Stride in bytes.
     stride_bytes: usize,
     /// Whether the pixel format is BGR.
     is_bgr: bool,
+}
+
+struct ParsedFonts {
+    inter: FontRef<'static>,
+    noto: FontRef<'static>,
+}
+
+impl ParsedFonts {
+    fn new(fonts: &FontAssets) -> Self {
+        Self {
+            inter: FontRef::try_from_slice(fonts.inter)
+                .expect("failed to construct Inter font from boot-loaded font asset"),
+            noto: FontRef::try_from_slice(fonts.noto)
+                .expect("failed to construct Noto Sans JP font from boot-loaded font asset"),
+        }
+    }
+
+    fn get(&self, font: Font) -> &FontRef<'static> {
+        match font {
+            Font::Inter => &self.inter,
+            Font::NotoSansJP => &self.noto,
+        }
+    }
 }
 
 // SAFETY: The driver is accessed through a spin mutex, and raw framebuffer
@@ -85,12 +112,12 @@ unsafe impl Sync for GraphicsDriver {}
 
 impl GraphicsDriver {
     /// Create a framebuffer graphics driver.
-    pub fn new(info: FrameBufferInfo, fonts: FontAssets, backbuffer_ptr: *mut u8) -> Self {
+    pub fn new(info: FrameBufferInfo, fonts: &FontAssets, backbuffer_ptr: *mut u8) -> Self {
         Self {
             info,
-            fonts,
+            fonts: ParsedFonts::new(fonts),
             backbuffer_ptr,
-            cursor_backup: [0; 16 * 16],
+            cursor_backup: [0; CURSOR_SIZE * CURSOR_SIZE],
             last_cursor_pos: (0, 0),
             stride_bytes: info.stride * 4,
             is_bgr: matches!(info.format, ColorFormat::Bgr),
@@ -140,9 +167,9 @@ impl GraphicsDriver {
     /// Save the background area where the cursor will be drawn (from BACKBUFFER).
     pub fn save_cursor_area(&mut self, x: usize, y: usize) {
         self.last_cursor_pos = (x, y);
-        for py in 0..16 {
-            for px in 0..16 {
-                self.cursor_backup[py * 16 + px] = self.get_pixel(x + px, y + py);
+        for py in 0..CURSOR_SIZE {
+            for px in 0..CURSOR_SIZE {
+                self.cursor_backup[py * CURSOR_SIZE + px] = self.get_pixel(x + px, y + py);
             }
         }
     }
@@ -150,9 +177,9 @@ impl GraphicsDriver {
     /// Restore the background area from the backup buffer (to BACKBUFFER).
     pub fn restore_cursor_area(&self) {
         let (x, y) = self.last_cursor_pos;
-        for py in 0..16 {
-            for px in 0..16 {
-                let color = self.cursor_backup[py * 16 + px];
+        for py in 0..CURSOR_SIZE {
+            for px in 0..CURSOR_SIZE {
+                let color = self.cursor_backup[py * CURSOR_SIZE + px];
                 self.put_pixel(x + px, y + py, color);
             }
         }
@@ -360,12 +387,7 @@ impl GraphicsDriver {
         color: Color,
         text: &str,
     ) {
-        let font_data = match font_kind {
-            Font::Inter => self.fonts.inter,
-            Font::NotoSansJP => self.fonts.noto,
-        };
-        let font = FontRef::try_from_slice(font_data)
-            .expect("failed to construct font from boot-loaded font asset");
+        let font = self.fonts.get(font_kind);
         let scale = PxScale::from(scale);
         let scaled_font = font.as_scaled(scale);
 

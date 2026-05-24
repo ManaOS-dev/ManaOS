@@ -76,7 +76,7 @@ pub fn inspect_header(data_address: u64) -> Option<GuidPartitionTableHeader> {
 
     if &sector[0..GUID_PARTITION_TABLE_SIGNATURE.len()] != GUID_PARTITION_TABLE_SIGNATURE {
         crate::log_warn!(
-            "guid_partition_table",
+            "gpt",
             "Header signature not found at logical block address 1"
         );
         return None;
@@ -86,16 +86,16 @@ pub fn inspect_header(data_address: u64) -> Option<GuidPartitionTableHeader> {
     let partition_entry_count = read_le_u32(sector, PARTITION_ENTRY_COUNT_OFFSET);
     let partition_entry_size = read_le_u32(sector, PARTITION_ENTRY_SIZE_OFFSET);
 
-    crate::log_info!("guid_partition_table", "Header signature: EFI PART");
+    crate::log_info!("gpt", "Header signature: EFI PART");
     crate::log_debug!(
-        "guid_partition_table",
+        "gpt",
         "header_crc32={:#010x} reserved={:#010x} partition_array_crc32={:#010x}",
         read_le_u32(sector, HEADER_CRC32_OFFSET),
         read_le_u32(sector, RESERVED_OFFSET),
         read_le_u32(sector, PARTITION_ENTRY_ARRAY_CRC32_OFFSET)
     );
     crate::log_info!(
-        "guid_partition_table",
+        "gpt",
         "revision={:#010x} header_size={} current_lba={} backup_lba={}",
         read_le_u32(sector, REVISION_OFFSET),
         read_le_u32(sector, HEADER_SIZE_OFFSET),
@@ -103,20 +103,20 @@ pub fn inspect_header(data_address: u64) -> Option<GuidPartitionTableHeader> {
         read_le_u64(sector, BACKUP_LBA_OFFSET)
     );
     crate::log_info!(
-        "guid_partition_table",
+        "gpt",
         "first_usable_lba={} last_usable_lba={}",
         read_le_u64(sector, FIRST_USABLE_LBA_OFFSET),
         read_le_u64(sector, LAST_USABLE_LBA_OFFSET)
     );
     crate::log_debug!(
-        "guid_partition_table",
+        "gpt",
         "disk_guid={}",
         GuidPartitionTableGuid(
             &sector[DISK_GUID_OFFSET..DISK_GUID_OFFSET + PARTITION_TYPE_GUID_SIZE]
         )
     );
     crate::log_info!(
-        "guid_partition_table",
+        "gpt",
         "entries_lba={} entry_count={} entry_size={}",
         partition_entry_lba,
         partition_entry_count,
@@ -187,21 +187,13 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
     let entry_size =
         usize::try_from(header.size).expect("GUID partition table entry size must fit in usize");
     if !(48..=SECTOR_BYTES).contains(&entry_size) {
-        crate::log_warn!(
-            "guid_partition_table",
-            "Unsupported partition entry size: {}",
-            header.size
-        );
+        crate::log_warn!("gpt", "Unsupported partition entry size: {}", header.size);
         return None;
     }
 
     let entries_per_sector = SECTOR_BYTES / entry_size;
     if entries_per_sector == 0 {
-        crate::log_warn!(
-            "guid_partition_table",
-            "Unsupported partition entry size: {}",
-            header.size
-        );
+        crate::log_warn!("gpt", "Unsupported partition entry size: {}", header.size);
         return None;
     }
 
@@ -215,7 +207,7 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
     let mut first_partition = None;
 
     crate::log_debug!(
-        "guid_partition_table",
+        "gpt",
         "Partition scan: start_lba={} total_entries={} entry_size={} total_bytes={}",
         header.entries_lba,
         header.count,
@@ -223,7 +215,7 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
         total_entry_bytes
     );
     crate::log_debug!(
-        "guid_partition_table",
+        "gpt",
         "Partition scan: sectors={} entries_per_sector={}",
         sector_count,
         entries_per_sector
@@ -249,7 +241,7 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
             first_partition = scan.first_partition;
         }
         crate::log_trace!(
-            "guid_partition_table",
+            "gpt",
             "Partition scan sector: lba={} first_entry={} scanned={} empty={} non_empty={}",
             logical_block_address,
             first_entry_index,
@@ -263,20 +255,16 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
     }
 
     crate::log_info!(
-        "guid_partition_table",
+        "gpt",
         "Partition scan summary: scanned={} empty={} non_empty={}",
         header.count,
         empty_entries,
         non_empty_entries
     );
     if non_empty_entries == 0 {
-        crate::log_info!("guid_partition_table", "No partition entries found");
+        crate::log_info!("gpt", "No partition entries found");
     } else {
-        crate::log_info!(
-            "guid_partition_table",
-            "Partition entries found: {}",
-            non_empty_entries
-        );
+        crate::log_info!("gpt", "Partition entries found: {}", non_empty_entries);
     }
 
     first_partition
@@ -325,13 +313,13 @@ fn parse_partition_entry(entry_index: usize, entry: &[u8]) -> GuidPartitionTable
 
 fn log_partition_entry(partition: GuidPartitionTablePartition, entry: &[u8]) {
     crate::log_debug!(
-        "guid_partition_table",
+        "gpt",
         "Partition entry {}: type_guid={}",
         partition.index,
         GuidPartitionTableGuid(&entry[0..PARTITION_TYPE_GUID_SIZE])
     );
     crate::log_debug!(
-        "guid_partition_table",
+        "gpt",
         "Partition entry {}: unique_guid={}",
         partition.index,
         GuidPartitionTableGuid(
@@ -340,7 +328,7 @@ fn log_partition_entry(partition: GuidPartitionTablePartition, entry: &[u8]) {
         )
     );
     crate::log_info!(
-        "guid_partition_table",
+        "gpt",
         "Partition entry {}: first_lba={} last_lba={} attributes={:#018x}",
         partition.index,
         partition.first_lba,
@@ -348,7 +336,7 @@ fn log_partition_entry(partition: GuidPartitionTablePartition, entry: &[u8]) {
         partition.attributes
     );
     crate::log_debug!(
-        "guid_partition_table",
+        "gpt",
         "Partition entry {}: name=\"{}\"",
         partition.index,
         partition.name()

@@ -43,6 +43,10 @@ impl BumpFrameAllocator {
     /// Allocate `n` contiguous 4KiB frames.
     /// Contiguous allocation is only guaranteed within a single region.
     pub fn allocate_frames(&mut self, n: u64) -> Option<u64> {
+        if n == 0 {
+            return None;
+        }
+
         while self.current < self.count {
             let r = &self.regions[self.current];
             let avail = r.pages.saturating_sub(self.offset);
@@ -51,12 +55,10 @@ impl BumpFrameAllocator {
 
                 // Never allocate address 0
                 if addr == 0 {
+                    self.offset += 1;
                     if avail > n {
-                        // Skip the first page and try the next one in the same region
-                        self.offset += 1;
                         continue;
                     }
-                    // Not enough space left in this region after skipping address 0
                     self.current += 1;
                     self.offset = 0;
                     continue;

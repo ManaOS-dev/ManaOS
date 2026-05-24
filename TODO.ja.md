@@ -94,9 +94,15 @@
 - [x] Phase 5C-5: block device abstraction
 - [x] AHCI sector read を `BlockDevice` で包む
 - [x] GPT scan が `BlockDevice` 経由で read するよう整理
-- [ ] GPT partition entry parsing
+- [x] GPT partition entry parsing
+- [x] Phase 5C-6: partition-relative block device
+- [x] 選択済み GPT partition から partition LBA を disk LBA へ変換
+- [x] Phase 5C-7: FAT32 boot sector inspection
+- [x] 最小 FAT32 boot sector 付き GPT test image を生成
+- [x] FAT32 BIOS Parameter Block geometry を parse
 - [ ] AHCI ドライバー実装
-- [ ] FAT32 パーサーとファイル API
+- [ ] FAT32 root directory listing
+- [ ] FAT32 file read APIs
 
 ## Phase 6: Userland
 - [ ] ELF ローダー
