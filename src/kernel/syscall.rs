@@ -12,11 +12,11 @@
 //!
 //! ## Public API
 //! - [`dispatch`] - Dispatch one syscall from architecture entry code
-//! - [`SYS_WRITE`] - Write syscall number
-//! - [`SYS_EXIT`] - Exit syscall number
-//! - [`SYS_OPEN`] - Open syscall number
-//! - [`SYS_CLOSE`] - Close syscall number
-//! - [`SYS_READ`] - Read syscall number
+//! - [`SYS_READ`] - Linux-compatible read syscall number
+//! - [`SYS_WRITE`] - Linux-compatible write syscall number
+//! - [`SYS_OPEN`] - Linux-compatible open syscall number
+//! - [`SYS_CLOSE`] - Linux-compatible close syscall number
+//! - [`SYS_EXIT`] - Linux-compatible exit syscall number
 
 use alloc::string::String;
 
@@ -27,16 +27,16 @@ const ERROR_NOT_IMPLEMENTED: u64 = u64::MAX - 37;
 const MAX_USER_STRING_LENGTH: usize = 256;
 const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 
-/// Write syscall number.
+/// Linux-compatible read syscall number.
+pub const SYS_READ: u64 = 0;
+/// Linux-compatible write syscall number.
 pub const SYS_WRITE: u64 = 1;
-/// Exit syscall number.
-pub const SYS_EXIT: u64 = 2;
-/// Open syscall number.
-pub const SYS_OPEN: u64 = 3;
-/// Close syscall number.
-pub const SYS_CLOSE: u64 = 4;
-/// Read syscall number.
-pub const SYS_READ: u64 = 5;
+/// Linux-compatible open syscall number.
+pub const SYS_OPEN: u64 = 2;
+/// Linux-compatible close syscall number.
+pub const SYS_CLOSE: u64 = 3;
+/// Linux-compatible exit syscall number.
+pub const SYS_EXIT: u64 = 60;
 /// Internal sentinel telling the syscall entry code to return to the kernel.
 pub const USER_EXIT_SENTINEL: u64 = u64::MAX;
 

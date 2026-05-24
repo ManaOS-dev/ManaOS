@@ -46,6 +46,8 @@
 - [x] Phase 5B-6b: command console usability polish
 - [x] Escape/backtick で console を toggle
 - [x] console open 中だけ keyboard input を console へ route
+- [x] Phase 5B-7: Linux-like syscall numbers
+- [x] read/write/open/close/exit に Linux x86_64 syscall number を使用
 - [ ] 最小 shell 風 task
 - [ ] Phase 5C: Real Storage
 - [x] Phase 5C-1: PCIe 列挙と AHCI コントローラ発見

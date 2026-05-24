@@ -1,17 +1,17 @@
-//! Thin wrappers for the ManaOS syscall ABI.
+//! Thin wrappers for the Linux-like ManaOS syscall ABI.
 
 use core::arch::asm;
 
-/// Write syscall number.
+/// Linux-compatible read syscall number.
+pub const SYS_READ: usize = 0;
+/// Linux-compatible write syscall number.
 pub const SYS_WRITE: usize = 1;
-/// Exit syscall number.
-pub const SYS_EXIT: usize = 2;
-/// Open syscall number.
-pub const SYS_OPEN: usize = 3;
-/// Close syscall number.
-pub const SYS_CLOSE: usize = 4;
-/// Read syscall number.
-pub const SYS_READ: usize = 5;
+/// Linux-compatible open syscall number.
+pub const SYS_OPEN: usize = 2;
+/// Linux-compatible close syscall number.
+pub const SYS_CLOSE: usize = 3;
+/// Linux-compatible exit syscall number.
+pub const SYS_EXIT: usize = 60;
 
 /// Bad address error return value as a signed syscall result.
 pub const ERROR_BAD_ADDRESS: isize = -14;
