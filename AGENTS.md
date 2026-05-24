@@ -7,55 +7,7 @@ Do not deviate from these rules unless explicitly instructed by the project owne
 
 ## 1. Directory Structure
 
-```
-src/
-├── arch/
-│   └── x86_64/
-│       ├── mod.rs
-│       ├── global_descriptor_table.rs
-│       ├── interrupt_descriptor_table.rs
-│       ├── interrupt_controller.rs
-│       └── interval_timer.rs
-└── kernel/
-    ├── boot/
-    │   └── mod.rs
-    ├── driver/
-    │   ├── display/
-    │   │   ├── mod.rs
-    │   │   ├── color.rs
-    │   │   ├── command.rs
-    │   │   ├── framebuffer.rs
-    │   │   ├── renderer.rs
-    │   │   ├── font.rs
-    │   │   └── cursor.rs
-    │   └── input/
-    │       ├── keyboard/
-    │       │   ├── mod.rs
-    │       │   ├── scancode.rs
-    │       │   └── decoder.rs
-    │       └── mouse/
-    │           ├── mod.rs
-    │           ├── packet.rs
-    │           ├── hardware.rs
-    │           └── state.rs
-    ├── memory/
-    │   ├── frame_allocator.rs
-    │   ├── heap.rs
-    │   ├── paging.rs
-    │   └── user_stack.rs
-    ├── interrupt.rs
-    ├── sync/
-    │   └── ring_buffer.rs
-    ├── task/
-    │   ├── mod.rs
-    │   ├── architecture.rs
-    │   ├── context.rs
-    │   └── user_mode.rs
-    ├── runtime/
-    │   └── mod.rs
-    ├── time.rs
-    └── profiler.rs
-```
+use `Get-ChildItem -Path src\ -File -Recurse | Resolve-Path -Relative`. for directorys
 
 ---
 

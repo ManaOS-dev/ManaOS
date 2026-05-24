@@ -5,7 +5,10 @@ use core::fmt;
 use crate::kernel::memory::{frame_allocator::BumpFrameAllocator, paging};
 
 use super::super::block_device::{BlockDevice, SECTOR_BYTES};
-use super::super::{guid_partition_table, set_selected_partition};
+use super::super::{
+    file_allocation_table, guid_partition_table, partition::PartitionBlockDevice,
+    set_selected_partition,
+};
 use super::registers::{HbaCommandHeader, HbaCommandTable, HbaMemory, HbaPort, MAX_PORTS};
 
 const HOST_BUS_ADAPTER_MEMORY_SIZE: u64 = 0x1100;
@@ -22,7 +25,7 @@ const COMMAND_AND_STATUS_FIS_RECEIVE_RUNNING: u32 = 1 << 14;
 const COMMAND_AND_STATUS_COMMAND_LIST_RUNNING: u32 = 1 << 15;
 const TASK_FILE_DATA_BUSY: u32 = 1 << 7;
 const TASK_FILE_DATA_DATA_REQUEST: u32 = 1 << 3;
-const GLOBAL_HOST_CONTROL_ADVANCED_HOST_CONTROLLER_INTERFACE_ENABLE: u32 = 1 << 31;
+const GLOBAL_HOST_CONTROL_AHCI_ENABLE: u32 = 1 << 31;
 const INTERRUPT_STATUS_TASK_FILE_ERROR: u32 = 1 << 30;
 const PORT_POLL_LIMIT: usize = 1_000_000;
 
@@ -54,8 +57,8 @@ impl BlockDevice for AhciBlockDevice {
     fn read_logical_block(&mut self, logical_block_address: u64, data_address: u64) -> bool {
         if data_address != self.buffers.data {
             crate::log_error!(
-                "advanced_host_controller_interface",
-                "unexpected Advanced Host Controller Interface read buffer: requested={:#018x} owned={:#018x}",
+                "ahci",
+                "unexpected AHCI read buffer: requested={:#018x} owned={:#018x}",
                 data_address,
                 self.buffers.data
             );
@@ -72,34 +75,31 @@ impl BlockDevice for AhciBlockDevice {
 }
 
 /// Initialize an Advanced Host Controller Interface controller from its base address register 5 MMIO base.
-pub fn init(frame_allocator: &mut BumpFrameAllocator, bar5: u64) {
+pub fn init(frame_allocator: &mut BumpFrameAllocator, base_address_register5: u64) {
     crate::log_debug!(
-        "advanced_host_controller_interface",
-        "Mapping host bus adapter MMIO: base={:#010x} size={:#x}",
-        bar5,
+        "ahci",
+        "Mapping HBA MMIO: base={:#010x} size={:#x}",
+        base_address_register5,
         HOST_BUS_ADAPTER_MEMORY_SIZE
     );
     // SAFETY: base address register 5 is reported by a PCI mass-storage SATA controller and points
     // to the Advanced Host Controller Interface host bus adapter MMIO register block.
     unsafe {
-        paging::map_kernel_mmio_range(frame_allocator, bar5, HOST_BUS_ADAPTER_MEMORY_SIZE);
+        paging::map_kernel_mmio_range(
+            frame_allocator,
+            base_address_register5,
+            HOST_BUS_ADAPTER_MEMORY_SIZE,
+        );
     }
-    crate::log_debug!(
-        "advanced_host_controller_interface",
-        "host bus adapter MMIO mapping complete."
-    );
+    crate::log_debug!("ahci", "HBA MMIO mapping complete.");
 
-    let hba_memory = bar5 as *mut HbaMemory;
+    let hba_memory = base_address_register5 as *mut HbaMemory;
     enable_ahci(hba_memory);
     // SAFETY: The base address register 5 MMIO range was mapped above, and `hba_memory` points to
     // the Advanced Host Controller Interface host bus adapter register block.
     let ports_implemented =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*hba_memory).ports_implemented)) };
-    crate::log_info!(
-        "advanced_host_controller_interface",
-        "host bus adapter ports implemented: {:#010x}",
-        ports_implemented
-    );
+    crate::log_info!("ahci", "HBA ports implemented: {:#010x}", ports_implemented);
 
     for port_index in 0..MAX_PORTS {
         if ports_implemented & (1_u32 << port_index) == 0 {
@@ -117,16 +117,12 @@ pub fn init(frame_allocator: &mut BumpFrameAllocator, bar5: u64) {
         // SAFETY: `port` points to an implemented mapped Advanced Host Controller Interface port.
         let signature = unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).signature)) };
         if signature == SATA_SIGNATURE {
-            crate::log_info!(
-                "advanced_host_controller_interface",
-                "Port {}: SATA device detected",
-                port_index
-            );
+            crate::log_info!("ahci", "Port {}: SATA device detected", port_index);
             if let Some(buffers) = allocate_dma_buffers(frame_allocator) {
                 read_initial_sectors(hba_memory, port_index, buffers);
             } else {
                 crate::log_error!(
-                    "advanced_host_controller_interface",
+                    "ahci",
                     "Port {}: failed to allocate DMA buffers",
                     port_index
                 );
@@ -135,17 +131,14 @@ pub fn init(frame_allocator: &mut BumpFrameAllocator, bar5: u64) {
         }
 
         crate::log_debug!(
-            "advanced_host_controller_interface",
+            "ahci",
             "Port {}: non-SATA signature {:#010x}",
             port_index,
             signature
         );
     }
 
-    crate::log_warn!(
-        "advanced_host_controller_interface",
-        "No usable SATA port found."
-    );
+    crate::log_warn!("ahci", "No usable SATA port found.");
 }
 
 fn enable_ahci(hba_memory: *mut HbaMemory) {
@@ -153,7 +146,7 @@ fn enable_ahci(hba_memory: *mut HbaMemory) {
     let global_host_control =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*hba_memory).global_host_control)) };
     crate::log_debug!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Global host control before enable: {:#010x}",
         global_host_control
     );
@@ -161,14 +154,14 @@ fn enable_ahci(hba_memory: *mut HbaMemory) {
     unsafe {
         core::ptr::write_volatile(
             core::ptr::addr_of_mut!((*hba_memory).global_host_control),
-            global_host_control | GLOBAL_HOST_CONTROL_ADVANCED_HOST_CONTROLLER_INTERFACE_ENABLE,
+            global_host_control | GLOBAL_HOST_CONTROL_AHCI_ENABLE,
         );
     }
     // SAFETY: `hba_memory` points to the mapped Advanced Host Controller Interface host bus adapter register block.
     let enabled_global_host_control =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*hba_memory).global_host_control)) };
     crate::log_debug!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Global host control after enable: {:#010x}",
         enabled_global_host_control
     );
@@ -186,7 +179,7 @@ fn allocate_dma_buffers(frame_allocator: &mut BumpFrameAllocator) -> Option<Ahci
     zero_page(data);
 
     crate::log_debug!(
-        "advanced_host_controller_interface",
+        "ahci",
         "DMA buffers: command_list={:#018x} received_fis={:#018x} command_table={:#018x} data={:#018x}",
         command_list,
         received_fis,
@@ -225,7 +218,7 @@ fn read_initial_sectors(hba_memory: *mut HbaMemory, port_index: usize, buffers: 
     rebase_port(port, buffers);
     start_command_engine(port);
     crate::log_info!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Port {}: command engine started; command slots available",
         port_index
     );
@@ -245,13 +238,20 @@ fn read_initial_sectors(hba_memory: *mut HbaMemory, port_index: usize, buffers: 
             ) {
                 crate::log_info!(
                     "storage",
-                    "Selected GUID partition table partition: index={} first_lba={} last_lba={} name=\"{}\"",
+                    "Selected GPT partition: index={} first_lba={} last_lba={} name=\"{}\"",
                     partition.index,
                     partition.first_lba,
                     partition.last_lba,
                     partition.name()
                 );
                 set_selected_partition(partition);
+                let mut partition_device = PartitionBlockDevice::new(
+                    &mut block_device,
+                    partition.first_lba,
+                    partition.last_lba,
+                );
+                let _ =
+                    file_allocation_table::inspect_boot_sector(&mut partition_device, buffers.data);
             }
         }
     }
@@ -262,7 +262,7 @@ fn stop_command_engine(port: *mut HbaPort, port_index: usize) -> bool {
     let command_and_status =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_and_status)) };
     crate::log_debug!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Port {}: stopping command engine, command_and_status before={:#010x}",
         port_index,
         command_and_status
@@ -286,7 +286,7 @@ fn stop_command_engine(port: *mut HbaPort, port_index: usize) -> bool {
             == 0
         {
             crate::log_debug!(
-                "advanced_host_controller_interface",
+                "ahci",
                 "Port {}: command engine stopped, command_and_status={:#010x}",
                 port_index,
                 value
@@ -296,7 +296,7 @@ fn stop_command_engine(port: *mut HbaPort, port_index: usize) -> bool {
     }
 
     crate::log_error!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Port {}: timeout while stopping command engine",
         port_index
     );
@@ -308,7 +308,7 @@ fn rebase_port(port: *mut HbaPort, buffers: AhciDmaBuffers) {
     let (received_fis_low, received_fis_high) = split_address(buffers.received_fis);
 
     crate::log_debug!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Rebasing port: command_list=({:#010x},{:#010x}) received_fis=({:#010x},{:#010x})",
         command_list_high,
         command_list_low,
@@ -343,7 +343,7 @@ fn start_command_engine(port: *mut HbaPort) {
     let command_and_status =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_and_status)) };
     crate::log_debug!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Starting command engine: command_and_status before={:#010x}",
         command_and_status
     );
@@ -358,7 +358,7 @@ fn start_command_engine(port: *mut HbaPort) {
     let started_command_and_status =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_and_status)) };
     crate::log_debug!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Command engine start requested: command_and_status after={:#010x}",
         started_command_and_status
     );
@@ -371,7 +371,7 @@ fn issue_read_sector(
     lba: u64,
 ) -> bool {
     crate::log_trace!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Port {}: preparing read command lba={} sector_count=1 data_buffer={:#018x}",
         port_index,
         lba,
@@ -389,7 +389,7 @@ fn issue_read_sector(
         core::ptr::write_volatile(core::ptr::addr_of_mut!((*port).command_issue), 1);
     }
     crate::log_trace!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Port {}: command issued for LBA {}",
         port_index,
         lba
@@ -405,7 +405,7 @@ fn issue_read_sector(
                 unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).interrupt_status)) };
             if interrupt_status & INTERRUPT_STATUS_TASK_FILE_ERROR != 0 {
                 crate::log_error!(
-                    "advanced_host_controller_interface",
+                    "ahci",
                     "Port {}: read failed, interrupt_status={:#010x}",
                     port_index,
                     interrupt_status
@@ -414,7 +414,7 @@ fn issue_read_sector(
             }
 
             crate::log_debug!(
-                "advanced_host_controller_interface",
+                "ahci",
                 "Read LBA {} complete: bytes={} interrupt_status={:#010x}",
                 lba,
                 SECTOR_BYTES,
@@ -431,7 +431,7 @@ fn issue_read_sector(
     let command_issue =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_issue)) };
     crate::log_error!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Port {}: read LBA {} timeout, task_file_data={:#010x} command_issue={:#010x}",
         port_index,
         lba,
@@ -455,7 +455,7 @@ fn wait_until_not_busy(port: *mut HbaPort, port_index: usize) -> bool {
     let task_file_data =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).task_file_data)) };
     crate::log_error!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Port {}: device busy timeout, task_file_data={:#010x}",
         port_index,
         task_file_data
@@ -522,12 +522,7 @@ fn lba_byte(lba: u64, shift: u32) -> u8 {
 }
 
 fn dump_sector_prefix(label: &str, data_address: u64) {
-    crate::log_debug!(
-        "advanced_host_controller_interface",
-        "{}: {}",
-        label,
-        SectorPrefix { data_address }
-    );
+    crate::log_debug!("ahci", "{}: {}", label, SectorPrefix { data_address });
 }
 
 struct SectorPrefix {
@@ -558,7 +553,7 @@ fn log_port_registers(port_index: usize, port: *const HbaPort) {
     let task_file_data =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).task_file_data)) };
     crate::log_debug!(
-        "advanced_host_controller_interface",
+        "ahci",
         "Port {} registers: signature={:#010x} sata_status={:#010x} command_and_status={:#010x} task_file_data={:#010x}",
         port_index,
         signature,

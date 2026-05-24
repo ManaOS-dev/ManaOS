@@ -17,7 +17,9 @@ use spin::Mutex;
 
 mod advanced_host_controller_interface;
 mod block_device;
+mod file_allocation_table;
 mod guid_partition_table;
+mod partition;
 mod pci;
 
 pub use pci::PciConfigurationAccess;
@@ -57,8 +59,8 @@ pub fn init(
         pci::find_advanced_host_controller_interface_controller(pci_configuration_access)
     {
         crate::log_info!(
-            "storage",
-            "Advanced Host Controller Interface storage controller selected: bus={} device={} function={} base_address_register5={:#010x}",
+            "ahci",
+            "Selected controller: bus={} device={} function={} bar5={:#010x}",
             controller.bus,
             controller.device,
             controller.function,
