@@ -13,8 +13,16 @@ pub const SYS_CLOSE: usize = 3;
 /// Linux-compatible exit syscall number.
 pub const SYS_EXIT: usize = 60;
 
+/// File opened for read-only access.
+pub const OPEN_READ_ONLY: usize = 0;
+/// Linux-compatible not found error as a signed syscall result.
+pub const ERROR_NOT_FOUND: isize = -2;
+/// Linux-compatible bad file descriptor error as a signed syscall result.
+pub const ERROR_BAD_FILE_DESCRIPTOR: isize = -9;
 /// Bad address error return value as a signed syscall result.
 pub const ERROR_BAD_ADDRESS: isize = -14;
+/// Linux-compatible not implemented error as a signed syscall result.
+pub const ERROR_NOT_IMPLEMENTED: isize = -38;
 
 /// Invoke a ManaOS syscall with one argument.
 #[inline(always)]
@@ -122,10 +130,16 @@ pub fn read(file_descriptor: usize, buffer: &mut [u8]) -> isize {
     )
 }
 
-/// Open a null-terminated path.
+/// Open a null-terminated path as read-only.
 #[inline(always)]
 pub fn open(path: &[u8]) -> isize {
-    syscall1(SYS_OPEN, path.as_ptr() as usize)
+    open_with_options(path, OPEN_READ_ONLY, 0)
+}
+
+/// Open a null-terminated path with Linux-like flags and mode arguments.
+#[inline(always)]
+pub fn open_with_options(path: &[u8], flags: usize, mode: usize) -> isize {
+    syscall3(SYS_OPEN, path.as_ptr() as usize, flags, mode)
 }
 
 /// Close an open file descriptor.

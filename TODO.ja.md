@@ -48,6 +48,9 @@
 - [x] console open 中だけ keyboard input を console へ route
 - [x] Phase 5B-7: Linux-like syscall numbers
 - [x] read/write/open/close/exit に Linux x86_64 syscall number を使用
+- [x] Phase 5B-8: Linux-like errno and open ABI
+- [x] Linux-style negative errno value を返却
+- [x] Linux-like `open(path, flags, mode)` argument を受け取る
 - [ ] 最小 shell 風 task
 - [ ] Phase 5C: Real Storage
 - [x] Phase 5C-1: PCIe 列挙と AHCI コントローラ発見

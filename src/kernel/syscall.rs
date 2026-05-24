@@ -20,10 +20,10 @@
 
 use alloc::string::String;
 
-const ERROR_NOT_FOUND: u64 = u64::MAX - 1;
-const ERROR_BAD_FILE_DESCRIPTOR: u64 = u64::MAX - 8;
-const ERROR_BAD_ADDRESS: u64 = u64::MAX - 13;
-const ERROR_NOT_IMPLEMENTED: u64 = u64::MAX - 37;
+const ERROR_NOT_FOUND: u64 = linux_error(2);
+const ERROR_BAD_FILE_DESCRIPTOR: u64 = linux_error(9);
+const ERROR_BAD_ADDRESS: u64 = linux_error(14);
+const ERROR_NOT_IMPLEMENTED: u64 = linux_error(38);
 const MAX_USER_STRING_LENGTH: usize = 256;
 const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 
@@ -39,6 +39,10 @@ pub const SYS_CLOSE: u64 = 3;
 pub const SYS_EXIT: u64 = 60;
 /// Internal sentinel telling the syscall entry code to return to the kernel.
 pub const USER_EXIT_SENTINEL: u64 = u64::MAX;
+
+const fn linux_error(errno: u64) -> u64 {
+    0_u64.wrapping_sub(errno)
+}
 
 /// Dispatch one syscall using the `ManaOS` syscall ABI.
 ///
@@ -57,7 +61,7 @@ pub extern "C" fn syscall_dispatch(
     match syscall_number {
         SYS_WRITE => sys_write(first_argument, second_argument, third_argument),
         SYS_EXIT => sys_exit(first_argument),
-        SYS_OPEN => sys_open(first_argument),
+        SYS_OPEN => sys_open(first_argument, second_argument, third_argument),
         SYS_CLOSE => sys_close(first_argument),
         SYS_READ => sys_read(first_argument, second_argument, third_argument),
         _ => ERROR_NOT_IMPLEMENTED,
@@ -85,7 +89,15 @@ fn sys_write(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
     }
 }
 
-fn sys_open(user_path_pointer: u64) -> u64 {
+fn sys_open(user_path_pointer: u64, flags: u64, mode: u64) -> u64 {
+    crate::log_debug!(
+        "syscall",
+        "open(path={:#018x}, flags={:#x}, mode={:#o})",
+        user_path_pointer,
+        flags,
+        mode
+    );
+
     let Ok(user_path_pointer) = usize::try_from(user_path_pointer) else {
         return ERROR_BAD_ADDRESS;
     };

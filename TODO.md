@@ -48,6 +48,9 @@
 - [x] route keyboard input to console only while open
 - [x] Phase 5B-7: Linux-like syscall numbers
 - [x] use Linux x86_64 syscall numbers for read/write/open/close/exit
+- [x] Phase 5B-8: Linux-like errno and open ABI
+- [x] return Linux-style negative errno values
+- [x] accept Linux-like `open(path, flags, mode)` arguments
 - [ ] minimal shell-style task
 - [ ] Phase 5C: Real Storage
 - [x] Phase 5C-1: PCIe enumeration and AHCI controller discovery
