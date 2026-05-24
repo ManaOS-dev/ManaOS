@@ -103,8 +103,11 @@
 - [x] Phase 5C-8: FAT32 root directory listing
 - [x] test 用 `HELLO.TXT` directory entry を生成
 - [x] root directory の 8.3 file entry を parse
+- [x] Phase 5C-9: FAT32 file read smoke test
+- [x] `HELLO.TXT` の first data cluster を読み出し
+- [x] first cluster の file allocation table entry を inspect
 - [ ] AHCI ドライバー実装
-- [ ] FAT32 file read APIs
+- [ ] FAT32 file read を VFS に mount
 
 ## Phase 6: Userland
 - [ ] ELF ローダー

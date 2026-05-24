@@ -34,6 +34,8 @@ const DIRECTORY_ENTRY_NAME_OFFSET: usize = 0;
 const DIRECTORY_ENTRY_NAME_SIZE: usize = 8;
 const DIRECTORY_ENTRY_EXTENSION_OFFSET: usize = 8;
 const DIRECTORY_ENTRY_EXTENSION_SIZE: usize = 3;
+const DIRECTORY_ENTRY_SHORT_NAME_SIZE: usize =
+    DIRECTORY_ENTRY_NAME_SIZE + DIRECTORY_ENTRY_EXTENSION_SIZE;
 const DIRECTORY_ENTRY_ATTRIBUTE_OFFSET: usize = 11;
 const DIRECTORY_ENTRY_FIRST_CLUSTER_HIGH_OFFSET: usize = 20;
 const DIRECTORY_ENTRY_FIRST_CLUSTER_LOW_OFFSET: usize = 26;
@@ -43,6 +45,9 @@ const DIRECTORY_ENTRY_DELETED_MARKER: u8 = 0xe5;
 const DIRECTORY_ENTRY_LONG_NAME_ATTRIBUTE: u8 = 0x0f;
 const DIRECTORY_ENTRY_VOLUME_LABEL_ATTRIBUTE: u8 = 0x08;
 const DIRECTORY_ENTRY_DIRECTORY_ATTRIBUTE: u8 = 0x10;
+const FILE_ALLOCATION_TABLE_ENTRY_BYTES: u32 = 4;
+const FILE_ALLOCATION_TABLE_ENTRY_MASK: u32 = 0x0fff_ffff;
+const FILE_ALLOCATION_TABLE_END_OF_CHAIN: u32 = 0x0fff_fff8;
 
 /// Parsed File Allocation Table 32 volume geometry.
 #[derive(Clone, Copy)]
@@ -65,6 +70,14 @@ pub(in crate::kernel::driver::storage) struct FileAllocationTable32Volume {
     first_data_sector: u32,
     /// Number of data clusters.
     cluster_count: u32,
+}
+
+/// Parsed File Allocation Table 32 directory entry metadata.
+#[derive(Clone, Copy)]
+pub(in crate::kernel::driver::storage) struct FileAllocationTable32DirectoryEntry {
+    short_name: [u8; DIRECTORY_ENTRY_SHORT_NAME_SIZE],
+    first_cluster: u32,
+    file_size: u32,
 }
 
 /// Inspect a partition boot sector as File Allocation Table 32 metadata.
@@ -97,9 +110,10 @@ pub(in crate::kernel::driver::storage) fn inspect_root_directory(
     block_device: &mut impl BlockDevice,
     volume: FileAllocationTable32Volume,
     data_address: u64,
-) -> Option<u32> {
+) -> Option<FileAllocationTable32DirectoryEntry> {
     let root_directory_start_sector = volume.cluster_first_sector(volume.root_cluster)?;
     let mut file_entries = 0;
+    let mut first_file = None;
 
     for sector_offset in 0..volume.sectors_per_cluster {
         let logical_block_address =
@@ -112,7 +126,7 @@ pub(in crate::kernel::driver::storage) fn inspect_root_directory(
         // SAFETY: `data_address` points to a 512-byte DMA buffer filled from a
         // root-directory sector.
         let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
-        let reached_end = inspect_directory_sector(sector, &mut file_entries);
+        let reached_end = inspect_directory_sector(sector, &mut file_entries, &mut first_file);
         if reached_end {
             break;
         }
@@ -124,7 +138,48 @@ pub(in crate::kernel::driver::storage) fn inspect_root_directory(
         volume.root_cluster,
         file_entries
     );
-    Some(file_entries)
+    first_file
+}
+
+/// Inspect the first data cluster for a File Allocation Table 32 file.
+pub(in crate::kernel::driver::storage) fn inspect_file_contents(
+    block_device: &mut impl BlockDevice,
+    volume: FileAllocationTable32Volume,
+    entry: FileAllocationTable32DirectoryEntry,
+    data_address: u64,
+) -> Option<()> {
+    if entry.file_size == 0 {
+        crate::log_info!("fat32", "Read {}: \"\"", entry.name());
+        return Some(());
+    }
+
+    let first_sector = volume.cluster_first_sector(entry.first_cluster)?;
+    if !block_device.read_logical_block(u64::from(first_sector), data_address) {
+        return None;
+    }
+
+    let sector = data_address as *const u8;
+    // SAFETY: `data_address` points to a 512-byte DMA buffer filled from the
+    // file's first data sector.
+    let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
+    let bytes_to_show = usize::try_from(entry.file_size)
+        .expect("file size must fit in usize")
+        .min(SECTOR_BYTES);
+    crate::log_info!(
+        "fat32",
+        "Read {}: \"{}\"",
+        entry.name(),
+        EscapedAscii(&sector[..bytes_to_show])
+    );
+
+    let next_cluster = read_next_cluster(block_device, &volume, entry.first_cluster, data_address)?;
+    if next_cluster >= FILE_ALLOCATION_TABLE_END_OF_CHAIN {
+        crate::log_debug!("fat32", "{} cluster chain ends", entry.name());
+    } else {
+        crate::log_debug!("fat32", "{} next_cluster={}", entry.name(), next_cluster);
+    }
+
+    Some(())
 }
 
 fn parse_volume(sector: &[u8]) -> Option<FileAllocationTable32Volume> {
@@ -259,7 +314,11 @@ impl FileAllocationTable32Volume {
     }
 }
 
-fn inspect_directory_sector(sector: &[u8], file_entries: &mut u32) -> bool {
+fn inspect_directory_sector(
+    sector: &[u8],
+    file_entries: &mut u32,
+    first_file: &mut Option<FileAllocationTable32DirectoryEntry>,
+) -> bool {
     for entry in sector.chunks_exact(DIRECTORY_ENTRY_SIZE) {
         match entry[0] {
             DIRECTORY_ENTRY_END_MARKER => return true,
@@ -274,17 +333,25 @@ fn inspect_directory_sector(sector: &[u8], file_entries: &mut u32) -> bool {
             continue;
         }
 
-        let name = ShortFileName::new(entry);
+        let directory_entry = FileAllocationTable32DirectoryEntry::new(entry);
         let first_cluster = read_first_cluster(entry);
         let file_size = read_le_u32(entry, DIRECTORY_ENTRY_FILE_SIZE_OFFSET);
         if attribute & DIRECTORY_ENTRY_DIRECTORY_ATTRIBUTE != 0 {
-            crate::log_info!("fat32", "Directory: {} cluster={}", name, first_cluster);
+            crate::log_info!(
+                "fat32",
+                "Directory: {} cluster={}",
+                directory_entry.name(),
+                first_cluster
+            );
         } else {
             *file_entries = file_entries.saturating_add(1);
+            if first_file.is_none() {
+                *first_file = Some(directory_entry);
+            }
             crate::log_info!(
                 "fat32",
                 "File: {} size={} cluster={}",
-                name,
+                directory_entry.name(),
                 file_size,
                 first_cluster
             );
@@ -292,6 +359,28 @@ fn inspect_directory_sector(sector: &[u8], file_entries: &mut u32) -> bool {
     }
 
     false
+}
+
+fn read_next_cluster(
+    block_device: &mut impl BlockDevice,
+    volume: &FileAllocationTable32Volume,
+    cluster: u32,
+    data_address: u64,
+) -> Option<u32> {
+    let byte_offset = cluster.checked_mul(FILE_ALLOCATION_TABLE_ENTRY_BYTES)?;
+    let sector_offset = byte_offset / u32::from(volume.bytes_per_sector);
+    let entry_offset = usize::try_from(byte_offset % u32::from(volume.bytes_per_sector))
+        .expect("file allocation table entry offset must fit in usize");
+    let logical_block_address = u64::from(volume.reserved_sector_count) + u64::from(sector_offset);
+    if !block_device.read_logical_block(logical_block_address, data_address) {
+        return None;
+    }
+
+    let sector = data_address as *const u8;
+    // SAFETY: `data_address` points to a 512-byte DMA buffer filled from a file
+    // allocation table sector.
+    let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
+    Some(read_le_u32(sector, entry_offset) & FILE_ALLOCATION_TABLE_ENTRY_MASK)
 }
 
 fn read_first_cluster(entry: &[u8]) -> u32 {
@@ -303,13 +392,27 @@ fn read_first_cluster(entry: &[u8]) -> u32 {
     (high << 16) | low
 }
 
-struct ShortFileName<'a>(&'a [u8]);
+impl FileAllocationTable32DirectoryEntry {
+    fn new(entry: &[u8]) -> Self {
+        let mut short_name = [0; DIRECTORY_ENTRY_SHORT_NAME_SIZE];
+        short_name.copy_from_slice(
+            &entry[DIRECTORY_ENTRY_NAME_OFFSET
+                ..DIRECTORY_ENTRY_NAME_OFFSET + DIRECTORY_ENTRY_SHORT_NAME_SIZE],
+        );
 
-impl<'a> ShortFileName<'a> {
-    fn new(entry: &'a [u8]) -> Self {
-        Self(entry)
+        Self {
+            short_name,
+            first_cluster: read_first_cluster(entry),
+            file_size: read_le_u32(entry, DIRECTORY_ENTRY_FILE_SIZE_OFFSET),
+        }
+    }
+
+    fn name(&self) -> ShortFileName<'_> {
+        ShortFileName(&self.short_name)
     }
 }
+
+struct ShortFileName<'a>(&'a [u8]);
 
 impl core::fmt::Display for ShortFileName<'_> {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -330,6 +433,23 @@ impl core::fmt::Display for ShortFileName<'_> {
             write!(formatter, ".{extension}")?;
         }
 
+        Ok(())
+    }
+}
+
+struct EscapedAscii<'a>(&'a [u8]);
+
+impl core::fmt::Display for EscapedAscii<'_> {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        for byte in self.0 {
+            match *byte {
+                b'\r' => write!(formatter, "\\r")?,
+                b'\n' => write!(formatter, "\\n")?,
+                b'\t' => write!(formatter, "\\t")?,
+                0x20..=0x7e => write!(formatter, "{}", char::from(*byte))?,
+                _ => write!(formatter, "\\x{byte:02x}")?,
+            }
+        }
         Ok(())
     }
 }
