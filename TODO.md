@@ -100,8 +100,10 @@
 - [x] Phase 5C-7: FAT32 boot sector inspection
 - [x] generate a GPT test image with a minimal FAT32 boot sector
 - [x] parse FAT32 BIOS Parameter Block geometry
+- [x] Phase 5C-8: FAT32 root directory listing
+- [x] generate a test `HELLO.TXT` directory entry
+- [x] parse root directory 8.3 file entries
 - [ ] AHCI Driver Implementation
-- [ ] FAT32 root directory listing
 - [ ] FAT32 file read APIs
 
 ## Phase 6: Userland
