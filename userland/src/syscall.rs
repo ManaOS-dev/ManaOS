@@ -27,8 +27,13 @@ pub fn syscall1(syscall_number: usize, first_argument: usize) -> isize {
         asm!(
             "syscall",
             inlateout("rax") syscall_number => result,
-            in("rdi") first_argument,
+            inlateout("rdi") first_argument => _,
             lateout("rcx") _,
+            lateout("rdx") _,
+            lateout("rsi") _,
+            lateout("r8") _,
+            lateout("r9") _,
+            lateout("r10") _,
             lateout("r11") _,
             options(nostack)
         );
@@ -49,9 +54,13 @@ pub fn syscall2(syscall_number: usize, first_argument: usize, second_argument: u
         asm!(
             "syscall",
             inlateout("rax") syscall_number => result,
-            in("rdi") first_argument,
-            in("rsi") second_argument,
+            inlateout("rdi") first_argument => _,
+            inlateout("rsi") second_argument => _,
             lateout("rcx") _,
+            lateout("rdx") _,
+            lateout("r8") _,
+            lateout("r9") _,
+            lateout("r10") _,
             lateout("r11") _,
             options(nostack)
         );
@@ -76,10 +85,13 @@ pub fn syscall3(
         asm!(
             "syscall",
             inlateout("rax") syscall_number => result,
-            in("rdi") first_argument,
-            in("rsi") second_argument,
-            in("rdx") third_argument,
+            inlateout("rdi") first_argument => _,
+            inlateout("rsi") second_argument => _,
+            inlateout("rdx") third_argument => _,
             lateout("rcx") _,
+            lateout("r8") _,
+            lateout("r9") _,
+            lateout("r10") _,
             lateout("r11") _,
             options(nostack)
         );

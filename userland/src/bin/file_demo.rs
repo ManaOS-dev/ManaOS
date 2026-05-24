@@ -23,7 +23,16 @@ extern "C" fn _start() -> ! {
     }
 
     let bytes_read = bytes_read as usize;
-    let _ = syscall::write(STDOUT, &buffer[..bytes_read]);
+    if bytes_read > buffer.len() {
+        syscall::exit(3);
+    }
+
+    let _ = syscall::syscall3(
+        syscall::SYS_WRITE,
+        STDOUT,
+        buffer.as_ptr() as usize,
+        bytes_read,
+    );
     syscall::exit(0);
 }
 
