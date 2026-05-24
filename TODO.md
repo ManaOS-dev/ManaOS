@@ -66,6 +66,9 @@
 - [x] Phase 5C-4d: storage and CI diagnostics
 - [x] install userland Rust target in CI
 - [x] log PCI discovery and AHCI state transitions in detail
+- [x] Phase 5C-4e: structured kernel log levels
+- [x] add `INFO`/`WARN`/`ERROR`/`DEBUG`/`TRACE` serial log macros
+- [x] move verbose GPT and AHCI diagnostics behind debug/trace levels
 - [ ] GPT partition entry parsing
 - [ ] AHCI Driver Implementation
 - [ ] FAT32 Parser & File APIs

@@ -84,7 +84,10 @@ pub fn calibrate_tsc() {
 
     let Some(frequency) = frequency else {
         crate::kernel::task::set_preemption_enabled(true);
-        crate::serial_println!("[prof ] TSC calibration skipped: no stable timer sample");
+        crate::log_warn!(
+            "profiler",
+            "TSC calibration skipped: no stable timer sample"
+        );
         return;
     };
 
@@ -92,8 +95,9 @@ pub fn calibrate_tsc() {
 
     crate::kernel::task::set_preemption_enabled(true);
 
-    crate::serial_println!(
-        "[prof ] TSC Frequency calibrated: {} MHz",
+    crate::log_info!(
+        "profiler",
+        "TSC frequency calibrated: {} MHz",
         frequency / HERTZ_PER_MEGAHERTZ
     );
 }

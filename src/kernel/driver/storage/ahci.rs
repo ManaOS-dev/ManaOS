@@ -1,5 +1,7 @@
 //! AHCI controller discovery helpers.
 
+use core::fmt;
+
 use crate::kernel::memory::{frame_allocator::BumpFrameAllocator, paging};
 
 use super::gpt;
@@ -103,8 +105,9 @@ struct AhciDmaBuffers {
 
 /// Initialize an AHCI controller from its BAR5 MMIO base.
 pub fn init(frame_allocator: &mut BumpFrameAllocator, bar5: u64) {
-    crate::serial_println!(
-        "[ahci ] Mapping HBA MMIO: base={:#010x} size={:#x}",
+    crate::log_debug!(
+        "ahci",
+        "Mapping HBA MMIO: base={:#010x} size={:#x}",
         bar5,
         HBA_MEMORY_SIZE
     );
@@ -113,7 +116,7 @@ pub fn init(frame_allocator: &mut BumpFrameAllocator, bar5: u64) {
     unsafe {
         paging::map_kernel_mmio_range(frame_allocator, bar5, HBA_MEMORY_SIZE);
     }
-    crate::serial_println!("[ahci ] HBA MMIO mapping complete.");
+    crate::log_debug!("ahci", "HBA MMIO mapping complete.");
 
     let hba_memory = bar5 as *mut HbaMemory;
     enable_ahci(hba_memory);
@@ -121,7 +124,7 @@ pub fn init(frame_allocator: &mut BumpFrameAllocator, bar5: u64) {
     // the AHCI HBA register block.
     let ports_implemented =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*hba_memory).ports_implemented)) };
-    crate::serial_println!("[ahci ] HBA ports implemented: {:#010x}", ports_implemented);
+    crate::log_info!("ahci", "HBA ports implemented: {:#010x}", ports_implemented);
 
     for port_index in 0..MAX_PORTS {
         if ports_implemented & (1_u32 << port_index) == 0 {
@@ -139,34 +142,37 @@ pub fn init(frame_allocator: &mut BumpFrameAllocator, bar5: u64) {
         // SAFETY: `port` points to an implemented mapped AHCI port.
         let signature = unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).signature)) };
         if signature == SATA_SIGNATURE {
-            crate::serial_println!("[ahci ] Port {}: SATA device detected", port_index);
+            crate::log_info!("ahci", "Port {}: SATA device detected", port_index);
             if let Some(buffers) = allocate_dma_buffers(frame_allocator) {
                 read_initial_sectors(hba_memory, port_index, buffers);
             } else {
-                crate::serial_println!(
-                    "[ahci ] Port {}: failed to allocate DMA buffers",
+                crate::log_error!(
+                    "ahci",
+                    "Port {}: failed to allocate DMA buffers",
                     port_index
                 );
             }
             return;
         }
 
-        crate::serial_println!(
-            "[ahci ] Port {}: non-SATA signature {:#010x}",
+        crate::log_debug!(
+            "ahci",
+            "Port {}: non-SATA signature {:#010x}",
             port_index,
             signature
         );
     }
 
-    crate::serial_println!("[ahci ] No usable SATA port found.");
+    crate::log_warn!("ahci", "No usable SATA port found.");
 }
 
 fn enable_ahci(hba_memory: *mut HbaMemory) {
     // SAFETY: `hba_memory` points to the mapped AHCI HBA register block.
     let global_host_control =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*hba_memory).global_host_control)) };
-    crate::serial_println!(
-        "[ahci ] Global host control before enable: {:#010x}",
+    crate::log_debug!(
+        "ahci",
+        "Global host control before enable: {:#010x}",
         global_host_control
     );
     // SAFETY: `hba_memory` points to the mapped AHCI HBA register block.
@@ -179,8 +185,9 @@ fn enable_ahci(hba_memory: *mut HbaMemory) {
     // SAFETY: `hba_memory` points to the mapped AHCI HBA register block.
     let enabled_global_host_control =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*hba_memory).global_host_control)) };
-    crate::serial_println!(
-        "[ahci ] Global host control after enable: {:#010x}",
+    crate::log_debug!(
+        "ahci",
+        "Global host control after enable: {:#010x}",
         enabled_global_host_control
     );
 }
@@ -196,8 +203,9 @@ fn allocate_dma_buffers(frame_allocator: &mut BumpFrameAllocator) -> Option<Ahci
     zero_page(command_table);
     zero_page(data);
 
-    crate::serial_println!(
-        "[ahci ] DMA buffers: command_list={:#018x} received_fis={:#018x} command_table={:#018x} data={:#018x}",
+    crate::log_debug!(
+        "ahci",
+        "DMA buffers: command_list={:#018x} received_fis={:#018x} command_table={:#018x} data={:#018x}",
         command_list,
         received_fis,
         command_table,
@@ -234,8 +242,9 @@ fn read_initial_sectors(hba_memory: *mut HbaMemory, port_index: usize, buffers: 
 
     rebase_port(port, buffers);
     start_command_engine(port);
-    crate::serial_println!(
-        "[ahci ] Port {}: command engine started; command slots available",
+    crate::log_info!(
+        "ahci",
+        "Port {}: command engine started; command slots available",
         port_index
     );
 
@@ -258,13 +267,13 @@ fn inspect_gpt_partition_entries(
 ) {
     let entry_size = usize::try_from(header.size).expect("GPT entry size must fit in usize");
     if !(48..=READ_SECTOR_BYTES).contains(&entry_size) {
-        crate::serial_println!("[gpt  ] Unsupported partition entry size: {}", header.size);
+        crate::log_warn!("gpt", "Unsupported partition entry size: {}", header.size);
         return;
     }
 
     let entries_per_sector = READ_SECTOR_BYTES / entry_size;
     if entries_per_sector == 0 {
-        crate::serial_println!("[gpt  ] Unsupported partition entry size: {}", header.size);
+        crate::log_warn!("gpt", "Unsupported partition entry size: {}", header.size);
         return;
     }
 
@@ -276,15 +285,17 @@ fn inspect_gpt_partition_entries(
     let mut empty_entries = 0;
     let mut entries_remaining = header.count;
 
-    crate::serial_println!(
-        "[gpt  ] Partition scan: start_lba={} total_entries={} entry_size={} total_bytes={}",
+    crate::log_debug!(
+        "gpt",
+        "Partition scan: start_lba={} total_entries={} entry_size={} total_bytes={}",
         header.entries_lba,
         header.count,
         header.size,
         total_entry_bytes
     );
-    crate::serial_println!(
-        "[gpt  ] Partition scan: sectors={} entries_per_sector={}",
+    crate::log_debug!(
+        "gpt",
+        "Partition scan: sectors={} entries_per_sector={}",
         sector_count,
         entries_per_sector
     );
@@ -309,8 +320,9 @@ fn inspect_gpt_partition_entries(
             entry_count,
             header.size,
         );
-        crate::serial_println!(
-            "[gpt  ] Partition scan sector: lba={} first_entry={} scanned={} empty={} non_empty={}",
+        crate::log_trace!(
+            "gpt",
+            "Partition scan sector: lba={} first_entry={} scanned={} empty={} non_empty={}",
             lba,
             first_entry_index,
             scan.scanned,
@@ -322,16 +334,17 @@ fn inspect_gpt_partition_entries(
         entries_remaining -= entry_count;
     }
 
-    crate::serial_println!(
-        "[gpt  ] Partition scan summary: scanned={} empty={} non_empty={}",
+    crate::log_info!(
+        "gpt",
+        "Partition scan summary: scanned={} empty={} non_empty={}",
         header.count,
         empty_entries,
         non_empty_entries
     );
     if non_empty_entries == 0 {
-        crate::serial_println!("[gpt  ] No partition entries found");
+        crate::log_info!("gpt", "No partition entries found");
     } else {
-        crate::serial_println!("[gpt  ] Partition entries found: {}", non_empty_entries);
+        crate::log_info!("gpt", "Partition entries found: {}", non_empty_entries);
     }
 }
 
@@ -339,8 +352,9 @@ fn stop_command_engine(port: *mut HbaPort, port_index: usize) -> bool {
     // SAFETY: `port` points to a mapped AHCI port register block.
     let command_and_status =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_and_status)) };
-    crate::serial_println!(
-        "[ahci ] Port {}: stopping command engine, command_and_status before={:#010x}",
+    crate::log_debug!(
+        "ahci",
+        "Port {}: stopping command engine, command_and_status before={:#010x}",
         port_index,
         command_and_status
     );
@@ -362,8 +376,9 @@ fn stop_command_engine(port: *mut HbaPort, port_index: usize) -> bool {
             & (COMMAND_AND_STATUS_FIS_RECEIVE_RUNNING | COMMAND_AND_STATUS_COMMAND_LIST_RUNNING)
             == 0
         {
-            crate::serial_println!(
-                "[ahci ] Port {}: command engine stopped, command_and_status={:#010x}",
+            crate::log_debug!(
+                "ahci",
+                "Port {}: command engine stopped, command_and_status={:#010x}",
                 port_index,
                 value
             );
@@ -371,8 +386,9 @@ fn stop_command_engine(port: *mut HbaPort, port_index: usize) -> bool {
         }
     }
 
-    crate::serial_println!(
-        "[ahci ] Port {}: timeout while stopping command engine",
+    crate::log_error!(
+        "ahci",
+        "Port {}: timeout while stopping command engine",
         port_index
     );
     false
@@ -382,8 +398,9 @@ fn rebase_port(port: *mut HbaPort, buffers: AhciDmaBuffers) {
     let (command_list_low, command_list_high) = split_address(buffers.command_list);
     let (received_fis_low, received_fis_high) = split_address(buffers.received_fis);
 
-    crate::serial_println!(
-        "[ahci ] Rebasing port: command_list=({:#010x},{:#010x}) received_fis=({:#010x},{:#010x})",
+    crate::log_debug!(
+        "ahci",
+        "Rebasing port: command_list=({:#010x},{:#010x}) received_fis=({:#010x},{:#010x})",
         command_list_high,
         command_list_low,
         received_fis_high,
@@ -416,8 +433,9 @@ fn start_command_engine(port: *mut HbaPort) {
     // SAFETY: `port` points to a mapped AHCI port register block.
     let command_and_status =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_and_status)) };
-    crate::serial_println!(
-        "[ahci ] Starting command engine: command_and_status before={:#010x}",
+    crate::log_debug!(
+        "ahci",
+        "Starting command engine: command_and_status before={:#010x}",
         command_and_status
     );
     // SAFETY: `port` points to a mapped AHCI port register block.
@@ -430,8 +448,9 @@ fn start_command_engine(port: *mut HbaPort) {
     // SAFETY: `port` points to a mapped AHCI port register block.
     let started_command_and_status =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_and_status)) };
-    crate::serial_println!(
-        "[ahci ] Command engine start requested: command_and_status after={:#010x}",
+    crate::log_debug!(
+        "ahci",
+        "Command engine start requested: command_and_status after={:#010x}",
         started_command_and_status
     );
 }
@@ -442,8 +461,9 @@ fn issue_read_sector(
     port_index: usize,
     lba: u64,
 ) -> bool {
-    crate::serial_println!(
-        "[ahci ] Port {}: preparing read command lba={} sector_count=1 data_buffer={:#018x}",
+    crate::log_trace!(
+        "ahci",
+        "Port {}: preparing read command lba={} sector_count=1 data_buffer={:#018x}",
         port_index,
         lba,
         buffers.data
@@ -459,8 +479,9 @@ fn issue_read_sector(
         core::ptr::write_volatile(core::ptr::addr_of_mut!((*port).interrupt_status), u32::MAX);
         core::ptr::write_volatile(core::ptr::addr_of_mut!((*port).command_issue), 1);
     }
-    crate::serial_println!(
-        "[ahci ] Port {}: command issued for LBA {}",
+    crate::log_trace!(
+        "ahci",
+        "Port {}: command issued for LBA {}",
         port_index,
         lba
     );
@@ -474,16 +495,18 @@ fn issue_read_sector(
             let interrupt_status =
                 unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).interrupt_status)) };
             if interrupt_status & INTERRUPT_STATUS_TASK_FILE_ERROR != 0 {
-                crate::serial_println!(
-                    "[ahci ] Port {}: read failed, interrupt_status={:#010x}",
+                crate::log_error!(
+                    "ahci",
+                    "Port {}: read failed, interrupt_status={:#010x}",
                     port_index,
                     interrupt_status
                 );
                 return false;
             }
 
-            crate::serial_println!(
-                "[ahci ] Read LBA {} complete: bytes={} interrupt_status={:#010x}",
+            crate::log_debug!(
+                "ahci",
+                "Read LBA {} complete: bytes={} interrupt_status={:#010x}",
                 lba,
                 READ_SECTOR_BYTES,
                 interrupt_status
@@ -498,8 +521,9 @@ fn issue_read_sector(
     // SAFETY: `port` points to a mapped AHCI port register block.
     let command_issue =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_issue)) };
-    crate::serial_println!(
-        "[ahci ] Port {}: read LBA {} timeout, task_file_data={:#010x} command_issue={:#010x}",
+    crate::log_error!(
+        "ahci",
+        "Port {}: read LBA {} timeout, task_file_data={:#010x} command_issue={:#010x}",
         port_index,
         lba,
         task_file_data,
@@ -521,8 +545,9 @@ fn wait_until_not_busy(port: *mut HbaPort, port_index: usize) -> bool {
     // SAFETY: `port` points to a mapped AHCI port register block.
     let task_file_data =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).task_file_data)) };
-    crate::serial_println!(
-        "[ahci ] Port {}: device busy timeout, task_file_data={:#010x}",
+    crate::log_error!(
+        "ahci",
+        "Port {}: device busy timeout, task_file_data={:#010x}",
         port_index,
         task_file_data
     );
@@ -589,14 +614,23 @@ fn lba_byte(lba: u64, shift: u32) -> u8 {
 }
 
 fn dump_sector_prefix(label: &str, data_address: u64) {
-    let data = data_address as *const u8;
-    crate::serial_print!("[ahci ] {}:", label);
-    for offset in 0..16 {
-        // SAFETY: `data_address` points to a 512-byte DMA read buffer.
-        let byte = unsafe { core::ptr::read_volatile(data.add(offset)) };
-        crate::serial_print!(" {byte:02x}");
+    crate::log_debug!("ahci", "{}: {}", label, SectorPrefix { data_address });
+}
+
+struct SectorPrefix {
+    data_address: u64,
+}
+
+impl fmt::Display for SectorPrefix {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let data = self.data_address as *const u8;
+        for offset in 0..16 {
+            // SAFETY: `data_address` points to a 512-byte DMA read buffer.
+            let byte = unsafe { core::ptr::read_volatile(data.add(offset)) };
+            write!(formatter, " {byte:02x}")?;
+        }
+        Ok(())
     }
-    crate::serial_println!("");
 }
 
 fn log_port_registers(port_index: usize, port: *const HbaPort) {
@@ -610,8 +644,9 @@ fn log_port_registers(port_index: usize, port: *const HbaPort) {
     // SAFETY: `port` points to an implemented mapped AHCI port.
     let task_file_data =
         unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).task_file_data)) };
-    crate::serial_println!(
-        "[ahci ] Port {} registers: signature={:#010x} sata_status={:#010x} command_and_status={:#010x} task_file_data={:#010x}",
+    crate::log_debug!(
+        "ahci",
+        "Port {} registers: signature={:#010x} sata_status={:#010x} command_and_status={:#010x} task_file_data={:#010x}",
         port_index,
         signature,
         sata_status,

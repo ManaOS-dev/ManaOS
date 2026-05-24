@@ -19,18 +19,19 @@ mod pci;
 
 /// Discover and initialize supported storage controllers.
 pub fn init(frame_allocator: &mut BumpFrameAllocator) {
-    crate::serial_println!("[storage] Initializing storage subsystem...");
+    crate::log_info!("storage", "Initializing storage subsystem...");
     if let Some(controller) = pci::find_ahci_controller() {
-        crate::serial_println!(
-            "[storage] AHCI controller selected: bus={} dev={} func={} bar5={:#010x}",
+        crate::log_info!(
+            "storage",
+            "AHCI controller selected: bus={} dev={} func={} bar5={:#010x}",
             controller.bus,
             controller.device,
             controller.function,
             controller.bar5
         );
         ahci::init(frame_allocator, controller.bar5);
-        crate::serial_println!("[storage] Storage subsystem initialization complete.");
+        crate::log_info!("storage", "Storage subsystem initialization complete.");
     } else {
-        crate::serial_println!("[storage] No supported storage controller found.");
+        crate::log_warn!("storage", "No supported storage controller found.");
     }
 }

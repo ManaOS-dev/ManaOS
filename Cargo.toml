@@ -33,6 +33,11 @@ pic8259 = "0.11"
 # キーボードデコーダ
 pc-keyboard = "0.9"
 
+[features]
+default = []
+log-debug = []
+log-trace = ["log-debug"]
+
 [profile.dev]
 opt-level = 1
 panic = "abort"

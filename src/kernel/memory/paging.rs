@@ -53,7 +53,7 @@ pub unsafe fn init<'a>(
     unsafe {
         Cr3::write(pml4_frame, x86_64::registers::control::Cr3Flags::empty());
     }
-    crate::serial_println!("[paging] Identity mapping complete.");
+    crate::log_info!("paging", "Identity mapping complete.");
 }
 
 /// Return whether the whole user range is mapped as readable user memory.
@@ -311,8 +311,9 @@ unsafe fn map_framebuffer(
     framebuffer_base: u64,
     framebuffer_size: u64,
 ) {
-    crate::serial_println!(
-        "[paging] Mapping frame buffer: {:#x} (size: {} bytes)",
+    crate::log_info!(
+        "paging",
+        "Mapping framebuffer: base={:#x} size={} bytes",
         framebuffer_base,
         framebuffer_size
     );

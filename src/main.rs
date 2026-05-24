@@ -117,7 +117,7 @@ fn initialize_scheduler() {
     kernel::task::spawn(idle_task);
     let task_id = kernel::task::get_current_task_id()
         .expect("scheduler must expose a bootstrap task after initialization");
-    crate::serial_println!("[ok   ] Scheduler initialized. current task: {}", task_id);
+    crate::log_info!("task", "Scheduler initialized. current_task={}", task_id);
 }
 
 fn initialize_architecture_and_drivers() {
@@ -134,10 +134,11 @@ fn initialize_architecture_and_drivers() {
         data: arch::x86_64::global_descriptor_table::USER_DATA_SELECTOR,
         code: arch::x86_64::global_descriptor_table::USER_CODE_SELECTOR,
     });
-    crate::serial_println!("[ok   ] Architecture initialized.");
+    crate::log_info!("arch", "Architecture initialized.");
     let user_selectors = kernel::task::user_mode::get_selectors();
-    crate::serial_println!(
-        "[task ] Ring 3 selectors installed. code={:#06x}, data={:#06x}",
+    crate::log_info!(
+        "task",
+        "Ring 3 selectors installed. code={:#06x}, data={:#06x}",
         user_selectors.code,
         user_selectors.data
     );
@@ -150,9 +151,9 @@ fn initialize_architecture_and_drivers() {
         },
     );
 
-    crate::serial_println!("[driver] Initializing mouse...");
+    crate::log_info!("driver", "Initializing mouse...");
     kernel::driver::input::mouse::init();
-    crate::serial_println!("[ok   ] Mouse initialized.");
+    crate::log_info!("driver", "Mouse initialized.");
 
     arch::x86_64::enable_interrupts();
 }
@@ -210,14 +211,14 @@ fn main() -> Status {
     // Kernel Phase
     // ────────────────────────────────────────────────
     kernel::serial::init();
-    crate::serial_println!("[serial] ExitBootServices OK.");
+    crate::log_info!("serial", "ExitBootServices OK.");
     let mut frame_allocator = kernel::memory::frame_allocator::BumpFrameAllocator::new();
     add_conventional_memory_regions(&mut frame_allocator, mmap.entries());
 
     // ────────────────────────────────────────────────
     // Kernel Phase (UEFI Services unavailable)
     // ────────────────────────────────────────────────
-    crate::serial_println!("[info ] ManaOS Kernel phase started.");
+    crate::log_info!("kernel", "ManaOS Kernel phase started.");
 
     let framebuffer_size = get_framebuffer_size(framebuffer_info);
     let backbuffer_ptr = allocate_backbuffer(&mut frame_allocator, framebuffer_size);
@@ -233,13 +234,13 @@ fn main() -> Status {
         backbuffer_ptr,
     );
     kernel::filesystem::initialize();
-    crate::serial_println!("[fs   ] Kernel filesystem initialized.");
+    crate::log_info!("fs", "Kernel filesystem initialized.");
     verify_kernel_filesystem();
     kernel::driver::storage::init(&mut frame_allocator);
     initialize_scheduler();
     initialize_architecture_and_drivers();
 
-    crate::serial_println!("[ok   ] ManaOS Kernel is alive.");
+    crate::log_info!("kernel", "ManaOS Kernel is alive.");
 
     // Calibrate TSC for profiling before user tasks can preempt the bootstrap task.
     kernel::profiler::calibrate_tsc();
@@ -250,10 +251,10 @@ fn main() -> Status {
     let user_entry_point =
         kernel::memory::user_stack::allocate_user_file_demo(&mut frame_allocator);
     let user_task_id = kernel::task::spawn_user_task(user_entry_point, user_stack_top);
-    crate::serial_println!("[ok   ] User task spawned.");
-    crate::serial_println!("[ok   ] User demo started.");
+    crate::log_info!("task", "User task spawned. task_id={}", user_task_id);
+    crate::log_info!("task", "User demo started.");
     if let Some(exit_code) = kernel::task::run_user_task_once(user_task_id) {
-        crate::serial_println!("[ok   ] UI resumed after user exit: code={}", exit_code);
+        crate::log_info!("task", "UI resumed after user exit: code={}", exit_code);
     }
 
     // Main Loop
