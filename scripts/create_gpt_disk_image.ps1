@@ -11,6 +11,8 @@ $partitionEntrySize = 128
 $partitionEntryArrayBytes = $partitionEntryCount * $partitionEntrySize
 $partitionEntrySectors = [UInt64]($partitionEntryArrayBytes / $sectorSize)
 $totalSectors = [UInt64]($SizeBytes / $sectorSize)
+$firstPartitionLba = [UInt64]2048
+$lastPartitionLba = $totalSectors - 34
 
 if ($SizeBytes % $sectorSize -ne 0) {
     throw "disk image size must be sector aligned"
@@ -26,10 +28,27 @@ function Write-LeUInt32 {
     [Array]::Copy($bytes, 0, $Buffer, $Offset, 4)
 }
 
+function Write-LeUInt16 {
+    param([byte[]]$Buffer, [int]$Offset, [UInt16]$Value)
+    $bytes = [BitConverter]::GetBytes($Value)
+    [Array]::Copy($bytes, 0, $Buffer, $Offset, 2)
+}
+
 function Write-LeUInt64 {
     param([byte[]]$Buffer, [int]$Offset, [UInt64]$Value)
     $bytes = [BitConverter]::GetBytes($Value)
     [Array]::Copy($bytes, 0, $Buffer, $Offset, 8)
+}
+
+function Write-AsciiField {
+    param([byte[]]$Buffer, [int]$Offset, [int]$Length, [string]$Value)
+    for ($index = 0; $index -lt $Length; $index++) {
+        $Buffer[$Offset + $index] = 0x20
+    }
+
+    $bytes = [Text.Encoding]::ASCII.GetBytes($Value)
+    $copyLength = [Math]::Min($bytes.Length, $Length)
+    [Array]::Copy($bytes, 0, $Buffer, $Offset, $copyLength)
 }
 
 function Write-GptGuid {
@@ -101,17 +120,74 @@ function New-GptHeader {
 function Write-TestPartitionEntry {
     param([byte[]]$PartitionEntries)
 
-    $firstPartitionLba = [UInt64]2048
-    $lastPartitionLba = $totalSectors - 34
     if ($firstPartitionLba -gt $lastPartitionLba) {
         throw "disk image is too small for the test partition"
     }
 
-    Write-GptGuid $PartitionEntries 0 "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
+    Write-GptGuid $PartitionEntries 0 "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"
     Write-GptGuid $PartitionEntries 16 "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     Write-LeUInt64 $PartitionEntries 32 $firstPartitionLba
     Write-LeUInt64 $PartitionEntries 40 $lastPartitionLba
     Write-GptPartitionName $PartitionEntries 56 "ManaOS Data"
+}
+
+function Write-FileAllocationTable32BootSector {
+    param([byte[]]$Image)
+
+    $partitionSectors = $lastPartitionLba - $firstPartitionLba + 1
+    if ($partitionSectors -gt [UInt64][UInt32]::MaxValue) {
+        throw "test FAT32 partition is too large"
+    }
+
+    $reservedSectorCount = [UInt16]32
+    $fileAllocationTableCount = [byte]2
+    $fileAllocationTableSize = [UInt32]1024
+    $sectorsPerCluster = [byte]1
+    $metadataSectors = [UInt64]$reservedSectorCount + ([UInt64]$fileAllocationTableCount * [UInt64]$fileAllocationTableSize)
+    if ($partitionSectors -le $metadataSectors) {
+        throw "test FAT32 partition is too small"
+    }
+
+    $bootSector = New-Object byte[] $sectorSize
+    $bootSector[0] = 0xEB
+    $bootSector[1] = 0x58
+    $bootSector[2] = 0x90
+    Write-AsciiField $bootSector 3 8 "MANAOS"
+    Write-LeUInt16 $bootSector 11 ([UInt16]$sectorSize)
+    $bootSector[13] = $sectorsPerCluster
+    Write-LeUInt16 $bootSector 14 $reservedSectorCount
+    $bootSector[16] = $fileAllocationTableCount
+    Write-LeUInt16 $bootSector 17 0
+    Write-LeUInt16 $bootSector 19 0
+    $bootSector[21] = 0xF8
+    Write-LeUInt16 $bootSector 22 0
+    Write-LeUInt16 $bootSector 24 63
+    Write-LeUInt16 $bootSector 26 255
+    Write-LeUInt32 $bootSector 28 ([UInt32]$firstPartitionLba)
+    Write-LeUInt32 $bootSector 32 ([UInt32]$partitionSectors)
+    Write-LeUInt32 $bootSector 36 $fileAllocationTableSize
+    Write-LeUInt16 $bootSector 40 0
+    Write-LeUInt16 $bootSector 42 0
+    Write-LeUInt32 $bootSector 44 2
+    Write-LeUInt16 $bootSector 48 1
+    Write-LeUInt16 $bootSector 50 6
+    $bootSector[64] = 0x80
+    $bootSector[66] = 0x29
+    Write-LeUInt32 $bootSector 67 0x4D414E41
+    Write-AsciiField $bootSector 71 11 "MANAOS"
+    Write-AsciiField $bootSector 82 8 "FAT32"
+    $bootSector[510] = 0x55
+    $bootSector[511] = 0xAA
+
+    [Array]::Copy($bootSector, 0, $Image, [int]($sectorSize * $firstPartitionLba), $sectorSize)
+
+    $firstFileAllocationTableOffset = [int](($firstPartitionLba + $reservedSectorCount) * $sectorSize)
+    $secondFileAllocationTableOffset = [int](($firstPartitionLba + $reservedSectorCount + $fileAllocationTableSize) * $sectorSize)
+    foreach ($offset in @($firstFileAllocationTableOffset, $secondFileAllocationTableOffset)) {
+        Write-LeUInt32 $Image $offset 0x0FFFFFF8
+        Write-LeUInt32 $Image ($offset + 4) 0x0FFFFFFF
+        Write-LeUInt32 $Image ($offset + 8) 0x0FFFFFFF
+    }
 }
 
 $image = New-Object byte[] $SizeBytes
@@ -164,6 +240,7 @@ $backupHeader = New-GptHeader `
     $partitionEntryArrayBytes
 )
 [Array]::Copy($backupHeader, 0, $image, [int]($sectorSize * $lastLba), $sectorSize)
+Write-FileAllocationTable32BootSector $image
 
 [System.IO.File]::WriteAllBytes($Path, $image)
-Write-Host "[disk ] Created GPT disk image: $Path ($SizeBytes bytes)"
+Write-Host "[disk ] Created GPT/FAT32 disk image: $Path ($SizeBytes bytes)"

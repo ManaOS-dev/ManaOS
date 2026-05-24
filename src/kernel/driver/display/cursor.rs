@@ -3,7 +3,8 @@
 use crate::kernel::driver::display::color::Color;
 use core::sync::atomic::{AtomicBool, Ordering};
 
-const CURSOR_SIZE: usize = 16;
+/// Width and height of the software cursor in pixels.
+pub(super) const CURSOR_SIZE: usize = 16;
 const CURSOR_PIXELS: [&[u8; CURSOR_SIZE]; CURSOR_SIZE] = [
     b"O...............",
     b"OW..............",

@@ -94,9 +94,15 @@
 - [x] Phase 5C-5: block device abstraction
 - [x] wrap AHCI sector reads behind `BlockDevice`
 - [x] make GPT scanning read through `BlockDevice`
-- [ ] GPT partition entry parsing
+- [x] GPT partition entry parsing
+- [x] Phase 5C-6: partition-relative block device
+- [x] translate partition LBA to disk LBA from selected GPT partition
+- [x] Phase 5C-7: FAT32 boot sector inspection
+- [x] generate a GPT test image with a minimal FAT32 boot sector
+- [x] parse FAT32 BIOS Parameter Block geometry
 - [ ] AHCI Driver Implementation
-- [ ] FAT32 Parser & File APIs
+- [ ] FAT32 root directory listing
+- [ ] FAT32 file read APIs
 
 ## Phase 6: Userland
 - [ ] ELF Loader

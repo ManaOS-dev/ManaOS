@@ -53,7 +53,10 @@ pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64)
             USER_STACK_BASE,
             physical_start,
             pages,
-            PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE,
+            PageTableFlags::PRESENT
+                | PageTableFlags::WRITABLE
+                | PageTableFlags::USER_ACCESSIBLE
+                | PageTableFlags::NO_EXECUTE,
         );
     }
 
@@ -104,7 +107,10 @@ pub fn allocate_user_file_demo(frame_allocator: &mut BumpFrameAllocator) -> u64 
             USER_DATA_BASE,
             data_physical_start,
             1,
-            PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE,
+            PageTableFlags::PRESENT
+                | PageTableFlags::WRITABLE
+                | PageTableFlags::USER_ACCESSIBLE
+                | PageTableFlags::NO_EXECUTE,
         );
     }
 

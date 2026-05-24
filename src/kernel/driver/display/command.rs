@@ -11,9 +11,9 @@
 
 use crate::kernel::driver::display::color::Color;
 use crate::kernel::driver::display::font::Font;
-use crate::kernel::sync::ring_buffer::LockFreeRingBuffer;
 use alloc::string::String;
 use core::sync::atomic::{AtomicU64, Ordering};
+use spin::Mutex;
 
 /// Supported drawing commands.
 #[derive(Debug, Clone)]
@@ -29,12 +29,49 @@ pub enum DrawCommand {
     Text(Font, usize, usize, f32, Color, String),
 }
 
-static COMMAND_QUEUE: LockFreeRingBuffer<DrawCommand, 2048> = LockFreeRingBuffer::new();
+static COMMAND_QUEUE: Mutex<CommandQueue<2048>> = Mutex::new(CommandQueue::new());
 static DROPPED_COMMANDS: AtomicU64 = AtomicU64::new(0);
 
+struct CommandQueue<const N: usize> {
+    buffer: [Option<DrawCommand>; N],
+    head: usize,
+    tail: usize,
+}
+
+impl<const N: usize> CommandQueue<N> {
+    const fn new() -> Self {
+        Self {
+            buffer: [const { None }; N],
+            head: 0,
+            tail: 0,
+        }
+    }
+
+    fn push(&mut self, command: DrawCommand) -> Result<(), DrawCommand> {
+        let next_head = (self.head + 1) % N;
+        if next_head == self.tail {
+            return Err(command);
+        }
+
+        self.buffer[self.head] = Some(command);
+        self.head = next_head;
+        Ok(())
+    }
+
+    fn pop(&mut self) -> Option<DrawCommand> {
+        if self.head == self.tail {
+            return None;
+        }
+
+        let command = self.buffer[self.tail].take();
+        self.tail = (self.tail + 1) % N;
+        command
+    }
+}
+
 /// Push a drawing command to the queue.
-pub fn push_command(cmd: DrawCommand) {
-    if COMMAND_QUEUE.push(cmd).is_err() {
+pub fn push_command(command: DrawCommand) {
+    if COMMAND_QUEUE.lock().push(command).is_err() {
         DROPPED_COMMANDS.fetch_add(1, Ordering::Relaxed);
     }
 }
@@ -50,17 +87,17 @@ pub fn process_commands() {
     use crate::kernel::driver::display::framebuffer;
 
     let _ = framebuffer::try_with_graphics_mut(|graphics| {
-        while let Some(cmd) = COMMAND_QUEUE.pop() {
-            process_command(graphics, cmd);
+        while let Some(command) = COMMAND_QUEUE.lock().pop() {
+            process_command(graphics, command);
         }
     });
 }
 
 fn process_command(
     graphics: &mut crate::kernel::driver::display::framebuffer::GraphicsDriver,
-    cmd: DrawCommand,
+    command: DrawCommand,
 ) {
-    match cmd {
+    match command {
         DrawCommand::FillRect(x, y, width, height, color) => {
             graphics.draw_filled_rectangle(x, y, width, height, color);
         }

@@ -10,6 +10,7 @@ pub enum Font {
 }
 
 /// Font binary assets loaded before boot services exit.
+#[derive(Clone, Copy)]
 pub struct FontAssets {
     /// Inter font bytes.
     pub inter: &'static [u8],
