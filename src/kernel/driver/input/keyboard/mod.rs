@@ -54,6 +54,15 @@ pub fn process_input() {
 }
 
 fn process_character(character: char) {
+    if character == '`' {
+        crate::kernel::console::toggle();
+        return;
+    }
+
+    if !crate::kernel::console::is_open() {
+        return;
+    }
+
     match character {
         '\n' | '\r' => crate::kernel::console::submit(),
         '\u{8}' | '\u{7f}' => crate::kernel::console::push_backspace(),
@@ -62,6 +71,15 @@ fn process_character(character: char) {
 }
 
 fn process_raw_key(key: KeyCode) {
+    if key == KeyCode::Escape {
+        crate::kernel::console::toggle();
+        return;
+    }
+
+    if !crate::kernel::console::is_open() {
+        return;
+    }
+
     match key {
         KeyCode::Return | KeyCode::NumpadEnter => crate::kernel::console::submit(),
         KeyCode::Backspace => crate::kernel::console::push_backspace(),

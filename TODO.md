@@ -43,6 +43,9 @@
 - [x] keyboard-driven command input buffer
 - [x] command overlay rendering
 - [x] built-in help/ticks/storage/fps commands
+- [x] Phase 5B-6b: command console usability polish
+- [x] toggle console with Escape/backtick
+- [x] route keyboard input to console only while open
 - [ ] minimal shell-style task
 - [ ] Phase 5C: Real Storage
 - [x] Phase 5C-1: PCIe enumeration and AHCI controller discovery

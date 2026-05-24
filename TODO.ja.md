@@ -43,6 +43,9 @@
 - [x] keyboard-driven command input buffer
 - [x] command overlay rendering
 - [x] built-in help/ticks/storage/fps commands
+- [x] Phase 5B-6b: command console usability polish
+- [x] Escape/backtick で console を toggle
+- [x] console open 中だけ keyboard input を console へ route
 - [ ] 最小 shell 風 task
 - [ ] Phase 5C: Real Storage
 - [x] Phase 5C-1: PCIe 列挙と AHCI コントローラ発見
