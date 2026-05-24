@@ -51,6 +51,13 @@
 - [x] Phase 5B-8: Linux-like errno and open ABI
 - [x] Linux-style negative errno value を返却
 - [x] Linux-like `open(path, flags, mode)` argument を受け取る
+- [x] Phase 5B-9: Linux syscall compatibility small set
+- [x] `SYS_EXIT_GROUP` と `SYS_OPENAT` を追加
+- [x] `openat(AT_FDCWD, path, flags, mode)` を `open` へ接続
+- [x] userland に `exit_group()` と `openat()` wrapper を追加
+- [x] Phase 5B-10: command console commands
+- [x] `cat /hello.txt` と `read /hello.txt` を追加
+- [x] `echo ...`、`syscalls`、`partitions` を追加
 - [ ] 最小 shell 風 task
 - [ ] Phase 5C: Real Storage
 - [x] Phase 5C-1: PCIe 列挙と AHCI コントローラ発見
@@ -84,6 +91,9 @@
 - [x] Phase 5C-4f: GPT partition metadata model
 - [x] GPT partition entry を kernel struct として parse
 - [x] 次の storage stage 用に最初の GPT partition を選択
+- [x] Phase 5C-5: block device abstraction
+- [x] AHCI sector read を `BlockDevice` で包む
+- [x] GPT scan が `BlockDevice` 経由で read するよう整理
 - [ ] GPT partition entry parsing
 - [ ] AHCI ドライバー実装
 - [ ] FAT32 パーサーとファイル API
