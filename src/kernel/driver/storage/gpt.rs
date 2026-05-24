@@ -1,5 +1,7 @@
 //! Minimal GPT header and partition entry inspection.
 
+use core::fmt;
+
 const GPT_SIGNATURE: &[u8; 8] = b"EFI PART";
 const SECTOR_BYTES: usize = 512;
 const REVISION_OFFSET: usize = 8;
@@ -22,6 +24,7 @@ const PARTITION_ENTRY_LAST_LBA_OFFSET: usize = 40;
 const PARTITION_ENTRY_ATTRIBUTES_OFFSET: usize = 48;
 const PARTITION_ENTRY_NAME_OFFSET: usize = 56;
 const PARTITION_ENTRY_NAME_BYTES: usize = 72;
+const PARTITION_NAME_CAPACITY: usize = 36;
 
 /// GPT header fields needed to locate partition entries.
 #[derive(Clone, Copy)]
@@ -43,6 +46,25 @@ pub struct PartitionEntryScan {
     pub empty: u32,
     /// Number of non-empty partition entries found in the inspected sector.
     pub non_empty: u32,
+    /// First non-empty partition found in the inspected sector.
+    pub first_partition: Option<GptPartition>,
+}
+
+/// Parsed GPT partition metadata used by storage probing.
+#[derive(Clone, Copy)]
+pub struct GptPartition {
+    /// Index in the GPT partition entry array.
+    pub index: u32,
+    /// First usable LBA owned by this partition.
+    pub first_lba: u64,
+    /// Last usable LBA owned by this partition.
+    pub last_lba: u64,
+    /// GPT partition attributes.
+    pub attributes: u64,
+    /// ASCII fallback partition name bytes.
+    pub name: [u8; PARTITION_NAME_CAPACITY],
+    /// Number of valid bytes in [`Self::name`].
+    pub name_length: usize,
 }
 
 /// Inspect a 512-byte sector as a GPT header and print key fields.
@@ -52,7 +74,7 @@ pub fn inspect_header(data_address: u64) -> Option<GptHeader> {
     let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
 
     if &sector[0..GPT_SIGNATURE.len()] != GPT_SIGNATURE {
-        crate::serial_println!("[gpt  ] Header signature not found at LBA1");
+        crate::log_warn!("gpt", "Header signature not found at LBA1");
         return None;
     }
 
@@ -60,30 +82,36 @@ pub fn inspect_header(data_address: u64) -> Option<GptHeader> {
     let partition_entry_count = read_le_u32(sector, PARTITION_ENTRY_COUNT_OFFSET);
     let partition_entry_size = read_le_u32(sector, PARTITION_ENTRY_SIZE_OFFSET);
 
-    crate::serial_println!("[gpt  ] Header signature: EFI PART");
-    crate::serial_println!(
-        "[gpt  ] header_crc32={:#010x} reserved={:#010x} partition_array_crc32={:#010x}",
+    crate::log_info!("gpt", "Header signature: EFI PART");
+    crate::log_debug!(
+        "gpt",
+        "header_crc32={:#010x} reserved={:#010x} partition_array_crc32={:#010x}",
         read_le_u32(sector, HEADER_CRC32_OFFSET),
         read_le_u32(sector, RESERVED_OFFSET),
         read_le_u32(sector, PARTITION_ENTRY_ARRAY_CRC32_OFFSET)
     );
-    crate::serial_println!(
-        "[gpt  ] revision={:#010x} header_size={} current_lba={} backup_lba={}",
+    crate::log_info!(
+        "gpt",
+        "revision={:#010x} header_size={} current_lba={} backup_lba={}",
         read_le_u32(sector, REVISION_OFFSET),
         read_le_u32(sector, HEADER_SIZE_OFFSET),
         read_le_u64(sector, CURRENT_LBA_OFFSET),
         read_le_u64(sector, BACKUP_LBA_OFFSET)
     );
-    crate::serial_println!(
-        "[gpt  ] first_usable_lba={} last_usable_lba={}",
+    crate::log_info!(
+        "gpt",
+        "first_usable_lba={} last_usable_lba={}",
         read_le_u64(sector, FIRST_USABLE_LBA_OFFSET),
         read_le_u64(sector, LAST_USABLE_LBA_OFFSET)
     );
-    crate::serial_print!("[gpt  ] disk_guid=");
-    print_guid(&sector[DISK_GUID_OFFSET..DISK_GUID_OFFSET + PARTITION_TYPE_GUID_SIZE]);
-    crate::serial_println!("");
-    crate::serial_println!(
-        "[gpt  ] entries_lba={} entry_count={} entry_size={}",
+    crate::log_debug!(
+        "gpt",
+        "disk_guid={}",
+        GptGuid(&sector[DISK_GUID_OFFSET..DISK_GUID_OFFSET + PARTITION_TYPE_GUID_SIZE])
+    );
+    crate::log_info!(
+        "gpt",
+        "entries_lba={} entry_count={} entry_size={}",
         partition_entry_lba,
         partition_entry_count,
         partition_entry_size
@@ -113,6 +141,7 @@ pub fn inspect_partition_entries(
     let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
     let mut non_empty_entries = 0;
     let mut empty_entries = 0;
+    let mut first_partition = None;
 
     for entry_index in 0..entry_count {
         let offset = entry_index * entry_size;
@@ -122,8 +151,12 @@ pub fn inspect_partition_entries(
             continue;
         }
 
+        let partition = parse_partition_entry(first_entry_index + entry_index, entry);
         non_empty_entries += 1;
-        log_partition_entry(first_entry_index + entry_index, entry);
+        if first_partition.is_none() {
+            first_partition = Some(partition);
+        }
+        log_partition_entry(partition, entry);
     }
 
     PartitionEntryScan {
@@ -131,6 +164,7 @@ pub fn inspect_partition_entries(
         empty: u32::try_from(empty_entries).expect("GPT empty entry count must fit in u32"),
         non_empty: u32::try_from(non_empty_entries)
             .expect("GPT non-empty entry count must fit in u32"),
+        first_partition,
     }
 }
 
@@ -162,61 +196,102 @@ fn is_empty_partition_entry(entry: &[u8]) -> bool {
         .all(|byte| *byte == 0)
 }
 
-fn log_partition_entry(entry_index: usize, entry: &[u8]) {
-    crate::serial_print!("[gpt  ] Partition entry {}: type_guid=", entry_index);
-    print_guid(&entry[0..PARTITION_TYPE_GUID_SIZE]);
-    crate::serial_println!("");
-    crate::serial_print!("[gpt  ] Partition entry {}: unique_guid=", entry_index);
-    print_guid(
-        &entry
-            [PARTITION_UNIQUE_GUID_OFFSET..PARTITION_UNIQUE_GUID_OFFSET + PARTITION_TYPE_GUID_SIZE],
-    );
-    crate::serial_println!("");
-    crate::serial_println!(
-        "[gpt  ] Partition entry {}: first_lba={} last_lba={} attributes={:#018x}",
-        entry_index,
-        read_le_u64(entry, PARTITION_ENTRY_FIRST_LBA_OFFSET),
-        read_le_u64(entry, PARTITION_ENTRY_LAST_LBA_OFFSET),
-        read_le_u64(entry, PARTITION_ENTRY_ATTRIBUTES_OFFSET)
-    );
-    crate::serial_print!("[gpt  ] Partition entry {}: name=\"", entry_index);
-    print_partition_name(entry);
-    crate::serial_println!("\"");
-}
-
-fn print_guid(bytes: &[u8]) {
-    crate::serial_print!(
-        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-",
-        bytes[3],
-        bytes[2],
-        bytes[1],
-        bytes[0],
-        bytes[5],
-        bytes[4],
-        bytes[7],
-        bytes[6],
-        bytes[8],
-        bytes[9]
-    );
-    for byte in &bytes[10..16] {
-        crate::serial_print!("{byte:02x}");
+fn parse_partition_entry(entry_index: usize, entry: &[u8]) -> GptPartition {
+    let (name, name_length) = parse_partition_name(entry);
+    GptPartition {
+        index: u32::try_from(entry_index).expect("GPT partition index must fit in u32"),
+        first_lba: read_le_u64(entry, PARTITION_ENTRY_FIRST_LBA_OFFSET),
+        last_lba: read_le_u64(entry, PARTITION_ENTRY_LAST_LBA_OFFSET),
+        attributes: read_le_u64(entry, PARTITION_ENTRY_ATTRIBUTES_OFFSET),
+        name,
+        name_length,
     }
 }
 
-fn print_partition_name(entry: &[u8]) {
+fn log_partition_entry(partition: GptPartition, entry: &[u8]) {
+    crate::log_debug!(
+        "gpt",
+        "Partition entry {}: type_guid={}",
+        partition.index,
+        GptGuid(&entry[0..PARTITION_TYPE_GUID_SIZE])
+    );
+    crate::log_debug!(
+        "gpt",
+        "Partition entry {}: unique_guid={}",
+        partition.index,
+        GptGuid(
+            &entry[PARTITION_UNIQUE_GUID_OFFSET
+                ..PARTITION_UNIQUE_GUID_OFFSET + PARTITION_TYPE_GUID_SIZE],
+        )
+    );
+    crate::log_info!(
+        "gpt",
+        "Partition entry {}: first_lba={} last_lba={} attributes={:#018x}",
+        partition.index,
+        partition.first_lba,
+        partition.last_lba,
+        partition.attributes
+    );
+    crate::log_debug!(
+        "gpt",
+        "Partition entry {}: name=\"{}\"",
+        partition.index,
+        partition.name()
+    );
+}
+
+impl GptPartition {
+    /// Return the parsed partition name as ASCII fallback text.
+    pub fn name(&self) -> &str {
+        core::str::from_utf8(&self.name[..self.name_length])
+            .expect("GPT partition names are stored as ASCII fallback bytes")
+    }
+}
+
+struct GptGuid<'a>(&'a [u8]);
+
+impl fmt::Display for GptGuid<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.0;
+        write!(
+            formatter,
+            "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-",
+            bytes[3],
+            bytes[2],
+            bytes[1],
+            bytes[0],
+            bytes[5],
+            bytes[4],
+            bytes[7],
+            bytes[6],
+            bytes[8],
+            bytes[9]
+        )?;
+        for byte in &bytes[10..16] {
+            write!(formatter, "{byte:02x}")?;
+        }
+        Ok(())
+    }
+}
+
+fn parse_partition_name(entry: &[u8]) -> ([u8; PARTITION_NAME_CAPACITY], usize) {
+    let mut output = [0; PARTITION_NAME_CAPACITY];
+    let mut output_length = 0;
     let name = &entry
         [PARTITION_ENTRY_NAME_OFFSET..PARTITION_ENTRY_NAME_OFFSET + PARTITION_ENTRY_NAME_BYTES];
     for code_unit in name.chunks_exact(2) {
         let value = u16::from_le_bytes([code_unit[0], code_unit[1]]);
-        if value == 0 {
+        if value == 0 || output_length == output.len() {
             break;
         }
 
-        if (0x20..=0x7e).contains(&value) {
-            let byte = u8::try_from(value).expect("ASCII GPT name character must fit in u8");
-            crate::serial_print!("{}", char::from(byte));
+        output[output_length] = if (0x20..=0x7e).contains(&value) {
+            u8::try_from(value).expect("ASCII GPT name character must fit in u8")
         } else {
-            crate::serial_print!("?");
-        }
+            b'?'
+        };
+        output_length += 1;
     }
+
+    (output, output_length)
 }

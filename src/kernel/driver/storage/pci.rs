@@ -45,8 +45,9 @@ pub fn pci_config_write32(bus: u8, device: u8, function: u8, offset: u8, value: 
 
 /// Find the first AHCI controller exposed through legacy PCI config space.
 pub fn find_ahci_controller() -> Option<AhciController> {
-    crate::serial_println!(
-        "[pci  ] Starting legacy PCI scan: buses={} devices_per_bus={} functions_per_device={}",
+    crate::log_info!(
+        "pci",
+        "Starting legacy PCI scan: buses={} devices_per_bus={} functions_per_device={}",
         MAX_BUS,
         MAX_DEVICE,
         MAX_FUNCTION
@@ -61,8 +62,9 @@ pub fn find_ahci_controller() -> Option<AhciController> {
 
             log_device_function(bus, device, 0);
             let function_count = if is_multifunction_device(bus, device) {
-                crate::serial_println!(
-                    "[pci  ] Multifunction device detected: bus={} dev={}",
+                crate::log_debug!(
+                    "pci",
+                    "Multifunction device detected: bus={} dev={}",
                     bus,
                     device
                 );
@@ -82,8 +84,9 @@ pub fn find_ahci_controller() -> Option<AhciController> {
                 if class_code(bus, device, function) == CLASS_MASS_STORAGE
                     && subclass(bus, device, function) == SUBCLASS_SATA
                 {
-                    crate::serial_println!(
-                        "[pci  ] AHCI class match: bus={} dev={} func={}",
+                    crate::log_info!(
+                        "pci",
+                        "AHCI class match: bus={} dev={} func={}",
                         bus,
                         device,
                         function
@@ -92,18 +95,21 @@ pub fn find_ahci_controller() -> Option<AhciController> {
                     let command_after = pci_config_read32(bus, device, function, COMMAND_OFFSET);
                     let raw_bar5 = pci_config_read32(bus, device, function, BAR5_OFFSET);
                     let bar5 = u64::from(raw_bar5 & BAR_MEMORY_MASK);
-                    crate::serial_println!(
-                        "[pci  ] AHCI command register: before={:#010x} after={:#010x}",
+                    crate::log_debug!(
+                        "pci",
+                        "AHCI command register: before={:#010x} after={:#010x}",
                         command_before,
                         command_after
                     );
-                    crate::serial_println!(
-                        "[pci  ] AHCI BAR5: raw={:#010x} memory_base={:#010x}",
+                    crate::log_debug!(
+                        "pci",
+                        "AHCI BAR5: raw={:#010x} memory_base={:#010x}",
                         raw_bar5,
                         bar5
                     );
-                    crate::serial_println!(
-                        "[pci  ] Found AHCI controller: bus={} dev={} func={} bar5={:#010x}",
+                    crate::log_info!(
+                        "pci",
+                        "Found AHCI controller: bus={} dev={} func={} bar5={:#010x}",
                         bus,
                         device,
                         function,
@@ -121,7 +127,7 @@ pub fn find_ahci_controller() -> Option<AhciController> {
         }
     }
 
-    crate::serial_println!("[pci  ] Legacy PCI scan complete: AHCI controller not found");
+    crate::log_warn!("pci", "Legacy PCI scan complete: AHCI controller not found");
     None
 }
 
@@ -162,8 +168,9 @@ fn programming_interface(bus: u8, device: u8, function: u8) -> u8 {
 }
 
 fn log_device_function(bus: u8, device: u8, function: u8) {
-    crate::serial_println!(
-        "[pci  ] Device: bus={} dev={} func={} vendor={:#06x} device_id={:#06x} class={:#04x} subclass={:#04x} interface={:#04x}",
+    crate::log_debug!(
+        "pci",
+        "Device: bus={} dev={} func={} vendor={:#06x} device_id={:#06x} class={:#04x} subclass={:#04x} interface={:#04x}",
         bus,
         device,
         function,

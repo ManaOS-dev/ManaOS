@@ -39,14 +39,15 @@ pub fn has_apic() -> bool {
 
 /// `x86_64` specific initialization.
 pub fn init(system_call_handler: u64) {
-    crate::serial_println!("[arch] Initializing GDT...");
+    crate::log_info!("arch", "Initializing GDT...");
     global_descriptor_table::init();
-    crate::serial_println!("[arch] Initializing IDT...");
+    crate::log_info!("arch", "Initializing IDT...");
     interrupt_descriptor_table::initialize();
-    crate::serial_println!("[arch] Initializing SYSCALL...");
+    crate::log_info!("arch", "Initializing SYSCALL...");
     init_syscall(system_call_handler);
-    crate::serial_println!(
-        "[arch] Preferred interrupt controller: {:?}, IOAPIC routing: {}",
+    crate::log_info!(
+        "arch",
+        "Preferred interrupt controller: {:?}, IOAPIC routing: {}",
         interrupt_controller::get_preferred_kind(),
         interrupt_controller::has_ioapic_routing()
     );
@@ -57,8 +58,9 @@ pub fn init(system_call_handler: u64) {
     }
 
     // Initialize PIT (Programmable Interval Timer)
-    crate::serial_println!(
-        "[arch] Initializing PIT... preferred timer: {:?}, local APIC timer: {}",
+    crate::log_info!(
+        "arch",
+        "Initializing PIT... preferred timer: {:?}, local APIC timer: {}",
         interval_timer::get_preferred_kind(),
         interval_timer::has_local_apic_timer()
     );

@@ -135,13 +135,14 @@ fn sys_read(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
 
 fn sys_exit(exit_code: u64) -> u64 {
     if let Some(task_id) = crate::kernel::task::finish_current_task(exit_code) {
-        crate::serial_println!(
-            "[ok   ] User task exited: code={} task={}",
+        crate::log_info!(
+            "syscall",
+            "User task exited: code={} task={}",
             exit_code,
             task_id
         );
     } else {
-        crate::serial_println!("[warn ] SYS_EXIT called without a running task");
+        crate::log_warn!("syscall", "SYS_EXIT called without a running task");
     }
 
     USER_EXIT_SENTINEL

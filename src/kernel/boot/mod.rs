@@ -42,7 +42,7 @@ pub fn initialize<'a>(
             framebuffer_size,
         );
     }
-    crate::serial_println!("[paging] Page table switched.");
+    crate::log_info!("paging", "Page table switched.");
 
     let heap_start_raw = frame_allocator
         .allocate_frames(heap::HEAP_PAGES)
@@ -54,8 +54,9 @@ pub fn initialize<'a>(
     unsafe {
         heap::init(heap_start);
     }
-    crate::serial_println!(
-        "[heap ] Initialized at {:#010x}, size: {} MB",
+    crate::log_info!(
+        "heap",
+        "Initialized at {:#010x}, size: {} MB",
         heap_start,
         heap::HEAP_SIZE / (1024 * 1024)
     );
