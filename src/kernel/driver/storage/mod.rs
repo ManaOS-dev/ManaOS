@@ -14,6 +14,7 @@
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 
 mod ahci;
+mod gpt;
 mod pci;
 
 /// Discover and initialize supported storage controllers.

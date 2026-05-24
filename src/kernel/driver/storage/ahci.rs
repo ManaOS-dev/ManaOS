@@ -2,6 +2,8 @@
 
 use crate::kernel::memory::{frame_allocator::BumpFrameAllocator, paging};
 
+use super::gpt;
+
 const HBA_MEMORY_SIZE: u64 = 0x1100;
 const MAX_PORTS: usize = 32;
 const SATA_SIGNATURE: u32 = 0x0000_0101;
@@ -130,7 +132,7 @@ pub fn init(frame_allocator: &mut BumpFrameAllocator, bar5: u64) {
         if signature == SATA_SIGNATURE {
             crate::serial_println!("[ahci ] Port {}: SATA device detected", port_index);
             if let Some(buffers) = allocate_dma_buffers(frame_allocator) {
-                read_lba0(hba_memory, port_index, buffers);
+                read_initial_sectors(hba_memory, port_index, buffers);
             } else {
                 crate::serial_println!(
                     "[ahci ] Port {}: failed to allocate DMA buffers",
@@ -188,7 +190,7 @@ fn zero_page(physical_address: u64) {
     }
 }
 
-fn read_lba0(hba_memory: *mut HbaMemory, port_index: usize, buffers: AhciDmaBuffers) {
+fn read_initial_sectors(hba_memory: *mut HbaMemory, port_index: usize, buffers: AhciDmaBuffers) {
     // SAFETY: `port_index` is within MAX_PORTS and was reported implemented by
     // the HBA before this helper is called.
     let port = unsafe {
@@ -204,8 +206,12 @@ fn read_lba0(hba_memory: *mut HbaMemory, port_index: usize, buffers: AhciDmaBuff
     start_command_engine(port);
     crate::serial_println!("[ahci ] Port {}: command slots available", port_index);
 
-    if issue_read_lba0(port, buffers, port_index) {
-        dump_lba0(buffers.data);
+    if issue_read_sector(port, buffers, port_index, 0) {
+        dump_sector_prefix("LBA0", buffers.data);
+    }
+
+    if issue_read_sector(port, buffers, port_index, 1) {
+        gpt::inspect_header(buffers.data);
     }
 }
 
@@ -282,12 +288,17 @@ fn start_command_engine(port: *mut HbaPort) {
     }
 }
 
-fn issue_read_lba0(port: *mut HbaPort, buffers: AhciDmaBuffers, port_index: usize) -> bool {
+fn issue_read_sector(
+    port: *mut HbaPort,
+    buffers: AhciDmaBuffers,
+    port_index: usize,
+    lba: u64,
+) -> bool {
     if !wait_until_not_busy(port, port_index) {
         return false;
     }
 
-    prepare_read_command(buffers);
+    prepare_read_command(buffers, lba);
 
     // SAFETY: `port` points to a mapped AHCI port register block.
     unsafe {
@@ -312,12 +323,12 @@ fn issue_read_lba0(port: *mut HbaPort, buffers: AhciDmaBuffers, port_index: usiz
                 return false;
             }
 
-            crate::serial_println!("[ahci ] Read LBA 0: {} bytes", READ_SECTOR_BYTES);
+            crate::serial_println!("[ahci ] Read LBA {}: {} bytes", lba, READ_SECTOR_BYTES);
             return true;
         }
     }
 
-    crate::serial_println!("[ahci ] Port {}: read LBA0 timeout", port_index);
+    crate::serial_println!("[ahci ] Port {}: read LBA {} timeout", port_index, lba);
     false
 }
 
@@ -335,7 +346,7 @@ fn wait_until_not_busy(port: *mut HbaPort, port_index: usize) -> bool {
     false
 }
 
-fn prepare_read_command(buffers: AhciDmaBuffers) {
+fn prepare_read_command(buffers: AhciDmaBuffers, lba: u64) {
     let command_headers = buffers.command_list as *mut HbaCommandHeader;
     let command_table = buffers.command_table as *mut HbaCommandTable;
     let (command_table_low, command_table_high) = split_address(buffers.command_table);
@@ -378,15 +389,25 @@ fn prepare_read_command(buffers: AhciDmaBuffers) {
         core::ptr::write(command_fis.add(0), FIS_TYPE_REGISTER_HOST_TO_DEVICE);
         core::ptr::write(command_fis.add(1), FIS_COMMAND_FLAG);
         core::ptr::write(command_fis.add(2), ATA_COMMAND_READ_DMA_EXT);
+        core::ptr::write(command_fis.add(4), lba_byte(lba, 0));
+        core::ptr::write(command_fis.add(5), lba_byte(lba, 8));
+        core::ptr::write(command_fis.add(6), lba_byte(lba, 16));
         core::ptr::write(command_fis.add(7), ATA_DEVICE_LBA_MODE);
+        core::ptr::write(command_fis.add(8), lba_byte(lba, 24));
+        core::ptr::write(command_fis.add(9), lba_byte(lba, 32));
+        core::ptr::write(command_fis.add(10), lba_byte(lba, 40));
         core::ptr::write(command_fis.add(12), 1);
         core::ptr::write(command_fis.add(13), 0);
     }
 }
 
-fn dump_lba0(data_address: u64) {
+fn lba_byte(lba: u64, shift: u32) -> u8 {
+    u8::try_from((lba >> shift) & 0xff).expect("masked LBA byte must fit in u8")
+}
+
+fn dump_sector_prefix(label: &str, data_address: u64) {
     let data = data_address as *const u8;
-    crate::serial_print!("[ahci ] LBA0:");
+    crate::serial_print!("[ahci ] {}:", label);
     for offset in 0..16 {
         // SAFETY: `data_address` points to a 512-byte DMA read buffer.
         let byte = unsafe { core::ptr::read_volatile(data.add(offset)) };

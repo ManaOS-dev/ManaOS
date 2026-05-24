@@ -49,7 +49,10 @@
 - [x] AHCI command list/FIS/command table setup
 - [x] READ DMA EXT for LBA0
 - [x] LBA0 first 16 bytes serial dump
-- [ ] GPT partition table parsing
+- [x] Phase 5C-3: GPT header inspection
+- [x] AHCI read by arbitrary LBA
+- [x] LBA1 GPT signature and header field logging
+- [ ] GPT partition entry parsing
 - [ ] AHCI Driver Implementation
 - [ ] FAT32 Parser & File APIs
 
