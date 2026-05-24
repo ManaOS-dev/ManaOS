@@ -235,6 +235,7 @@ fn main() -> Status {
     kernel::filesystem::initialize();
     crate::serial_println!("[fs   ] Kernel filesystem initialized.");
     verify_kernel_filesystem();
+    kernel::driver::storage::init(&mut frame_allocator);
     initialize_scheduler();
     initialize_architecture_and_drivers();
 

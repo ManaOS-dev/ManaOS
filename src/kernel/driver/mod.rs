@@ -10,6 +10,8 @@
 //! ## Public API
 //! - [`display`] - Display and framebuffer drivers
 //! - [`input`] - Keyboard and mouse input drivers
+//! - [`storage`] - Storage controller drivers
 
 pub mod display;
 pub mod input;
+pub mod storage;

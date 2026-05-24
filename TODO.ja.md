@@ -41,7 +41,18 @@
 - [x] Rust file demo flat binary を kernel から include
 - [ ] 最小 shell 風 task
 - [ ] Phase 5C: Real Storage
-- [ ] GPT パーティションテーブル解析
+- [x] Phase 5C-1: PCIe 列挙と AHCI コントローラ発見
+- [x] legacy PCI config-space access
+- [x] AHCI BAR5 discovery
+- [x] AHCI implemented port と SATA signature のログ出力
+- [x] Phase 5C-2: AHCI LBA0 read smoke test
+- [x] AHCI command list/FIS/command table setup
+- [x] READ DMA EXT による LBA0 読み出し
+- [x] LBA0 先頭 16 bytes の serial dump
+- [x] Phase 5C-3: GPT header inspection
+- [x] AHCI の任意 LBA 読み出し
+- [x] LBA1 GPT signature と header field のログ出力
+- [ ] GPT partition entry parsing
 - [ ] AHCI ドライバー実装
 - [ ] FAT32 パーサーとファイル API
 

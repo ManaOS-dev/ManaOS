@@ -12,8 +12,13 @@ build:
     @echo "[build] Compiling ManaOS userland demos and kernel..."
     cargo build
 
+# Create the QEMU storage image
+disk:
+    @echo "[build] Ensuring disk.img exists..."
+    {{ if os == "windows" { "if (-not (Test-Path disk.img)) { $bytes = New-Object byte[] 67108864; [System.IO.File]::WriteAllBytes('disk.img', $bytes) }" } else { "test -f disk.img || dd if=/dev/zero of=disk.img bs=1M count=64" } }}
+
 # Setup ESP and Run QEMU
-run: build
+run: build disk
     @echo "[run] Setting up ESP and starting QEMU..."
     {{ if os == "windows" { "powershell -ExecutionPolicy Bypass -File run.bat" } else { "./run.sh" } }}
 
@@ -38,4 +43,4 @@ licenses:
 # Clean build artifacts
 clean:
     cargo clean
-    {{ if os == "windows" { "if (Test-Path esp/EFI) { Remove-Item -Recurse -Force esp/EFI }; if (Test-Path esp/bootx64.efi) { Remove-Item -Force esp/bootx64.efi }" } else { "rm -rf esp/EFI esp/bootx64.efi" } }}
+    {{ if os == "windows" { "if (Test-Path esp/EFI) { Remove-Item -Recurse -Force esp/EFI }; if (Test-Path esp/bootx64.efi) { Remove-Item -Force esp/bootx64.efi }; if (Test-Path disk.img) { Remove-Item -Force disk.img }" } else { "rm -rf esp/EFI esp/bootx64.efi disk.img" } }}

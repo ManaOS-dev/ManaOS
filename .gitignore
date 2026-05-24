@@ -3,6 +3,7 @@
 
 # UEFI / QEMU
 /OVMF.fd
+/disk.img
 /esp/EFI/
 /esp/bootx64.efi
 

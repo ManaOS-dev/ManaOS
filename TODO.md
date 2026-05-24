@@ -41,7 +41,18 @@
 - [x] Rust file demo flat binary included by kernel
 - [ ] minimal shell-style task
 - [ ] Phase 5C: Real Storage
-- [ ] GPT partition table parsing
+- [x] Phase 5C-1: PCIe enumeration and AHCI controller discovery
+- [x] legacy PCI config-space access
+- [x] AHCI BAR5 discovery
+- [x] AHCI implemented port and SATA signature logging
+- [x] Phase 5C-2: AHCI LBA0 read smoke test
+- [x] AHCI command list/FIS/command table setup
+- [x] READ DMA EXT for LBA0
+- [x] LBA0 first 16 bytes serial dump
+- [x] Phase 5C-3: GPT header inspection
+- [x] AHCI read by arbitrary LBA
+- [x] LBA1 GPT signature and header field logging
+- [ ] GPT partition entry parsing
 - [ ] AHCI Driver Implementation
 - [ ] FAT32 Parser & File APIs
 

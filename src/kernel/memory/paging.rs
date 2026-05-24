@@ -66,6 +66,52 @@ pub fn is_user_range_mapped_writable(user_pointer: usize, length: usize) -> bool
     validate_user_mapping(user_pointer, length, PageTableFlags::WRITABLE)
 }
 
+/// Identity-map a kernel MMIO range as writable and uncached.
+///
+/// # Panics
+///
+/// Panics if the range is empty, overflows, or page-table mapping fails.
+///
+/// # Safety
+///
+/// The caller must ensure the physical range belongs to an MMIO device and that
+/// mapping it into the kernel address space does not alias regular RAM.
+pub unsafe fn map_kernel_mmio_range(
+    frame_allocator: &mut BumpFrameAllocator,
+    physical_start: u64,
+    size: u64,
+) {
+    assert!(size > 0, "MMIO mapping size must be non-zero");
+
+    let start_page_address = align_down_to_page(physical_start);
+    let end_address = physical_start
+        .checked_add(size - 1)
+        .expect("MMIO mapping end address overflowed");
+    let end_page_address = align_down_to_page(end_address);
+    let page_count = ((end_page_address - start_page_address) / PAGE_SIZE) + 1;
+    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_CACHE;
+
+    let (level_4_frame, _) = Cr3::read();
+    let level_4_table = level_4_frame.start_address().as_u64() as *mut PageTable;
+    // SAFETY: ManaOS keeps active page tables identity mapped, so the physical
+    // address from CR3 is directly usable as a kernel virtual address.
+    let level_4_table = unsafe { &mut *level_4_table };
+    // SAFETY: The active address space uses an identity physical memory offset.
+    let mut mapper = unsafe { OffsetPageTable::new(level_4_table, VirtAddr::new(0)) };
+
+    // SAFETY: The caller guarantees this is an MMIO range, and this helper
+    // identity maps exactly the pages covering that range as uncached memory.
+    unsafe {
+        map_identity_pages(
+            &mut mapper,
+            frame_allocator,
+            start_page_address,
+            page_count,
+            flags,
+        );
+    }
+}
+
 fn validate_user_mapping(
     user_pointer: usize,
     length: usize,
@@ -212,6 +258,49 @@ unsafe fn map_memory_regions<'a>(
                     .checked_add(4096)
                     .expect("4KiB mapping address overflowed");
             }
+        }
+    }
+}
+
+unsafe fn map_identity_pages(
+    mapper: &mut OffsetPageTable,
+    frame_allocator: &mut BumpFrameAllocator,
+    start_address: u64,
+    page_count: u64,
+    flags: PageTableFlags,
+) {
+    for index in 0..page_count {
+        let offset = index
+            .checked_mul(PAGE_SIZE)
+            .expect("identity mapping offset overflowed");
+        let address = start_address
+            .checked_add(offset)
+            .expect("identity mapping address overflowed");
+        let page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(VirtAddr::new(
+            address,
+        ));
+        let frame = PhysFrame::containing_address(PhysAddr::new(address));
+
+        if let x86_64::structures::paging::mapper::TranslateResult::Mapped { .. } =
+            mapper.translate(page.start_address())
+        {
+            continue;
+        }
+
+        match mapper.map_to(
+            page,
+            frame,
+            flags,
+            &mut FrameAllocWrapper { frame_allocator },
+        ) {
+            Ok(t) => t.flush(),
+            Err(e) => assert!(
+                matches!(
+                    e,
+                    x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)
+                ),
+                "Failed to map identity page {address:#x}: {e:?}"
+            ),
         }
     }
 }
