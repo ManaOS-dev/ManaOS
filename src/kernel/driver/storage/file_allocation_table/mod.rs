@@ -12,7 +12,8 @@
 //! ## Public API
 //! - [`inspect_boot_sector`] - Inspect a partition boot sector as File Allocation Table 32 metadata
 //! - [`inspect_root_directory`] - Inspect the root directory cluster
+//! - [`inspect_file_contents`] - Inspect a file's first data cluster
 
 mod parser;
 
-pub(super) use parser::{inspect_boot_sector, inspect_root_directory};
+pub(super) use parser::{inspect_boot_sector, inspect_file_contents, inspect_root_directory};
