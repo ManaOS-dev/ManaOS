@@ -253,11 +253,18 @@ fn read_initial_sectors(hba_memory: *mut HbaMemory, port_index: usize, buffers: 
                 if let Some(volume) =
                     file_allocation_table::inspect_boot_sector(&mut partition_device, buffers.data)
                 {
-                    let _ = file_allocation_table::inspect_root_directory(
+                    if let Some(entry) = file_allocation_table::inspect_root_directory(
                         &mut partition_device,
                         volume,
                         buffers.data,
-                    );
+                    ) {
+                        let _ = file_allocation_table::inspect_file_contents(
+                            &mut partition_device,
+                            volume,
+                            entry,
+                            buffers.data,
+                        );
+                    }
                 }
             }
         }

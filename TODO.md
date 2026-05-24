@@ -103,8 +103,11 @@
 - [x] Phase 5C-8: FAT32 root directory listing
 - [x] generate a test `HELLO.TXT` directory entry
 - [x] parse root directory 8.3 file entries
+- [x] Phase 5C-9: FAT32 file read smoke test
+- [x] read first data cluster for `HELLO.TXT`
+- [x] inspect the file allocation table entry for the first cluster
 - [ ] AHCI Driver Implementation
-- [ ] FAT32 file read APIs
+- [ ] mount FAT32 file reads into VFS
 
 ## Phase 6: Userland
 - [ ] ELF Loader
