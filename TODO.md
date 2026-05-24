@@ -52,6 +52,8 @@
 - [x] Phase 5C-3: GPT header inspection
 - [x] AHCI read by arbitrary LBA
 - [x] LBA1 GPT signature and header field logging
+- [x] Phase 5C-3b: GPT test image script
+- [x] generate protective MBR plus primary/backup GPT headers
 - [ ] GPT partition entry parsing
 - [ ] AHCI Driver Implementation
 - [ ] FAT32 Parser & File APIs

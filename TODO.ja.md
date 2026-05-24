@@ -52,6 +52,8 @@
 - [x] Phase 5C-3: GPT header inspection
 - [x] AHCI の任意 LBA 読み出し
 - [x] LBA1 GPT signature と header field のログ出力
+- [x] Phase 5C-3b: GPT test image script
+- [x] protective MBR と primary/backup GPT header を生成
 - [ ] GPT partition entry parsing
 - [ ] AHCI ドライバー実装
 - [ ] FAT32 パーサーとファイル API
