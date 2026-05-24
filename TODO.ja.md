@@ -60,6 +60,9 @@
 - [x] Phase 5C-4b: GPT test partition detection
 - [x] disk image script で GPT partition entry を 1 つ生成
 - [x] non-empty GPT partition entry count を報告
+- [x] Phase 5C-4c: 詳細 GPT partition debug logging
+- [x] GPT header CRC、disk GUID、partition array CRC をログ出力
+- [x] partition type GUID、unique GUID、attributes、name をログ出力
 - [ ] GPT partition entry parsing
 - [ ] AHCI ドライバー実装
 - [ ] FAT32 パーサーとファイル API

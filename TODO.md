@@ -60,6 +60,9 @@
 - [x] Phase 5C-4b: GPT test partition detection
 - [x] generate one GPT partition entry in disk image script
 - [x] report non-empty GPT partition entry count
+- [x] Phase 5C-4c: detailed GPT partition debug logging
+- [x] log GPT header CRC, disk GUID, and partition array CRC
+- [x] log partition type GUID, unique GUID, attributes, and name
 - [ ] GPT partition entry parsing
 - [ ] AHCI Driver Implementation
 - [ ] FAT32 Parser & File APIs

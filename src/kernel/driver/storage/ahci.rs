@@ -240,7 +240,21 @@ fn inspect_gpt_partition_entries(
     let entries_per_sector_u32 =
         u32::try_from(entries_per_sector).expect("entries per sector must fit in u32");
     let mut non_empty_entries = 0;
+    let mut empty_entries = 0;
     let mut entries_remaining = header.count;
+
+    crate::serial_println!(
+        "[gpt  ] Partition scan: start_lba={} total_entries={} entry_size={} total_bytes={}",
+        header.entries_lba,
+        header.count,
+        header.size,
+        total_entry_bytes
+    );
+    crate::serial_println!(
+        "[gpt  ] Partition scan: sectors={} entries_per_sector={}",
+        sector_count,
+        entries_per_sector
+    );
 
     for sector_offset in 0..sector_count {
         if entries_remaining == 0 {
@@ -262,10 +276,25 @@ fn inspect_gpt_partition_entries(
             entry_count,
             header.size,
         );
-        non_empty_entries += scan.non_empty_entries;
+        crate::serial_println!(
+            "[gpt  ] Partition scan sector: lba={} first_entry={} scanned={} empty={} non_empty={}",
+            lba,
+            first_entry_index,
+            scan.scanned,
+            scan.empty,
+            scan.non_empty
+        );
+        empty_entries += scan.empty;
+        non_empty_entries += scan.non_empty;
         entries_remaining -= entry_count;
     }
 
+    crate::serial_println!(
+        "[gpt  ] Partition scan summary: scanned={} empty={} non_empty={}",
+        header.count,
+        empty_entries,
+        non_empty_entries
+    );
     if non_empty_entries == 0 {
         crate::serial_println!("[gpt  ] No partition entries found");
     } else {
