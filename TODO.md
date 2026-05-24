@@ -39,6 +39,18 @@
 - [x] no_std userland crate
 - [x] syscall wrappers for write/read/open/close/exit
 - [x] Rust file demo flat binary included by kernel
+- [x] Phase 5B-6: kernel command console
+- [x] keyboard-driven command input buffer
+- [x] command overlay rendering
+- [x] built-in help/ticks/storage/fps commands
+- [x] Phase 5B-6b: command console usability polish
+- [x] toggle console with Escape/backtick
+- [x] route keyboard input to console only while open
+- [x] Phase 5B-7: Linux-like syscall numbers
+- [x] use Linux x86_64 syscall numbers for read/write/open/close/exit
+- [x] Phase 5B-8: Linux-like errno and open ABI
+- [x] return Linux-style negative errno values
+- [x] accept Linux-like `open(path, flags, mode)` arguments
 - [ ] minimal shell-style task
 - [ ] Phase 5C: Real Storage
 - [x] Phase 5C-1: PCIe enumeration and AHCI controller discovery

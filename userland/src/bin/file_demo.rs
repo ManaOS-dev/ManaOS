@@ -10,7 +10,7 @@ const BUFFER_LENGTH: usize = 64;
 #[no_mangle]
 extern "C" fn _start() -> ! {
     let path = b"/hello.txt\0";
-    let file_descriptor = syscall::open(path);
+    let file_descriptor = syscall::open_with_options(path, syscall::OPEN_READ_ONLY, 0);
     if file_descriptor < 0 {
         syscall::exit(1);
     }

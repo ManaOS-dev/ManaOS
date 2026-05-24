@@ -20,10 +20,16 @@ pub fn initialize() {
     LAST_FPS_TICKS.store(ticks, Ordering::Relaxed);
 }
 
+/// Return the last calculated frames-per-second value.
+pub fn get_fps() -> u64 {
+    FPS.load(Ordering::Relaxed)
+}
+
 /// Run one iteration of the main loop.
 pub fn tick() {
     kernel::driver::input::keyboard::process_input();
     kernel::driver::input::mouse::process_packets();
+    kernel::console::render_if_dirty();
 
     FRAME_COUNT.fetch_add(1, Ordering::Relaxed);
 
