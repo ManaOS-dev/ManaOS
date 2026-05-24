@@ -187,7 +187,20 @@ function Write-FileAllocationTable32BootSector {
         Write-LeUInt32 $Image $offset 0x0FFFFFF8
         Write-LeUInt32 $Image ($offset + 4) 0x0FFFFFFF
         Write-LeUInt32 $Image ($offset + 8) 0x0FFFFFFF
+        Write-LeUInt32 $Image ($offset + 12) 0x0FFFFFFF
     }
+
+    $rootDirectoryOffset = [int](($firstPartitionLba + $metadataSectors) * $sectorSize)
+    Write-AsciiField $Image $rootDirectoryOffset 8 "HELLO"
+    Write-AsciiField $Image ($rootDirectoryOffset + 8) 3 "TXT"
+    $Image[$rootDirectoryOffset + 11] = 0x20
+    Write-LeUInt16 $Image ($rootDirectoryOffset + 20) 0
+    Write-LeUInt16 $Image ($rootDirectoryOffset + 26) 3
+    $fileBytes = [Text.Encoding]::ASCII.GetBytes("hello from FAT32`r`n")
+    Write-LeUInt32 $Image ($rootDirectoryOffset + 28) ([UInt32]$fileBytes.Length)
+
+    $fileDataOffset = [int](($firstPartitionLba + $metadataSectors + 1) * $sectorSize)
+    [Array]::Copy($fileBytes, 0, $Image, $fileDataOffset, $fileBytes.Length)
 }
 
 $image = New-Object byte[] $SizeBytes
