@@ -45,6 +45,10 @@
 - [x] legacy PCI config-space access
 - [x] AHCI BAR5 discovery
 - [x] AHCI implemented port and SATA signature logging
+- [x] Phase 5C-2: AHCI LBA0 read smoke test
+- [x] AHCI command list/FIS/command table setup
+- [x] READ DMA EXT for LBA0
+- [x] LBA0 first 16 bytes serial dump
 - [ ] GPT partition table parsing
 - [ ] AHCI Driver Implementation
 - [ ] FAT32 Parser & File APIs

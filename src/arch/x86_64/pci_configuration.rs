@@ -30,7 +30,6 @@ pub fn read_config32(address: u32) -> u32 {
 }
 
 /// Write one 32-bit value through the legacy PCI configuration data port.
-#[allow(dead_code)]
 pub fn write_config32(address: u32, value: u32) {
     let mut address_port = Port::<u32>::new(PCI_CONFIG_ADDRESS_PORT);
     let mut data_port = Port::<u32>::new(PCI_CONFIG_DATA_PORT);

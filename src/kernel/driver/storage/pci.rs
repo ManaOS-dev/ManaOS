@@ -8,8 +8,11 @@ const VENDOR_ID_NONE: u16 = 0xffff;
 const HEADER_TYPE_MULTIFUNCTION_BIT: u8 = 0x80;
 const CLASS_MASS_STORAGE: u8 = 0x01;
 const SUBCLASS_SATA: u8 = 0x06;
+const COMMAND_OFFSET: u8 = 0x04;
 const BAR5_OFFSET: u8 = 0x24;
 const BAR_MEMORY_MASK: u32 = 0xffff_fff0;
+const COMMAND_MEMORY_SPACE_ENABLE: u32 = 1 << 1;
+const COMMAND_BUS_MASTER_ENABLE: u32 = 1 << 2;
 
 /// A discovered AHCI controller on the PCI bus.
 pub struct AhciController {
@@ -31,7 +34,6 @@ pub fn pci_config_read32(bus: u8, device: u8, function: u8, offset: u8) -> u32 {
 }
 
 /// Write one 32-bit PCI configuration register.
-#[allow(dead_code)]
 pub fn pci_config_write32(bus: u8, device: u8, function: u8, offset: u8, value: u32) {
     crate::arch::x86_64::pci_configuration::write_config32(
         config_address(bus, device, function, offset),
@@ -62,6 +64,7 @@ pub fn find_ahci_controller() -> Option<AhciController> {
                 if class_code(bus, device, function) == CLASS_MASS_STORAGE
                     && subclass(bus, device, function) == SUBCLASS_SATA
                 {
+                    enable_memory_bus_mastering(bus, device, function);
                     let bar5 = u64::from(pci_config_read32(bus, device, function, BAR5_OFFSET));
                     let bar5 = bar5 & u64::from(BAR_MEMORY_MASK);
                     crate::serial_println!(
@@ -112,4 +115,15 @@ fn class_code(bus: u8, device: u8, function: u8) -> u8 {
 
 fn subclass(bus: u8, device: u8, function: u8) -> u8 {
     ((pci_config_read32(bus, device, function, 0x08) >> 16) & 0xff) as u8
+}
+
+fn enable_memory_bus_mastering(bus: u8, device: u8, function: u8) {
+    let command = pci_config_read32(bus, device, function, COMMAND_OFFSET);
+    pci_config_write32(
+        bus,
+        device,
+        function,
+        COMMAND_OFFSET,
+        command | COMMAND_MEMORY_SPACE_ENABLE | COMMAND_BUS_MASTER_ENABLE,
+    );
 }

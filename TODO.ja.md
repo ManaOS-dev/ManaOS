@@ -45,6 +45,10 @@
 - [x] legacy PCI config-space access
 - [x] AHCI BAR5 discovery
 - [x] AHCI implemented port と SATA signature のログ出力
+- [x] Phase 5C-2: AHCI LBA0 read smoke test
+- [x] AHCI command list/FIS/command table setup
+- [x] READ DMA EXT による LBA0 読み出し
+- [x] LBA0 先頭 16 bytes の serial dump
 - [ ] GPT パーティションテーブル解析
 - [ ] AHCI ドライバー実装
 - [ ] FAT32 パーサーとファイル API
