@@ -57,6 +57,9 @@
 - [x] Phase 5C-4a: 空 GPT partition entry scan
 - [x] GPT partition entry array sector を読み出し
 - [x] partition entry がない GPT を empty として報告
+- [x] Phase 5C-4b: GPT test partition detection
+- [x] disk image script で GPT partition entry を 1 つ生成
+- [x] non-empty GPT partition entry count を報告
 - [ ] GPT partition entry parsing
 - [ ] AHCI ドライバー実装
 - [ ] FAT32 パーサーとファイル API

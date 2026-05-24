@@ -57,6 +57,9 @@
 - [x] Phase 5C-4a: empty GPT partition entry scan
 - [x] read GPT partition entry array sectors
 - [x] report empty GPT when no partition entries exist
+- [x] Phase 5C-4b: GPT test partition detection
+- [x] generate one GPT partition entry in disk image script
+- [x] report non-empty GPT partition entry count
 - [ ] GPT partition entry parsing
 - [ ] AHCI Driver Implementation
 - [ ] FAT32 Parser & File APIs

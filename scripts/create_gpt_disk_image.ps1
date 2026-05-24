@@ -32,6 +32,19 @@ function Write-LeUInt64 {
     [Array]::Copy($bytes, 0, $Buffer, $Offset, 8)
 }
 
+function Write-GptGuid {
+    param([byte[]]$Buffer, [int]$Offset, [string]$Value)
+    $bytes = [Guid]::Parse($Value).ToByteArray()
+    [Array]::Copy($bytes, 0, $Buffer, $Offset, 16)
+}
+
+function Write-GptPartitionName {
+    param([byte[]]$Buffer, [int]$Offset, [string]$Value)
+    $bytes = [Text.Encoding]::Unicode.GetBytes($Value)
+    $length = [Math]::Min($bytes.Length, 72)
+    [Array]::Copy($bytes, 0, $Buffer, $Offset, $length)
+}
+
 function Get-Crc32 {
     param([byte[]]$Bytes)
 
@@ -85,6 +98,22 @@ function New-GptHeader {
     return $header
 }
 
+function Write-TestPartitionEntry {
+    param([byte[]]$PartitionEntries)
+
+    $firstPartitionLba = [UInt64]2048
+    $lastPartitionLba = $totalSectors - 34
+    if ($firstPartitionLba -gt $lastPartitionLba) {
+        throw "disk image is too small for the test partition"
+    }
+
+    Write-GptGuid $PartitionEntries 0 "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
+    Write-GptGuid $PartitionEntries 16 "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    Write-LeUInt64 $PartitionEntries 32 $firstPartitionLba
+    Write-LeUInt64 $PartitionEntries 40 $lastPartitionLba
+    Write-GptPartitionName $PartitionEntries 56 "ManaOS Data"
+}
+
 $image = New-Object byte[] $SizeBytes
 
 $protectiveMbr = New-Object byte[] $sectorSize
@@ -101,6 +130,7 @@ $protectiveMbr[511] = 0xAA
 [Array]::Copy($protectiveMbr, 0, $image, 0, $sectorSize)
 
 $partitionEntries = New-Object byte[] $partitionEntryArrayBytes
+Write-TestPartitionEntry $partitionEntries
 $partitionArrayCrc32 = Get-Crc32 $partitionEntries
 
 $primaryPartitionEntryLba = [UInt64]2
