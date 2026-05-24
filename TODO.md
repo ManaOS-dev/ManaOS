@@ -63,6 +63,9 @@
 - [x] Phase 5C-4c: detailed GPT partition debug logging
 - [x] log GPT header CRC, disk GUID, and partition array CRC
 - [x] log partition type GUID, unique GUID, attributes, and name
+- [x] Phase 5C-4d: storage and CI diagnostics
+- [x] install userland Rust target in CI
+- [x] log PCI discovery and AHCI state transitions in detail
 - [ ] GPT partition entry parsing
 - [ ] AHCI Driver Implementation
 - [ ] FAT32 Parser & File APIs
