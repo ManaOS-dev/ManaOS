@@ -51,6 +51,13 @@
 - [x] Phase 5B-8: Linux-like errno and open ABI
 - [x] return Linux-style negative errno values
 - [x] accept Linux-like `open(path, flags, mode)` arguments
+- [x] Phase 5B-9: Linux syscall compatibility small set
+- [x] add `SYS_EXIT_GROUP` and `SYS_OPENAT`
+- [x] route `openat(AT_FDCWD, path, flags, mode)` to `open`
+- [x] add userland `exit_group()` and `openat()` wrappers
+- [x] Phase 5B-10: command console commands
+- [x] add `cat /hello.txt` and `read /hello.txt`
+- [x] add `echo ...`, `syscalls`, and `partitions`
 - [ ] minimal shell-style task
 - [ ] Phase 5C: Real Storage
 - [x] Phase 5C-1: PCIe enumeration and AHCI controller discovery
@@ -84,6 +91,9 @@
 - [x] Phase 5C-4f: GPT partition metadata model
 - [x] parse GPT partition entries into kernel structs
 - [x] select first GPT partition for the next storage stage
+- [x] Phase 5C-5: block device abstraction
+- [x] wrap AHCI sector reads behind `BlockDevice`
+- [x] make GPT scanning read through `BlockDevice`
 - [ ] GPT partition entry parsing
 - [ ] AHCI Driver Implementation
 - [ ] FAT32 Parser & File APIs

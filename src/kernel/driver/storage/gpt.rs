@@ -2,8 +2,9 @@
 
 use core::fmt;
 
+use super::block_device::{BlockDevice, SECTOR_BYTES};
+
 const GPT_SIGNATURE: &[u8; 8] = b"EFI PART";
-const SECTOR_BYTES: usize = 512;
 const REVISION_OFFSET: usize = 8;
 const HEADER_SIZE_OFFSET: usize = 12;
 const HEADER_CRC32_OFFSET: usize = 16;
@@ -166,6 +167,97 @@ pub fn inspect_partition_entries(
             .expect("GPT non-empty entry count must fit in u32"),
         first_partition,
     }
+}
+
+/// Inspect the GPT partition-entry array and return the first non-empty partition.
+pub(super) fn inspect_partition_table(
+    block_device: &mut impl BlockDevice,
+    header: GptHeader,
+    data_address: u64,
+) -> Option<GptPartition> {
+    let entry_size = usize::try_from(header.size).expect("GPT entry size must fit in usize");
+    if !(48..=SECTOR_BYTES).contains(&entry_size) {
+        crate::log_warn!("gpt", "Unsupported partition entry size: {}", header.size);
+        return None;
+    }
+
+    let entries_per_sector = SECTOR_BYTES / entry_size;
+    if entries_per_sector == 0 {
+        crate::log_warn!("gpt", "Unsupported partition entry size: {}", header.size);
+        return None;
+    }
+
+    let total_entry_bytes = u64::from(header.count) * u64::from(header.size);
+    let sector_count = total_entry_bytes.div_ceil(SECTOR_BYTES as u64);
+    let entries_per_sector_u32 =
+        u32::try_from(entries_per_sector).expect("entries per sector must fit in u32");
+    let mut non_empty_entries = 0;
+    let mut empty_entries = 0;
+    let mut entries_remaining = header.count;
+    let mut first_partition = None;
+
+    crate::log_debug!(
+        "gpt",
+        "Partition scan: start_lba={} total_entries={} entry_size={} total_bytes={}",
+        header.entries_lba,
+        header.count,
+        header.size,
+        total_entry_bytes
+    );
+    crate::log_debug!(
+        "gpt",
+        "Partition scan: sectors={} entries_per_sector={}",
+        sector_count,
+        entries_per_sector
+    );
+
+    for sector_offset in 0..sector_count {
+        if entries_remaining == 0 {
+            break;
+        }
+
+        let logical_block_address = header.entries_lba + sector_offset;
+        if !block_device.read_logical_block(logical_block_address, data_address) {
+            return None;
+        }
+
+        let entry_count = entries_remaining.min(entries_per_sector_u32);
+        let first_entry_index = u32::try_from(sector_offset)
+            .expect("GPT partition entry sector offset must fit in u32")
+            * entries_per_sector_u32;
+        let scan =
+            inspect_partition_entries(data_address, first_entry_index, entry_count, header.size);
+        if first_partition.is_none() {
+            first_partition = scan.first_partition;
+        }
+        crate::log_trace!(
+            "gpt",
+            "Partition scan sector: lba={} first_entry={} scanned={} empty={} non_empty={}",
+            logical_block_address,
+            first_entry_index,
+            scan.scanned,
+            scan.empty,
+            scan.non_empty
+        );
+        empty_entries += scan.empty;
+        non_empty_entries += scan.non_empty;
+        entries_remaining -= entry_count;
+    }
+
+    crate::log_info!(
+        "gpt",
+        "Partition scan summary: scanned={} empty={} non_empty={}",
+        header.count,
+        empty_entries,
+        non_empty_entries
+    );
+    if non_empty_entries == 0 {
+        crate::log_info!("gpt", "No partition entries found");
+    } else {
+        crate::log_info!("gpt", "Partition entries found: {}", non_empty_entries);
+    }
+
+    first_partition
 }
 
 fn read_le_u32(bytes: &[u8], offset: usize) -> u32 {

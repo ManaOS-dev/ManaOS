@@ -4,12 +4,12 @@ use core::fmt;
 
 use crate::kernel::memory::{frame_allocator::BumpFrameAllocator, paging};
 
+use super::block_device::{BlockDevice, SECTOR_BYTES};
 use super::{gpt, set_selected_partition};
 
 const HBA_MEMORY_SIZE: u64 = 0x1100;
 const MAX_PORTS: usize = 32;
 const SATA_SIGNATURE: u32 = 0x0000_0101;
-const READ_SECTOR_BYTES: usize = 512;
 const DMA_PAGE_SIZE: usize = 4096;
 const COMMAND_FIS_LENGTH_DWORDS: u16 = 5;
 const ATA_COMMAND_READ_DMA_EXT: u8 = 0x25;
@@ -101,6 +101,43 @@ struct AhciDmaBuffers {
     received_fis: u64,
     command_table: u64,
     data: u64,
+}
+
+struct AhciBlockDevice {
+    port: *mut HbaPort,
+    buffers: AhciDmaBuffers,
+    port_index: usize,
+}
+
+impl AhciBlockDevice {
+    fn new(port: *mut HbaPort, buffers: AhciDmaBuffers, port_index: usize) -> Self {
+        Self {
+            port,
+            buffers,
+            port_index,
+        }
+    }
+}
+
+impl BlockDevice for AhciBlockDevice {
+    fn read_logical_block(&mut self, logical_block_address: u64, data_address: u64) -> bool {
+        if data_address != self.buffers.data {
+            crate::log_error!(
+                "ahci",
+                "unexpected AHCI read buffer: requested={:#018x} owned={:#018x}",
+                data_address,
+                self.buffers.data
+            );
+            return false;
+        }
+
+        issue_read_sector(
+            self.port,
+            self.buffers,
+            self.port_index,
+            logical_block_address,
+        )
+    }
 }
 
 /// Initialize an AHCI controller from its BAR5 MMIO base.
@@ -248,14 +285,16 @@ fn read_initial_sectors(hba_memory: *mut HbaMemory, port_index: usize, buffers: 
         port_index
     );
 
-    if issue_read_sector(port, buffers, port_index, 0) {
+    let mut block_device = AhciBlockDevice::new(port, buffers, port_index);
+
+    if block_device.read_logical_block(0, buffers.data) {
         dump_sector_prefix("LBA0", buffers.data);
     }
 
-    if issue_read_sector(port, buffers, port_index, 1) {
+    if block_device.read_logical_block(1, buffers.data) {
         if let Some(header) = gpt::inspect_header(buffers.data) {
             if let Some(partition) =
-                inspect_gpt_partition_entries(port, buffers, port_index, header)
+                gpt::inspect_partition_table(&mut block_device, header, buffers.data)
             {
                 crate::log_info!(
                     "storage",
@@ -269,101 +308,6 @@ fn read_initial_sectors(hba_memory: *mut HbaMemory, port_index: usize, buffers: 
             }
         }
     }
-}
-
-fn inspect_gpt_partition_entries(
-    port: *mut HbaPort,
-    buffers: AhciDmaBuffers,
-    port_index: usize,
-    header: gpt::GptHeader,
-) -> Option<gpt::GptPartition> {
-    let entry_size = usize::try_from(header.size).expect("GPT entry size must fit in usize");
-    if !(48..=READ_SECTOR_BYTES).contains(&entry_size) {
-        crate::log_warn!("gpt", "Unsupported partition entry size: {}", header.size);
-        return None;
-    }
-
-    let entries_per_sector = READ_SECTOR_BYTES / entry_size;
-    if entries_per_sector == 0 {
-        crate::log_warn!("gpt", "Unsupported partition entry size: {}", header.size);
-        return None;
-    }
-
-    let total_entry_bytes = u64::from(header.count) * u64::from(header.size);
-    let sector_count = total_entry_bytes.div_ceil(READ_SECTOR_BYTES as u64);
-    let entries_per_sector_u32 =
-        u32::try_from(entries_per_sector).expect("entries per sector must fit in u32");
-    let mut non_empty_entries = 0;
-    let mut empty_entries = 0;
-    let mut entries_remaining = header.count;
-    let mut first_partition = None;
-
-    crate::log_debug!(
-        "gpt",
-        "Partition scan: start_lba={} total_entries={} entry_size={} total_bytes={}",
-        header.entries_lba,
-        header.count,
-        header.size,
-        total_entry_bytes
-    );
-    crate::log_debug!(
-        "gpt",
-        "Partition scan: sectors={} entries_per_sector={}",
-        sector_count,
-        entries_per_sector
-    );
-
-    for sector_offset in 0..sector_count {
-        if entries_remaining == 0 {
-            break;
-        }
-
-        let lba = header.entries_lba + sector_offset;
-        if !issue_read_sector(port, buffers, port_index, lba) {
-            return None;
-        }
-
-        let entry_count = entries_remaining.min(entries_per_sector_u32);
-        let first_entry_index = u32::try_from(sector_offset)
-            .expect("GPT partition entry sector offset must fit in u32")
-            * entries_per_sector_u32;
-        let scan = gpt::inspect_partition_entries(
-            buffers.data,
-            first_entry_index,
-            entry_count,
-            header.size,
-        );
-        if first_partition.is_none() {
-            first_partition = scan.first_partition;
-        }
-        crate::log_trace!(
-            "gpt",
-            "Partition scan sector: lba={} first_entry={} scanned={} empty={} non_empty={}",
-            lba,
-            first_entry_index,
-            scan.scanned,
-            scan.empty,
-            scan.non_empty
-        );
-        empty_entries += scan.empty;
-        non_empty_entries += scan.non_empty;
-        entries_remaining -= entry_count;
-    }
-
-    crate::log_info!(
-        "gpt",
-        "Partition scan summary: scanned={} empty={} non_empty={}",
-        header.count,
-        empty_entries,
-        non_empty_entries
-    );
-    if non_empty_entries == 0 {
-        crate::log_info!("gpt", "No partition entries found");
-    } else {
-        crate::log_info!("gpt", "Partition entries found: {}", non_empty_entries);
-    }
-
-    first_partition
 }
 
 fn stop_command_engine(port: *mut HbaPort, port_index: usize) -> bool {
@@ -526,7 +470,7 @@ fn issue_read_sector(
                 "ahci",
                 "Read LBA {} complete: bytes={} interrupt_status={:#010x}",
                 lba,
-                READ_SECTOR_BYTES,
+                SECTOR_BYTES,
                 interrupt_status
             );
             return true;
@@ -606,8 +550,7 @@ fn prepare_read_command(buffers: AhciDmaBuffers, lba: u64) {
         core::ptr::write_volatile(core::ptr::addr_of_mut!((*prdt_entry).reserved), 0);
         core::ptr::write_volatile(
             core::ptr::addr_of_mut!((*prdt_entry).byte_count_and_interrupt),
-            (u32::try_from(READ_SECTOR_BYTES).expect("sector size must fit in PRDT byte count")
-                - 1)
+            (u32::try_from(SECTOR_BYTES).expect("sector size must fit in PRDT byte count") - 1)
                 | (1 << 31),
         );
 

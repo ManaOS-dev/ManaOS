@@ -15,6 +15,7 @@ use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use spin::Mutex;
 
 mod ahci;
+mod block_device;
 mod gpt;
 mod pci;
 
