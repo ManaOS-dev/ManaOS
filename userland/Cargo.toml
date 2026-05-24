@@ -1,0 +1,32 @@
+[package]
+name = "mana_userland"
+version = "0.1.0"
+edition = "2021"
+authors = ["ManaOS Contributors"]
+description = "no_std userland demos for ManaOS."
+license = "GPL-3.0-or-later"
+
+[lib]
+path = "src/lib.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "file_demo"
+path = "src/bin/file_demo.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "bad_pointer_demo"
+path = "src/bin/bad_pointer_demo.rs"
+test = false
+bench = false
+
+[profile.dev]
+opt-level = 1
+panic = "abort"
+
+[profile.release]
+opt-level = "s"
+panic = "abort"

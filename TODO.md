@@ -35,6 +35,10 @@
 - [x] Phase 5B-4b: bad pointer demo mode
 - [x] switch user demo mode with a single constant
 - [x] verify bad read buffer returns `ERROR_BAD_ADDRESS`
+- [x] Phase 5B-5: userland syscall wrapper crate
+- [x] no_std userland crate
+- [x] syscall wrappers for write/read/open/close/exit
+- [x] Rust file demo flat binary included by kernel
 - [ ] minimal shell-style task
 - [ ] Phase 5C: Real Storage
 - [ ] GPT partition table parsing

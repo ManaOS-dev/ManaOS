@@ -35,6 +35,10 @@
 - [x] Phase 5B-4b: bad pointer demo mode
 - [x] user demo mode を定数 1 個で切り替え
 - [x] 不正な read buffer が `ERROR_BAD_ADDRESS` を返すことを検証
+- [x] Phase 5B-5: userland syscall wrapper クレート
+- [x] no_std userland クレート
+- [x] write/read/open/close/exit の syscall wrapper
+- [x] Rust file demo flat binary を kernel から include
 - [ ] 最小 shell 風 task
 - [ ] Phase 5C: Real Storage
 - [ ] GPT パーティションテーブル解析
