@@ -159,10 +159,8 @@ fn initialize_architecture_and_drivers() {
 }
 
 fn verify_kernel_filesystem() {
-    let _ = kernel::filesystem::write(
-        kernel::filesystem::STANDARD_OUTPUT,
-        b"[fs   ] Standard output is connected to /dev/console.\n",
-    );
+    crate::log_info!("fs", "Standard output is connected to /dev/console.");
+    let _ = kernel::filesystem::write(kernel::filesystem::STANDARD_OUTPUT, b"");
     let _ = kernel::filesystem::write(kernel::filesystem::STANDARD_ERROR, b"");
 
     kernel::filesystem::mount_ram_file("/hello.txt", b"hello from ramfs\n");

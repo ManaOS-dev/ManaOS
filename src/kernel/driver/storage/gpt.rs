@@ -171,13 +171,13 @@ fn is_empty_partition_entry(entry: &[u8]) -> bool {
 }
 
 fn log_partition_entry(entry_index: usize, entry: &[u8]) {
-    crate::log_info!(
+    crate::log_debug!(
         "gpt",
         "Partition entry {}: type_guid={}",
         entry_index,
         GptGuid(&entry[0..PARTITION_TYPE_GUID_SIZE])
     );
-    crate::log_info!(
+    crate::log_debug!(
         "gpt",
         "Partition entry {}: unique_guid={}",
         entry_index,
@@ -194,7 +194,7 @@ fn log_partition_entry(entry_index: usize, entry: &[u8]) {
         read_le_u64(entry, PARTITION_ENTRY_LAST_LBA_OFFSET),
         read_le_u64(entry, PARTITION_ENTRY_ATTRIBUTES_OFFSET)
     );
-    crate::log_info!(
+    crate::log_debug!(
         "gpt",
         "Partition entry {}: name=\"{}\"",
         entry_index,
