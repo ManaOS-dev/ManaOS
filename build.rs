@@ -68,7 +68,10 @@ fn build_userland(manifest_dir: &Path, target_dir: &Path, profile: &str) {
     }
 
     let status = command.status().expect("failed to spawn userland cargo");
-    assert!(status.success(), "failed to build ManaOS userland demos");
+    assert!(
+        status.success(),
+        "failed to build ManaOS userland demos for {USERLAND_TARGET}; install it with `rustup target add {USERLAND_TARGET}`"
+    );
 }
 
 fn extract_binary(

@@ -52,6 +52,20 @@
 - [x] Phase 5C-3: GPT header inspection
 - [x] AHCI の任意 LBA 読み出し
 - [x] LBA1 GPT signature と header field のログ出力
+- [x] Phase 5C-3b: GPT test image script
+- [x] protective MBR と primary/backup GPT header を生成
+- [x] Phase 5C-4a: 空 GPT partition entry scan
+- [x] GPT partition entry array sector を読み出し
+- [x] partition entry がない GPT を empty として報告
+- [x] Phase 5C-4b: GPT test partition detection
+- [x] disk image script で GPT partition entry を 1 つ生成
+- [x] non-empty GPT partition entry count を報告
+- [x] Phase 5C-4c: 詳細 GPT partition debug logging
+- [x] GPT header CRC、disk GUID、partition array CRC をログ出力
+- [x] partition type GUID、unique GUID、attributes、name をログ出力
+- [x] Phase 5C-4d: storage と CI diagnostics
+- [x] CI で userland Rust target を install
+- [x] PCI discovery と AHCI state transition を詳細ログ化
 - [ ] GPT partition entry parsing
 - [ ] AHCI ドライバー実装
 - [ ] FAT32 パーサーとファイル API
