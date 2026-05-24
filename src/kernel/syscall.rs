@@ -17,6 +17,8 @@
 //! - [`SYS_OPEN`] - Linux-compatible open syscall number
 //! - [`SYS_CLOSE`] - Linux-compatible close syscall number
 //! - [`SYS_EXIT`] - Linux-compatible exit syscall number
+//! - [`SYS_EXIT_GROUP`] - Linux-compatible process exit syscall number
+//! - [`SYS_OPENAT`] - Linux-compatible open-at syscall number
 
 use alloc::string::String;
 
@@ -24,6 +26,7 @@ const ERROR_NOT_FOUND: u64 = linux_error(2);
 const ERROR_BAD_FILE_DESCRIPTOR: u64 = linux_error(9);
 const ERROR_BAD_ADDRESS: u64 = linux_error(14);
 const ERROR_NOT_IMPLEMENTED: u64 = linux_error(38);
+const AT_FDCWD: u64 = u64::MAX - 99;
 const MAX_USER_STRING_LENGTH: usize = 256;
 const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 
@@ -37,6 +40,10 @@ pub const SYS_OPEN: u64 = 2;
 pub const SYS_CLOSE: u64 = 3;
 /// Linux-compatible exit syscall number.
 pub const SYS_EXIT: u64 = 60;
+/// Linux-compatible exit-group syscall number.
+pub const SYS_EXIT_GROUP: u64 = 231;
+/// Linux-compatible open-at syscall number.
+pub const SYS_OPENAT: u64 = 257;
 /// Internal sentinel telling the syscall entry code to return to the kernel.
 pub const USER_EXIT_SENTINEL: u64 = u64::MAX;
 
@@ -51,17 +58,25 @@ const fn linux_error(errno: u64) -> u64 {
 /// - `rdi`: first argument
 /// - `rsi`: second argument
 /// - `rdx`: third argument
+/// - `r10`: fourth argument
 #[no_mangle]
 pub extern "C" fn syscall_dispatch(
     syscall_number: u64,
     first_argument: u64,
     second_argument: u64,
     third_argument: u64,
+    fourth_argument: u64,
 ) -> u64 {
     match syscall_number {
         SYS_WRITE => sys_write(first_argument, second_argument, third_argument),
-        SYS_EXIT => sys_exit(first_argument),
+        SYS_EXIT | SYS_EXIT_GROUP => sys_exit(first_argument),
         SYS_OPEN => sys_open(first_argument, second_argument, third_argument),
+        SYS_OPENAT => sys_openat(
+            first_argument,
+            second_argument,
+            third_argument,
+            fourth_argument,
+        ),
         SYS_CLOSE => sys_close(first_argument),
         SYS_READ => sys_read(first_argument, second_argument, third_argument),
         _ => ERROR_NOT_IMPLEMENTED,
@@ -111,6 +126,19 @@ fn sys_open(user_path_pointer: u64, flags: u64, mode: u64) -> u64 {
         Err(crate::kernel::filesystem::FileSystemError::NotFound) => ERROR_NOT_FOUND,
         Err(_) => ERROR_BAD_FILE_DESCRIPTOR,
     }
+}
+
+fn sys_openat(
+    directory_file_descriptor: u64,
+    user_path_pointer: u64,
+    flags: u64,
+    mode: u64,
+) -> u64 {
+    if directory_file_descriptor != AT_FDCWD {
+        return ERROR_NOT_IMPLEMENTED;
+    }
+
+    sys_open(user_path_pointer, flags, mode)
 }
 
 fn sys_close(file_descriptor: u64) -> u64 {
