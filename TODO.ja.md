@@ -54,6 +54,9 @@
 - [x] LBA1 GPT signature と header field のログ出力
 - [x] Phase 5C-3b: GPT test image script
 - [x] protective MBR と primary/backup GPT header を生成
+- [x] Phase 5C-4a: 空 GPT partition entry scan
+- [x] GPT partition entry array sector を読み出し
+- [x] partition entry がない GPT を empty として報告
 - [ ] GPT partition entry parsing
 - [ ] AHCI ドライバー実装
 - [ ] FAT32 パーサーとファイル API

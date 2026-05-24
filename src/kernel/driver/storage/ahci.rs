@@ -211,7 +211,65 @@ fn read_initial_sectors(hba_memory: *mut HbaMemory, port_index: usize, buffers: 
     }
 
     if issue_read_sector(port, buffers, port_index, 1) {
-        gpt::inspect_header(buffers.data);
+        if let Some(header) = gpt::inspect_header(buffers.data) {
+            inspect_gpt_partition_entries(port, buffers, port_index, header);
+        }
+    }
+}
+
+fn inspect_gpt_partition_entries(
+    port: *mut HbaPort,
+    buffers: AhciDmaBuffers,
+    port_index: usize,
+    header: gpt::GptHeader,
+) {
+    let entry_size = usize::try_from(header.size).expect("GPT entry size must fit in usize");
+    if !(48..=READ_SECTOR_BYTES).contains(&entry_size) {
+        crate::serial_println!("[gpt  ] Unsupported partition entry size: {}", header.size);
+        return;
+    }
+
+    let entries_per_sector = READ_SECTOR_BYTES / entry_size;
+    if entries_per_sector == 0 {
+        crate::serial_println!("[gpt  ] Unsupported partition entry size: {}", header.size);
+        return;
+    }
+
+    let total_entry_bytes = u64::from(header.count) * u64::from(header.size);
+    let sector_count = total_entry_bytes.div_ceil(READ_SECTOR_BYTES as u64);
+    let entries_per_sector_u32 =
+        u32::try_from(entries_per_sector).expect("entries per sector must fit in u32");
+    let mut non_empty_entries = 0;
+    let mut entries_remaining = header.count;
+
+    for sector_offset in 0..sector_count {
+        if entries_remaining == 0 {
+            break;
+        }
+
+        let lba = header.entries_lba + sector_offset;
+        if !issue_read_sector(port, buffers, port_index, lba) {
+            return;
+        }
+
+        let entry_count = entries_remaining.min(entries_per_sector_u32);
+        let first_entry_index = u32::try_from(sector_offset)
+            .expect("GPT partition entry sector offset must fit in u32")
+            * entries_per_sector_u32;
+        let scan = gpt::inspect_partition_entries(
+            buffers.data,
+            first_entry_index,
+            entry_count,
+            header.size,
+        );
+        non_empty_entries += scan.non_empty_entries;
+        entries_remaining -= entry_count;
+    }
+
+    if non_empty_entries == 0 {
+        crate::serial_println!("[gpt  ] No partition entries found");
+    } else {
+        crate::serial_println!("[gpt  ] Partition entries found: {}", non_empty_entries);
     }
 }
 

@@ -54,6 +54,9 @@
 - [x] LBA1 GPT signature and header field logging
 - [x] Phase 5C-3b: GPT test image script
 - [x] generate protective MBR plus primary/backup GPT headers
+- [x] Phase 5C-4a: empty GPT partition entry scan
+- [x] read GPT partition entry array sectors
+- [x] report empty GPT when no partition entries exist
 - [ ] GPT partition entry parsing
 - [ ] AHCI Driver Implementation
 - [ ] FAT32 Parser & File APIs
