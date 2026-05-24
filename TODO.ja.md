@@ -69,6 +69,9 @@
 - [x] Phase 5C-4e: structured kernel log levels
 - [x] `INFO`/`WARN`/`ERROR`/`DEBUG`/`TRACE` serial log macro を追加
 - [x] GPT と AHCI の verbose diagnostics を debug/trace level へ移動
+- [x] Phase 5C-4f: GPT partition metadata model
+- [x] GPT partition entry を kernel struct として parse
+- [x] 次の storage stage 用に最初の GPT partition を選択
 - [ ] GPT partition entry parsing
 - [ ] AHCI ドライバー実装
 - [ ] FAT32 パーサーとファイル API

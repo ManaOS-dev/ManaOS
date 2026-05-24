@@ -254,7 +254,18 @@ fn read_initial_sectors(hba_memory: *mut HbaMemory, port_index: usize, buffers: 
 
     if issue_read_sector(port, buffers, port_index, 1) {
         if let Some(header) = gpt::inspect_header(buffers.data) {
-            inspect_gpt_partition_entries(port, buffers, port_index, header);
+            if let Some(partition) =
+                inspect_gpt_partition_entries(port, buffers, port_index, header)
+            {
+                crate::log_info!(
+                    "storage",
+                    "Selected GPT partition: index={} first_lba={} last_lba={} name=\"{}\"",
+                    partition.index,
+                    partition.first_lba,
+                    partition.last_lba,
+                    partition.name()
+                );
+            }
         }
     }
 }
@@ -264,17 +275,17 @@ fn inspect_gpt_partition_entries(
     buffers: AhciDmaBuffers,
     port_index: usize,
     header: gpt::GptHeader,
-) {
+) -> Option<gpt::GptPartition> {
     let entry_size = usize::try_from(header.size).expect("GPT entry size must fit in usize");
     if !(48..=READ_SECTOR_BYTES).contains(&entry_size) {
         crate::log_warn!("gpt", "Unsupported partition entry size: {}", header.size);
-        return;
+        return None;
     }
 
     let entries_per_sector = READ_SECTOR_BYTES / entry_size;
     if entries_per_sector == 0 {
         crate::log_warn!("gpt", "Unsupported partition entry size: {}", header.size);
-        return;
+        return None;
     }
 
     let total_entry_bytes = u64::from(header.count) * u64::from(header.size);
@@ -284,6 +295,7 @@ fn inspect_gpt_partition_entries(
     let mut non_empty_entries = 0;
     let mut empty_entries = 0;
     let mut entries_remaining = header.count;
+    let mut first_partition = None;
 
     crate::log_debug!(
         "gpt",
@@ -307,7 +319,7 @@ fn inspect_gpt_partition_entries(
 
         let lba = header.entries_lba + sector_offset;
         if !issue_read_sector(port, buffers, port_index, lba) {
-            return;
+            return None;
         }
 
         let entry_count = entries_remaining.min(entries_per_sector_u32);
@@ -320,6 +332,9 @@ fn inspect_gpt_partition_entries(
             entry_count,
             header.size,
         );
+        if first_partition.is_none() {
+            first_partition = scan.first_partition;
+        }
         crate::log_trace!(
             "gpt",
             "Partition scan sector: lba={} first_entry={} scanned={} empty={} non_empty={}",
@@ -346,6 +361,8 @@ fn inspect_gpt_partition_entries(
     } else {
         crate::log_info!("gpt", "Partition entries found: {}", non_empty_entries);
     }
+
+    first_partition
 }
 
 fn stop_command_engine(port: *mut HbaPort, port_index: usize) -> bool {
