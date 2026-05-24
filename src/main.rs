@@ -234,7 +234,13 @@ fn main() -> Status {
     kernel::filesystem::initialize();
     crate::log_info!("fs", "Kernel filesystem initialized.");
     verify_kernel_filesystem();
-    kernel::driver::storage::init(&mut frame_allocator);
+    kernel::driver::storage::init(
+        &mut frame_allocator,
+        kernel::driver::storage::PciConfigurationAccess::new(
+            arch::x86_64::pci_configuration::read_config32,
+            arch::x86_64::pci_configuration::write_config32,
+        ),
+    );
     initialize_scheduler();
     initialize_architecture_and_drivers();
 
