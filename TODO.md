@@ -39,6 +39,10 @@
 - [x] no_std userland crate
 - [x] syscall wrappers for write/read/open/close/exit
 - [x] Rust file demo flat binary included by kernel
+- [x] Phase 5B-6: kernel command console
+- [x] keyboard-driven command input buffer
+- [x] command overlay rendering
+- [x] built-in help/ticks/storage/fps commands
 - [ ] minimal shell-style task
 - [ ] Phase 5C: Real Storage
 - [x] Phase 5C-1: PCIe enumeration and AHCI controller discovery

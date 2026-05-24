@@ -12,7 +12,7 @@
 //! - [`process_input`] - Called from main loop
 
 use crate::kernel::sync::ring_buffer::LockFreeRingBuffer;
-use pc_keyboard::{layouts, DecodedKey, HandleControl, PS2Keyboard, ScancodeSet1};
+use pc_keyboard::{layouts, DecodedKey, HandleControl, KeyCode, PS2Keyboard, ScancodeSet1};
 use spin::Mutex;
 
 static SCANCODE_QUEUE: LockFreeRingBuffer<u8, 128> = LockFreeRingBuffer::new();
@@ -39,10 +39,10 @@ pub fn process_input() {
                 if let Some(key) = keyboard.process_keyevent(key_event) {
                     match key {
                         DecodedKey::Unicode(character) => {
-                            crate::serial_print!("{}", character);
+                            process_character(character);
                         }
                         DecodedKey::RawKey(key) => {
-                            crate::serial_println!(" [kb] raw: {:?}", key);
+                            process_raw_key(key);
                         }
                     }
                 }
@@ -50,5 +50,21 @@ pub fn process_input() {
         } else {
             break;
         }
+    }
+}
+
+fn process_character(character: char) {
+    match character {
+        '\n' | '\r' => crate::kernel::console::submit(),
+        '\u{8}' | '\u{7f}' => crate::kernel::console::push_backspace(),
+        _ => crate::kernel::console::push_character(character),
+    }
+}
+
+fn process_raw_key(key: KeyCode) {
+    match key {
+        KeyCode::Return | KeyCode::NumpadEnter => crate::kernel::console::submit(),
+        KeyCode::Backspace => crate::kernel::console::push_backspace(),
+        _ => crate::log_debug!("keyboard", "raw key: {:?}", key),
     }
 }

@@ -4,7 +4,7 @@ use core::fmt;
 
 use crate::kernel::memory::{frame_allocator::BumpFrameAllocator, paging};
 
-use super::gpt;
+use super::{gpt, set_selected_partition};
 
 const HBA_MEMORY_SIZE: u64 = 0x1100;
 const MAX_PORTS: usize = 32;
@@ -265,6 +265,7 @@ fn read_initial_sectors(hba_memory: *mut HbaMemory, port_index: usize, buffers: 
                     partition.last_lba,
                     partition.name()
                 );
+                set_selected_partition(partition);
             }
         }
     }

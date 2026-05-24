@@ -8,6 +8,7 @@
 //! - Bootloader entry wiring (-> main.rs)
 //!
 //! ## Public API
+//! - [`console`] - Kernel command console
 //! - [`diagnostic`] - Kernel diagnostic logging
 //! - [`driver`] - Kernel device drivers
 //! - [`filesystem`] - Kernel virtual filesystem and file descriptors
@@ -22,6 +23,7 @@
 //! - [`time`] - Kernel time source boundary
 
 pub mod boot;
+pub mod console;
 pub mod diagnostic;
 pub mod driver;
 pub mod filesystem;
