@@ -1,5 +1,6 @@
 //! Boot-time storage probing through an Advanced Host Controller Interface disk.
 
+use alloc::format;
 use core::fmt;
 
 use crate::kernel::driver::storage::block_device::BlockDevice;
@@ -13,12 +14,9 @@ pub(super) fn inspect_initial_storage(block_device: &mut impl BlockDevice, data_
         dump_sector_prefix("LBA0", data_address);
     }
 
-    if let Err(error) = block_device.read_logical_block(1, data_address) {
-        crate::log_warn!("storage", "Failed to read GPT header sector: {error:?}");
-        return;
-    }
-
-    let Some(header) = guid_partition_table::inspect_header(data_address) else {
+    let Some(header) =
+        guid_partition_table::inspect_header_with_fallback(block_device, data_address)
+    else {
         crate::log_warn!("storage", "Failed to parse GPT header");
         return;
     };
@@ -55,6 +53,26 @@ pub(super) fn inspect_initial_storage(block_device: &mut impl BlockDevice, data_
         crate::log_warn!("storage", "Failed to scan FAT32 root directory");
         return;
     };
+    let _ = file_allocation_table::list_root_directory(&mut partition_device, volume, data_address);
+    let entry = file_allocation_table::find_entry_by_path(
+        &mut partition_device,
+        volume,
+        &format!("{}", entry.name()),
+        data_address,
+    )
+    .unwrap_or(entry);
+    let write_plan = file_allocation_table::plan_write(
+        volume,
+        &entry.disk_mount_path(),
+        usize::try_from(entry.file_size()).expect("FAT32 file size must fit in usize"),
+    );
+    crate::log_debug!(
+        "storage",
+        "FAT32 write plan retained read-only: path={} bytes={} clusters={}",
+        write_plan.path,
+        write_plan.byte_count,
+        write_plan.required_clusters
+    );
 
     let _ = file_allocation_table::inspect_file_contents(
         &mut partition_device,

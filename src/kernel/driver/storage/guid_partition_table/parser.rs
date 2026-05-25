@@ -1,5 +1,6 @@
 //! GUID partition table parsing implementation.
 
+use alloc::vec::Vec;
 use core::fmt;
 
 use super::super::block_device::{BlockDevice, SECTOR_BYTES};
@@ -29,10 +30,18 @@ const PARTITION_NAME_CAPACITY: usize = 36;
 const MINIMUM_HEADER_SIZE: usize = 92;
 const CRC32_INITIAL: u32 = u32::MAX;
 const CRC32_POLYNOMIAL: u32 = 0xedb8_8320;
+const MICROSOFT_BASIC_DATA_TYPE_GUID: [u8; PARTITION_TYPE_GUID_SIZE] = [
+    0xa2, 0xa0, 0xd0, 0xeb, 0xe5, 0xb9, 0x33, 0x44, 0x87, 0xc0, 0x68, 0xb6, 0xb7, 0x26, 0x99, 0xc7,
+];
+const PREFERRED_PARTITION_NAME: &str = "ManaOS Data";
 
 /// GUID partition table header fields needed to locate partition entries.
 #[derive(Clone, Copy)]
 pub struct GuidPartitionTableHeader {
+    /// LBA containing this GUID partition table header.
+    pub current_lba: u64,
+    /// LBA containing the backup GUID partition table header.
+    pub backup_lba: u64,
     /// LBA containing the first partition entry sector.
     pub entries_lba: u64,
     /// Number of partition entries described by the header.
@@ -54,6 +63,8 @@ pub struct PartitionEntryScan {
     pub non_empty: u32,
     /// First non-empty partition found in the inspected sector.
     pub first_partition: Option<GuidPartitionTablePartition>,
+    /// Preferred partition found in the inspected sector.
+    pub preferred_partition: Option<GuidPartitionTablePartition>,
 }
 
 /// Parsed GUID partition table partition metadata used by storage probing.
@@ -61,6 +72,8 @@ pub struct PartitionEntryScan {
 pub struct GuidPartitionTablePartition {
     /// Index in the GUID partition table partition entry array.
     pub index: u32,
+    /// Partition type GUID bytes.
+    pub type_guid: [u8; PARTITION_TYPE_GUID_SIZE],
     /// First usable LBA owned by this partition.
     pub first_lba: u64,
     /// Last usable LBA owned by this partition.
@@ -116,6 +129,8 @@ pub fn inspect_header(data_address: u64) -> Option<GuidPartitionTableHeader> {
     let partition_entry_lba = read_le_u64(sector, PARTITION_ENTRY_LBA_OFFSET);
     let partition_entry_count = read_le_u32(sector, PARTITION_ENTRY_COUNT_OFFSET);
     let partition_entry_size = read_le_u32(sector, PARTITION_ENTRY_SIZE_OFFSET);
+    let current_lba = read_le_u64(sector, CURRENT_LBA_OFFSET);
+    let backup_lba = read_le_u64(sector, BACKUP_LBA_OFFSET);
     crate::log_debug!(
         "gpt",
         "header_crc32={:#010x} reserved={:#010x} partition_array_crc32={:#010x}",
@@ -128,8 +143,8 @@ pub fn inspect_header(data_address: u64) -> Option<GuidPartitionTableHeader> {
         "revision={:#010x} header_size={} current_lba={} backup_lba={}",
         read_le_u32(sector, REVISION_OFFSET),
         read_le_u32(sector, HEADER_SIZE_OFFSET),
-        read_le_u64(sector, CURRENT_LBA_OFFSET),
-        read_le_u64(sector, BACKUP_LBA_OFFSET)
+        current_lba,
+        backup_lba
     );
     crate::log_info!(
         "gpt",
@@ -153,11 +168,48 @@ pub fn inspect_header(data_address: u64) -> Option<GuidPartitionTableHeader> {
     );
 
     Some(GuidPartitionTableHeader {
+        current_lba,
+        backup_lba,
         entries_lba: partition_entry_lba,
         count: partition_entry_count,
         size: partition_entry_size,
         partition_entry_array_crc32: read_le_u32(sector, PARTITION_ENTRY_ARRAY_CRC32_OFFSET),
     })
+}
+
+/// Inspect the primary GUID partition table header, falling back to the backup header when possible.
+pub(in crate::kernel::driver::storage) fn inspect_header_with_fallback(
+    block_device: &mut impl BlockDevice,
+    data_address: u64,
+) -> Option<GuidPartitionTableHeader> {
+    if let Err(error) = block_device.read_logical_block(1, data_address) {
+        crate::log_warn!("gpt", "Failed to read primary GPT header: {error:?}");
+        return None;
+    }
+
+    if let Some(header) = inspect_header(data_address) {
+        return Some(header);
+    }
+
+    let backup_lba = backup_lba_hint(data_address)?;
+    crate::log_warn!(
+        "gpt",
+        "Primary GPT header invalid; trying backup_lba={}",
+        backup_lba
+    );
+    if let Err(error) = block_device.read_logical_block(backup_lba, data_address) {
+        crate::log_warn!("gpt", "Failed to read backup GPT header: {error:?}");
+        return None;
+    }
+
+    let header = inspect_header(data_address)?;
+    crate::log_info!(
+        "gpt",
+        "Backup GPT header accepted: current_lba={} entries_lba={}",
+        header.current_lba,
+        header.entries_lba
+    );
+    Some(header)
 }
 
 /// Inspect GUID partition table partition entries contained in one 512-byte sector.
@@ -180,6 +232,7 @@ pub fn inspect_partition_entries(
     let mut non_empty_entries = 0;
     let mut empty_entries = 0;
     let mut first_partition = None;
+    let mut preferred_partition = None;
 
     for entry_index in 0..entry_count {
         let offset = entry_index * entry_size;
@@ -194,6 +247,9 @@ pub fn inspect_partition_entries(
         if first_partition.is_none() {
             first_partition = Some(partition);
         }
+        if preferred_partition.is_none() && is_preferred_partition(partition) {
+            preferred_partition = Some(partition);
+        }
         log_partition_entry(partition, entry);
     }
 
@@ -205,6 +261,7 @@ pub fn inspect_partition_entries(
         non_empty: u32::try_from(non_empty_entries)
             .expect("GUID partition table non-empty entry count must fit in u32"),
         first_partition,
+        preferred_partition,
     }
 }
 
@@ -235,7 +292,7 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
     let mut non_empty_entries = 0;
     let mut empty_entries = 0;
     let mut entries_remaining = header.count;
-    let mut first_partition = None;
+    let mut partitions = Vec::new();
     let mut partition_array_crc32 = CRC32_INITIAL;
 
     crate::log_debug!(
@@ -248,9 +305,11 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
     );
     crate::log_debug!(
         "gpt",
-        "Partition scan: sectors={} entries_per_sector={}",
+        "Partition scan: sectors={} entries_per_sector={} header_lba={} backup_lba={}",
         sector_count,
-        entries_per_sector
+        entries_per_sector,
+        header.current_lba,
+        header.backup_lba
     );
 
     for sector_offset in 0..sector_count {
@@ -285,8 +344,8 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
             * entries_per_sector_u32;
         let scan =
             inspect_partition_entries(data_address, first_entry_index, entry_count, header.size);
-        if first_partition.is_none() {
-            first_partition = scan.first_partition;
+        if let Some(partition) = scan.preferred_partition.or(scan.first_partition) {
+            partitions.push(partition);
         }
         crate::log_trace!(
             "gpt",
@@ -331,7 +390,7 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
         crate::log_info!("gpt", "Partition entries found: {}", non_empty_entries);
     }
 
-    first_partition
+    select_partition(&partitions)
 }
 
 fn read_le_u32(bytes: &[u8], offset: usize) -> u32 {
@@ -354,6 +413,28 @@ fn read_le_u64(bytes: &[u8], offset: usize) -> u64 {
         bytes[offset + 6],
         bytes[offset + 7],
     ])
+}
+
+fn backup_lba_hint(data_address: u64) -> Option<u64> {
+    let sector = data_address as *const u8;
+    // SAFETY: `data_address` points to a 512-byte DMA buffer filled from a GPT
+    // header candidate sector.
+    let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
+    if &sector[0..GUID_PARTITION_TABLE_SIGNATURE.len()] != GUID_PARTITION_TABLE_SIGNATURE {
+        crate::log_warn!(
+            "gpt",
+            "Cannot find backup GPT header without a primary signature"
+        );
+        return None;
+    }
+
+    let backup_lba = read_le_u64(sector, BACKUP_LBA_OFFSET);
+    if backup_lba == 0 {
+        crate::log_warn!("gpt", "Primary GPT header has no backup_lba hint");
+        return None;
+    }
+
+    Some(backup_lba)
 }
 
 fn calculate_header_crc32(sector: &[u8], header_size: usize) -> u32 {
@@ -400,15 +481,66 @@ fn is_empty_partition_entry(entry: &[u8]) -> bool {
 
 fn parse_partition_entry(entry_index: usize, entry: &[u8]) -> GuidPartitionTablePartition {
     let (name, name_length) = parse_partition_name(entry);
+    let mut type_guid = [0; PARTITION_TYPE_GUID_SIZE];
+    type_guid.copy_from_slice(&entry[0..PARTITION_TYPE_GUID_SIZE]);
     GuidPartitionTablePartition {
         index: u32::try_from(entry_index)
             .expect("GUID partition table partition index must fit in u32"),
+        type_guid,
         first_lba: read_le_u64(entry, PARTITION_ENTRY_FIRST_LBA_OFFSET),
         last_lba: read_le_u64(entry, PARTITION_ENTRY_LAST_LBA_OFFSET),
         attributes: read_le_u64(entry, PARTITION_ENTRY_ATTRIBUTES_OFFSET),
         name,
         name_length,
     }
+}
+
+fn select_partition(
+    partitions: &[GuidPartitionTablePartition],
+) -> Option<GuidPartitionTablePartition> {
+    if let Some(partition) = partitions
+        .iter()
+        .copied()
+        .find(|partition| partition.name() == PREFERRED_PARTITION_NAME)
+    {
+        crate::log_info!(
+            "gpt",
+            "Selected partition by name: index={} name=\"{}\"",
+            partition.index,
+            partition.name()
+        );
+        return Some(partition);
+    }
+
+    if let Some(partition) = partitions
+        .iter()
+        .copied()
+        .find(|partition| partition.type_guid == MICROSOFT_BASIC_DATA_TYPE_GUID)
+    {
+        crate::log_info!(
+            "gpt",
+            "Selected partition by type GUID: index={} name=\"{}\"",
+            partition.index,
+            partition.name()
+        );
+        return Some(partition);
+    }
+
+    let partition = partitions.first().copied();
+    if let Some(partition) = partition {
+        crate::log_info!(
+            "gpt",
+            "Selected first non-empty partition: index={} name=\"{}\"",
+            partition.index,
+            partition.name()
+        );
+    }
+    partition
+}
+
+fn is_preferred_partition(partition: GuidPartitionTablePartition) -> bool {
+    partition.name() == PREFERRED_PARTITION_NAME
+        || partition.type_guid == MICROSOFT_BASIC_DATA_TYPE_GUID
 }
 
 fn log_partition_entry(partition: GuidPartitionTablePartition, entry: &[u8]) {
