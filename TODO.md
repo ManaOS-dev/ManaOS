@@ -1,188 +1,183 @@
 # ManaOS TODO
 
-## Now (Current Sprint)
-- [x] Fix timer EOI unconditional send (`timer_interrupt_handler` try-lock bug)
-- [x] Clamp mouse cursor coordinates in `state.rs`, not only in `draw_cursor()`
-- [x] Guard FPS division against zero in `runtime::tick()`
+This roadmap intentionally lists only unfinished work. Completed historical
+items have been removed so the file stays useful for deciding the next task.
 
-## Phase 5: Filesystem & Storage
-- [x] Phase 5A: Kernel-side file abstraction
-- [x] VFS abstraction layer
-- [x] ramfs
-- [x] `/dev/console`
-- [x] `/dev/null`
-- [x] FileDescriptor table
-- [ ] Phase 5B: Userland I/O
-- [x] Phase 5B-1: SYS_WRITE only
-- [x] syscall ABI
-- [x] SYS_WRITE implementation
-- [x] temporary user pointer validation
-- [x] userland write wrapper
-- [x] `hello from userland` output
-- [x] Phase 5B-2: SYS_EXIT plus one-shot user demo
-- [x] SYS_EXIT implementation
-- [x] mark current user task finished on exit
-- [x] one-shot user demo runner
-- [x] resume UI after user exit
-- [x] Phase 5B-3: file syscalls
-- [x] syscall open/read/close
-- [x] copy C string from user
-- [x] copy read buffer to user
-- [x] userland open/read/close demo
-- [x] Phase 5B-4: user pointer page-table validation
-- [x] verify user ranges by mapped pages
-- [x] reject unmapped read/write syscall buffers
-- [x] Phase 5B-4b: bad pointer demo mode
-- [x] switch user demo mode with a single constant
-- [x] verify bad read buffer returns `ERROR_BAD_ADDRESS`
-- [x] Phase 5B-5: userland syscall wrapper crate
-- [x] no_std userland crate
-- [x] syscall wrappers for write/read/open/close/exit
-- [x] Rust file demo flat binary included by kernel
-- [x] Phase 5B-6: kernel command console
-- [x] keyboard-driven command input buffer
-- [x] command overlay rendering
-- [x] built-in help/ticks/storage/fps commands
-- [x] Phase 5B-6b: command console usability polish
-- [x] toggle console with Escape/backtick
-- [x] route keyboard input to console only while open
-- [x] Phase 5B-7: Linux-like syscall numbers
-- [x] use Linux x86_64 syscall numbers for read/write/open/close/exit
-- [x] Phase 5B-8: Linux-like errno and open ABI
-- [x] return Linux-style negative errno values
-- [x] accept Linux-like `open(path, flags, mode)` arguments
-- [x] Phase 5B-9: Linux syscall compatibility small set
-- [x] add `SYS_EXIT_GROUP` and `SYS_OPENAT`
-- [x] route `openat(AT_FDCWD, path, flags, mode)` to `open`
-- [x] add userland `exit_group()` and `openat()` wrappers
-- [x] Phase 5B-10: command console commands
-- [x] add `cat /hello.txt` and `read /hello.txt`
-- [x] add `echo ...`, `syscalls`, and `partitions`
-- [ ] minimal shell-style task
-- [ ] Phase 5C: Real Storage
-- [x] Phase 5C-1: PCIe enumeration and AHCI controller discovery
-- [x] legacy PCI config-space access
-- [x] AHCI BAR5 discovery
-- [x] AHCI implemented port and SATA signature logging
-- [x] Phase 5C-2: AHCI LBA0 read smoke test
-- [x] AHCI command list/FIS/command table setup
-- [x] READ DMA EXT for LBA0
-- [x] LBA0 first 16 bytes serial dump
-- [x] Phase 5C-3: GPT header inspection
-- [x] AHCI read by arbitrary LBA
-- [x] LBA1 GPT signature and header field logging
-- [x] Phase 5C-3b: GPT test image script
-- [x] generate protective MBR plus primary/backup GPT headers
-- [x] Phase 5C-4a: empty GPT partition entry scan
-- [x] read GPT partition entry array sectors
-- [x] report empty GPT when no partition entries exist
-- [x] Phase 5C-4b: GPT test partition detection
-- [x] generate one GPT partition entry in disk image script
-- [x] report non-empty GPT partition entry count
-- [x] Phase 5C-4c: detailed GPT partition debug logging
-- [x] log GPT header CRC, disk GUID, and partition array CRC
-- [x] log partition type GUID, unique GUID, attributes, and name
-- [x] Phase 5C-4d: storage and CI diagnostics
-- [x] install userland Rust target in CI
-- [x] log PCI discovery and AHCI state transitions in detail
-- [x] Phase 5C-4e: structured kernel log levels
-- [x] add `INFO`/`WARN`/`ERROR`/`DEBUG`/`TRACE` serial log macros
-- [x] move verbose GPT and AHCI diagnostics behind debug/trace levels
-- [x] Phase 5C-4f: GPT partition metadata model
-- [x] parse GPT partition entries into kernel structs
-- [x] select first GPT partition for the next storage stage
-- [x] Phase 5C-5: block device abstraction
-- [x] wrap AHCI sector reads behind `BlockDevice`
-- [x] make GPT scanning read through `BlockDevice`
-- [x] GPT partition entry parsing
-- [x] Phase 5C-6: partition-relative block device
-- [x] translate partition LBA to disk LBA from selected GPT partition
-- [x] Phase 5C-7: FAT32 boot sector inspection
-- [x] generate a GPT test image with a minimal FAT32 boot sector
-- [x] parse FAT32 BIOS Parameter Block geometry
-- [x] Phase 5C-8: FAT32 root directory listing
-- [x] generate a test `HELLO.TXT` directory entry
-- [x] parse root directory 8.3 file entries
-- [x] Phase 5C-9: FAT32 file read smoke test
-- [x] read first data cluster for `HELLO.TXT`
-- [x] inspect the file allocation table entry for the first cluster
-- [x] mount FAT32 file reads into the virtual filesystem
-- [x] expose the disk file to `cat /disk/hello.txt`
-- [ ] AHCI Driver Implementation
+## Immediate Priorities
+
+- [ ] Fix `BumpFrameAllocator::allocate_frames` zero-address skip behavior for multi-frame allocations.
+- [ ] Set `NO_EXECUTE` on non-executable kernel and user mappings where appropriate.
+- [ ] Avoid parsing font data on every `draw_text` call; cache parsed font faces.
+- [ ] Replace the display command queue with a design that is correct for multi-producer use.
+- [ ] Replace cursor backup dimensions with the cursor size constant.
+- [ ] Split kernel console command dispatch into command-focused modules once more commands are added.
+
+## Phase 5: Filesystem And Storage
+
+### Storage Driver
+
+- [ ] Turn the AHCI probe path into a persistent block-device service instead of a boot-only smoke test.
+- [ ] Add a storage device registry with stable device identifiers.
+- [ ] Support multi-sector reads in the AHCI command path.
+- [ ] Support reads that cross FAT32 cluster boundaries.
+- [ ] Add AHCI error propagation instead of returning only `bool`.
+- [ ] Add AHCI timeout diagnostics that include port and command slot state.
+- [ ] Add AHCI interrupt-driven completion as an alternative to polling.
+- [ ] Add cache invalidation or explicit ownership rules for DMA buffers.
+- [ ] Add write support for AHCI sectors after read-only storage is stable.
+- [ ] Add a QEMU storage test mode that boots and verifies expected serial log lines automatically.
+
+### Partition And Filesystem Parsing
+
+- [ ] Validate GPT header CRCs before trusting partition metadata.
+- [ ] Validate GPT partition array CRCs.
+- [ ] Fall back to the backup GPT header when the primary header is invalid.
+- [ ] Support selecting a partition by type GUID or name instead of always selecting the first entry.
+- [ ] Parse FAT32 FSInfo sector metadata.
+- [ ] Validate FAT32 backup boot sector.
+- [ ] Implement FAT32 long file name entries.
+- [ ] Implement FAT32 directory traversal beyond the root directory.
+- [ ] Implement FAT32 file reads across full cluster chains.
+- [ ] Detect FAT32 cluster chain loops and invalid cluster numbers.
+- [ ] Implement FAT32 read-only directory listing API.
+- [ ] Add FAT32 write planning before mutating disk images.
+
+### Virtual Filesystem
+
+- [ ] Add a real mount table with mount points and filesystem backends.
+- [ ] Mount FAT32 as a filesystem backend instead of copying one boot-time file into memory.
+- [ ] Add path traversal for directories and nested files.
+- [ ] Add file metadata operations such as `stat`.
+- [ ] Add `seek` support to file descriptors.
+- [ ] Add directory handles and `readdir` support.
+- [ ] Add read-only and writable mount flags.
+- [ ] Return richer filesystem errors and map them consistently to syscall errno values.
+- [ ] Add `/dev` directory listing.
+- [ ] Decide and document pathname normalization rules for `..`, repeated slashes, and trailing slashes.
+
+### Kernel Console Commands
+
+- [ ] Split command parsing and individual commands out of `kernel::console::mod.rs`.
+- [ ] Add `ls`.
+- [ ] Add `pwd`.
+- [ ] Add `cd`.
+- [ ] Add `stat`.
+- [ ] Add `mounts`.
+- [ ] Add `hexdump`.
+- [ ] Add command history.
+- [ ] Add cursor movement and line editing.
+- [ ] Add scrollback for console output.
+- [ ] Make `cat /disk/hello.txt` a manual smoke test in the docs.
 
 ## Phase 6: Userland
-- [ ] ELF Loader
-- [ ] System Call API Definitions
-- [ ] Shell Implementation
-- [ ] Dynamic linker stub
+
+### ELF And Process Loading
+
+- [ ] Implement a 64-bit ELF loader.
+- [ ] Validate ELF headers, program headers, and segment permissions.
+- [ ] Map user text, rodata, data, bss, stack, and guard pages with correct flags.
+- [ ] Pass `argc`, `argv`, and environment pointers to user entry points.
+- [ ] Load user programs from the filesystem instead of `include_bytes!`.
+- [ ] Add `execve`.
+- [ ] Add process identifiers and parent-child relationships.
+- [ ] Add `wait` or `waitpid`.
+- [ ] Add a minimal user shell process.
+- [ ] Add a userland test program that opens `/disk/hello.txt`.
+
+### Syscall Surface
+
+- [ ] Define syscall numbers and ABI in a shared generated or copied contract for kernel and userland.
+- [ ] Add `lseek`.
+- [ ] Add `stat` or `newfstatat`.
+- [ ] Add `getdents64`.
+- [ ] Add `brk` or another first heap-growth syscall.
+- [ ] Add `mmap` and `munmap` planning.
+- [ ] Add `nanosleep` or a minimal sleep syscall.
+- [ ] Add `getpid`.
+- [ ] Add `fork` or document why the first process model uses `spawn`/`exec` instead.
+- [ ] Add syscall tracing controls.
+
+### Userland Runtime
+
+- [ ] Grow the no-std userland support crate into a small runtime.
+- [ ] Add panic handling that exits with a clear status.
+- [ ] Add basic formatting helpers for userland output.
+- [ ] Add file descriptor wrappers in userland.
+- [ ] Add argument parsing helpers.
+- [ ] Add build scripts for multiple userland binaries.
+- [ ] Add a userland smoke-test runner.
 
 ## Phase 7: Kernel Hardening
-- [ ] ACPI MADT parsing
-- [ ] IOAPIC routing (replace legacy 8259 PIC)
-- [ ] Local APIC timer (replace PIT)
-- [ ] Save/restore full user trap frame on context switch
-- [ ] Per-process virtual address space (separate page tables)
-- [ ] Guard pages between kernel stacks
-- [ ] Virtual memory allocator (for dynamic kernel mappings)
-- [ ] Console text output with scroll
-- [ ] Window / widget primitive layer
 
-## Completed
-<details>
-<summary>Phase 1-4 (click to expand)</summary>
+### Memory Management
 
-### Refactoring
+- [ ] Replace the bump frame allocator with a reusable physical frame allocator.
+- [ ] Track reserved, used, and free physical frame ranges.
+- [ ] Add a kernel virtual memory allocator for dynamic mappings.
+- [ ] Add guard pages for kernel stacks.
+- [ ] Add per-process page tables.
+- [ ] Add copy-in/copy-out helpers with consistent user pointer validation.
+- [ ] Enforce writable, user, and executable page permissions in syscall validation.
+- [ ] Audit identity mapping lifetime and shrink it when possible.
+- [ ] Add typed physical and virtual address wrappers where raw `u64` still leaks across boundaries.
+- [ ] Add page fault diagnostics that include the current task and access type.
 
-- [x] Split boot-time memory/display initialization out of `main.rs`
-- [x] Move main-loop tick processing out of `main.rs`
-- [x] Remove direct `arch/` to `kernel/` calls from interrupt handlers
-- [x] Wire interrupt callbacks from `main.rs`
-- [x] Rework interrupt callback registration into a single `InterruptProcessors` registration API
-- [x] Add `kernel::interrupt` bridge for kernel-side interrupt event routing
-- [x] Fix stale boot memory map usage after boot-service pool allocations
-- [x] Persist PS/2 mouse packet assembly state across `process_packets()` calls
-- [x] Make display command processing non-dropping when the framebuffer lock is busy
-- [x] Add missing `// SAFETY:` comments in remaining unsafe-heavy modules
-- [x] Move cursor rendering ownership from input mouse code to display cursor code
+### Interrupts And Scheduling
 
-### Phase 1: Memory Management & Foundation
+- [ ] Parse ACPI RSDP and XSDT/RSDT.
+- [ ] Parse ACPI MADT.
+- [ ] Enable IOAPIC routing.
+- [ ] Replace legacy PIC routing after IOAPIC is stable.
+- [ ] Calibrate and use the Local APIC timer.
+- [ ] Replace PIT scheduling ticks after Local APIC timer validation.
+- [ ] Save and restore a full user trap frame on interrupt and syscall paths.
+- [ ] Make preemptive scheduling safe for user tasks.
+- [ ] Add scheduler accounting and task state diagnostics.
+- [ ] Add kernel stack switching per task where needed.
 
-- [x] Memory Map Acquisition & `ExitBootServices`
-- [x] Physical Frame Allocator (Bump Allocator)
-- [x] Heap Allocator (`linked_list_allocator`)
-- [x] Architecture Separation (`arch/` layer established)
-- [x] Explicit Paging Setup (Identity Mapping)
-- [x] Rebuild or refresh allocator regions from the final memory map after all boot-service allocations
+### Synchronization And Concurrency
 
-### Phase 2: Interrupts & Exceptions
+- [ ] Audit all interrupt-time locks for deadlock and priority inversion risk.
+- [ ] Replace queues that have mismatched producer/consumer assumptions.
+- [ ] Add explicit single-producer/single-consumer and multi-producer queue types.
+- [ ] Define which APIs are callable from interrupt context.
+- [ ] Add lock ordering notes for kernel subsystems.
 
-- [x] GDT / IDT Setup (with Data Segments)
-- [x] Exception Handlers (Page Fault, Double Fault, GPF)
-- [x] Mouse Driver (PS/2) with Real-time Cursor, Lock-Free Async Queue & Dirty Rectangles
-- [x] Keyboard Driver (PS/2) - Interrupt driven & Lock-Free Async Queue
-- [x] Interrupt callback boundary: `arch/` dispatches to registered callbacks, not `kernel/`
-- [x] Consolidate callback registration with `InterruptProcessors`
-- [x] Add timeouts to PS/2 controller busy waits
-- [x] Timer backend abstraction with Local APIC capability detection
-- [x] Interrupt controller abstraction with IOAPIC routing boundary
+## Phase 8: Drivers And Hardware
 
-### Phase 3: Graphics & Console
+### Input
 
-- [x] Serial Output (COM1)
-- [x] GOP Framebuffer Control
-- [x] Font Engine (`ab_glyph`)
-- [x] Proper Alpha Blending for Text (Pixel-perfect rounding)
-- [x] Double Buffering & Dirty Rectangles Optimization (1000fps ready)
-- [x] RDTSC Profiling & Calibration
-- [x] Split renderer/font/cursor responsibilities out of `framebuffer.rs`
-- [x] Avoid dropping queued draw commands on temporary framebuffer lock contention
+- [ ] Move keyboard layout choice behind a small configuration boundary.
+- [ ] Add key release handling where useful.
+- [ ] Add modifier state reporting for Shift, Control, Alt, and Super.
+- [ ] Add Caps Lock state and LED updates.
+- [ ] Add mouse wheel packet support.
+- [ ] Add optional double-click and drag state at the UI layer, not the input driver layer.
 
-### Phase 4: Process Management
+### Display
 
-- [x] Task Structure & Context Switching
-- [x] Cooperative / Preemptive Scheduler
-- [x] Ring 3 descriptor groundwork and selector exposure
-- [x] Enter user mode with `iretq` and a user stack
-- [x] Minimal `SYSCALL`/`SYSRET` MSR setup and syscall bridge stub
+- [ ] Add a text console with scrolling independent of the graphical overlay.
+- [ ] Add framebuffer mode diagnostics.
+- [ ] Add damage tracking tests for dirty rectangles.
+- [ ] Add primitive window/widget layer planning.
+- [ ] Add bitmap image rendering support if the UI starts using assets.
 
-</details>
+### Future Hardware
+
+- [ ] Investigate NVMe support after AHCI read/write is stable.
+- [ ] Investigate USB keyboard and mouse support after ACPI/interrupt work.
+- [ ] Add PCI capability parsing.
+- [ ] Add MSI/MSI-X planning.
+
+## Phase 9: Tooling, Tests, And Documentation
+
+- [ ] Add a headless QEMU smoke test script for CI.
+- [ ] Add serial log assertions for boot milestones.
+- [ ] Add a disk-image fixture generator with multiple files and directories.
+- [ ] Add parser unit tests for GPT and FAT32 using byte fixtures.
+- [ ] Add syscall ABI tests for success and errno paths.
+- [ ] Add userland build checks to CI for every committed user program.
+- [ ] Add architecture boundary checks that reject `arch` to `kernel` imports.
+- [ ] Add docs for the direct maintainer branch workflow.
+- [ ] Add docs for manual QEMU validation commands.
+- [ ] Add a contributor-facing architecture map generated from the current module tree.
