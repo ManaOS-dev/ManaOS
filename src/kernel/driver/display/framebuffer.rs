@@ -455,17 +455,62 @@ impl GraphicsDriver {
 pub fn get_info(graphics_output: &mut GraphicsOutput) -> FrameBufferInfo {
     let mode_info = graphics_output.current_mode_info();
     let (width, height) = mode_info.resolution();
-    let format = match mode_info.pixel_format() {
+    let pixel_format = mode_info.pixel_format();
+    let format = match pixel_format {
         PixelFormat::Rgb => ColorFormat::Rgb,
-        _ => ColorFormat::Bgr,
+        PixelFormat::Bgr | PixelFormat::Bitmask | PixelFormat::BltOnly => ColorFormat::Bgr,
     };
 
     let mut framebuffer = graphics_output.frame_buffer();
-    FrameBufferInfo {
+    let info = FrameBufferInfo {
         base_ptr: framebuffer.as_mut_ptr(),
         horizontal_resolution: width,
         vertical_resolution: height,
         stride: mode_info.stride(),
         format,
+    };
+    crate::log_info!(
+        "framebuffer",
+        "GOP mode: {}x{} stride={} pixel_format={} mapped_format={:?}",
+        info.horizontal_resolution,
+        info.vertical_resolution,
+        info.stride,
+        pixel_format_name(pixel_format),
+        info.format
+    );
+    crate::log_debug!(
+        "framebuffer",
+        "Framebuffer base={:p} bytes={}",
+        info.base_ptr,
+        info.stride
+            .saturating_mul(info.vertical_resolution)
+            .saturating_mul(4)
+    );
+    if let Some(bitmask) = mode_info.pixel_bitmask() {
+        crate::log_debug!(
+            "framebuffer",
+            "GOP bitmask: red={:#010x} green={:#010x} blue={:#010x} reserved={:#010x}",
+            bitmask.red,
+            bitmask.green,
+            bitmask.blue,
+            bitmask.reserved
+        );
+    }
+    if matches!(pixel_format, PixelFormat::Bitmask | PixelFormat::BltOnly) {
+        crate::log_warn!(
+            "framebuffer",
+            "GOP pixel format {} is treated as BGR",
+            pixel_format_name(pixel_format)
+        );
+    }
+    info
+}
+
+fn pixel_format_name(pixel_format: PixelFormat) -> &'static str {
+    match pixel_format {
+        PixelFormat::Rgb => "RGB",
+        PixelFormat::Bgr => "BGR",
+        PixelFormat::Bitmask => "bitmask",
+        PixelFormat::BltOnly => "BLT-only",
     }
 }

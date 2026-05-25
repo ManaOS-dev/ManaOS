@@ -26,6 +26,9 @@ const PARTITION_ENTRY_ATTRIBUTES_OFFSET: usize = 48;
 const PARTITION_ENTRY_NAME_OFFSET: usize = 56;
 const PARTITION_ENTRY_NAME_BYTES: usize = 72;
 const PARTITION_NAME_CAPACITY: usize = 36;
+const MINIMUM_HEADER_SIZE: usize = 92;
+const CRC32_INITIAL: u32 = u32::MAX;
+const CRC32_POLYNOMIAL: u32 = 0xedb8_8320;
 
 /// GUID partition table header fields needed to locate partition entries.
 #[derive(Clone, Copy)]
@@ -36,6 +39,8 @@ pub struct GuidPartitionTableHeader {
     pub count: u32,
     /// Size in bytes of each partition entry.
     pub size: u32,
+    /// Expected CRC32 of the partition entry array.
+    pub partition_entry_array_crc32: u32,
 }
 
 /// Summary of partition entries inspected from one sector.
@@ -82,15 +87,39 @@ pub fn inspect_header(data_address: u64) -> Option<GuidPartitionTableHeader> {
         return None;
     }
 
+    let header_size = usize::try_from(read_le_u32(sector, HEADER_SIZE_OFFSET))
+        .expect("GUID partition table header size must fit in usize");
+    if !(MINIMUM_HEADER_SIZE..=SECTOR_BYTES).contains(&header_size) {
+        crate::log_warn!("gpt", "Invalid header_size={}", header_size);
+        return None;
+    }
+
+    let expected_header_crc32 = read_le_u32(sector, HEADER_CRC32_OFFSET);
+    let actual_header_crc32 = calculate_header_crc32(sector, header_size);
+    if actual_header_crc32 != expected_header_crc32 {
+        crate::log_warn!(
+            "gpt",
+            "Header CRC32 mismatch: expected={:#010x} actual={:#010x} header_size={}",
+            expected_header_crc32,
+            actual_header_crc32,
+            header_size
+        );
+        return None;
+    }
+
+    crate::log_info!("gpt", "Header signature: EFI PART");
+    crate::log_info!(
+        "gpt",
+        "Header CRC32 validated: {:#010x}",
+        actual_header_crc32
+    );
     let partition_entry_lba = read_le_u64(sector, PARTITION_ENTRY_LBA_OFFSET);
     let partition_entry_count = read_le_u32(sector, PARTITION_ENTRY_COUNT_OFFSET);
     let partition_entry_size = read_le_u32(sector, PARTITION_ENTRY_SIZE_OFFSET);
-
-    crate::log_info!("gpt", "Header signature: EFI PART");
     crate::log_debug!(
         "gpt",
         "header_crc32={:#010x} reserved={:#010x} partition_array_crc32={:#010x}",
-        read_le_u32(sector, HEADER_CRC32_OFFSET),
+        expected_header_crc32,
         read_le_u32(sector, RESERVED_OFFSET),
         read_le_u32(sector, PARTITION_ENTRY_ARRAY_CRC32_OFFSET)
     );
@@ -127,6 +156,7 @@ pub fn inspect_header(data_address: u64) -> Option<GuidPartitionTableHeader> {
         entries_lba: partition_entry_lba,
         count: partition_entry_count,
         size: partition_entry_size,
+        partition_entry_array_crc32: read_le_u32(sector, PARTITION_ENTRY_ARRAY_CRC32_OFFSET),
     })
 }
 
@@ -205,6 +235,7 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
     let mut empty_entries = 0;
     let mut entries_remaining = header.count;
     let mut first_partition = None;
+    let mut partition_array_crc32 = CRC32_INITIAL;
 
     crate::log_debug!(
         "gpt",
@@ -232,6 +263,17 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
         }
 
         let entry_count = entries_remaining.min(entries_per_sector_u32);
+        let checksum_bytes = usize::try_from(entry_count)
+            .expect("GUID partition table entry count must fit in usize")
+            .checked_mul(entry_size)
+            .expect("GUID partition table checksum byte count must not overflow");
+        let sector = data_address as *const u8;
+        // SAFETY: `data_address` points to a 512-byte DMA buffer filled from a
+        // GUID partition table partition entry sector.
+        let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
+        partition_array_crc32 =
+            update_crc32_bytes(partition_array_crc32, &sector[..checksum_bytes]);
+
         let first_entry_index = u32::try_from(sector_offset)
             .expect("GUID partition table partition entry sector offset must fit in u32")
             * entries_per_sector_u32;
@@ -253,6 +295,22 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
         non_empty_entries += scan.non_empty;
         entries_remaining -= entry_count;
     }
+
+    let actual_partition_array_crc32 = finalize_crc32(partition_array_crc32);
+    if actual_partition_array_crc32 != header.partition_entry_array_crc32 {
+        crate::log_warn!(
+            "gpt",
+            "Partition array CRC32 mismatch: expected={:#010x} actual={:#010x}",
+            header.partition_entry_array_crc32,
+            actual_partition_array_crc32
+        );
+        return None;
+    }
+    crate::log_info!(
+        "gpt",
+        "Partition array CRC32 validated: {:#010x}",
+        actual_partition_array_crc32
+    );
 
     crate::log_info!(
         "gpt",
@@ -290,6 +348,42 @@ fn read_le_u64(bytes: &[u8], offset: usize) -> u64 {
         bytes[offset + 6],
         bytes[offset + 7],
     ])
+}
+
+fn calculate_header_crc32(sector: &[u8], header_size: usize) -> u32 {
+    let mut crc32 = CRC32_INITIAL;
+    let header_crc32_end = HEADER_CRC32_OFFSET + core::mem::size_of::<u32>();
+
+    for (offset, byte) in sector[..header_size].iter().enumerate() {
+        let byte = if (HEADER_CRC32_OFFSET..header_crc32_end).contains(&offset) {
+            0
+        } else {
+            *byte
+        };
+        crc32 = update_crc32(crc32, byte);
+    }
+
+    finalize_crc32(crc32)
+}
+
+fn update_crc32_bytes(mut crc32: u32, bytes: &[u8]) -> u32 {
+    for byte in bytes {
+        crc32 = update_crc32(crc32, *byte);
+    }
+    crc32
+}
+
+fn finalize_crc32(crc32: u32) -> u32 {
+    !crc32
+}
+
+fn update_crc32(mut crc32: u32, byte: u8) -> u32 {
+    crc32 ^= u32::from(byte);
+    for _ in 0..8 {
+        let mask = 0_u32.wrapping_sub(crc32 & 1);
+        crc32 = (crc32 >> 1) ^ (CRC32_POLYNOMIAL & mask);
+    }
+    crc32
 }
 
 fn is_empty_partition_entry(entry: &[u8]) -> bool {

@@ -181,6 +181,16 @@ fn verify_kernel_filesystem() {
     let _ = kernel::filesystem::read(kernel::filesystem::STANDARD_INPUT, &mut buffer);
 }
 
+fn verify_frame_allocator_rules() {
+    let zero_skip_ok =
+        kernel::memory::frame_allocator::verify_zero_address_skip_for_multi_frame_allocations();
+    if zero_skip_ok {
+        crate::log_info!("memory", "Frame allocator zero-address skip check passed.");
+    } else {
+        crate::log_error!("memory", "Frame allocator zero-address skip check failed.");
+    }
+}
+
 fn verify_mounted_disk_file(path: &str) {
     let descriptor = kernel::filesystem::open(path).expect("mounted disk file must open");
     let mut buffer = [0_u8; 64];
@@ -228,6 +238,7 @@ fn main() -> Status {
     crate::log_info!("serial", "ExitBootServices OK.");
     let mut frame_allocator = kernel::memory::frame_allocator::BumpFrameAllocator::new();
     add_conventional_memory_regions(&mut frame_allocator, mmap.entries());
+    verify_frame_allocator_rules();
 
     // ────────────────────────────────────────────────
     // Kernel Phase (UEFI Services unavailable)
