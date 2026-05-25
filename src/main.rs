@@ -206,6 +206,24 @@ fn verify_mounted_disk_file(path: &str) {
     let _ = kernel::filesystem::write(kernel::filesystem::STANDARD_OUTPUT, &buffer[..bytes_read]);
 }
 
+fn verify_primary_storage_device() {
+    let Some(data_address) = kernel::driver::storage::get_primary_data_address() else {
+        return;
+    };
+
+    if kernel::driver::storage::read_primary_blocks(0, 2, data_address) {
+        crate::log_info!(
+            "storage",
+            "Primary block device multi-sector read smoke passed."
+        );
+    } else {
+        crate::log_warn!(
+            "storage",
+            "Primary block device multi-sector read smoke failed."
+        );
+    }
+}
+
 #[entry]
 fn main() -> Status {
     // ────────────────────────────────────────────────
@@ -268,6 +286,7 @@ fn main() -> Status {
             arch::x86_64::pci_configuration::write_config32,
         ),
     );
+    verify_primary_storage_device();
     if let Some(file) = kernel::driver::storage::get_detected_file() {
         kernel::filesystem::mount_read_only_file(&file.mount_path, &file.contents);
         crate::log_info!(

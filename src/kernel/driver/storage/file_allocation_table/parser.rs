@@ -101,7 +101,8 @@ pub(in crate::kernel::driver::storage) fn inspect_boot_sector(
     block_device: &mut impl BlockDevice,
     data_address: u64,
 ) -> Option<FileAllocationTable32Volume> {
-    if !block_device.read_logical_block(BOOT_SECTOR_LBA, data_address) {
+    if let Err(error) = block_device.read_logical_block(BOOT_SECTOR_LBA, data_address) {
+        crate::log_warn!("fat32", "Failed to read boot sector: {error:?}");
         return None;
     }
 
@@ -135,7 +136,14 @@ pub(in crate::kernel::driver::storage) fn inspect_root_directory(
     for sector_offset in 0..volume.sectors_per_cluster {
         let logical_block_address =
             root_directory_start_sector.checked_add(u32::from(sector_offset))?;
-        if !block_device.read_logical_block(u64::from(logical_block_address), data_address) {
+        if let Err(error) =
+            block_device.read_logical_block(u64::from(logical_block_address), data_address)
+        {
+            crate::log_warn!(
+                "fat32",
+                "Failed to read root directory sector lba={}: {error:?}",
+                logical_block_address
+            );
             return None;
         }
 
@@ -171,7 +179,12 @@ pub(in crate::kernel::driver::storage) fn inspect_file_contents(
     }
 
     let first_sector = volume.cluster_first_sector(entry.first_cluster)?;
-    if !block_device.read_logical_block(u64::from(first_sector), data_address) {
+    if let Err(error) = block_device.read_logical_block(u64::from(first_sector), data_address) {
+        crate::log_warn!(
+            "fat32",
+            "Failed to read first data sector lba={}: {error:?}",
+            first_sector
+        );
         return None;
     }
 
@@ -217,6 +230,7 @@ pub(in crate::kernel::driver::storage) fn read_file_contents(
     }
 
     let mut current_cluster = entry.first_cluster;
+    let mut clusters_read = 0_u32;
     while contents.len() < file_size {
         read_cluster_contents(
             block_device,
@@ -226,6 +240,7 @@ pub(in crate::kernel::driver::storage) fn read_file_contents(
             file_size,
             &mut contents,
         )?;
+        clusters_read = clusters_read.saturating_add(1);
 
         if contents.len() >= file_size {
             break;
@@ -245,6 +260,13 @@ pub(in crate::kernel::driver::storage) fn read_file_contents(
         current_cluster = next_cluster;
     }
 
+    crate::log_info!(
+        "fat32",
+        "Read {} complete: bytes={} clusters_read={}",
+        entry.name(),
+        contents.len(),
+        clusters_read
+    );
     Some(contents)
 }
 
@@ -396,14 +418,15 @@ fn inspect_file_system_information(
         return;
     }
 
-    if !block_device.read_logical_block(
+    if let Err(error) = block_device.read_logical_block(
         u64::from(volume.file_system_information_sector),
         data_address,
     ) {
         crate::log_warn!(
             "fat32",
-            "Failed to read FSInfo sector: lba={}",
-            volume.file_system_information_sector
+            "Failed to read FSInfo sector: lba={} error={:?}",
+            volume.file_system_information_sector,
+            error
         );
         return;
     }
@@ -565,7 +588,14 @@ fn read_cluster_contents(
     let first_sector = volume.cluster_first_sector(cluster)?;
     for sector_offset in 0..volume.sectors_per_cluster {
         let logical_block_address = first_sector.checked_add(u32::from(sector_offset))?;
-        if !block_device.read_logical_block(u64::from(logical_block_address), data_address) {
+        if let Err(error) =
+            block_device.read_logical_block(u64::from(logical_block_address), data_address)
+        {
+            crate::log_warn!(
+                "fat32",
+                "Failed to read file sector lba={}: {error:?}",
+                logical_block_address
+            );
             return None;
         }
 
@@ -595,7 +625,12 @@ fn read_next_cluster(
     let entry_offset = usize::try_from(byte_offset % u32::from(volume.bytes_per_sector))
         .expect("file allocation table entry offset must fit in usize");
     let logical_block_address = u64::from(volume.reserved_sector_count) + u64::from(sector_offset);
-    if !block_device.read_logical_block(logical_block_address, data_address) {
+    if let Err(error) = block_device.read_logical_block(logical_block_address, data_address) {
+        crate::log_warn!(
+            "fat32",
+            "Failed to read FAT sector lba={}: {error:?}",
+            logical_block_address
+        );
         return None;
     }
 

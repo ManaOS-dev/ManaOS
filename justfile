@@ -27,6 +27,12 @@ run: build disk
     @echo "[run] Setting up ESP and starting QEMU..."
     {{ if os == "windows" { "powershell -ExecutionPolicy Bypass -File run.bat" } else { "./run.sh" } }}
 
+# Boot QEMU headlessly and assert storage serial milestones
+storage-smoke: disk-gpt
+    @echo "[test] Running headless storage smoke test..."
+    cargo build --target x86_64-unknown-uefi
+    {{ if os == "windows" { "powershell -ExecutionPolicy Bypass -File scripts/run_storage_smoke.ps1" } else { "pwsh -File scripts/run_storage_smoke.ps1" } }}
+
 # Format code (checks in CI)
 fmt:
     @echo "[fmt] Formatting code..."

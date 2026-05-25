@@ -1,5 +1,5 @@
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
-use uefi::mem::memory_map::MemoryDescriptor;
+use uefi::mem::memory_map::{MemoryDescriptor, MemoryType};
 use x86_64::{
     registers::{
         control::Cr3,
@@ -207,8 +207,15 @@ unsafe fn map_memory_regions<'a>(
     frame_allocator: &mut BumpFrameAllocator,
     mmap_iter: impl Iterator<Item = &'a MemoryDescriptor>,
 ) {
-    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+    let mut executable_pages = 0_u64;
+    let mut non_executable_pages = 0_u64;
     for desc in mmap_iter {
+        let flags = memory_region_flags(desc.ty);
+        if flags.contains(PageTableFlags::NO_EXECUTE) {
+            non_executable_pages = non_executable_pages.saturating_add(desc.page_count);
+        } else {
+            executable_pages = executable_pages.saturating_add(desc.page_count);
+        }
         let start = desc.phys_start;
         let size = desc
             .page_count
@@ -272,6 +279,30 @@ unsafe fn map_memory_regions<'a>(
             }
         }
     }
+
+    crate::log_info!(
+        "paging",
+        "Identity mapping permissions: executable_pages={} non_executable_pages={}",
+        executable_pages,
+        non_executable_pages
+    );
+}
+
+fn memory_region_flags(memory_type: MemoryType) -> PageTableFlags {
+    let mut flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+    if !is_executable_memory_type(memory_type) {
+        flags |= PageTableFlags::NO_EXECUTE;
+    }
+    flags
+}
+
+fn is_executable_memory_type(memory_type: MemoryType) -> bool {
+    matches!(
+        memory_type,
+        MemoryType::LOADER_CODE
+            | MemoryType::BOOT_SERVICES_CODE
+            | MemoryType::RUNTIME_SERVICES_CODE
+    )
 }
 
 unsafe fn map_identity_pages(

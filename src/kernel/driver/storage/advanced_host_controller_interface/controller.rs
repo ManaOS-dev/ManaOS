@@ -4,7 +4,12 @@ use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 
 use super::block_device::AhciBlockDevice;
 use super::registers::MAX_PORTS;
+use super::{command, service};
 use super::{dma, host, port, probe};
+use crate::kernel::driver::storage::block_device::SECTOR_BYTES;
+use crate::kernel::driver::storage::{
+    register_storage_device, StorageControllerKind, StorageDeviceId,
+};
 
 const SATA_SIGNATURE: u32 = 0x0000_0101;
 
@@ -45,6 +50,7 @@ fn initialize_sata_port(
     port_index: usize,
 ) {
     crate::log_info!("ahci", "Port {}: SATA device detected", port_index);
+    command::log_supported_transfer_directions(port_index);
     let Some(buffers) = dma::allocate(frame_allocator) else {
         crate::log_error!(
             "ahci",
@@ -59,5 +65,16 @@ fn initialize_sata_port(
     }
 
     let mut block_device = AhciBlockDevice::new(hba_port, buffers, port_index);
+    let maximum_transfer_sectors = block_device.maximum_transfer_sectors();
     probe::inspect_initial_storage(&mut block_device, buffers.data);
+    register_storage_device(
+        StorageDeviceId {
+            controller: StorageControllerKind::Ahci,
+            controller_index: 0,
+            port_index: u8::try_from(port_index).expect("AHCI port index must fit in u8"),
+        },
+        SECTOR_BYTES,
+        maximum_transfer_sectors,
+    );
+    service::register_primary_device(block_device);
 }

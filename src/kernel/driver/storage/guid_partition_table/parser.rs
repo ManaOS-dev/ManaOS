@@ -209,6 +209,7 @@ pub fn inspect_partition_entries(
 }
 
 /// Inspect the GUID partition table partition-entry array and return the first non-empty partition.
+#[allow(clippy::too_many_lines)]
 pub(in crate::kernel::driver::storage) fn inspect_partition_table(
     block_device: &mut impl BlockDevice,
     header: GuidPartitionTableHeader,
@@ -258,7 +259,12 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
         }
 
         let logical_block_address = header.entries_lba + sector_offset;
-        if !block_device.read_logical_block(logical_block_address, data_address) {
+        if let Err(error) = block_device.read_logical_block(logical_block_address, data_address) {
+            crate::log_warn!(
+                "gpt",
+                "Failed to read partition entry sector lba={}: {error:?}",
+                logical_block_address
+            );
             return None;
         }
 

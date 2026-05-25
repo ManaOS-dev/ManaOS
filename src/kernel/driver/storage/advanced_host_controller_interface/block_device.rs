@@ -1,16 +1,23 @@
 //! Advanced Host Controller Interface block device adapter.
 
-use crate::kernel::driver::storage::block_device::BlockDevice;
+use crate::kernel::driver::storage::block_device::{
+    BlockDevice, BlockDeviceError, BlockDeviceResult, SECTOR_BYTES,
+};
 
-use super::command;
+use super::command::{self, AhciTransferDirection};
 use super::dma::AhciDmaBuffers;
 use super::registers::HbaPort;
 
+/// Persistent Advanced Host Controller Interface block-device service.
 pub(super) struct AhciBlockDevice {
     port: *mut HbaPort,
     buffers: AhciDmaBuffers,
     port_index: usize,
 }
+
+// SAFETY: Access to the raw port pointer and DMA buffers is serialized by the
+// storage service mutex before commands are issued.
+unsafe impl Send for AhciBlockDevice {}
 
 impl AhciBlockDevice {
     pub(super) fn new(port: *mut HbaPort, buffers: AhciDmaBuffers, port_index: usize) -> Self {
@@ -20,25 +27,79 @@ impl AhciBlockDevice {
             port_index,
         }
     }
-}
 
-impl BlockDevice for AhciBlockDevice {
-    fn read_logical_block(&mut self, logical_block_address: u64, data_address: u64) -> bool {
+    pub(super) fn maximum_transfer_sectors(&self) -> u16 {
+        u16::try_from(self.buffers.data_bytes / SECTOR_BYTES)
+            .expect("AHCI DMA transfer sector capacity must fit in u16")
+    }
+
+    pub(super) fn data_address(&self) -> u64 {
+        self.buffers.data
+    }
+
+    pub(super) fn port_index(&self) -> usize {
+        self.port_index
+    }
+
+    fn validate_data_buffer(&self, sector_count: u16, data_address: u64) -> BlockDeviceResult<()> {
         if data_address != self.buffers.data {
             crate::log_error!(
                 "ahci",
-                "unexpected AHCI read buffer: requested={:#018x} owned={:#018x}",
+                "unexpected AHCI transfer buffer: requested={:#018x} owned={:#018x}",
                 data_address,
                 self.buffers.data
             );
-            return false;
+            return Err(BlockDeviceError::BufferMismatch);
         }
 
-        command::issue_read_sector(
+        if sector_count == 0 || sector_count > self.maximum_transfer_sectors() {
+            crate::log_error!(
+                "ahci",
+                "invalid AHCI transfer length: sector_count={} max={}",
+                sector_count,
+                self.maximum_transfer_sectors()
+            );
+            return Err(BlockDeviceError::InvalidTransferLength);
+        }
+
+        Ok(())
+    }
+}
+
+impl BlockDevice for AhciBlockDevice {
+    fn read_logical_blocks(
+        &mut self,
+        logical_block_address: u64,
+        sector_count: u16,
+        data_address: u64,
+    ) -> BlockDeviceResult<()> {
+        self.validate_data_buffer(sector_count, data_address)?;
+
+        command::issue_dma_transfer(
             self.port,
             self.buffers,
             self.port_index,
             logical_block_address,
+            sector_count,
+            AhciTransferDirection::Read,
+        )
+    }
+
+    fn write_logical_blocks(
+        &mut self,
+        logical_block_address: u64,
+        sector_count: u16,
+        data_address: u64,
+    ) -> BlockDeviceResult<()> {
+        self.validate_data_buffer(sector_count, data_address)?;
+
+        command::issue_dma_transfer(
+            self.port,
+            self.buffers,
+            self.port_index,
+            logical_block_address,
+            sector_count,
+            AhciTransferDirection::Write,
         )
     }
 }

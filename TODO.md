@@ -5,25 +5,25 @@ items have been removed so the file stays useful for deciding the next task.
 
 ## Immediate Priorities
 
-- [ ] Set `NO_EXECUTE` on non-executable kernel and user mappings where appropriate.
-- [ ] Avoid parsing font data on every `draw_text` call; cache parsed font faces.
-- [ ] Replace the display command queue with a design that is correct for multi-producer use.
-- [ ] Replace cursor backup dimensions with the cursor size constant.
-- [ ] Split kernel console command dispatch into command-focused modules once more commands are added.
+- [x] Set `NO_EXECUTE` on non-executable kernel and user mappings where appropriate.
+- [x] Avoid parsing font data on every `draw_text` call; cache parsed font faces.
+- [x] Replace the display command queue with a design that is correct for multi-producer use.
+- [x] Replace cursor backup dimensions with the cursor size constant.
+- [x] Split kernel console command dispatch into command-focused modules once more commands are added.
 
 ## Phase 5: Filesystem And Storage
 
 ### Storage Driver
 
-- [ ] Turn the AHCI probe path into a persistent block-device service instead of a boot-only smoke test.
-- [ ] Add a storage device registry with stable device identifiers.
-- [ ] Support multi-sector reads in the AHCI command path.
-- [ ] Support reads that cross FAT32 cluster boundaries.
-- [ ] Add AHCI error propagation instead of returning only `bool`.
-- [ ] Add AHCI interrupt-driven completion as an alternative to polling.
-- [ ] Add cache invalidation or explicit ownership rules for DMA buffers.
-- [ ] Add write support for AHCI sectors after read-only storage is stable.
-- [ ] Add a QEMU storage test mode that boots and verifies expected serial log lines automatically.
+- [x] Turn the AHCI probe path into a persistent block-device service instead of a boot-only smoke test.
+- [x] Add a storage device registry with stable device identifiers.
+- [x] Support multi-sector reads in the AHCI command path.
+- [x] Support reads that cross FAT32 cluster boundaries.
+- [x] Add AHCI error propagation instead of returning only `bool`.
+- [x] Add AHCI interrupt-driven completion as an alternative to polling.
+- [x] Add cache invalidation or explicit ownership rules for DMA buffers.
+- [x] Add write support for AHCI sectors after read-only storage is stable.
+- [x] Add a QEMU storage test mode that boots and verifies expected serial log lines automatically.
 
 ### Partition And Filesystem Parsing
 
