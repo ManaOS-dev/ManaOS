@@ -1,6 +1,8 @@
 //! Device-backed filesystem nodes.
 
-use crate::kernel::filesystem::node::{FileNode, FileSystemError, FileSystemResult};
+use crate::kernel::filesystem::node::{
+    FileMetadata, FileNode, FileSystemError, FileSystemResult, FileType,
+};
 use core::str;
 
 /// Serial-backed console device.
@@ -29,6 +31,14 @@ impl FileNode for ConsoleDevice {
 
         Ok(buffer.len())
     }
+
+    fn metadata(&self) -> FileMetadata {
+        FileMetadata {
+            file_type: FileType::Device,
+            size: 0,
+            writable: true,
+        }
+    }
 }
 
 /// Null device that discards writes and returns end-of-file on reads.
@@ -48,5 +58,13 @@ impl FileNode for NullDevice {
 
     fn write_at(&self, _offset: usize, buffer: &[u8]) -> FileSystemResult<usize> {
         Ok(buffer.len())
+    }
+
+    fn metadata(&self) -> FileMetadata {
+        FileMetadata {
+            file_type: FileType::Device,
+            size: 0,
+            writable: true,
+        }
     }
 }

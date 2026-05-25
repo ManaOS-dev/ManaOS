@@ -1,6 +1,8 @@
 //! Read-only filesystem nodes.
 
-use crate::kernel::filesystem::node::{FileNode, FileSystemError, FileSystemResult};
+use crate::kernel::filesystem::node::{
+    FileMetadata, FileNode, FileSystemError, FileSystemResult, FileType,
+};
 use alloc::vec::Vec;
 
 /// A read-only memory-backed regular file.
@@ -31,5 +33,13 @@ impl FileNode for ReadOnlyFile {
 
     fn write_at(&self, _offset: usize, _buffer: &[u8]) -> FileSystemResult<usize> {
         Err(FileSystemError::UnsupportedOperation)
+    }
+
+    fn metadata(&self) -> FileMetadata {
+        FileMetadata {
+            file_type: FileType::Regular,
+            size: self.data.len(),
+            writable: false,
+        }
     }
 }

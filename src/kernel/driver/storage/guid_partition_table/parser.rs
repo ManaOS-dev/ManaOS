@@ -1,9 +1,10 @@
 //! GUID partition table parsing implementation.
 
 use alloc::vec::Vec;
-use core::fmt;
 
 use super::super::block_device::{BlockDevice, SECTOR_BYTES};
+use super::bytes::{read_le_u32, read_le_u64};
+use super::display::GuidPartitionTableGuid;
 
 const GUID_PARTITION_TABLE_SIGNATURE: &[u8; 8] = b"EFI PART";
 const REVISION_OFFSET: usize = 8;
@@ -393,28 +394,6 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
     select_partition(&partitions)
 }
 
-fn read_le_u32(bytes: &[u8], offset: usize) -> u32 {
-    u32::from_le_bytes([
-        bytes[offset],
-        bytes[offset + 1],
-        bytes[offset + 2],
-        bytes[offset + 3],
-    ])
-}
-
-fn read_le_u64(bytes: &[u8], offset: usize) -> u64 {
-    u64::from_le_bytes([
-        bytes[offset],
-        bytes[offset + 1],
-        bytes[offset + 2],
-        bytes[offset + 3],
-        bytes[offset + 4],
-        bytes[offset + 5],
-        bytes[offset + 6],
-        bytes[offset + 7],
-    ])
-}
-
 fn backup_lba_hint(data_address: u64) -> Option<u64> {
     let sector = data_address as *const u8;
     // SAFETY: `data_address` points to a 512-byte DMA buffer filled from a GPT
@@ -580,32 +559,6 @@ impl GuidPartitionTablePartition {
     pub fn name(&self) -> &str {
         core::str::from_utf8(&self.name[..self.name_length])
             .expect("GUID partition table partition names are stored as ASCII fallback bytes")
-    }
-}
-
-struct GuidPartitionTableGuid<'a>(&'a [u8]);
-
-impl fmt::Display for GuidPartitionTableGuid<'_> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let bytes = self.0;
-        write!(
-            formatter,
-            "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-",
-            bytes[3],
-            bytes[2],
-            bytes[1],
-            bytes[0],
-            bytes[5],
-            bytes[4],
-            bytes[7],
-            bytes[6],
-            bytes[8],
-            bytes[9]
-        )?;
-        for byte in &bytes[10..16] {
-            write!(formatter, "{byte:02x}")?;
-        }
-        Ok(())
     }
 }
 

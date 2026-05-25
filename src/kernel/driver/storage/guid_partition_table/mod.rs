@@ -14,6 +14,8 @@
 //! - [`inspect_header_with_fallback`] - Inspect primary and backup partition table headers
 //! - [`inspect_partition_table`] - Inspect partition entry sectors through a block device
 
+mod bytes;
+mod display;
 mod parser;
 
 pub(super) use parser::{

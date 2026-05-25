@@ -26,7 +26,12 @@ use alloc::string::String;
 const ERROR_NOT_FOUND: u64 = linux_error(2);
 const ERROR_BAD_FILE_DESCRIPTOR: u64 = linux_error(9);
 const ERROR_BAD_ADDRESS: u64 = linux_error(14);
+const ERROR_NOT_DIRECTORY: u64 = linux_error(20);
+const ERROR_IS_DIRECTORY: u64 = linux_error(21);
+const ERROR_INVALID_ARGUMENT: u64 = linux_error(22);
+const ERROR_TOO_MANY_OPEN_FILES: u64 = linux_error(24);
 const ERROR_NOT_IMPLEMENTED: u64 = linux_error(38);
+const ERROR_NOT_SUPPORTED: u64 = linux_error(95);
 const AT_FDCWD: u64 = u64::MAX - 99;
 const MAX_USER_STRING_LENGTH: usize = 256;
 const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
@@ -104,7 +109,7 @@ fn sys_write(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
 
     match crate::kernel::filesystem::write(file_descriptor, buffer) {
         Ok(bytes_written) => u64::try_from(bytes_written).unwrap_or(u64::MAX),
-        Err(_) => ERROR_BAD_FILE_DESCRIPTOR,
+        Err(error) => filesystem_error_to_linux(error),
     }
 }
 
@@ -127,8 +132,7 @@ fn sys_open(user_path_pointer: u64, flags: u64, mode: u64) -> u64 {
 
     match crate::kernel::filesystem::open(&path) {
         Ok(file_descriptor) => u64::try_from(file_descriptor).unwrap_or(u64::MAX),
-        Err(crate::kernel::filesystem::FileSystemError::NotFound) => ERROR_NOT_FOUND,
-        Err(_) => ERROR_BAD_FILE_DESCRIPTOR,
+        Err(error) => filesystem_error_to_linux(error),
     }
 }
 
@@ -152,7 +156,7 @@ fn sys_close(file_descriptor: u64) -> u64 {
 
     match crate::kernel::filesystem::close(file_descriptor) {
         Ok(()) => 0,
-        Err(_) => ERROR_BAD_FILE_DESCRIPTOR,
+        Err(error) => filesystem_error_to_linux(error),
     }
 }
 
@@ -173,7 +177,7 @@ fn sys_read(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
 
     match crate::kernel::filesystem::read(file_descriptor, buffer) {
         Ok(bytes_read) => u64::try_from(bytes_read).unwrap_or(u64::MAX),
-        Err(_) => ERROR_BAD_FILE_DESCRIPTOR,
+        Err(error) => filesystem_error_to_linux(error),
     }
 }
 
@@ -199,6 +203,21 @@ fn sys_getpid() -> u64 {
             task_id
         }
         None => ERROR_NOT_IMPLEMENTED,
+    }
+}
+
+fn filesystem_error_to_linux(error: crate::kernel::filesystem::FileSystemError) -> u64 {
+    match error {
+        crate::kernel::filesystem::FileSystemError::NotFound => ERROR_NOT_FOUND,
+        crate::kernel::filesystem::FileSystemError::InvalidFileDescriptor => {
+            ERROR_BAD_FILE_DESCRIPTOR
+        }
+        crate::kernel::filesystem::FileSystemError::UnsupportedOperation => ERROR_NOT_SUPPORTED,
+        crate::kernel::filesystem::FileSystemError::TooManyOpenFiles => ERROR_TOO_MANY_OPEN_FILES,
+        crate::kernel::filesystem::FileSystemError::AlreadyInitialized
+        | crate::kernel::filesystem::FileSystemError::InvalidPath => ERROR_INVALID_ARGUMENT,
+        crate::kernel::filesystem::FileSystemError::NotDirectory => ERROR_NOT_DIRECTORY,
+        crate::kernel::filesystem::FileSystemError::IsDirectory => ERROR_IS_DIRECTORY,
     }
 }
 

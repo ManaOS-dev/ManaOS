@@ -1,6 +1,6 @@
 //! Memory-backed filesystem nodes.
 
-use crate::kernel::filesystem::node::{FileNode, FileSystemResult};
+use crate::kernel::filesystem::node::{FileMetadata, FileNode, FileSystemResult, FileType};
 use alloc::vec::Vec;
 use spin::Mutex;
 
@@ -40,5 +40,13 @@ impl FileNode for RamFile {
 
         data[offset..offset + buffer.len()].copy_from_slice(buffer);
         Ok(buffer.len())
+    }
+
+    fn metadata(&self) -> FileMetadata {
+        FileMetadata {
+            file_type: FileType::Regular,
+            size: self.data.lock().len(),
+            writable: true,
+        }
     }
 }

@@ -18,6 +18,8 @@
 //! - [`find_entry_by_path`] - Traverse directory clusters by path
 //! - [`plan_write`] - Plan a read-only write mutation
 
+mod bytes;
+mod display;
 mod parser;
 
 pub(super) use parser::{

@@ -165,13 +165,40 @@ fn verify_kernel_filesystem() {
     let _ = kernel::filesystem::write(kernel::filesystem::STANDARD_ERROR, b"");
 
     kernel::filesystem::mount_ram_file("/hello.txt", b"hello from ramfs\n");
+    kernel::filesystem::mount_read_only_file("/docs/manual-smoke.txt", b"cat /disk/hello.txt\n");
     let descriptor =
         kernel::filesystem::open("/hello.txt").expect("ramfs smoke test file must open");
     let mut buffer = [0_u8; 32];
+    kernel::filesystem::seek(descriptor, 0).expect("ramfs smoke test seek must succeed");
     let bytes_read =
         kernel::filesystem::read(descriptor, &mut buffer).expect("ramfs smoke test must read");
     kernel::filesystem::close(descriptor).expect("ramfs smoke test descriptor must close");
     let _ = kernel::filesystem::write(kernel::filesystem::STANDARD_OUTPUT, &buffer[..bytes_read]);
+
+    let dev_entries =
+        kernel::filesystem::list_directory("/dev").expect("/dev listing must be available");
+    crate::log_info!(
+        "fs",
+        "VFS directory listing smoke: path=/dev entries={}",
+        dev_entries.len()
+    );
+    let dev_descriptor = kernel::filesystem::open("/dev").expect("/dev directory handle must open");
+    let dev_metadata =
+        kernel::filesystem::descriptor_metadata(dev_descriptor).expect("/dev stat must succeed");
+    let mut directory_entry_count = 0_usize;
+    while kernel::filesystem::read_directory(dev_descriptor)
+        .expect("/dev readdir must succeed")
+        .is_some()
+    {
+        directory_entry_count += 1;
+    }
+    kernel::filesystem::close(dev_descriptor).expect("/dev descriptor must close");
+    crate::log_info!(
+        "fs",
+        "VFS directory handle smoke: path=/dev entries={} type={:?}",
+        directory_entry_count,
+        dev_metadata.file_type
+    );
 
     let null_descriptor =
         kernel::filesystem::open("/dev/null").expect("null device must open during smoke test");
@@ -288,7 +315,7 @@ fn main() -> Status {
     );
     verify_primary_storage_device();
     if let Some(file) = kernel::driver::storage::get_detected_file() {
-        kernel::filesystem::mount_read_only_file(&file.mount_path, &file.contents);
+        kernel::filesystem::mount_fat32_file(&file.mount_path, &file.contents);
         crate::log_info!(
             "fs",
             "Mounted disk file: path={} bytes={}",

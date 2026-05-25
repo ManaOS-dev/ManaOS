@@ -34,6 +34,14 @@ pub(super) fn process_key_code(key_code: KeyCode) {
     match key_code {
         KeyCode::Return | KeyCode::NumpadEnter => crate::kernel::console::submit(),
         KeyCode::Backspace => crate::kernel::console::push_backspace(),
+        KeyCode::ArrowLeft => crate::kernel::console::move_cursor_left(),
+        KeyCode::ArrowRight => crate::kernel::console::move_cursor_right(),
+        KeyCode::ArrowUp => crate::kernel::console::load_previous_history(),
+        KeyCode::ArrowDown => crate::kernel::console::load_next_history(),
+        KeyCode::Home => crate::kernel::console::move_cursor_home(),
+        KeyCode::End => crate::kernel::console::move_cursor_end(),
+        KeyCode::PageUp => crate::kernel::console::scroll_up(),
+        KeyCode::PageDown => crate::kernel::console::scroll_down(),
         _ => crate::log_debug!("keyboard", "raw key: {:?}", key_code),
     }
 }
