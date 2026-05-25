@@ -12,9 +12,12 @@ Use `Get-ChildItem -Path src\ -File -Recurse | Resolve-Path -Relative` (PowerShe
 
 ## 2. Naming Rules
 
-### ❌ Abbreviations are BANNED
+### Naming Clarity
 
-| Banned                            | Required                                                |
+Avoid unclear local abbreviations in identifiers. Domain-standard acronyms are
+allowed when they are clearer than spelling out the term.
+
+| Avoid                             | Required / Allowed                                      |
 | --------------------------------- | ------------------------------------------------------- |
 | `mem/`                            | `memory/`                                               |
 | `fb_info`                         | `framebuffer_info`                                      |
@@ -22,6 +25,10 @@ Use `Get-ChildItem -Path src\ -File -Recurse | Resolve-Path -Relative` (PowerShe
 | `handle_mouse()`                  | `process_packets()`                                     |
 | `handle_keyboard()`               | `process_input()`                                       |
 | `mod_impl`                        | A descriptive name (e.g., `state`, `packet`, `decoder`) |
+
+Allowed domain acronyms include `PCI`, `AHCI`, `GPT`, `FAT32`, `UEFI`, `GDT`,
+`IDT`, `GOP`, `PIC`, `PIT`, `APIC`, `IOAPIC`, `LBA`, `FIS`, `DMA`, and `PRDT`.
+Prefer these acronyms in log categories and concise diagnostic messages.
 
 ### Function Naming
 
@@ -234,7 +241,7 @@ let frame = frame_allocator
 Before writing or suggesting any code, verify:
 
 - [ ] File is in the correct directory per Section 1
-- [ ] No abbreviations per Section 2
+- [ ] Names are clear per Section 2
 - [ ] `mod.rs` has a module-level doc comment per Section 3
 - [ ] No `pub static` per Section 4
 - [ ] Every `unsafe` has a `// SAFETY:` comment per Section 5
@@ -263,3 +270,22 @@ Use Rust `///` doc comments. Never use JSDoc style.
 ### Clippy enforces this
 
 `#![deny(missing_docs)]` is set in main.rs — missing doc = compile error.
+
+---
+
+## 11. Git Workflow
+
+Agents must work in a task branch, verify the branch, merge it into `master`,
+push `origin/master`, and delete the task branch after success.
+
+1. Start from a clean `master` unless the project owner has intentionally left
+   working-tree changes to include.
+2. Create a focused branch such as `feature/...`, `fix/...`, `refactor/...`, or
+   `docs/...`.
+3. Commit with a clear English message. Conventional Commit prefixes are
+   optional, not mandatory.
+4. Run the relevant checks before merging. For Rust code, run `cargo fmt`,
+   `cargo check`, and `cargo clippy --all-targets --all-features`; run
+   `just lint` when the change touches kernel/userland boundaries.
+5. Merge the verified branch into `master`, push `origin/master`, then delete
+   the local and remote task branch.
