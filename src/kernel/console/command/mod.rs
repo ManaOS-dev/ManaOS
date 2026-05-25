@@ -2,6 +2,7 @@
 //!
 //! ## Owns
 //! - Kernel console command parsing
+//! - Single-pipe command execution
 //! - Dispatch to command-focused handlers
 //!
 //! ## Does NOT own
@@ -12,50 +13,61 @@
 //! ## Public API
 //! - [`execute`] - Parse and run one submitted console command
 
-mod filesystem;
-mod system;
+mod cat;
+mod cd;
+mod clear;
+mod context;
+mod dispatch;
+mod echo;
+mod fps;
+mod grep;
+mod help;
+mod hexdump;
+mod ls;
+mod mounts;
+mod output;
+mod pipeline;
+mod pwd;
+mod stat;
+mod storage;
+mod syscalls;
+mod ticks;
 
 use alloc::format;
-use alloc::string::{String, ToString};
 
 pub(super) fn execute(command: &str) {
     if command.is_empty() {
         return;
     }
 
-    push_output(format!("> {command}"));
-    let (name, argument) = split_command(command);
-    match name {
-        "help" => push_output(
-            "commands: help clear pwd cd ls stat mounts hexdump cat read echo syscalls".to_string(),
-        ),
-        "clear" if argument.is_empty() => clear_output(),
-        "pwd" if argument.is_empty() => filesystem::push_working_directory(),
-        "cd" => filesystem::change_directory(argument),
-        "ls" => filesystem::list_directory(argument),
-        "stat" => filesystem::push_stat_output(argument),
-        "mounts" if argument.is_empty() => filesystem::push_mounts_output(),
-        "hexdump" => filesystem::push_hexdump_output(argument),
-        "ticks" if argument.is_empty() => system::push_ticks_output(),
-        "fps" if argument.is_empty() => system::push_fps_output(),
-        "storage" | "partitions" if argument.is_empty() => system::push_storage_output(),
-        "cat" | "read" => filesystem::push_file_output(name, argument),
-        "echo" => push_output(argument.to_string()),
-        "syscalls" if argument.is_empty() => system::push_syscalls_output(),
-        _ => push_output(format!("unknown command: {command}")),
+    super::push_output(format!("> {command}"));
+    let is_pipeline = command.contains('|');
+    match pipeline::run_line(command) {
+        Ok(output::CommandEffect::Output(output)) => {
+            if is_pipeline {
+                crate::log_info!(
+                    "console",
+                    "Pipeline command completed: command=\"{}\" output_lines={}",
+                    command,
+                    output.lines().len()
+                );
+            }
+            for line in output.lines() {
+                super::push_output(line.clone());
+            }
+        }
+        Ok(output::CommandEffect::Clear) => super::clear_output(),
+        Err(error) => super::push_output(error.message(command)),
     }
 }
 
-fn split_command(command: &str) -> (&str, &str) {
-    command
-        .split_once(' ')
-        .map_or((command, ""), |(name, argument)| (name, argument.trim()))
-}
+pub(super) fn verify_pipeline_smoke(command: &str) -> Option<usize> {
+    if !command.contains('|') {
+        return None;
+    }
 
-fn push_output(line: String) {
-    super::push_output(line);
-}
-
-fn clear_output() {
-    super::clear_output();
+    match pipeline::run_line(command).ok()? {
+        output::CommandEffect::Output(output) => Some(output.lines().len()),
+        output::CommandEffect::Clear => None,
+    }
 }

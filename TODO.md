@@ -59,6 +59,8 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Add `stat`.
 - [x] Add `mounts`.
 - [x] Add `hexdump`.
+- [x] Add `grep`.
+- [x] Add single-pipe command execution with `command | command`.
 - [x] Add command history.
 - [x] Add cursor movement and line editing.
 - [x] Add scrollback for console output.
