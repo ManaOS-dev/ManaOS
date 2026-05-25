@@ -39,30 +39,30 @@ items have been removed so the file stays useful for deciding the next task.
 
 ### Virtual Filesystem
 
-- [ ] Add a real mount table with mount points and filesystem backends.
+- [x] Add a real mount table with mount points and filesystem backends.
 - [ ] Mount FAT32 as a filesystem backend instead of copying one boot-time file into memory.
-- [ ] Add path traversal for directories and nested files.
-- [ ] Add file metadata operations such as `stat`.
-- [ ] Add `seek` support to file descriptors.
-- [ ] Add directory handles and `readdir` support.
-- [ ] Add read-only and writable mount flags.
-- [ ] Return richer filesystem errors and map them consistently to syscall errno values.
-- [ ] Add `/dev` directory listing.
-- [ ] Decide and document pathname normalization rules for `..`, repeated slashes, and trailing slashes.
+- [x] Add path traversal for directories and nested files.
+- [x] Add file metadata operations such as `stat`.
+- [x] Add `seek` support to file descriptors.
+- [x] Add directory handles and `readdir` support.
+- [x] Add read-only and writable mount flags.
+- [x] Return richer filesystem errors and map them consistently to syscall errno values.
+- [x] Add `/dev` directory listing.
+- [x] Decide and document pathname normalization rules for `..`, repeated slashes, and trailing slashes.
 
 ### Kernel Console Commands
 
-- [ ] Split command parsing and individual commands out of `kernel::console::mod.rs`.
-- [ ] Add `ls`.
-- [ ] Add `pwd`.
-- [ ] Add `cd`.
-- [ ] Add `stat`.
-- [ ] Add `mounts`.
-- [ ] Add `hexdump`.
-- [ ] Add command history.
-- [ ] Add cursor movement and line editing.
-- [ ] Add scrollback for console output.
-- [ ] Make `cat /disk/hello.txt` a manual smoke test in the docs.
+- [x] Split command parsing and individual commands out of `kernel::console::mod.rs`.
+- [x] Add `ls`.
+- [x] Add `pwd`.
+- [x] Add `cd`.
+- [x] Add `stat`.
+- [x] Add `mounts`.
+- [x] Add `hexdump`.
+- [x] Add command history.
+- [x] Add cursor movement and line editing.
+- [x] Add scrollback for console output.
+- [x] Make `cat /disk/hello.txt` a manual smoke test in the docs.
 
 ## Phase 6: Userland
 

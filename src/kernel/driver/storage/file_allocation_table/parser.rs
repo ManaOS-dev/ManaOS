@@ -6,6 +6,8 @@ use alloc::vec::Vec;
 use core::{fmt, str};
 
 use super::super::block_device::{BlockDevice, SECTOR_BYTES};
+use super::bytes::{ascii_field, read_le_u16, read_le_u32};
+use super::display::EscapedAscii;
 
 const BOOT_SECTOR_LBA: u64 = 0;
 const JUMP_INSTRUCTION_OFFSET: usize = 0;
@@ -1044,42 +1046,4 @@ impl core::fmt::Display for DirectoryEntryName<'_> {
 
         Ok(())
     }
-}
-
-struct EscapedAscii<'a>(&'a [u8]);
-
-impl core::fmt::Display for EscapedAscii<'_> {
-    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        for byte in self.0 {
-            match *byte {
-                b'\r' => write!(formatter, "\\r")?,
-                b'\n' => write!(formatter, "\\n")?,
-                b'\t' => write!(formatter, "\\t")?,
-                0x20..=0x7e => write!(formatter, "{}", char::from(*byte))?,
-                _ => write!(formatter, "\\x{byte:02x}")?,
-            }
-        }
-        Ok(())
-    }
-}
-
-fn read_le_u16(bytes: &[u8], offset: usize) -> u16 {
-    u16::from_le_bytes([bytes[offset], bytes[offset + 1]])
-}
-
-fn read_le_u32(bytes: &[u8], offset: usize) -> u32 {
-    u32::from_le_bytes([
-        bytes[offset],
-        bytes[offset + 1],
-        bytes[offset + 2],
-        bytes[offset + 3],
-    ])
-}
-
-fn ascii_field(bytes: &[u8]) -> &str {
-    let trimmed = bytes
-        .iter()
-        .rposition(|byte| *byte != b' ')
-        .map_or(&[][..], |last| &bytes[..=last]);
-    str::from_utf8(trimmed).unwrap_or("?")
 }

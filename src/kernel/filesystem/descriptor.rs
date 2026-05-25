@@ -1,6 +1,8 @@
 //! Open file descriptor table.
 
-use crate::kernel::filesystem::node::{FileNode, FileSystemError, FileSystemResult};
+use crate::kernel::filesystem::node::{
+    DirectoryEntry, FileMetadata, FileNode, FileSystemError, FileSystemResult,
+};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -107,6 +109,33 @@ impl FileDescriptorTable {
         let count = open_file.node.write_at(open_file.offset, buffer)?;
         open_file.offset = open_file.offset.saturating_add(count);
         Ok(count)
+    }
+
+    /// Seek an open file descriptor and return the new offset.
+    pub fn seek(&mut self, descriptor: FileDescriptor, offset: usize) -> FileSystemResult<usize> {
+        let open_file = self.get_open_file_mut(descriptor)?;
+        open_file.offset = offset;
+        Ok(open_file.offset)
+    }
+
+    /// Return metadata for an open file descriptor.
+    pub fn metadata(&mut self, descriptor: FileDescriptor) -> FileSystemResult<FileMetadata> {
+        let open_file = self.get_open_file_mut(descriptor)?;
+        Ok(open_file.node.metadata())
+    }
+
+    /// Read one directory entry from an open directory descriptor.
+    pub fn read_directory(
+        &mut self,
+        descriptor: FileDescriptor,
+    ) -> FileSystemResult<Option<DirectoryEntry>> {
+        let open_file = self.get_open_file_mut(descriptor)?;
+        let entries = open_file.node.list_entries()?;
+        let entry = entries.get(open_file.offset).cloned();
+        if entry.is_some() {
+            open_file.offset = open_file.offset.saturating_add(1);
+        }
+        Ok(entry)
     }
 
     fn get_open_file_mut(&mut self, descriptor: FileDescriptor) -> FileSystemResult<&mut OpenFile> {

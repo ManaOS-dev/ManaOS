@@ -20,67 +20,29 @@
 
 mod descriptor;
 mod device;
+mod directory;
+mod mount;
+mod namespace;
 mod node;
 mod ramfs;
 mod read_only;
 
-use alloc::collections::BTreeMap;
-use alloc::string::String;
 use alloc::sync::Arc;
 use descriptor::FileDescriptorTable;
+use namespace::VirtualFileSystem;
+use node::normalize_path;
 use spin::{LazyLock, Mutex};
 
 pub use descriptor::{FileDescriptor, STANDARD_ERROR, STANDARD_INPUT, STANDARD_OUTPUT};
-pub use node::{FileSystemError, FileSystemResult};
+pub use mount::{MountFlags, MountInfo, MountSource};
+pub use node::{DirectoryEntry, FileMetadata, FileSystemError, FileSystemResult, FileType};
 pub use ramfs::RamFile;
 pub use read_only::ReadOnlyFile;
-
-use node::{normalize_path, FileNode};
 
 static VIRTUAL_FILE_SYSTEM: LazyLock<Mutex<VirtualFileSystem>> =
     LazyLock::new(|| Mutex::new(VirtualFileSystem::new()));
 static FILE_DESCRIPTORS: LazyLock<Mutex<FileDescriptorTable>> =
     LazyLock::new(|| Mutex::new(FileDescriptorTable::new()));
-
-struct VirtualFileSystem {
-    nodes: BTreeMap<String, Arc<dyn FileNode>>,
-    initialized: bool,
-}
-
-impl VirtualFileSystem {
-    fn new() -> Self {
-        Self {
-            nodes: BTreeMap::new(),
-            initialized: false,
-        }
-    }
-
-    fn initialize(&mut self) -> FileSystemResult<()> {
-        if self.initialized {
-            return Err(FileSystemError::AlreadyInitialized);
-        }
-
-        self.mount_node("/dev/console", Arc::new(device::ConsoleDevice::new()));
-        self.mount_node("/dev/null", Arc::new(device::NullDevice::new()));
-        self.mount_node(
-            "/README",
-            Arc::new(RamFile::from_bytes(b"ManaOS ramfs is initialized.\n")),
-        );
-        self.initialized = true;
-        Ok(())
-    }
-
-    fn mount_node(&mut self, path: &str, node: Arc<dyn FileNode>) {
-        self.nodes.insert(normalize_path(path), node);
-    }
-
-    fn get_node(&self, path: &str) -> FileSystemResult<Arc<dyn FileNode>> {
-        self.nodes
-            .get(&normalize_path(path))
-            .cloned()
-            .ok_or(FileSystemError::NotFound)
-    }
-}
 
 /// Initialize the kernel filesystem namespace and standard descriptors.
 ///
@@ -95,9 +57,18 @@ pub fn initialize() {
         }
     }
 
-    let input = get_node("/dev/null").expect("standard input device must exist");
-    let output = get_node("/dev/console").expect("standard output device must exist");
-    let error = get_node("/dev/console").expect("standard error device must exist");
+    let input = VIRTUAL_FILE_SYSTEM
+        .lock()
+        .get_node("/dev/null")
+        .expect("standard input device must exist");
+    let output = VIRTUAL_FILE_SYSTEM
+        .lock()
+        .get_node("/dev/console")
+        .expect("standard output device must exist");
+    let error = VIRTUAL_FILE_SYSTEM
+        .lock()
+        .get_node("/dev/console")
+        .expect("standard error device must exist");
     FILE_DESCRIPTORS
         .lock()
         .initialize_standard_descriptors(input, output, error);
@@ -105,21 +76,37 @@ pub fn initialize() {
 
 /// Mount a memory-backed file at an absolute path.
 pub fn mount_ram_file(path: &str, contents: &[u8]) {
-    VIRTUAL_FILE_SYSTEM
-        .lock()
-        .mount_node(path, Arc::new(RamFile::from_bytes(contents)));
+    VIRTUAL_FILE_SYSTEM.lock().mount_node(
+        path,
+        Arc::new(RamFile::from_bytes(contents)),
+        MountSource::Ram,
+        MountFlags::read_write(),
+    );
 }
 
 /// Mount a read-only memory-backed file at an absolute path.
 pub fn mount_read_only_file(path: &str, contents: &[u8]) {
-    VIRTUAL_FILE_SYSTEM
-        .lock()
-        .mount_node(path, Arc::new(ReadOnlyFile::from_bytes(contents)));
+    VIRTUAL_FILE_SYSTEM.lock().mount_node(
+        path,
+        Arc::new(ReadOnlyFile::from_bytes(contents)),
+        MountSource::Ram,
+        MountFlags::read_only(),
+    );
+}
+
+/// Mount a FAT32-backed read-only file snapshot at an absolute path.
+pub fn mount_fat32_file(path: &str, contents: &[u8]) {
+    VIRTUAL_FILE_SYSTEM.lock().mount_node(
+        path,
+        Arc::new(ReadOnlyFile::from_bytes(contents)),
+        MountSource::Fat32,
+        MountFlags::read_only(),
+    );
 }
 
 /// Open a path and return a file descriptor.
 pub fn open(path: &str) -> FileSystemResult<FileDescriptor> {
-    let node = get_node(path)?;
+    let node = VIRTUAL_FILE_SYSTEM.lock().get_node(path)?;
     FILE_DESCRIPTORS.lock().open(node)
 }
 
@@ -138,6 +125,37 @@ pub fn write(descriptor: FileDescriptor, buffer: &[u8]) -> FileSystemResult<usiz
     FILE_DESCRIPTORS.lock().write(descriptor, buffer)
 }
 
-fn get_node(path: &str) -> FileSystemResult<Arc<dyn FileNode>> {
-    VIRTUAL_FILE_SYSTEM.lock().get_node(path)
+/// Seek an open file descriptor to an absolute offset.
+pub fn seek(descriptor: FileDescriptor, offset: usize) -> FileSystemResult<usize> {
+    FILE_DESCRIPTORS.lock().seek(descriptor, offset)
+}
+
+/// Return metadata for a filesystem path.
+pub fn metadata(path: &str) -> FileSystemResult<FileMetadata> {
+    VIRTUAL_FILE_SYSTEM.lock().metadata(path)
+}
+
+/// Return metadata for an open file descriptor.
+pub fn descriptor_metadata(descriptor: FileDescriptor) -> FileSystemResult<FileMetadata> {
+    FILE_DESCRIPTORS.lock().metadata(descriptor)
+}
+
+/// Read the next directory entry from an open directory descriptor.
+pub fn read_directory(descriptor: FileDescriptor) -> FileSystemResult<Option<DirectoryEntry>> {
+    FILE_DESCRIPTORS.lock().read_directory(descriptor)
+}
+
+/// List directory entries for a path.
+pub fn list_directory(path: &str) -> FileSystemResult<alloc::vec::Vec<DirectoryEntry>> {
+    VIRTUAL_FILE_SYSTEM.lock().list_directory(path)
+}
+
+/// Return mounted namespace metadata.
+pub fn list_mounts() -> alloc::vec::Vec<MountInfo> {
+    VIRTUAL_FILE_SYSTEM.lock().list_mounts()
+}
+
+/// Normalize a user-visible filesystem path for command output.
+pub fn normalize_path_for_display(path: &str) -> alloc::string::String {
+    normalize_path(path)
 }
