@@ -7,8 +7,7 @@ Do not deviate from these rules unless explicitly instructed by the project owne
 
 ## 1. Directory Structure
 
-use `Get-ChildItem -Path src\ -File -Recurse | Resolve-Path -Relative`. for directorys
-
+Use `Get-ChildItem -Path src\ -File -Recurse | Resolve-Path -Relative` (PowerShell) or `find src/ -type f` (Linux/macOS) to inspect the directory structure.
 ---
 
 ## 2. Naming Rules
@@ -17,7 +16,6 @@ use `Get-ChildItem -Path src\ -File -Recurse | Resolve-Path -Relative`. for dire
 
 | Banned                            | Required                                                |
 | --------------------------------- | ------------------------------------------------------- |
-| `pic`, `pit`, `gop`, `idt`, `gdt` | Full concept name (see directory structure)             |
 | `mem/`                            | `memory/`                                               |
 | `fb_info`                         | `framebuffer_info`                                      |
 | `let (h, v) = ...`                | `let (width, height) = ...`                             |
