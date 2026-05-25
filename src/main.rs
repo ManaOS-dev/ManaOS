@@ -180,6 +180,21 @@ fn verify_kernel_filesystem() {
     let _ = kernel::filesystem::read(kernel::filesystem::STANDARD_INPUT, &mut buffer);
 }
 
+fn verify_mounted_disk_file(path: &str) {
+    let descriptor = kernel::filesystem::open(path).expect("mounted disk file must open");
+    let mut buffer = [0_u8; 64];
+    let bytes_read =
+        kernel::filesystem::read(descriptor, &mut buffer).expect("mounted disk file must read");
+    kernel::filesystem::close(descriptor).expect("mounted disk file descriptor must close");
+    crate::log_info!(
+        "fs",
+        "Disk file smoke read: path={} bytes={}",
+        path,
+        bytes_read
+    );
+    let _ = kernel::filesystem::write(kernel::filesystem::STANDARD_OUTPUT, &buffer[..bytes_read]);
+}
+
 #[entry]
 fn main() -> Status {
     // ────────────────────────────────────────────────
@@ -241,6 +256,16 @@ fn main() -> Status {
             arch::x86_64::pci_configuration::write_config32,
         ),
     );
+    if let Some(file) = kernel::driver::storage::get_detected_file() {
+        kernel::filesystem::mount_read_only_file(&file.mount_path, &file.contents);
+        crate::log_info!(
+            "fs",
+            "Mounted disk file: path={} bytes={}",
+            file.mount_path,
+            file.contents.len()
+        );
+        verify_mounted_disk_file(&file.mount_path);
+    }
     initialize_scheduler();
     initialize_architecture_and_drivers();
 

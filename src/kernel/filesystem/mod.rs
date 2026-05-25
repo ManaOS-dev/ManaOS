@@ -22,6 +22,7 @@ mod descriptor;
 mod device;
 mod node;
 mod ramfs;
+mod read_only;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
@@ -32,6 +33,7 @@ use spin::{LazyLock, Mutex};
 pub use descriptor::{FileDescriptor, STANDARD_ERROR, STANDARD_INPUT, STANDARD_OUTPUT};
 pub use node::{FileSystemError, FileSystemResult};
 pub use ramfs::RamFile;
+pub use read_only::ReadOnlyFile;
 
 use node::{normalize_path, FileNode};
 
@@ -106,6 +108,13 @@ pub fn mount_ram_file(path: &str, contents: &[u8]) {
     VIRTUAL_FILE_SYSTEM
         .lock()
         .mount_node(path, Arc::new(RamFile::from_bytes(contents)));
+}
+
+/// Mount a read-only memory-backed file at an absolute path.
+pub fn mount_read_only_file(path: &str, contents: &[u8]) {
+    VIRTUAL_FILE_SYSTEM
+        .lock()
+        .mount_node(path, Arc::new(ReadOnlyFile::from_bytes(contents)));
 }
 
 /// Open a path and return a file descriptor.

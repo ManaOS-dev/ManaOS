@@ -7,7 +7,7 @@ use crate::kernel::memory::{frame_allocator::BumpFrameAllocator, paging};
 use super::super::block_device::{BlockDevice, SECTOR_BYTES};
 use super::super::{
     file_allocation_table, guid_partition_table, partition::PartitionBlockDevice,
-    set_selected_partition,
+    set_detected_file, set_selected_partition, StorageFile,
 };
 use super::registers::{HbaCommandHeader, HbaCommandTable, HbaMemory, HbaPort, MAX_PORTS};
 
@@ -264,6 +264,24 @@ fn read_initial_sectors(hba_memory: *mut HbaMemory, port_index: usize, buffers: 
                             entry,
                             buffers.data,
                         );
+                        if let Some(contents) = file_allocation_table::read_file_contents(
+                            &mut partition_device,
+                            volume,
+                            entry,
+                            buffers.data,
+                        ) {
+                            let mount_path = entry.disk_mount_path();
+                            crate::log_info!(
+                                "storage",
+                                "Loaded FAT32 file for virtual filesystem: path={} bytes={}",
+                                mount_path,
+                                contents.len()
+                            );
+                            set_detected_file(StorageFile {
+                                mount_path,
+                                contents,
+                            });
+                        }
                     }
                 }
             }

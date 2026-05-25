@@ -106,8 +106,9 @@
 - [x] Phase 5C-9: FAT32 file read smoke test
 - [x] read first data cluster for `HELLO.TXT`
 - [x] inspect the file allocation table entry for the first cluster
+- [x] mount FAT32 file reads into the virtual filesystem
+- [x] expose the disk file to `cat /disk/hello.txt`
 - [ ] AHCI Driver Implementation
-- [ ] mount FAT32 file reads into VFS
 
 ## Phase 6: Userland
 - [ ] ELF Loader
