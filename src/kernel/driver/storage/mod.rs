@@ -11,8 +11,11 @@
 //! ## Public API
 //! - [`init`] - Discover and initialize storage controllers
 //! - [`PciConfigurationAccess`] - Provider for PCI configuration-space access
+//! - [`get_detected_file`] - Return the first file loaded from disk during probing
 
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
+use alloc::string::String;
+use alloc::vec::Vec;
 use spin::Mutex;
 
 mod advanced_host_controller_interface;
@@ -25,6 +28,7 @@ mod pci;
 pub use pci::PciConfigurationAccess;
 
 static SELECTED_PARTITION: Mutex<Option<StoragePartition>> = Mutex::new(None);
+static DETECTED_FILE: Mutex<Option<StorageFile>> = Mutex::new(None);
 
 /// Storage partition selected by the kernel storage probe.
 #[derive(Clone, Copy)]
@@ -47,6 +51,15 @@ impl StoragePartition {
         core::str::from_utf8(&self.name[..self.name_length])
             .expect("storage partition names are stored as ASCII fallback bytes")
     }
+}
+
+/// File content loaded from storage during early probing.
+#[derive(Clone)]
+pub struct StorageFile {
+    /// Absolute path where the file should be mounted.
+    pub mount_path: String,
+    /// File bytes read from the storage device.
+    pub contents: Vec<u8>,
 }
 
 /// Discover and initialize supported storage controllers.
@@ -81,6 +94,11 @@ pub fn get_selected_partition() -> Option<StoragePartition> {
     *SELECTED_PARTITION.lock()
 }
 
+/// Return the first file loaded from disk during storage probing.
+pub fn get_detected_file() -> Option<StorageFile> {
+    DETECTED_FILE.lock().clone()
+}
+
 pub(super) fn set_selected_partition(partition: guid_partition_table::GuidPartitionTablePartition) {
     *SELECTED_PARTITION.lock() = Some(StoragePartition {
         index: partition.index,
@@ -89,4 +107,8 @@ pub(super) fn set_selected_partition(partition: guid_partition_table::GuidPartit
         name: partition.name,
         name_length: partition.name_length,
     });
+}
+
+pub(super) fn set_detected_file(file: StorageFile) {
+    *DETECTED_FILE.lock() = Some(file);
 }

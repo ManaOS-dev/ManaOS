@@ -1,5 +1,8 @@
 //! File Allocation Table 32 boot sector parsing implementation.
 
+use alloc::format;
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::str;
 
 use super::super::block_device::{BlockDevice, SECTOR_BYTES};
@@ -182,6 +185,65 @@ pub(in crate::kernel::driver::storage) fn inspect_file_contents(
     Some(())
 }
 
+/// Read the contents of a File Allocation Table 32 regular file.
+pub(in crate::kernel::driver::storage) fn read_file_contents(
+    block_device: &mut impl BlockDevice,
+    volume: FileAllocationTable32Volume,
+    entry: FileAllocationTable32DirectoryEntry,
+    data_address: u64,
+) -> Option<Vec<u8>> {
+    let file_size = usize::try_from(entry.file_size).expect("file size must fit in usize");
+    let mut contents = Vec::new();
+    contents
+        .try_reserve_exact(file_size)
+        .expect("OOM: failed to reserve FAT32 file contents buffer");
+
+    if file_size == 0 {
+        return Some(contents);
+    }
+
+    let mut current_cluster = entry.first_cluster;
+    while contents.len() < file_size {
+        read_cluster_contents(
+            block_device,
+            &volume,
+            current_cluster,
+            data_address,
+            file_size,
+            &mut contents,
+        )?;
+
+        if contents.len() >= file_size {
+            break;
+        }
+
+        let next_cluster = read_next_cluster(block_device, &volume, current_cluster, data_address)?;
+        if next_cluster >= FILE_ALLOCATION_TABLE_END_OF_CHAIN {
+            crate::log_warn!(
+                "fat32",
+                "{} ended before file_size={} bytes",
+                entry.name(),
+                entry.file_size
+            );
+            break;
+        }
+        current_cluster = next_cluster;
+    }
+
+    Some(contents)
+}
+
+impl FileAllocationTable32DirectoryEntry {
+    /// Return an absolute lowercase virtual filesystem path under `/disk`.
+    pub(in crate::kernel::driver::storage) fn disk_mount_path(&self) -> String {
+        let mut mount_path = String::from("/disk/");
+        for byte in format!("{}", self.name()).bytes() {
+            mount_path.push(char::from(byte.to_ascii_lowercase()));
+        }
+        mount_path
+    }
+}
+
 fn parse_volume(sector: &[u8]) -> Option<FileAllocationTable32Volume> {
     let bytes_per_sector = read_le_u16(sector, BYTES_PER_SECTOR_OFFSET);
     let sectors_per_cluster = sector[SECTORS_PER_CLUSTER_OFFSET];
@@ -359,6 +421,36 @@ fn inspect_directory_sector(
     }
 
     false
+}
+
+fn read_cluster_contents(
+    block_device: &mut impl BlockDevice,
+    volume: &FileAllocationTable32Volume,
+    cluster: u32,
+    data_address: u64,
+    file_size: usize,
+    contents: &mut Vec<u8>,
+) -> Option<()> {
+    let first_sector = volume.cluster_first_sector(cluster)?;
+    for sector_offset in 0..volume.sectors_per_cluster {
+        let logical_block_address = first_sector.checked_add(u32::from(sector_offset))?;
+        if !block_device.read_logical_block(u64::from(logical_block_address), data_address) {
+            return None;
+        }
+
+        let sector = data_address as *const u8;
+        // SAFETY: `data_address` points to a 512-byte DMA buffer filled from a
+        // file data sector.
+        let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
+        let remaining = file_size.saturating_sub(contents.len());
+        let bytes_to_copy = remaining.min(SECTOR_BYTES);
+        contents.extend_from_slice(&sector[..bytes_to_copy]);
+        if contents.len() >= file_size {
+            break;
+        }
+    }
+
+    Some(())
 }
 
 fn read_next_cluster(
