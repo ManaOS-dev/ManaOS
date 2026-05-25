@@ -20,22 +20,22 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Support multi-sector reads in the AHCI command path.
 - [x] Support reads that cross FAT32 cluster boundaries.
 - [x] Add AHCI error propagation instead of returning only `bool`.
-- [x] Add AHCI interrupt-driven completion as an alternative to polling.
+- [ ] Add AHCI interrupt-driven completion as an alternative to polling.
 - [x] Add cache invalidation or explicit ownership rules for DMA buffers.
 - [x] Add write support for AHCI sectors after read-only storage is stable.
 - [x] Add a QEMU storage test mode that boots and verifies expected serial log lines automatically.
 
 ### Partition And Filesystem Parsing
 
-- [ ] Fall back to the backup GPT header when the primary header is invalid.
-- [ ] Support selecting a partition by type GUID or name instead of always selecting the first entry.
-- [ ] Validate FAT32 backup boot sector.
-- [ ] Implement FAT32 long file name entries.
-- [ ] Implement FAT32 directory traversal beyond the root directory.
-- [ ] Implement FAT32 file reads across full cluster chains.
-- [ ] Detect FAT32 cluster chain loops and invalid cluster numbers.
-- [ ] Implement FAT32 read-only directory listing API.
-- [ ] Add FAT32 write planning before mutating disk images.
+- [x] Fall back to the backup GPT header when the primary header is invalid.
+- [x] Support selecting a partition by type GUID or name instead of always selecting the first entry.
+- [x] Validate FAT32 backup boot sector.
+- [x] Implement FAT32 long file name entries.
+- [x] Implement FAT32 directory traversal beyond the root directory.
+- [x] Implement FAT32 file reads across full cluster chains.
+- [x] Detect FAT32 cluster chain loops and invalid cluster numbers.
+- [x] Implement FAT32 read-only directory listing API.
+- [x] Add FAT32 write planning before mutating disk images.
 
 ### Virtual Filesystem
 

@@ -3,7 +3,7 @@
 //! ## Owns
 //! - GUID partition table header inspection
 //! - GUID partition table partition entry parsing
-//! - Selection of the first non-empty partition entry
+//! - Selection of a preferred partition entry by name or type GUID
 //!
 //! ## Does NOT own
 //! - Storage controller command submission
@@ -11,9 +11,11 @@
 //! - Filesystem parsing
 //!
 //! ## Public API
-//! - [`inspect_header`] - Inspect a 512-byte sector as a partition table header
+//! - [`inspect_header_with_fallback`] - Inspect primary and backup partition table headers
 //! - [`inspect_partition_table`] - Inspect partition entry sectors through a block device
 
 mod parser;
 
-pub(super) use parser::{inspect_header, inspect_partition_table, GuidPartitionTablePartition};
+pub(super) use parser::{
+    inspect_header_with_fallback, inspect_partition_table, GuidPartitionTablePartition,
+};
