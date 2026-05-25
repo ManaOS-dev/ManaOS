@@ -233,6 +233,24 @@ fn verify_mounted_disk_file(path: &str) {
     let _ = kernel::filesystem::write(kernel::filesystem::STANDARD_OUTPUT, &buffer[..bytes_read]);
 }
 
+fn verify_kernel_console_pipeline() {
+    const PIPELINE_COMMAND: &str = "cat /disk/hello.txt | grep FAT32";
+
+    match kernel::console::verify_pipeline_smoke(PIPELINE_COMMAND) {
+        Some(output_lines) if output_lines > 0 => crate::log_info!(
+            "console",
+            "Pipeline command smoke passed: command=\"{}\" output_lines={}",
+            PIPELINE_COMMAND,
+            output_lines
+        ),
+        _ => crate::log_warn!(
+            "console",
+            "Pipeline command smoke failed: command=\"{}\"",
+            PIPELINE_COMMAND
+        ),
+    }
+}
+
 fn verify_primary_storage_device() {
     let Some(data_address) = kernel::driver::storage::get_primary_data_address() else {
         return;
@@ -323,6 +341,7 @@ fn main() -> Status {
             file.contents.len()
         );
         verify_mounted_disk_file(&file.mount_path);
+        verify_kernel_console_pipeline();
     }
     initialize_scheduler();
     initialize_architecture_and_drivers();

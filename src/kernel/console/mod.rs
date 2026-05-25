@@ -15,6 +15,7 @@
 //! - [`push_character`] - Push one decoded keyboard character
 //! - [`push_backspace`] - Delete one pending input character
 //! - [`submit`] - Execute the current input line
+//! - [`verify_pipeline_smoke`] - Run a non-interactive pipeline smoke check
 //! - [`render_if_dirty`] - Redraw the command console when state changed
 
 mod command;
@@ -90,6 +91,11 @@ pub fn submit() {
     };
 
     command::execute(&command);
+}
+
+/// Run a non-interactive pipeline command and return the number of output lines.
+pub fn verify_pipeline_smoke(command: &str) -> Option<usize> {
+    command::verify_pipeline_smoke(command)
 }
 
 /// Redraw the command console overlay when state changed.
