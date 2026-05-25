@@ -2,29 +2,34 @@
 
 Welcome! ManaOS is an "OS for Developers," and we value your contributions. This document provides guidelines for participating in the project.
 
-## 🤝 Pull Request Workflow
+## 🤝 Contribution Workflow
 
-We follow a **Pull Request (PR) first** development model.
+External contributors should use a pull request workflow. When there are no
+external contributors involved in the change, maintainers and project-owned
+automation may use the direct branch workflow documented in `AGENTS.md` after
+local verification.
 
 1. **Fork** the repository.
 2. **Create a branch** for your feature or bug fix: `git checkout -b feature/your-awesome-feature` or `git checkout -b fix/your-bug`.
 3. **Commit** your changes with clear messages.
 4. **Format & Lint** your code (see below).
-5. **Push** to your fork and **Open a Pull Request**.
+5. **Push** to your fork and **Open a Pull Request** targeting `master`.
 
 ## 🌿 Branch Policy
 
 | Branch | Purpose |
 |---|---|
-| `main` | Always builds and boots with all features fully working |
-| `dev` | Integration branch for non-experimental work |
+| `master` | Always builds and boots with all merged work verified |
 | `feature/xxx` | Single feature unit |
 | `fix/xxx` | Bug fix |
-| `experimental/xxx` | Experimental work — breaking changes allowed |
+| `refactor/xxx` | Code restructuring without behavior changes unless stated |
+| `docs/xxx` | Documentation-only work |
+| `experimental/xxx` | Experimental work; do not merge until converted to a verified branch |
 
-- PRs from `feature/xxx` and `fix/xxx` target `dev`.
-- `dev` is merged into `main` only when fully verified.
-- `experimental/xxx` branches are never merged into `main` directly.
+- Pull requests from `feature/xxx`, `fix/xxx`, `refactor/xxx`, and `docs/xxx`
+  target `master`.
+- Keep each branch focused on one reviewable unit.
+- Delete task branches after they are merged.
 
 ---
 
@@ -37,12 +42,14 @@ We follow a **Pull Request (PR) first** development model.
 ## 📝 Language Policy
 
 - **Code & Comments**: **English only** (for global collaboration and better tool integration).
-- **Commit Messages**: **English** (following [Conventional Commits](https://www.conventionalcommits.org/)).
+- **Commit Messages**: **English**. Use a concise imperative summary.
+  Conventional Commit prefixes are optional when they add useful context.
 - **Discussions**: **Japanese is welcome** in GitHub Issues and Pull Request comments to facilitate smooth and fast communication among core members.
 
 ## 🏹 Commit Message Convention
 
-Please use the following format for commit messages:
+Use clear English commit messages. Conventional Commit prefixes are allowed but
+not required:
 - `feat: ...` (new feature)
 - `fix: ...` (bug fix)
 - `docs: ...` (documentation)
@@ -70,7 +77,20 @@ just lint
 - All `pub` functions, structs, and enums must have `///` doc comments.
 - Use English for all comments and documentation to ensure global accessibility.
 
-### 4. Safety
+### 4. Naming
+- Avoid unclear local abbreviations such as `fb_info`, `h`, and `v`.
+- Domain-standard acronyms are allowed when they improve readability, including
+  `PCI`, `AHCI`, `GPT`, `FAT32`, `UEFI`, `GDT`, `IDT`, `GOP`, `PIC`, `PIT`,
+  `APIC`, `IOAPIC`, `LBA`, `FIS`, `DMA`, and `PRDT`.
+- Prefer concise acronyms in log categories and diagnostic messages.
+
+### 5. Module Boundaries
+- Keep `mod.rs` files thin: ownership documentation, module declarations,
+  re-exports, and small public API forwarding only.
+- Move processing logic into focused sibling modules such as `queue`, `decoder`,
+  `state`, or `hardware`.
+
+### 6. Safety
 - Minimize the use of `unsafe` blocks.
 - If you use `unsafe`, you **must** add a `// SAFETY:` comment explaining why it is safe.
 

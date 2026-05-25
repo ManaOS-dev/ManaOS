@@ -1,88 +1,27 @@
 //! # `kernel::driver::input::keyboard`
 //!
 //! ## Owns
-//! - PS/2 keyboard scancode queue
-//! - Keyboard state decoding
+//! - PS/2 keyboard scancode queue from interrupt handler to main loop
+//! - Keyboard scancode decoding and console input dispatch
 //!
 //! ## Does NOT own
 //! - Interrupt routing (-> `arch::x86_64::interrupt_descriptor_table`)
+//! - Console state or command execution (-> `kernel::console`)
 //!
 //! ## Public API
-//! - [`push_scancode`] - Called from interrupt handler
-//! - [`process_input`] - Called from main loop
+//! - [`push_scancode`] - Called from interrupt handler only
+//! - [`process_input`] - Called from main loop only
 
-use crate::kernel::sync::ring_buffer::LockFreeRingBuffer;
-use pc_keyboard::{layouts, DecodedKey, HandleControl, KeyCode, PS2Keyboard, ScancodeSet1};
-use spin::Mutex;
+mod console;
+mod decoder;
+mod queue;
 
-static SCANCODE_QUEUE: LockFreeRingBuffer<u8, 128> = LockFreeRingBuffer::new();
-static KEYBOARD: Mutex<PS2Keyboard<layouts::Us104Key, ScancodeSet1>> =
-    Mutex::new(PS2Keyboard::new(
-        ScancodeSet1::new(),
-        layouts::Us104Key,
-        HandleControl::Ignore,
-    ));
-
-/// Push a raw scancode from the keyboard interrupt.
+/// Push one raw PS/2 keyboard scancode from the interrupt path.
 pub fn push_scancode(scancode: u8) {
-    let _ = SCANCODE_QUEUE.push(scancode);
+    queue::push_scancode(scancode);
 }
 
-/// Decode and process pending scancodes.
+/// Decode and process pending keyboard input.
 pub fn process_input() {
-    let mut keyboard = KEYBOARD.lock();
-    let mut processed = 0;
-    while processed < 16 {
-        if let Some(scancode) = SCANCODE_QUEUE.pop() {
-            processed += 1;
-            if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-                if let Some(key) = keyboard.process_keyevent(key_event) {
-                    match key {
-                        DecodedKey::Unicode(character) => {
-                            process_character(character);
-                        }
-                        DecodedKey::RawKey(key) => {
-                            process_raw_key(key);
-                        }
-                    }
-                }
-            }
-        } else {
-            break;
-        }
-    }
-}
-
-fn process_character(character: char) {
-    if character == '`' {
-        crate::kernel::console::toggle();
-        return;
-    }
-
-    if !crate::kernel::console::is_open() {
-        return;
-    }
-
-    match character {
-        '\n' | '\r' => crate::kernel::console::submit(),
-        '\u{8}' | '\u{7f}' => crate::kernel::console::push_backspace(),
-        _ => crate::kernel::console::push_character(character),
-    }
-}
-
-fn process_raw_key(key: KeyCode) {
-    if key == KeyCode::Escape {
-        crate::kernel::console::toggle();
-        return;
-    }
-
-    if !crate::kernel::console::is_open() {
-        return;
-    }
-
-    match key {
-        KeyCode::Return | KeyCode::NumpadEnter => crate::kernel::console::submit(),
-        KeyCode::Backspace => crate::kernel::console::push_backspace(),
-        _ => crate::log_debug!("keyboard", "raw key: {:?}", key),
-    }
+    decoder::process_input();
 }
