@@ -229,64 +229,80 @@ fn read_initial_sectors(hba_memory: *mut HbaMemory, port_index: usize, buffers: 
         dump_sector_prefix("LBA0", buffers.data);
     }
 
-    if block_device.read_logical_block(1, buffers.data) {
-        if let Some(header) = guid_partition_table::inspect_header(buffers.data) {
-            if let Some(partition) = guid_partition_table::inspect_partition_table(
-                &mut block_device,
-                header,
-                buffers.data,
-            ) {
-                crate::log_info!(
-                    "storage",
-                    "Selected GPT partition: index={} first_lba={} last_lba={} name=\"{}\"",
-                    partition.index,
-                    partition.first_lba,
-                    partition.last_lba,
-                    partition.name()
-                );
-                set_selected_partition(partition);
-                let mut partition_device = PartitionBlockDevice::new(
-                    &mut block_device,
-                    partition.first_lba,
-                    partition.last_lba,
-                );
-                if let Some(volume) =
-                    file_allocation_table::inspect_boot_sector(&mut partition_device, buffers.data)
-                {
-                    if let Some(entry) = file_allocation_table::inspect_root_directory(
-                        &mut partition_device,
-                        volume,
-                        buffers.data,
-                    ) {
-                        let _ = file_allocation_table::inspect_file_contents(
-                            &mut partition_device,
-                            volume,
-                            entry,
-                            buffers.data,
-                        );
-                        if let Some(contents) = file_allocation_table::read_file_contents(
-                            &mut partition_device,
-                            volume,
-                            entry,
-                            buffers.data,
-                        ) {
-                            let mount_path = entry.disk_mount_path();
-                            crate::log_info!(
-                                "storage",
-                                "Loaded FAT32 file for virtual filesystem: path={} bytes={}",
-                                mount_path,
-                                contents.len()
-                            );
-                            set_detected_file(StorageFile {
-                                mount_path,
-                                contents,
-                            });
-                        }
-                    }
-                }
-            }
-        }
+    if !block_device.read_logical_block(1, buffers.data) {
+        crate::log_warn!("storage", "Failed to read GPT header sector");
+        return;
     }
+
+    let Some(header) = guid_partition_table::inspect_header(buffers.data) else {
+        crate::log_warn!("storage", "Failed to parse GPT header");
+        return;
+    };
+
+    let Some(partition) =
+        guid_partition_table::inspect_partition_table(&mut block_device, header, buffers.data)
+    else {
+        crate::log_warn!("storage", "Failed to select a GPT partition");
+        return;
+    };
+
+    crate::log_info!(
+        "storage",
+        "Selected GPT partition: index={} first_lba={} last_lba={} name=\"{}\"",
+        partition.index,
+        partition.first_lba,
+        partition.last_lba,
+        partition.name()
+    );
+    set_selected_partition(partition);
+    let mut partition_device =
+        PartitionBlockDevice::new(&mut block_device, partition.first_lba, partition.last_lba);
+
+    let Some(volume) =
+        file_allocation_table::inspect_boot_sector(&mut partition_device, buffers.data)
+    else {
+        crate::log_warn!("storage", "Failed to parse FAT32 boot sector");
+        return;
+    };
+
+    let Some(entry) =
+        file_allocation_table::inspect_root_directory(&mut partition_device, volume, buffers.data)
+    else {
+        crate::log_warn!("storage", "Failed to scan FAT32 root directory");
+        return;
+    };
+
+    let _ = file_allocation_table::inspect_file_contents(
+        &mut partition_device,
+        volume,
+        entry,
+        buffers.data,
+    );
+    let Some(contents) = file_allocation_table::read_file_contents(
+        &mut partition_device,
+        volume,
+        entry,
+        buffers.data,
+    ) else {
+        crate::log_warn!(
+            "storage",
+            "Failed to load FAT32 file: path={}",
+            entry.disk_mount_path()
+        );
+        return;
+    };
+
+    let mount_path = entry.disk_mount_path();
+    crate::log_info!(
+        "storage",
+        "Loaded FAT32 file for virtual filesystem: path={} bytes={}",
+        mount_path,
+        contents.len()
+    );
+    set_detected_file(StorageFile {
+        mount_path,
+        contents,
+    });
 }
 
 fn stop_command_engine(port: *mut HbaPort, port_index: usize) -> bool {

@@ -219,13 +219,14 @@ pub(in crate::kernel::driver::storage) fn read_file_contents(
 
         let next_cluster = read_next_cluster(block_device, &volume, current_cluster, data_address)?;
         if next_cluster >= FILE_ALLOCATION_TABLE_END_OF_CHAIN {
-            crate::log_warn!(
+            crate::log_error!(
                 "fat32",
-                "{} ended before file_size={} bytes",
+                "{} ended before file_size={} bytes; read={} bytes",
                 entry.name(),
-                entry.file_size
+                entry.file_size,
+                contents.len()
             );
-            break;
+            return None;
         }
         current_cluster = next_cluster;
     }

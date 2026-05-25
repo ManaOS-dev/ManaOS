@@ -1,7 +1,9 @@
-use core::arch::x86_64::_rdtsc;
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 static TSC_FREQUENCY: AtomicU64 = AtomicU64::new(0);
+static TIMESTAMP_COUNTER_PROVIDER: AtomicUsize = AtomicUsize::new(0);
+
+type TimestampCounterProvider = fn() -> u64;
 const CALIBRATION_TICKS: u64 = 100;
 const MAX_TIMER_WAIT_SPINS: u64 = 50_000_000;
 const MAX_CALIBRATION_ATTEMPTS: usize = 5;
@@ -16,10 +18,22 @@ pub fn get_tsc_frequency() -> u64 {
     TSC_FREQUENCY.load(Ordering::Relaxed)
 }
 
+/// Register the platform timestamp counter reader used by the profiler.
+pub fn register_timestamp_counter_provider(provider: TimestampCounterProvider) {
+    TIMESTAMP_COUNTER_PROVIDER.store(provider as usize, Ordering::Relaxed);
+}
+
 /// Reads the current TSC value.
 pub fn read_tsc() -> u64 {
-    // SAFETY: rdtsc is a standard x86 instruction and safe to call.
-    unsafe { _rdtsc() }
+    let provider_address = TIMESTAMP_COUNTER_PROVIDER.load(Ordering::Relaxed);
+    if provider_address == 0 {
+        return 0;
+    }
+
+    // SAFETY: The stored address is written only by
+    // `register_timestamp_counter_provider` from a valid function pointer.
+    let provider: TimestampCounterProvider = unsafe { core::mem::transmute(provider_address) };
+    provider()
 }
 
 fn wait_for_tick_change_and_read_tsc(start_ticks: u64) -> Option<(u64, u64)> {
