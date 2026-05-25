@@ -50,6 +50,11 @@ impl BumpFrameAllocator {
 
         while self.current < self.count {
             let region = &self.regions[self.current];
+            if region.start == 0 && self.offset == 0 {
+                self.offset = 1;
+                continue;
+            }
+
             let available_pages = region.pages.saturating_sub(self.offset);
             if available_pages >= n {
                 let Some(candidate_offset) = self.offset.checked_mul(FRAME_SIZE) else {
@@ -62,12 +67,6 @@ impl BumpFrameAllocator {
                     self.offset = 0;
                     continue;
                 };
-
-                // Never allocate address 0
-                if candidate_address == 0 {
-                    self.offset += 1;
-                    continue;
-                }
 
                 self.offset += n;
                 return Some(candidate_address);
@@ -88,4 +87,13 @@ impl BumpFrameAllocator {
         }
         total
     }
+}
+
+/// Verify the frame-zero skip behavior for multi-frame allocations.
+#[allow(dead_code)]
+pub fn verify_zero_address_skip_for_multi_frame_allocations() -> bool {
+    let mut frame_allocator = BumpFrameAllocator::new();
+    frame_allocator.add_region(0, 3);
+
+    frame_allocator.allocate_frames(2) == Some(FRAME_SIZE)
 }

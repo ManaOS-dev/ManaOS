@@ -12,6 +12,8 @@ pub const SYS_OPEN: usize = 2;
 pub const SYS_CLOSE: usize = 3;
 /// Linux-compatible exit syscall number.
 pub const SYS_EXIT: usize = 60;
+/// Linux-compatible get-process-identifier syscall number.
+pub const SYS_GETPID: usize = 39;
 /// Linux-compatible exit-group syscall number.
 pub const SYS_EXIT_GROUP: usize = 231;
 /// Linux-compatible open-at syscall number.
@@ -196,6 +198,12 @@ pub fn openat(directory_file_descriptor: usize, path: &[u8], flags: usize, mode:
 #[inline(always)]
 pub fn close(file_descriptor: usize) -> isize {
     syscall1(SYS_CLOSE, file_descriptor)
+}
+
+/// Return the current ManaOS task identifier.
+#[inline(always)]
+pub fn getpid() -> isize {
+    syscall1(SYS_GETPID, 0)
 }
 
 /// Terminate the current user task.

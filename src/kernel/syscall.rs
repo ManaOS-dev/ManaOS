@@ -18,6 +18,7 @@
 //! - [`SYS_CLOSE`] - Linux-compatible close syscall number
 //! - [`SYS_EXIT`] - Linux-compatible exit syscall number
 //! - [`SYS_EXIT_GROUP`] - Linux-compatible process exit syscall number
+//! - [`SYS_GETPID`] - Linux-compatible get-process-identifier syscall number
 //! - [`SYS_OPENAT`] - Linux-compatible open-at syscall number
 
 use alloc::string::String;
@@ -40,6 +41,8 @@ pub const SYS_OPEN: u64 = 2;
 pub const SYS_CLOSE: u64 = 3;
 /// Linux-compatible exit syscall number.
 pub const SYS_EXIT: u64 = 60;
+/// Linux-compatible get-process-identifier syscall number.
+pub const SYS_GETPID: u64 = 39;
 /// Linux-compatible exit-group syscall number.
 pub const SYS_EXIT_GROUP: u64 = 231;
 /// Linux-compatible open-at syscall number.
@@ -79,6 +82,7 @@ pub extern "C" fn syscall_dispatch(
         ),
         SYS_CLOSE => sys_close(first_argument),
         SYS_READ => sys_read(first_argument, second_argument, third_argument),
+        SYS_GETPID => sys_getpid(),
         _ => ERROR_NOT_IMPLEMENTED,
     }
 }
@@ -186,6 +190,16 @@ fn sys_exit(exit_code: u64) -> u64 {
     }
 
     USER_EXIT_SENTINEL
+}
+
+fn sys_getpid() -> u64 {
+    match crate::kernel::task::get_current_task_id() {
+        Some(task_id) => {
+            crate::log_info!("syscall", "getpid -> task={}", task_id);
+            task_id
+        }
+        None => ERROR_NOT_IMPLEMENTED,
+    }
 }
 
 fn validate_user_range(user_pointer: usize, length: usize) -> Option<()> {

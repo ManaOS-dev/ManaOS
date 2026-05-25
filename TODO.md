@@ -5,7 +5,6 @@ items have been removed so the file stays useful for deciding the next task.
 
 ## Immediate Priorities
 
-- [ ] Fix `BumpFrameAllocator::allocate_frames` zero-address skip behavior for multi-frame allocations.
 - [ ] Set `NO_EXECUTE` on non-executable kernel and user mappings where appropriate.
 - [ ] Avoid parsing font data on every `draw_text` call; cache parsed font faces.
 - [ ] Replace the display command queue with a design that is correct for multi-producer use.
@@ -21,7 +20,6 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Support multi-sector reads in the AHCI command path.
 - [ ] Support reads that cross FAT32 cluster boundaries.
 - [ ] Add AHCI error propagation instead of returning only `bool`.
-- [ ] Add AHCI timeout diagnostics that include port and command slot state.
 - [ ] Add AHCI interrupt-driven completion as an alternative to polling.
 - [ ] Add cache invalidation or explicit ownership rules for DMA buffers.
 - [ ] Add write support for AHCI sectors after read-only storage is stable.
@@ -29,11 +27,8 @@ items have been removed so the file stays useful for deciding the next task.
 
 ### Partition And Filesystem Parsing
 
-- [ ] Validate GPT header CRCs before trusting partition metadata.
-- [ ] Validate GPT partition array CRCs.
 - [ ] Fall back to the backup GPT header when the primary header is invalid.
 - [ ] Support selecting a partition by type GUID or name instead of always selecting the first entry.
-- [ ] Parse FAT32 FSInfo sector metadata.
 - [ ] Validate FAT32 backup boot sector.
 - [ ] Implement FAT32 long file name entries.
 - [ ] Implement FAT32 directory traversal beyond the root directory.
@@ -93,7 +88,6 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Add `brk` or another first heap-growth syscall.
 - [ ] Add `mmap` and `munmap` planning.
 - [ ] Add `nanosleep` or a minimal sleep syscall.
-- [ ] Add `getpid`.
 - [ ] Add `fork` or document why the first process model uses `spawn`/`exec` instead.
 - [ ] Add syscall tracing controls.
 
@@ -157,7 +151,6 @@ items have been removed so the file stays useful for deciding the next task.
 ### Display
 
 - [ ] Add a text console with scrolling independent of the graphical overlay.
-- [ ] Add framebuffer mode diagnostics.
 - [ ] Add damage tracking tests for dirty rectangles.
 - [ ] Add primitive window/widget layer planning.
 - [ ] Add bitmap image rendering support if the UI starts using assets.

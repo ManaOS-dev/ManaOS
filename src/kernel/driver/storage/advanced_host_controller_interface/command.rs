@@ -13,6 +13,7 @@ const TASK_FILE_DATA_BUSY: u32 = 1 << 7;
 const TASK_FILE_DATA_DATA_REQUEST: u32 = 1 << 3;
 const INTERRUPT_STATUS_TASK_FILE_ERROR: u32 = 1 << 30;
 const PORT_POLL_LIMIT: usize = 1_000_000;
+const READ_COMMAND_SLOT: u32 = 1;
 
 pub(super) fn issue_read_sector(
     port: *mut HbaPort,
@@ -37,7 +38,10 @@ pub(super) fn issue_read_sector(
     // register block.
     unsafe {
         core::ptr::write_volatile(core::ptr::addr_of_mut!((*port).interrupt_status), u32::MAX);
-        core::ptr::write_volatile(core::ptr::addr_of_mut!((*port).command_issue), 1);
+        core::ptr::write_volatile(
+            core::ptr::addr_of_mut!((*port).command_issue),
+            READ_COMMAND_SLOT,
+        );
     }
     crate::log_trace!(
         "ahci",
@@ -51,7 +55,7 @@ pub(super) fn issue_read_sector(
         // port register block.
         let command_issue =
             unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_issue)) };
-        if command_issue & 1 == 0 {
+        if command_issue & READ_COMMAND_SLOT == 0 {
             // SAFETY: `port` points to a mapped Advanced Host Controller
             // Interface port register block.
             let interrupt_status =
@@ -77,22 +81,7 @@ pub(super) fn issue_read_sector(
         }
     }
 
-    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
-    // register block.
-    let task_file_data =
-        unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).task_file_data)) };
-    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
-    // register block.
-    let command_issue =
-        unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_issue)) };
-    crate::log_error!(
-        "ahci",
-        "Port {}: read LBA {} timeout, task_file_data={:#010x} command_issue={:#010x}",
-        port_index,
-        logical_block_address,
-        task_file_data,
-        command_issue
-    );
+    log_timeout_registers(port, port_index, logical_block_address, "read command");
     false
 }
 
@@ -107,16 +96,7 @@ fn wait_until_not_busy(port: *mut HbaPort, port_index: usize) -> bool {
         }
     }
 
-    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
-    // register block.
-    let task_file_data =
-        unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).task_file_data)) };
-    crate::log_error!(
-        "ahci",
-        "Port {}: device busy timeout, task_file_data={:#010x}",
-        port_index,
-        task_file_data
-    );
+    log_timeout_registers(port, port_index, 0, "device busy");
     false
 }
 
@@ -176,4 +156,43 @@ fn prepare_read_command(buffers: AhciDmaBuffers, logical_block_address: u64) {
 
 fn lba_byte(logical_block_address: u64, shift: u32) -> u8 {
     u8::try_from((logical_block_address >> shift) & 0xff).expect("masked LBA byte must fit in u8")
+}
+
+fn log_timeout_registers(
+    port: *mut HbaPort,
+    port_index: usize,
+    logical_block_address: u64,
+    context: &str,
+) {
+    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
+    // register block.
+    let task_file_data =
+        unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).task_file_data)) };
+    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
+    // register block.
+    let command_issue =
+        unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_issue)) };
+    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
+    // register block.
+    let sata_active = unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).sata_active)) };
+    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
+    // register block.
+    let interrupt_status =
+        unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).interrupt_status)) };
+    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
+    // register block.
+    let sata_error = unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).sata_error)) };
+    crate::log_error!(
+        "ahci",
+        "Port {}: {} timeout lba={} slot_mask={:#010x} task_file_data={:#010x} command_issue={:#010x} sata_active={:#010x} interrupt_status={:#010x} sata_error={:#010x}",
+        port_index,
+        context,
+        logical_block_address,
+        READ_COMMAND_SLOT,
+        task_file_data,
+        command_issue,
+        sata_active,
+        interrupt_status,
+        sata_error
+    );
 }
