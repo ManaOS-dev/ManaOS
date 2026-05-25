@@ -110,6 +110,13 @@ pub fn enable_interrupts() {
     x86_64::instructions::interrupts::enable();
 }
 
+/// Read the current `x86_64` timestamp counter value.
+pub fn read_timestamp_counter() -> u64 {
+    // SAFETY: RDTSC reads the processor timestamp counter and does not access
+    // memory or require additional kernel invariants.
+    unsafe { core::arch::x86_64::_rdtsc() }
+}
+
 #[allow(dead_code)]
 pub fn hlt_loop() -> ! {
     loop {

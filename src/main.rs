@@ -125,6 +125,7 @@ fn initialize_architecture_and_drivers() {
     kernel::time::register_timer_ticks_provider(
         arch::x86_64::interrupt_descriptor_table::get_ticks,
     );
+    kernel::profiler::register_timestamp_counter_provider(arch::x86_64::read_timestamp_counter);
     kernel::task::architecture::register_context_switch(arch::x86_64::switch_context);
     kernel::task::architecture::register_user_mode_entry(arch::x86_64::enter_user_mode);
     kernel::task::architecture::register_returnable_user_mode_entry(

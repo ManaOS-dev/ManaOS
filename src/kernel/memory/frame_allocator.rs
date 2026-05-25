@@ -2,6 +2,7 @@
 /// Conventional memory regions are registered before `ExitBootServices`,
 /// and physical frames (4KB units) are allocated after `ExitBootServices`.
 const MAX_REGIONS: usize = 128;
+const FRAME_SIZE: u64 = 4096;
 
 #[derive(Clone, Copy)]
 struct Region {
@@ -48,24 +49,28 @@ impl BumpFrameAllocator {
         }
 
         while self.current < self.count {
-            let r = &self.regions[self.current];
-            let avail = r.pages.saturating_sub(self.offset);
-            if avail >= n {
-                let addr = r.start + self.offset * 4096;
-
-                // Never allocate address 0
-                if addr == 0 {
-                    self.offset += 1;
-                    if avail > n {
-                        continue;
-                    }
+            let region = &self.regions[self.current];
+            let available_pages = region.pages.saturating_sub(self.offset);
+            if available_pages >= n {
+                let Some(candidate_offset) = self.offset.checked_mul(FRAME_SIZE) else {
                     self.current += 1;
                     self.offset = 0;
+                    continue;
+                };
+                let Some(candidate_address) = region.start.checked_add(candidate_offset) else {
+                    self.current += 1;
+                    self.offset = 0;
+                    continue;
+                };
+
+                // Never allocate address 0
+                if candidate_address == 0 {
+                    self.offset += 1;
                     continue;
                 }
 
                 self.offset += n;
-                return Some(addr);
+                return Some(candidate_address);
             }
             // Move to the next region
             self.current += 1;
@@ -79,7 +84,7 @@ impl BumpFrameAllocator {
     pub fn total_bytes(&self) -> u64 {
         let mut total = 0;
         for i in 0..self.count {
-            total += self.regions[i].pages * 4096;
+            total += self.regions[i].pages * FRAME_SIZE;
         }
         total
     }
