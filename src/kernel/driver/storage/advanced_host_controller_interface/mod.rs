@@ -13,7 +13,13 @@
 //! ## Public API
 //! - [`init`] - Initialize one storage controller from its memory register base
 
+mod block_device;
+mod command;
 mod controller;
+mod dma;
+mod host;
+mod port;
+mod probe;
 mod registers;
 
 pub(super) use controller::init;
