@@ -93,11 +93,12 @@ items have been removed so the file stays useful for deciding the next task.
 
 ### Userland Runtime
 
-- [ ] Grow the no-std userland support crate into a small runtime.
+- [x] Grow the no-std userland support crate into a small runtime.
 - [ ] Add panic handling that exits with a clear status.
 - [ ] Add basic formatting helpers for userland output.
-- [ ] Add file descriptor wrappers in userland.
-- [ ] Add argument parsing helpers.
+- [x] Add file descriptor wrappers in userland.
+- [x] Add argument parsing helpers.
+- [x] Add fixed-buffer userland command modules with single-pipe execution.
 - [ ] Add build scripts for multiple userland binaries.
 - [ ] Add a userland smoke-test runner.
 
