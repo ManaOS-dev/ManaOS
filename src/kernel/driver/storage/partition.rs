@@ -1,6 +1,6 @@
 //! Partition-relative block device adapter.
 
-use super::block_device::BlockDevice;
+use super::block_device::{BlockDevice, BlockDeviceError, BlockDeviceResult};
 
 /// Block-device view that translates partition-relative LBAs to disk LBAs.
 pub(super) struct PartitionBlockDevice<'a, T: BlockDevice> {
@@ -26,27 +26,69 @@ impl<'a, T: BlockDevice> PartitionBlockDevice<'a, T> {
 }
 
 impl<T: BlockDevice> BlockDevice for PartitionBlockDevice<'_, T> {
-    fn read_logical_block(&mut self, logical_block_address: u64, data_address: u64) -> bool {
-        if logical_block_address >= self.sector_count {
-            crate::log_warn!(
-                "storage",
-                "partition LBA out of range: lba={} sectors={}",
-                logical_block_address,
-                self.sector_count
-            );
-            return false;
+    fn read_logical_blocks(
+        &mut self,
+        logical_block_address: u64,
+        sector_count: u16,
+        data_address: u64,
+    ) -> BlockDeviceResult<()> {
+        if sector_count == 0 {
+            return Err(BlockDeviceError::InvalidTransferLength);
         }
 
-        let Some(disk_lba) = self.first_lba.checked_add(logical_block_address) else {
-            crate::log_error!(
+        let last_logical_block_address = logical_block_address
+            .checked_add(u64::from(sector_count) - 1)
+            .ok_or(BlockDeviceError::Overflow)?;
+        if last_logical_block_address >= self.sector_count {
+            crate::log_warn!(
                 "storage",
-                "partition LBA overflow: first_lba={} lba={}",
-                self.first_lba,
-                logical_block_address
+                "partition LBA out of range: lba={} sector_count={} sectors={}",
+                logical_block_address,
+                sector_count,
+                self.sector_count
             );
-            return false;
-        };
+            return Err(BlockDeviceError::OutOfRange);
+        }
 
-        self.inner.read_logical_block(disk_lba, data_address)
+        let disk_lba = self
+            .first_lba
+            .checked_add(logical_block_address)
+            .ok_or(BlockDeviceError::Overflow)?;
+
+        self.inner
+            .read_logical_blocks(disk_lba, sector_count, data_address)
+    }
+
+    fn write_logical_blocks(
+        &mut self,
+        logical_block_address: u64,
+        sector_count: u16,
+        data_address: u64,
+    ) -> BlockDeviceResult<()> {
+        if sector_count == 0 {
+            return Err(BlockDeviceError::InvalidTransferLength);
+        }
+
+        let last_logical_block_address = logical_block_address
+            .checked_add(u64::from(sector_count) - 1)
+            .ok_or(BlockDeviceError::Overflow)?;
+        if last_logical_block_address >= self.sector_count {
+            crate::log_warn!(
+                "storage",
+                "partition write LBA out of range: lba={} sector_count={} sectors={}",
+                logical_block_address,
+                sector_count,
+                self.sector_count
+            );
+            return Err(BlockDeviceError::OutOfRange);
+        }
+
+        let disk_lba = self
+            .first_lba
+            .checked_add(logical_block_address)
+            .ok_or(BlockDeviceError::Overflow)?;
+
+        self.inner
+            .write_logical_blocks(disk_lba, sector_count, data_address)
     }
 }

@@ -9,12 +9,12 @@ use crate::kernel::driver::storage::{
 };
 
 pub(super) fn inspect_initial_storage(block_device: &mut impl BlockDevice, data_address: u64) {
-    if block_device.read_logical_block(0, data_address) {
+    if block_device.read_logical_block(0, data_address).is_ok() {
         dump_sector_prefix("LBA0", data_address);
     }
 
-    if !block_device.read_logical_block(1, data_address) {
-        crate::log_warn!("storage", "Failed to read GPT header sector");
+    if let Err(error) = block_device.read_logical_block(1, data_address) {
+        crate::log_warn!("storage", "Failed to read GPT header sector: {error:?}");
         return;
     }
 

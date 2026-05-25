@@ -33,6 +33,8 @@ const CONSOLE_PADDING: usize = 12;
 const LINE_HEIGHT: usize = 18;
 const TITLE_HEIGHT: usize = 24;
 
+mod command;
+
 static STATE: LazyLock<Mutex<ConsoleState>> = LazyLock::new(|| Mutex::new(ConsoleState::new()));
 
 struct ConsoleState {
@@ -102,7 +104,7 @@ pub fn submit() {
         command
     };
 
-    execute_command(&command);
+    command::execute(&command);
 }
 
 /// Redraw the command console overlay when state changed.
@@ -202,89 +204,6 @@ pub fn render_if_dirty() {
         console_width,
         CONSOLE_HEIGHT,
     ));
-}
-
-fn execute_command(command: &str) {
-    if command.is_empty() {
-        return;
-    }
-
-    push_output(format!("> {command}"));
-    let (name, argument) = split_command(command);
-    match name {
-        "help" => push_output(
-            "commands: help clear ticks fps storage partitions cat read echo syscalls".to_string(),
-        ),
-        "clear" if argument.is_empty() => clear_output(),
-        "ticks" if argument.is_empty() => {
-            push_output(format!("ticks={}", crate::kernel::time::get_timer_ticks()));
-        }
-        "fps" if argument.is_empty() => {
-            push_output(format!("fps={}", crate::kernel::runtime::get_fps()));
-        }
-        "storage" | "partitions" if argument.is_empty() => push_storage_output(),
-        "cat" | "read" => push_file_output(name, argument),
-        "echo" => push_output(argument.to_string()),
-        "syscalls" if argument.is_empty() => {
-            push_output("syscalls: read write open close exit exit_group openat".to_string());
-        }
-        _ => push_output(format!("unknown command: {command}")),
-    }
-}
-
-fn split_command(command: &str) -> (&str, &str) {
-    command
-        .split_once(' ')
-        .map_or((command, ""), |(name, argument)| (name, argument.trim()))
-}
-
-fn push_file_output(command_name: &str, path: &str) {
-    if path.is_empty() {
-        push_output(format!("usage: {command_name} /path"));
-        return;
-    }
-
-    let Ok(file_descriptor) = crate::kernel::filesystem::open(path) else {
-        push_output(format!("{command_name}: cannot open {path}"));
-        return;
-    };
-
-    let mut buffer = [0_u8; 80];
-    let result = crate::kernel::filesystem::read(file_descriptor, &mut buffer);
-    let _ = crate::kernel::filesystem::close(file_descriptor);
-    let Ok(bytes_read) = result else {
-        push_output(format!("{command_name}: cannot read {path}"));
-        return;
-    };
-
-    push_output(format_file_contents(&buffer[..bytes_read]));
-}
-
-fn format_file_contents(bytes: &[u8]) -> String {
-    let mut output = String::new();
-    for byte in bytes {
-        match *byte {
-            b'\n' | b'\r' => break,
-            0x20..=0x7e => output.push(char::from(*byte)),
-            _ => output.push('.'),
-        }
-    }
-
-    output
-}
-
-fn push_storage_output() {
-    if let Some(partition) = crate::kernel::driver::storage::get_selected_partition() {
-        push_output(format!(
-            "partition {}: first_lba={} last_lba={} name=\"{}\"",
-            partition.index,
-            partition.first_lba,
-            partition.last_lba,
-            partition.name()
-        ));
-    } else {
-        push_output("storage: no selected GPT partition".to_string());
-    }
 }
 
 fn clear_output() {
