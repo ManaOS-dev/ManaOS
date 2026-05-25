@@ -1,188 +1,182 @@
 # ManaOS TODO
 
-## Now (Current Sprint)
-- [x] タイマー EOI を常に送信するよう修正（`timer_interrupt_handler` の try-lock バグ）
-- [x] マウスカーソル座標を `draw_cursor()` だけでなく `state.rs` 側でクランプ
-- [x] `runtime::tick()` の FPS 計算でゼロ除算を防止
+このロードマップは未完了の作業だけを載せます。次にやることを決めやすくするため、完了済みの履歴は削除しています。
 
-## Phase 5: Filesystem & Storage
-- [x] Phase 5A: kernel-side file abstraction
-- [x] VFS 抽象化レイヤー
-- [x] ramfs
-- [x] `/dev/console`
-- [x] `/dev/null`
-- [x] FileDescriptor table
-- [ ] Phase 5B: Userland I/O
-- [x] Phase 5B-1: SYS_WRITE only
-- [x] syscall ABI
-- [x] SYS_WRITE 実装
-- [x] user pointer validation の仮実装
-- [x] userland write wrapper
-- [x] `hello from userland` 出力
-- [x] Phase 5B-2: SYS_EXIT plus one-shot user demo
-- [x] SYS_EXIT 実装
-- [x] exit 時に current user task を finished にする
-- [x] one-shot user demo runner
-- [x] user exit 後に UI を再開
-- [x] Phase 5B-3: file syscalls
-- [x] syscall open/read/close
-- [x] user から C string をコピー
-- [x] read buffer を user へコピー
-- [x] userland open/read/close demo
-- [x] Phase 5B-4: user pointer のページテーブル検証
-- [x] user range を mapped page 単位で検証
-- [x] 未マップの read/write syscall buffer を拒否
-- [x] Phase 5B-4b: bad pointer demo mode
-- [x] user demo mode を定数 1 個で切り替え
-- [x] 不正な read buffer が `ERROR_BAD_ADDRESS` を返すことを検証
-- [x] Phase 5B-5: userland syscall wrapper クレート
-- [x] no_std userland クレート
-- [x] write/read/open/close/exit の syscall wrapper
-- [x] Rust file demo flat binary を kernel から include
-- [x] Phase 5B-6: kernel command console
-- [x] keyboard-driven command input buffer
-- [x] command overlay rendering
-- [x] built-in help/ticks/storage/fps commands
-- [x] Phase 5B-6b: command console usability polish
-- [x] Escape/backtick で console を toggle
-- [x] console open 中だけ keyboard input を console へ route
-- [x] Phase 5B-7: Linux-like syscall numbers
-- [x] read/write/open/close/exit に Linux x86_64 syscall number を使用
-- [x] Phase 5B-8: Linux-like errno and open ABI
-- [x] Linux-style negative errno value を返却
-- [x] Linux-like `open(path, flags, mode)` argument を受け取る
-- [x] Phase 5B-9: Linux syscall compatibility small set
-- [x] `SYS_EXIT_GROUP` と `SYS_OPENAT` を追加
-- [x] `openat(AT_FDCWD, path, flags, mode)` を `open` へ接続
-- [x] userland に `exit_group()` と `openat()` wrapper を追加
-- [x] Phase 5B-10: command console commands
-- [x] `cat /hello.txt` と `read /hello.txt` を追加
-- [x] `echo ...`、`syscalls`、`partitions` を追加
-- [ ] 最小 shell 風 task
-- [ ] Phase 5C: Real Storage
-- [x] Phase 5C-1: PCIe 列挙と AHCI コントローラ発見
-- [x] legacy PCI config-space access
-- [x] AHCI BAR5 discovery
-- [x] AHCI implemented port と SATA signature のログ出力
-- [x] Phase 5C-2: AHCI LBA0 read smoke test
-- [x] AHCI command list/FIS/command table setup
-- [x] READ DMA EXT による LBA0 読み出し
-- [x] LBA0 先頭 16 bytes の serial dump
-- [x] Phase 5C-3: GPT header inspection
-- [x] AHCI の任意 LBA 読み出し
-- [x] LBA1 GPT signature と header field のログ出力
-- [x] Phase 5C-3b: GPT test image script
-- [x] protective MBR と primary/backup GPT header を生成
-- [x] Phase 5C-4a: 空 GPT partition entry scan
-- [x] GPT partition entry array sector を読み出し
-- [x] partition entry がない GPT を empty として報告
-- [x] Phase 5C-4b: GPT test partition detection
-- [x] disk image script で GPT partition entry を 1 つ生成
-- [x] non-empty GPT partition entry count を報告
-- [x] Phase 5C-4c: 詳細 GPT partition debug logging
-- [x] GPT header CRC、disk GUID、partition array CRC をログ出力
-- [x] partition type GUID、unique GUID、attributes、name をログ出力
-- [x] Phase 5C-4d: storage と CI diagnostics
-- [x] CI で userland Rust target を install
-- [x] PCI discovery と AHCI state transition を詳細ログ化
-- [x] Phase 5C-4e: structured kernel log levels
-- [x] `INFO`/`WARN`/`ERROR`/`DEBUG`/`TRACE` serial log macro を追加
-- [x] GPT と AHCI の verbose diagnostics を debug/trace level へ移動
-- [x] Phase 5C-4f: GPT partition metadata model
-- [x] GPT partition entry を kernel struct として parse
-- [x] 次の storage stage 用に最初の GPT partition を選択
-- [x] Phase 5C-5: block device abstraction
-- [x] AHCI sector read を `BlockDevice` で包む
-- [x] GPT scan が `BlockDevice` 経由で read するよう整理
-- [x] GPT partition entry parsing
-- [x] Phase 5C-6: partition-relative block device
-- [x] 選択済み GPT partition から partition LBA を disk LBA へ変換
-- [x] Phase 5C-7: FAT32 boot sector inspection
-- [x] 最小 FAT32 boot sector 付き GPT test image を生成
-- [x] FAT32 BIOS Parameter Block geometry を parse
-- [x] Phase 5C-8: FAT32 root directory listing
-- [x] test 用 `HELLO.TXT` directory entry を生成
-- [x] root directory の 8.3 file entry を parse
-- [x] Phase 5C-9: FAT32 file read smoke test
-- [x] `HELLO.TXT` の first data cluster を読み出し
-- [x] first cluster の file allocation table entry を inspect
-- [x] FAT32 file read を virtual filesystem に mount
-- [x] disk file を `cat /disk/hello.txt` で参照可能にする
-- [ ] AHCI ドライバー実装
+## 直近の優先事項
+
+- [ ] `BumpFrameAllocator::allocate_frames` の複数フレーム確保時のゼロ番地スキップ挙動を修正する
+- [ ] 実行不要な kernel/user mapping に `NO_EXECUTE` を設定する
+- [ ] `draw_text` 呼び出しごとの font parse をやめ、parse 済み font face を cache する
+- [ ] display command queue を multi-producer 前提で正しい設計に置き換える
+- [ ] cursor backup の寸法に cursor size 定数を使う
+- [ ] command が増えた段階で kernel console command dispatch を command 単位の module に分割する
+
+## Phase 5: Filesystem And Storage
+
+### Storage Driver
+
+- [ ] AHCI probe 経路を boot-only smoke test ではなく永続的な block-device service にする
+- [ ] 安定した device identifier を持つ storage device registry を追加する
+- [ ] AHCI command path で multi-sector read を support する
+- [ ] FAT32 cluster 境界をまたぐ read を support する
+- [ ] AHCI error を `bool` だけではなく原因付きで伝搬する
+- [ ] AHCI timeout diagnostics に port と command slot state を含める
+- [ ] polling だけでなく AHCI interrupt-driven completion を追加する
+- [ ] DMA buffer の cache invalidation または ownership rule を明文化する
+- [ ] read-only storage が安定した後に AHCI sector write を追加する
+- [ ] QEMU 起動と serial log 期待値確認を自動化する storage test mode を追加する
+
+### Partition And Filesystem Parsing
+
+- [ ] GPT header CRC を検証してから partition metadata を信用する
+- [ ] GPT partition array CRC を検証する
+- [ ] primary GPT header が壊れている場合に backup GPT header へ fallback する
+- [ ] 常に最初の entry を選ぶのではなく、type GUID または名前で partition を選べるようにする
+- [ ] FAT32 FSInfo sector metadata を parse する
+- [ ] FAT32 backup boot sector を検証する
+- [ ] FAT32 long file name entry を実装する
+- [ ] root directory 以外の FAT32 directory traversal を実装する
+- [ ] FAT32 file read を cluster chain 全体に対応させる
+- [ ] FAT32 cluster chain loop と不正 cluster number を検出する
+- [ ] FAT32 read-only directory listing API を実装する
+- [ ] disk image を変更する前に FAT32 write 方針を設計する
+
+### Virtual Filesystem
+
+- [ ] mount point と filesystem backend を持つ実 mount table を追加する
+- [ ] boot 時に 1 ファイルを memory にコピーするのではなく、FAT32 を filesystem backend として mount する
+- [ ] directory と nested file の path traversal を追加する
+- [ ] `stat` などの file metadata operation を追加する
+- [ ] file descriptor に `seek` support を追加する
+- [ ] directory handle と `readdir` support を追加する
+- [ ] read-only / writable mount flag を追加する
+- [ ] filesystem error を詳細化し、syscall errno value へ一貫して mapping する
+- [ ] `/dev` directory listing を追加する
+- [ ] `..`、連続 slash、末尾 slash の pathname normalization rule を決めて文書化する
+
+### Kernel Console Commands
+
+- [ ] command parsing と個別 command を `kernel::console::mod.rs` から分離する
+- [ ] `ls` を追加する
+- [ ] `pwd` を追加する
+- [ ] `cd` を追加する
+- [ ] `stat` を追加する
+- [ ] `mounts` を追加する
+- [ ] `hexdump` を追加する
+- [ ] command history を追加する
+- [ ] cursor movement と line editing を追加する
+- [ ] console output の scrollback を追加する
+- [ ] `cat /disk/hello.txt` を manual smoke test として docs に追加する
 
 ## Phase 6: Userland
-- [ ] ELF ローダー
-- [ ] システムコール API 定義
-- [ ] シェル実装
-- [ ] 動的リンカースタブ
+
+### ELF And Process Loading
+
+- [ ] 64-bit ELF loader を実装する
+- [ ] ELF header、program header、segment permission を検証する
+- [ ] user text、rodata、data、bss、stack、guard page を正しい flag で map する
+- [ ] `argc`、`argv`、environment pointer を user entry point に渡す
+- [ ] `include_bytes!` ではなく filesystem から user program を load する
+- [ ] `execve` を追加する
+- [ ] process identifier と parent-child relationship を追加する
+- [ ] `wait` または `waitpid` を追加する
+- [ ] 最小 user shell process を追加する
+- [ ] `/disk/hello.txt` を open する userland test program を追加する
+
+### Syscall Surface
+
+- [ ] kernel と userland が共有できる syscall number / ABI contract を定義する
+- [ ] `lseek` を追加する
+- [ ] `stat` または `newfstatat` を追加する
+- [ ] `getdents64` を追加する
+- [ ] `brk` または最初の heap growth syscall を追加する
+- [ ] `mmap` / `munmap` の設計を追加する
+- [ ] `nanosleep` または最小 sleep syscall を追加する
+- [ ] `getpid` を追加する
+- [ ] `fork` を追加する、または最初の process model が `spawn`/`exec` である理由を文書化する
+- [ ] syscall tracing control を追加する
+
+### Userland Runtime
+
+- [ ] no-std userland support crate を小さな runtime に育てる
+- [ ] panic 時に明確な status で exit する処理を追加する
+- [ ] userland output 用の基本 formatting helper を追加する
+- [ ] userland file descriptor wrapper を追加する
+- [ ] argument parsing helper を追加する
+- [ ] 複数 userland binary 用 build script を追加する
+- [ ] userland smoke-test runner を追加する
 
 ## Phase 7: Kernel Hardening
-- [ ] ACPI MADT 解析
-- [ ] IOAPIC ルーティング（legacy 8259 PIC の置き換え）
-- [ ] Local APIC timer（PIT の置き換え）
-- [ ] コンテキストスイッチ時に完全な user trap frame を保存/復元
-- [ ] プロセスごとの仮想アドレス空間（ページテーブル分離）
-- [ ] カーネルスタック間のガードページ
-- [ ] 仮想メモリアロケーター（動的カーネルマッピング用）
-- [ ] スクロール対応のコンソールテキスト出力
-- [ ] ウィンドウ / ウィジェットのプリミティブレイヤー
 
-## Completed
-<details>
-<summary>Phase 1-4（クリックして展開）</summary>
+### Memory Management
 
-### リファクタリング
+- [ ] bump frame allocator を再利用可能な physical frame allocator に置き換える
+- [ ] reserved / used / free physical frame range を追跡する
+- [ ] dynamic mapping 用 kernel virtual memory allocator を追加する
+- [ ] kernel stack に guard page を追加する
+- [ ] process ごとの page table を追加する
+- [ ] user pointer validation を一貫させる copy-in / copy-out helper を追加する
+- [ ] syscall validation で writable / user / executable page permission を検証する
+- [ ] identity mapping の寿命を audit し、可能なら縮小する
+- [ ] raw `u64` が boundary を漏れている箇所に typed physical / virtual address wrapper を追加する
+- [ ] page fault diagnostics に current task と access type を含める
 
-- [x] boot 時の memory/display 初期化を `main.rs` から分離
-- [x] メインループの tick 処理を `main.rs` から分離
-- [x] interrupt handler から `arch/` -> `kernel/` の直接呼び出しを削除
-- [x] `main.rs` から interrupt callback を配線
-- [x] interrupt callback 登録を単一の `InterruptProcessors` API に整理
-- [x] kernel 側 interrupt event routing 用の `kernel::interrupt` bridge を追加
-- [x] boot-service pool allocation 後に stale boot memory map を使う問題を修正
-- [x] `process_packets()` 呼び出し間で PS/2 mouse packet assembly state を保持
-- [x] framebuffer lock 競合時に display command processing が command を落とさないよう修正
-- [x] unsafe-heavy module に不足していた `// SAFETY:` コメントを追加
-- [x] cursor rendering の責務を input mouse code から display cursor code へ移動
+### Interrupts And Scheduling
 
-### Phase 1: Memory Management & Foundation
+- [ ] ACPI RSDP と XSDT/RSDT を parse する
+- [ ] ACPI MADT を parse する
+- [ ] IOAPIC routing を有効化する
+- [ ] IOAPIC 安定後に legacy PIC routing を置き換える
+- [ ] Local APIC timer を calibrate して使用する
+- [ ] Local APIC timer 検証後に PIT scheduling tick を置き換える
+- [ ] interrupt / syscall path で完全な user trap frame を保存・復元する
+- [ ] user task の preemptive scheduling を安全にする
+- [ ] scheduler accounting と task state diagnostics を追加する
+- [ ] 必要な箇所で task ごとの kernel stack switching を追加する
 
-- [x] Memory Map Acquisition & `ExitBootServices`
-- [x] Physical Frame Allocator（Bump Allocator）
-- [x] Heap Allocator（`linked_list_allocator`）
-- [x] Architecture Separation（`arch/` layer established）
-- [x] Explicit Paging Setup（Identity Mapping）
-- [x] boot-service allocation 後の最終 memory map から allocator region を再構築/更新
+### Synchronization And Concurrency
 
-### Phase 2: Interrupts & Exceptions
+- [ ] interrupt-time lock の deadlock / priority inversion risk を audit する
+- [ ] producer/consumer 前提が合っていない queue を置き換える
+- [ ] single-producer/single-consumer と multi-producer queue type を明示的に分ける
+- [ ] interrupt context から呼べる API を定義する
+- [ ] kernel subsystem の lock ordering note を追加する
 
-- [x] GDT / IDT Setup（with Data Segments）
-- [x] Exception Handlers（Page Fault, Double Fault, GPF）
-- [x] Mouse Driver（PS/2）with Real-time Cursor, Lock-Free Async Queue & Dirty Rectangles
-- [x] Keyboard Driver（PS/2）- Interrupt driven & Lock-Free Async Queue
-- [x] Interrupt callback boundary: `arch/` は `kernel/` ではなく登録 callback へ dispatch
-- [x] callback registration を `InterruptProcessors` に統合
-- [x] PS/2 controller busy wait に timeout を追加
-- [x] Local APIC capability detection 付き timer backend abstraction
-- [x] IOAPIC routing boundary 付き interrupt controller abstraction
+## Phase 8: Drivers And Hardware
 
-### Phase 3: Graphics & Console
+### Input
 
-- [x] Serial Output（COM1）
-- [x] GOP Framebuffer Control
-- [x] Font Engine（`ab_glyph`）
-- [x] Proper Alpha Blending for Text（Pixel-perfect rounding）
-- [x] Double Buffering & Dirty Rectangles Optimization（1000fps ready）
-- [x] RDTSC Profiling & Calibration
-- [x] `framebuffer.rs` から renderer/font/cursor responsibility を分離
-- [x] 一時的な framebuffer lock contention で queued draw command を落とさないよう修正
+- [ ] keyboard layout choice を小さな configuration boundary の後ろに移す
+- [ ] 必要な範囲で key release handling を追加する
+- [ ] Shift / Control / Alt / Super の modifier state reporting を追加する
+- [ ] Caps Lock state と LED update を追加する
+- [ ] mouse wheel packet support を追加する
+- [ ] double-click / drag state は input driver ではなく UI layer で追加する
 
-### Phase 4: Process Management
+### Display
 
-- [x] Task Structure & Context Switching
-- [x] Cooperative / Preemptive Scheduler
-- [x] Ring 3 descriptor groundwork and selector exposure
-- [x] `iretq` と user stack による user mode への遷移
-- [x] 最小 `SYSCALL`/`SYSRET` MSR setup と syscall bridge stub
+- [ ] graphical overlay とは独立した scroll 対応 text console を追加する
+- [ ] framebuffer mode diagnostics を追加する
+- [ ] dirty rectangle の damage tracking test を追加する
+- [ ] primitive window/widget layer を設計する
+- [ ] UI が asset を使い始める場合に bitmap image rendering support を追加する
 
-</details>
+### Future Hardware
+
+- [ ] AHCI read/write 安定後に NVMe support を調査する
+- [ ] ACPI/interrupt work 後に USB keyboard/mouse support を調査する
+- [ ] PCI capability parsing を追加する
+- [ ] MSI/MSI-X の設計を追加する
+
+## Phase 9: Tooling, Tests, And Documentation
+
+- [ ] CI 用 headless QEMU smoke test script を追加する
+- [ ] boot milestone の serial log assertion を追加する
+- [ ] 複数 file / directory を持つ disk-image fixture generator を追加する
+- [ ] byte fixture を使った GPT / FAT32 parser unit test を追加する
+- [ ] success path と errno path の syscall ABI test を追加する
+- [ ] commit された全 user program の userland build check を CI に追加する
+- [ ] `arch` から `kernel` への import を拒否する architecture boundary check を追加する
+- [ ] direct maintainer branch workflow の docs を追加する
+- [ ] manual QEMU validation command の docs を追加する
+- [ ] 現在の module tree から contributor 向け architecture map を生成する
