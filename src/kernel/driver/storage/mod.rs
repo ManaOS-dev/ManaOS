@@ -31,6 +31,7 @@ pub use pci::PciConfigurationAccess;
 
 static SELECTED_PARTITION: Mutex<Option<StoragePartition>> = Mutex::new(None);
 static DETECTED_FILE: Mutex<Option<StorageFile>> = Mutex::new(None);
+static DETECTED_FAT32_FILE: Mutex<Option<DetectedFat32File>> = Mutex::new(None);
 static STORAGE_DEVICES: Mutex<Vec<StorageDevice>> = Mutex::new(Vec::new());
 
 /// Stable storage-device identifier.
@@ -103,13 +104,20 @@ impl StoragePartition {
     }
 }
 
-/// File content loaded from storage during early probing.
+/// File discovered from storage during early probing.
 #[derive(Clone)]
 pub struct StorageFile {
     /// Absolute path where the file should be mounted.
     pub mount_path: String,
-    /// File bytes read from the storage device.
-    pub contents: Vec<u8>,
+    /// File size in bytes.
+    pub size: usize,
+}
+
+#[derive(Clone, Copy)]
+struct DetectedFat32File {
+    partition: guid_partition_table::GuidPartitionTablePartition,
+    volume: file_allocation_table::FileAllocationTable32Volume,
+    entry: file_allocation_table::FileAllocationTable32DirectoryEntry,
 }
 
 /// Discover and initialize supported storage controllers.
@@ -179,6 +187,29 @@ pub fn get_primary_data_address() -> Option<u64> {
     advanced_host_controller_interface::get_primary_data_address()
 }
 
+/// Read from the detected FAT32 file backend into `buffer`.
+pub fn read_detected_file_range(offset: usize, buffer: &mut [u8]) -> Option<usize> {
+    let detected_file = *DETECTED_FAT32_FILE.lock();
+    let detected_file = detected_file?;
+    advanced_host_controller_interface::read_with_primary_device(|block_device, data_address| {
+        let mut partition_device = partition::PartitionBlockDevice::new(
+            block_device,
+            detected_file.partition.first_lba,
+            detected_file.partition.last_lba,
+        );
+        file_allocation_table::read_file_range(
+            &mut partition_device,
+            detected_file.volume,
+            detected_file.entry,
+            data_address,
+            offset,
+            buffer,
+        )
+    })
+    .ok()
+    .flatten()
+}
+
 /// Write sectors through the primary persistent block device.
 #[allow(dead_code)]
 pub fn write_primary_blocks(
@@ -209,8 +240,20 @@ pub(super) fn set_selected_partition(partition: guid_partition_table::GuidPartit
     });
 }
 
-pub(super) fn set_detected_file(file: StorageFile) {
-    *DETECTED_FILE.lock() = Some(file);
+/// Record a detected FAT32 file and expose it as a read-only backend candidate.
+pub(in crate::kernel::driver::storage) fn set_detected_file(
+    partition: guid_partition_table::GuidPartitionTablePartition,
+    volume: file_allocation_table::FileAllocationTable32Volume,
+    entry: file_allocation_table::FileAllocationTable32DirectoryEntry,
+) {
+    let mount_path = entry.disk_mount_path();
+    let size = usize::try_from(entry.file_size()).expect("FAT32 file size must fit in usize");
+    *DETECTED_FILE.lock() = Some(StorageFile { mount_path, size });
+    *DETECTED_FAT32_FILE.lock() = Some(DetectedFat32File {
+        partition,
+        volume,
+        entry,
+    });
 }
 
 pub(super) fn register_storage_device(

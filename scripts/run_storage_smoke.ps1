@@ -34,8 +34,12 @@ $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $expectedPatterns = @(
     "Persistent block-device service registered",
     "Registered block device",
-    "Loaded FAT32 file for virtual filesystem",
-    "ManaOS Kernel is alive\."
+    "Registered FAT32 file backend for virtual filesystem",
+    "Disk file smoke read",
+    "Pipeline command smoke passed",
+    "ManaOS Kernel is alive\.",
+    "fstat -> fd=",
+    "User task exited: code=0"
 )
 
 try {

@@ -15,6 +15,7 @@
 
 mod block_device;
 mod command;
+mod completion;
 mod controller;
 mod dma;
 mod host;
@@ -24,4 +25,6 @@ mod registers;
 mod service;
 
 pub(super) use controller::init;
-pub(super) use service::{get_primary_data_address, read_primary_blocks, write_primary_blocks};
+pub(super) use service::{
+    get_primary_data_address, read_primary_blocks, read_with_primary_device, write_primary_blocks,
+};

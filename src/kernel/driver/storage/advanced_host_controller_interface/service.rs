@@ -39,6 +39,18 @@ pub(in crate::kernel::driver::storage) fn read_primary_blocks(
     device.read_logical_blocks(logical_block_address, sector_count, data_address)
 }
 
+/// Execute a read-only storage operation with the primary AHCI device locked.
+pub(in crate::kernel::driver::storage) fn read_with_primary_device<T>(
+    read: impl FnOnce(&mut AhciBlockDevice, u64) -> T,
+) -> BlockDeviceResult<T> {
+    let mut device = PRIMARY_DEVICE.lock();
+    let Some(device) = device.as_mut() else {
+        return Err(crate::kernel::driver::storage::block_device::BlockDeviceError::Unsupported);
+    };
+    let data_address = device.data_address();
+    Ok(read(device, data_address))
+}
+
 #[allow(dead_code)]
 pub(in crate::kernel::driver::storage) fn write_primary_blocks(
     logical_block_address: u64,

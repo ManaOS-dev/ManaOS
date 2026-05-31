@@ -65,6 +65,20 @@ const FILE_ALLOCATION_TABLE_ENTRY_MASK: u32 = 0x0fff_ffff;
 const FILE_ALLOCATION_TABLE_BAD_CLUSTER: u32 = 0x0fff_fff7;
 const FILE_ALLOCATION_TABLE_END_OF_CHAIN: u32 = 0x0fff_fff8;
 
+/// Return whether a FAT entry marks a bad cluster.
+pub(in crate::kernel::driver::storage::file_allocation_table) fn is_bad_cluster(
+    cluster: u32,
+) -> bool {
+    cluster == FILE_ALLOCATION_TABLE_BAD_CLUSTER
+}
+
+/// Return whether a FAT entry marks the end of a cluster chain.
+pub(in crate::kernel::driver::storage::file_allocation_table) fn is_end_of_chain(
+    cluster: u32,
+) -> bool {
+    cluster >= FILE_ALLOCATION_TABLE_END_OF_CHAIN
+}
+
 /// Parsed File Allocation Table 32 volume geometry.
 #[derive(Clone, Copy)]
 pub(in crate::kernel::driver::storage) struct FileAllocationTable32Volume {
@@ -230,6 +244,7 @@ pub(in crate::kernel::driver::storage) fn inspect_file_contents(
 }
 
 /// Read the contents of a File Allocation Table 32 regular file.
+#[allow(dead_code)]
 pub(in crate::kernel::driver::storage) fn read_file_contents(
     block_device: &mut impl BlockDevice,
     volume: FileAllocationTable32Volume,
@@ -679,7 +694,11 @@ impl fmt::Display for FileSystemInformationValue {
 }
 
 impl FileAllocationTable32Volume {
-    fn cluster_first_sector(self, cluster: u32) -> Option<u32> {
+    /// Return the first logical sector for a valid data cluster.
+    pub(in crate::kernel::driver::storage::file_allocation_table) fn cluster_first_sector(
+        self,
+        cluster: u32,
+    ) -> Option<u32> {
         if cluster < 2 {
             return None;
         }
@@ -691,6 +710,20 @@ impl FileAllocationTable32Volume {
 
         self.first_data_sector
             .checked_add(cluster_index.checked_mul(u32::from(self.sectors_per_cluster))?)
+    }
+
+    /// Return the byte size of one allocation cluster.
+    pub(in crate::kernel::driver::storage::file_allocation_table) fn bytes_per_cluster(
+        self,
+    ) -> Option<usize> {
+        usize::from(self.bytes_per_sector).checked_mul(usize::from(self.sectors_per_cluster))
+    }
+
+    /// Return the number of sectors in one allocation cluster.
+    pub(in crate::kernel::driver::storage::file_allocation_table) fn sectors_per_cluster(
+        self,
+    ) -> u8 {
+        self.sectors_per_cluster
     }
 }
 
@@ -819,7 +852,8 @@ fn inspect_directory_sector(
     false
 }
 
-fn validate_cluster(
+/// Validate that a cluster can be read and has not looped.
+pub(in crate::kernel::driver::storage::file_allocation_table) fn validate_cluster(
     volume: &FileAllocationTable32Volume,
     cluster: u32,
     visited_clusters: &[u32],
@@ -877,7 +911,8 @@ fn read_cluster_contents(
     Some(())
 }
 
-fn read_next_cluster(
+/// Read the FAT entry that follows a cluster in a chain.
+pub(in crate::kernel::driver::storage::file_allocation_table) fn read_next_cluster(
     block_device: &mut impl BlockDevice,
     volume: &FileAllocationTable32Volume,
     cluster: u32,
@@ -949,6 +984,11 @@ impl FileAllocationTable32DirectoryEntry {
 
     pub(in crate::kernel::driver::storage) fn file_size(&self) -> u32 {
         self.file_size
+    }
+
+    /// Return the first cluster for the directory entry.
+    pub(in crate::kernel::driver::storage::file_allocation_table) fn first_cluster(&self) -> u32 {
+        self.first_cluster
     }
 
     fn name_matches(&self, component: &str) -> bool {

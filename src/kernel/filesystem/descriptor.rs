@@ -18,6 +18,17 @@ pub const STANDARD_ERROR: FileDescriptor = 2;
 
 const MAX_OPEN_FILES: usize = 64;
 
+/// Starting point for a seek operation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SeekWhence {
+    /// Seek relative to the start of the file.
+    Start,
+    /// Seek relative to the current descriptor offset.
+    Current,
+    /// Seek relative to the end of the file.
+    End,
+}
+
 #[derive(Clone)]
 struct OpenFile {
     node: Arc<dyn FileNode>,
@@ -118,6 +129,25 @@ impl FileDescriptorTable {
         Ok(open_file.offset)
     }
 
+    /// Seek an open file descriptor relative to the requested base.
+    pub fn seek_from(
+        &mut self,
+        descriptor: FileDescriptor,
+        offset: i64,
+        whence: SeekWhence,
+    ) -> FileSystemResult<usize> {
+        let open_file = self.get_open_file_mut(descriptor)?;
+        let base = match whence {
+            SeekWhence::Start => 0,
+            SeekWhence::Current => open_file.offset,
+            SeekWhence::End => open_file.node.metadata().size,
+        };
+        let next_offset =
+            add_signed_offset(base, offset).ok_or(FileSystemError::InvalidArgument)?;
+        open_file.offset = next_offset;
+        Ok(open_file.offset)
+    }
+
     /// Return metadata for an open file descriptor.
     pub fn metadata(&mut self, descriptor: FileDescriptor) -> FileSystemResult<FileMetadata> {
         let open_file = self.get_open_file_mut(descriptor)?;
@@ -143,5 +173,13 @@ impl FileDescriptorTable {
             .get_mut(descriptor)
             .and_then(Option::as_mut)
             .ok_or(FileSystemError::InvalidFileDescriptor)
+    }
+}
+
+fn add_signed_offset(base: usize, offset: i64) -> Option<usize> {
+    if offset >= 0 {
+        base.checked_add(usize::try_from(offset).ok()?)
+    } else {
+        base.checked_sub(usize::try_from(offset.checked_abs()?).ok()?)
     }
 }

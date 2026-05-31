@@ -21,8 +21,11 @@
 mod bytes;
 mod display;
 mod parser;
+mod range;
 
 pub(super) use parser::{
     find_entry_by_path, inspect_boot_sector, inspect_file_contents, inspect_root_directory,
-    list_root_directory, plan_write, read_file_contents,
+    list_root_directory, plan_write, FileAllocationTable32DirectoryEntry,
+    FileAllocationTable32Volume,
 };
+pub(super) use range::read_file_range;

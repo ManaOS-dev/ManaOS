@@ -5,14 +5,16 @@ use crate::kernel::driver::storage::block_device::{
 };
 
 use super::command::{self, AhciTransferDirection};
+use super::completion::CompletionMode;
 use super::dma::AhciDmaBuffers;
 use super::registers::HbaPort;
 
 /// Persistent Advanced Host Controller Interface block-device service.
-pub(super) struct AhciBlockDevice {
+pub(in crate::kernel::driver::storage) struct AhciBlockDevice {
     port: *mut HbaPort,
     buffers: AhciDmaBuffers,
     port_index: usize,
+    completion_mode: CompletionMode,
 }
 
 // SAFETY: Access to the raw port pointer and DMA buffers is serialized by the
@@ -20,23 +22,33 @@ pub(super) struct AhciBlockDevice {
 unsafe impl Send for AhciBlockDevice {}
 
 impl AhciBlockDevice {
-    pub(super) fn new(port: *mut HbaPort, buffers: AhciDmaBuffers, port_index: usize) -> Self {
+    /// Create a persistent AHCI block device for one SATA port.
+    pub(super) fn new(
+        port: *mut HbaPort,
+        buffers: AhciDmaBuffers,
+        port_index: usize,
+        completion_mode: CompletionMode,
+    ) -> Self {
         Self {
             port,
             buffers,
             port_index,
+            completion_mode,
         }
     }
 
+    /// Return the largest transfer accepted by the DMA bounce buffer.
     pub(super) fn maximum_transfer_sectors(&self) -> u16 {
         u16::try_from(self.buffers.data_bytes / SECTOR_BYTES)
             .expect("AHCI DMA transfer sector capacity must fit in u16")
     }
 
+    /// Return the physical address of the persistent DMA data buffer.
     pub(super) fn data_address(&self) -> u64 {
         self.buffers.data
     }
 
+    /// Return the HBA port index served by this block device.
     pub(super) fn port_index(&self) -> usize {
         self.port_index
     }
@@ -82,6 +94,7 @@ impl BlockDevice for AhciBlockDevice {
             logical_block_address,
             sector_count,
             AhciTransferDirection::Read,
+            self.completion_mode,
         )
     }
 
@@ -100,6 +113,7 @@ impl BlockDevice for AhciBlockDevice {
             logical_block_address,
             sector_count,
             AhciTransferDirection::Write,
+            self.completion_mode,
         )
     }
 }

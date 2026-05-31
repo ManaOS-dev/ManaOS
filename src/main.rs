@@ -333,12 +333,16 @@ fn main() -> Status {
     );
     verify_primary_storage_device();
     if let Some(file) = kernel::driver::storage::get_detected_file() {
-        kernel::filesystem::mount_fat32_file(&file.mount_path, &file.contents);
+        kernel::filesystem::mount_fat32_file(
+            &file.mount_path,
+            file.size,
+            kernel::driver::storage::read_detected_file_range,
+        );
         crate::log_info!(
             "fs",
             "Mounted disk file: path={} bytes={}",
             file.mount_path,
-            file.contents.len()
+            file.size
         );
         verify_mounted_disk_file(&file.mount_path);
         verify_kernel_console_pipeline();

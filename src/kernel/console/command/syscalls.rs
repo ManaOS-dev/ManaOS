@@ -12,6 +12,6 @@ pub(super) fn run(
     }
 
     Ok(CommandEffect::Output(CommandOutput::single(
-        "syscalls: read write open close exit exit_group openat getpid".to_string(),
+        "syscalls: read write open close fstat lseek exit exit_group openat getpid".to_string(),
     )))
 }
