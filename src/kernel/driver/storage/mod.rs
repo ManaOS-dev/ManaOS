@@ -11,7 +11,7 @@
 //! ## Public API
 //! - [`init`] - Discover and initialize storage controllers
 //! - [`PciConfigurationAccess`] - Provider for PCI configuration-space access
-//! - [`get_detected_file`] - Return the first file loaded from disk during probing
+//! - [`get_detected_files`] - Return files detected from disk during probing
 
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use alloc::format;
@@ -30,8 +30,8 @@ mod pci;
 pub use pci::PciConfigurationAccess;
 
 static SELECTED_PARTITION: Mutex<Option<StoragePartition>> = Mutex::new(None);
-static DETECTED_FILE: Mutex<Option<StorageFile>> = Mutex::new(None);
-static DETECTED_FAT32_FILE: Mutex<Option<DetectedFat32File>> = Mutex::new(None);
+static DETECTED_FILES: Mutex<Vec<StorageFile>> = Mutex::new(Vec::new());
+static DETECTED_FAT32_FILES: Mutex<Vec<DetectedFat32File>> = Mutex::new(Vec::new());
 static STORAGE_DEVICES: Mutex<Vec<StorageDevice>> = Mutex::new(Vec::new());
 
 /// Stable storage-device identifier.
@@ -111,6 +111,8 @@ pub struct StorageFile {
     pub mount_path: String,
     /// File size in bytes.
     pub size: usize,
+    /// Backend context index used when reading this file.
+    pub backend_index: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -126,6 +128,8 @@ pub fn init(
     pci_configuration_access: PciConfigurationAccess,
 ) {
     STORAGE_DEVICES.lock().clear();
+    DETECTED_FILES.lock().clear();
+    DETECTED_FAT32_FILES.lock().clear();
     crate::log_info!("storage", "Initializing storage subsystem...");
     if let Some(controller) =
         pci::find_advanced_host_controller_interface_controller(pci_configuration_access)
@@ -153,9 +157,9 @@ pub fn get_selected_partition() -> Option<StoragePartition> {
     *SELECTED_PARTITION.lock()
 }
 
-/// Return the first file loaded from disk during storage probing.
-pub fn get_detected_file() -> Option<StorageFile> {
-    DETECTED_FILE.lock().clone()
+/// Return files loaded from disk during storage probing.
+pub fn get_detected_files() -> Vec<StorageFile> {
+    DETECTED_FILES.lock().clone()
 }
 
 /// Return registered storage devices.
@@ -188,9 +192,13 @@ pub fn get_primary_data_address() -> Option<u64> {
 }
 
 /// Read from the detected FAT32 file backend into `buffer`.
-pub fn read_detected_file_range(offset: usize, buffer: &mut [u8]) -> Option<usize> {
-    let detected_file = *DETECTED_FAT32_FILE.lock();
-    let detected_file = detected_file?;
+pub fn read_detected_file_range(
+    backend_index: usize,
+    offset: usize,
+    buffer: &mut [u8],
+) -> Option<usize> {
+    let detected_files = DETECTED_FAT32_FILES.lock();
+    let detected_file = detected_files.get(backend_index).copied()?;
     advanced_host_controller_interface::read_with_primary_device(|block_device, data_address| {
         let mut partition_device = partition::PartitionBlockDevice::new(
             block_device,
@@ -245,14 +253,23 @@ pub(in crate::kernel::driver::storage) fn set_detected_file(
     partition: guid_partition_table::GuidPartitionTablePartition,
     volume: file_allocation_table::FileAllocationTable32Volume,
     entry: file_allocation_table::FileAllocationTable32DirectoryEntry,
+    mount_path: String,
 ) {
-    let mount_path = entry.disk_mount_path();
     let size = usize::try_from(entry.file_size()).expect("FAT32 file size must fit in usize");
-    *DETECTED_FILE.lock() = Some(StorageFile { mount_path, size });
-    *DETECTED_FAT32_FILE.lock() = Some(DetectedFat32File {
-        partition,
-        volume,
-        entry,
+    let backend_index = {
+        let mut detected_fat32_files = DETECTED_FAT32_FILES.lock();
+        let backend_index = detected_fat32_files.len();
+        detected_fat32_files.push(DetectedFat32File {
+            partition,
+            volume,
+            entry,
+        });
+        backend_index
+    };
+    DETECTED_FILES.lock().push(StorageFile {
+        mount_path,
+        size,
+        backend_index,
     });
 }
 

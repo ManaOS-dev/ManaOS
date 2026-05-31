@@ -1,12 +1,15 @@
 #![no_main]
 #![no_std]
 
+use core::sync::atomic::{AtomicU64, Ordering};
 use mana_userland::syscall;
 
 const STDOUT: usize = 1;
 const BUFFER_LENGTH: usize = 64;
 const DIRECTORY_BUFFER_BYTES: usize = core::mem::size_of::<syscall::UserDirectoryEntry>();
+const BSS_MESSAGE: &[u8] = b"user bss ok\n";
 const PASS_MESSAGE: &[u8] = b"user smoke ok\n";
+static BSS_SMOKE_VALUE: AtomicU64 = AtomicU64::new(0);
 
 #[no_mangle]
 extern "C" fn _start() -> ! {
@@ -16,9 +19,21 @@ extern "C" fn _start() -> ! {
 
     verify_disk_file();
     verify_root_directory();
+    verify_bss_zero_initialization();
 
     let _ = syscall::write(STDOUT, PASS_MESSAGE);
     syscall::exit(0);
+}
+
+fn verify_bss_zero_initialization() {
+    if BSS_SMOKE_VALUE.load(Ordering::Relaxed) != 0 {
+        syscall::exit(19);
+    }
+    BSS_SMOKE_VALUE.store(0x4d414e414f535f36, Ordering::Relaxed);
+    if BSS_SMOKE_VALUE.load(Ordering::Relaxed) != 0x4d414e414f535f36 {
+        syscall::exit(20);
+    }
+    let _ = syscall::write(STDOUT, BSS_MESSAGE);
 }
 
 fn verify_disk_file() {

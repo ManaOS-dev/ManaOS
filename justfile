@@ -18,7 +18,7 @@ disk:
     {{ if os == "windows" { "if (-not (Test-Path disk.img)) { $bytes = New-Object byte[] 67108864; [System.IO.File]::WriteAllBytes('disk.img', $bytes) }" } else { "test -f disk.img || dd if=/dev/zero of=disk.img bs=1M count=64" } }}
 
 # Create a 64MB GPT-formatted QEMU storage image
-disk-gpt:
+disk-gpt: build
     @echo "[build] Creating GPT disk.img..."
     {{ if os == "windows" { "powershell -ExecutionPolicy Bypass -File scripts/create_gpt_disk_image.ps1 -Path disk.img" } else { "pwsh -File scripts/create_gpt_disk_image.ps1 -Path disk.img" } }}
 
