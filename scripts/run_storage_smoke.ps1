@@ -35,11 +35,18 @@ $expectedPatterns = @(
     "Persistent block-device service registered",
     "Registered block device",
     "Registered FAT32 file backend for virtual filesystem",
+    "Registered FAT32 file backend for virtual filesystem: path=/disk/bin/smoke_demo",
     "Disk file smoke read",
     "Pipeline command smoke passed",
     "ManaOS Kernel is alive\.",
+    "Invalid ELF rejection smoke passed",
+    "Loading user ELF from filesystem: path=/disk/bin/smoke_demo",
+    "ELF segment mapped: .*perms=R-X",
+    "ELF segment mapped: .*perms=R--",
+    "ELF segment mapped: .*perms=RW-",
     "fstat -> fd=",
     "getdents64 -> fd=",
+    "user bss ok",
     "user smoke ok",
     "User task exited: code=0"
 )

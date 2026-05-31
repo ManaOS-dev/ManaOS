@@ -1,6 +1,6 @@
 //! Boot-time storage probing through an Advanced Host Controller Interface disk.
 
-use alloc::format;
+use alloc::string::String;
 use core::fmt;
 
 use crate::kernel::driver::storage::block_device::BlockDevice;
@@ -47,24 +47,24 @@ pub(super) fn inspect_initial_storage(block_device: &mut impl BlockDevice, data_
         return;
     };
 
-    let Some(entry) =
+    let Some(first_entry) =
         file_allocation_table::inspect_root_directory(&mut partition_device, volume, data_address)
     else {
         crate::log_warn!("storage", "Failed to scan FAT32 root directory");
         return;
     };
     let _ = file_allocation_table::list_root_directory(&mut partition_device, volume, data_address);
-    let entry = file_allocation_table::find_entry_by_path(
+    let hello_entry = file_allocation_table::find_entry_by_path(
         &mut partition_device,
         volume,
-        &format!("{}", entry.name()),
+        "hello.txt",
         data_address,
     )
-    .unwrap_or(entry);
+    .unwrap_or(first_entry);
     let write_plan = file_allocation_table::plan_write(
         volume,
-        &entry.disk_mount_path(),
-        usize::try_from(entry.file_size()).expect("FAT32 file size must fit in usize"),
+        &hello_entry.disk_mount_path(),
+        usize::try_from(hello_entry.file_size()).expect("FAT32 file size must fit in usize"),
     );
     crate::log_debug!(
         "storage",
@@ -77,17 +77,46 @@ pub(super) fn inspect_initial_storage(block_device: &mut impl BlockDevice, data_
     let _ = file_allocation_table::inspect_file_contents(
         &mut partition_device,
         volume,
-        entry,
+        hello_entry,
         data_address,
     );
-    let mount_path = entry.disk_mount_path();
+    register_detected_file(
+        partition,
+        volume,
+        hello_entry,
+        hello_entry.disk_mount_path(),
+    );
+
+    if let Some(smoke_entry) = file_allocation_table::find_entry_by_path(
+        &mut partition_device,
+        volume,
+        "bin/smoke_demo",
+        data_address,
+    ) {
+        register_detected_file(
+            partition,
+            volume,
+            smoke_entry,
+            String::from("/disk/bin/smoke_demo"),
+        );
+    } else {
+        crate::log_warn!("storage", "FAT32 user ELF not found: path=/bin/smoke_demo");
+    }
+}
+
+fn register_detected_file(
+    partition: guid_partition_table::GuidPartitionTablePartition,
+    volume: file_allocation_table::FileAllocationTable32Volume,
+    entry: file_allocation_table::FileAllocationTable32DirectoryEntry,
+    mount_path: String,
+) {
     crate::log_info!(
         "storage",
         "Registered FAT32 file backend for virtual filesystem: path={} bytes={}",
         mount_path,
         entry.file_size()
     );
-    set_detected_file(partition, volume, entry);
+    set_detected_file(partition, volume, entry, mount_path);
 }
 
 fn dump_sector_prefix(label: &str, data_address: u64) {

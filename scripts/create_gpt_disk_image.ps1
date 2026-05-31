@@ -1,6 +1,7 @@
 param(
     [string]$Path = "disk.img",
-    [UInt64]$SizeBytes = 67108864
+    [UInt64]$SizeBytes = 67108864,
+    [string]$SmokeDemoElfPath = "target\userland\x86_64-unknown-none\debug\smoke_demo"
 )
 
 $ErrorActionPreference = "Stop"
@@ -49,6 +50,58 @@ function Write-AsciiField {
     $bytes = [Text.Encoding]::ASCII.GetBytes($Value)
     $copyLength = [Math]::Min($bytes.Length, $Length)
     [Array]::Copy($bytes, 0, $Buffer, $Offset, $copyLength)
+}
+
+function Write-ShortNameField {
+    param([byte[]]$Buffer, [int]$Offset, [string]$Value)
+    if ($Value.Length -ne 11) {
+        throw "short FAT name field must contain exactly 11 characters"
+    }
+
+    $bytes = [Text.Encoding]::ASCII.GetBytes($Value)
+    [Array]::Copy($bytes, 0, $Buffer, $Offset, 11)
+}
+
+function Write-DirectoryEntry {
+    param(
+        [byte[]]$Image,
+        [int]$Offset,
+        [string]$ShortName,
+        [byte]$Attribute,
+        [UInt32]$FirstCluster,
+        [UInt32]$FileSize
+    )
+
+    Write-ShortNameField $Image $Offset $ShortName
+    $Image[$Offset + 11] = $Attribute
+    Write-LeUInt16 $Image ($Offset + 20) ([UInt16](($FirstCluster -shr 16) -band 0xFFFF))
+    Write-LeUInt16 $Image ($Offset + 26) ([UInt16]($FirstCluster -band 0xFFFF))
+    Write-LeUInt32 $Image ($Offset + 28) $FileSize
+}
+
+function Write-LongFileNameEntry {
+    param(
+        [byte[]]$Image,
+        [int]$Offset,
+        [string]$Name
+    )
+
+    $Image[$Offset] = 0x41
+    $Image[$Offset + 11] = 0x0F
+    $Image[$Offset + 13] = 0
+    Write-LeUInt16 $Image ($Offset + 26) 0
+
+    $slots = @(1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30)
+    for ($index = 0; $index -lt $slots.Length; $index++) {
+        if ($index -lt $Name.Length) {
+            $codeUnit = [UInt16][char]$Name[$index]
+        } elseif ($index -eq $Name.Length) {
+            $codeUnit = [UInt16]0
+        } else {
+            $codeUnit = [UInt16]0xFFFF
+        }
+        Write-LeUInt16 $Image ($Offset + $slots[$index]) $codeUnit
+    }
 }
 
 function Write-GptGuid {
@@ -133,6 +186,10 @@ function Write-TestPartitionEntry {
 
 function Write-FileAllocationTable32BootSector {
     param([byte[]]$Image)
+    if (-not (Test-Path -LiteralPath $SmokeDemoElfPath)) {
+        throw "smoke_demo ELF not found at $SmokeDemoElfPath; run cargo build first"
+    }
+    $smokeDemoElf = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $SmokeDemoElfPath))
 
     $partitionSectors = $lastPartitionLba - $firstPartitionLba + 1
     if ($partitionSectors -gt [UInt64][UInt32]::MaxValue) {
@@ -183,24 +240,43 @@ function Write-FileAllocationTable32BootSector {
 
     $firstFileAllocationTableOffset = [int](($firstPartitionLba + $reservedSectorCount) * $sectorSize)
     $secondFileAllocationTableOffset = [int](($firstPartitionLba + $reservedSectorCount + $fileAllocationTableSize) * $sectorSize)
+    $smokeDemoClusterCount = [UInt32][Math]::Ceiling($smokeDemoElf.Length / [double]$sectorSize)
+    if ($smokeDemoClusterCount -eq 0) {
+        throw "smoke_demo ELF must not be empty"
+    }
+    $smokeDemoFirstCluster = [UInt32]5
+    $smokeDemoLastCluster = [UInt32]($smokeDemoFirstCluster + $smokeDemoClusterCount - 1)
+
     foreach ($offset in @($firstFileAllocationTableOffset, $secondFileAllocationTableOffset)) {
         Write-LeUInt32 $Image $offset 0x0FFFFFF8
         Write-LeUInt32 $Image ($offset + 4) 0x0FFFFFFF
         Write-LeUInt32 $Image ($offset + 8) 0x0FFFFFFF
         Write-LeUInt32 $Image ($offset + 12) 0x0FFFFFFF
+        Write-LeUInt32 $Image ($offset + 16) 0x0FFFFFFF
+        for ($cluster = $smokeDemoFirstCluster; $cluster -le $smokeDemoLastCluster; $cluster++) {
+            $entryOffset = $offset + ([int]$cluster * 4)
+            if ($cluster -eq $smokeDemoLastCluster) {
+                Write-LeUInt32 $Image $entryOffset 0x0FFFFFFF
+            } else {
+                Write-LeUInt32 $Image $entryOffset ([UInt32]($cluster + 1))
+            }
+        }
     }
 
     $rootDirectoryOffset = [int](($firstPartitionLba + $metadataSectors) * $sectorSize)
-    Write-AsciiField $Image $rootDirectoryOffset 8 "HELLO"
-    Write-AsciiField $Image ($rootDirectoryOffset + 8) 3 "TXT"
-    $Image[$rootDirectoryOffset + 11] = 0x20
-    Write-LeUInt16 $Image ($rootDirectoryOffset + 20) 0
-    Write-LeUInt16 $Image ($rootDirectoryOffset + 26) 3
     $fileBytes = [Text.Encoding]::ASCII.GetBytes("hello from FAT32`r`n")
-    Write-LeUInt32 $Image ($rootDirectoryOffset + 28) ([UInt32]$fileBytes.Length)
+    Write-DirectoryEntry $Image $rootDirectoryOffset "HELLO   TXT" 0x20 3 ([UInt32]$fileBytes.Length)
+    Write-DirectoryEntry $Image ($rootDirectoryOffset + 32) "BIN        " 0x10 4 0
 
     $fileDataOffset = [int](($firstPartitionLba + $metadataSectors + 1) * $sectorSize)
     [Array]::Copy($fileBytes, 0, $Image, $fileDataOffset, $fileBytes.Length)
+
+    $binDirectoryOffset = [int](($firstPartitionLba + $metadataSectors + 2) * $sectorSize)
+    Write-LongFileNameEntry $Image $binDirectoryOffset "smoke_demo"
+    Write-DirectoryEntry $Image ($binDirectoryOffset + 32) "SMOKED~1   " 0x20 $smokeDemoFirstCluster ([UInt32]$smokeDemoElf.Length)
+
+    $smokeDemoDataOffset = [int](($firstPartitionLba + $metadataSectors + 3) * $sectorSize)
+    [Array]::Copy($smokeDemoElf, 0, $Image, $smokeDemoDataOffset, $smokeDemoElf.Length)
 }
 
 $image = New-Object byte[] $SizeBytes

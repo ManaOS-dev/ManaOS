@@ -97,10 +97,10 @@ pub fn mount_read_only_file(path: &str, contents: &[u8]) {
 }
 
 /// Mount a FAT32-backed read-only file at an absolute path.
-pub fn mount_fat32_file(path: &str, size: usize, read: BackendRead) {
+pub fn mount_fat32_file(path: &str, size: usize, context: usize, read: BackendRead) {
     VIRTUAL_FILE_SYSTEM.lock().mount_node(
         path,
-        Arc::new(ReadOnlyBackendFile::new(size, read)),
+        Arc::new(ReadOnlyBackendFile::new(size, context, read)),
         MountSource::Fat32,
         MountFlags::read_only(),
     );

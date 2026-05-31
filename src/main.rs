@@ -13,6 +13,7 @@ extern crate alloc;
 mod arch;
 mod kernel;
 
+use alloc::vec::Vec;
 use uefi::prelude::*;
 use uefi::proto::console::gop::GraphicsOutput;
 use uefi::proto::media::file::{File, FileAttribute, FileMode};
@@ -218,6 +219,13 @@ fn verify_frame_allocator_rules() {
     }
 }
 
+fn verify_elf_loader_rules() {
+    assert!(
+        kernel::elf::verify_invalid_elf_rejections(),
+        "ELF invalid-image rejection smoke must pass"
+    );
+}
+
 fn verify_mounted_disk_file(path: &str) {
     let descriptor = kernel::filesystem::open(path).expect("mounted disk file must open");
     let mut buffer = [0_u8; 64];
@@ -269,6 +277,56 @@ fn verify_primary_storage_device() {
     }
 }
 
+fn mount_detected_disk_files() -> bool {
+    let mut hello_mounted = false;
+    for file in kernel::driver::storage::get_detected_files() {
+        kernel::filesystem::mount_fat32_file(
+            &file.mount_path,
+            file.size,
+            file.backend_index,
+            kernel::driver::storage::read_detected_file_range,
+        );
+        crate::log_info!(
+            "fs",
+            "Mounted disk file: path={} bytes={}",
+            file.mount_path,
+            file.size
+        );
+        if file.mount_path == "/disk/hello.txt" {
+            hello_mounted = true;
+        }
+    }
+    hello_mounted
+}
+
+fn read_kernel_file(path: &str) -> Option<Vec<u8>> {
+    let metadata = kernel::filesystem::metadata(path).ok()?;
+    if metadata.file_type != kernel::filesystem::FileType::Regular {
+        return None;
+    }
+
+    let descriptor = kernel::filesystem::open(path).ok()?;
+    let mut contents = Vec::new();
+    contents
+        .try_reserve_exact(metadata.size)
+        .expect("OOM: failed to reserve kernel file buffer");
+    contents.resize(metadata.size, 0);
+
+    let mut bytes_read = 0_usize;
+    while bytes_read < metadata.size {
+        let read_now = kernel::filesystem::read(descriptor, &mut contents[bytes_read..]).ok()?;
+        if read_now == 0 {
+            break;
+        }
+        bytes_read = bytes_read
+            .checked_add(read_now)
+            .expect("kernel file read byte count overflowed");
+    }
+    kernel::filesystem::close(descriptor).ok()?;
+    contents.truncate(bytes_read);
+    Some(contents)
+}
+
 #[entry]
 fn main() -> Status {
     // ────────────────────────────────────────────────
@@ -302,6 +360,7 @@ fn main() -> Status {
     let mut frame_allocator = kernel::memory::frame_allocator::BumpFrameAllocator::new();
     add_conventional_memory_regions(&mut frame_allocator, mmap.entries());
     verify_frame_allocator_rules();
+    verify_elf_loader_rules();
 
     // ────────────────────────────────────────────────
     // Kernel Phase (UEFI Services unavailable)
@@ -332,19 +391,8 @@ fn main() -> Status {
         ),
     );
     verify_primary_storage_device();
-    if let Some(file) = kernel::driver::storage::get_detected_file() {
-        kernel::filesystem::mount_fat32_file(
-            &file.mount_path,
-            file.size,
-            kernel::driver::storage::read_detected_file_range,
-        );
-        crate::log_info!(
-            "fs",
-            "Mounted disk file: path={} bytes={}",
-            file.mount_path,
-            file.size
-        );
-        verify_mounted_disk_file(&file.mount_path);
+    if mount_detected_disk_files() {
+        verify_mounted_disk_file("/disk/hello.txt");
         verify_kernel_console_pipeline();
     }
     initialize_scheduler();
@@ -358,7 +406,17 @@ fn main() -> Status {
     kernel::runtime::initialize();
 
     let user_stack_top = kernel::memory::user_stack::allocate_user_stack(&mut frame_allocator, 4);
-    let user_elf: kernel::elf::LoadedElf = kernel::elf::load_user_smoke_demo(&mut frame_allocator);
+    let user_elf_path = "/disk/bin/smoke_demo";
+    let user_elf_bytes =
+        read_kernel_file(user_elf_path).expect("user smoke ELF must be readable from /disk/bin");
+    crate::log_info!(
+        "elf",
+        "Loading user ELF from filesystem: path={} bytes={}",
+        user_elf_path,
+        user_elf_bytes.len()
+    );
+    let user_elf: kernel::elf::LoadedElf =
+        kernel::elf::load_user_program(&mut frame_allocator, &user_elf_bytes, user_elf_path);
     let user_entry_point = user_elf.entry_point();
     let user_task_id = kernel::task::spawn_user_task(user_entry_point, user_stack_top);
     crate::log_info!("task", "User task spawned. task_id={}", user_task_id);
