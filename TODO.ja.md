@@ -72,11 +72,11 @@
 
 ### ELF And Process Loading
 
-- [ ] 64-bit ELF loader を実装する
-- [ ] ELF header、program header、segment permission を検証する
-- [ ] user text、rodata、data、bss、stack、guard page を正しい flag で map する
+- [x] 64-bit ELF loader を実装する
+- [x] ELF header、program header、segment permission を検証する
+- [x] user text、rodata、data、bss、stack、guard page を正しい flag で map する
 - [ ] `argc`、`argv`、environment pointer を user entry point に渡す
-- [ ] `include_bytes!` ではなく filesystem から user program を load する
+- [x] `include_bytes!` ではなく filesystem から user program を load する
 - [ ] `execve` を追加する
 - [ ] process identifier と parent-child relationship を追加する
 - [ ] `wait` または `waitpid` を追加する
@@ -171,8 +171,8 @@
 ## Phase 9: Tooling, Tests, And Documentation
 
 - [ ] CI 用 headless QEMU smoke test script を追加する
-- [ ] boot milestone の serial log assertion を追加する
-- [ ] 複数 file / directory を持つ disk-image fixture generator を追加する
+- [x] boot milestone の serial log assertion を追加する
+- [x] 複数 file / directory を持つ disk-image fixture generator を追加する
 - [ ] byte fixture を使った GPT / FAT32 parser unit test を追加する
 - [ ] success path と errno path の syscall ABI test を追加する
 - [ ] commit された全 user program の userland build check を CI に追加する

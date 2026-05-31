@@ -34,6 +34,8 @@ $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $expectedPatterns = @(
     "Persistent block-device service registered",
     "Registered block device",
+    "Backup boot sector validated",
+    "FSInfo: sector=1",
     "Registered FAT32 file backend for virtual filesystem",
     "Registered FAT32 file backend for virtual filesystem: path=/disk/bin/smoke_demo",
     "Disk file smoke read",
@@ -44,6 +46,7 @@ $expectedPatterns = @(
     "ELF segment mapped: .*perms=R-X",
     "ELF segment mapped: .*perms=R--",
     "ELF segment mapped: .*perms=RW-",
+    "User stack mapping verified: pages=4 guard_unmapped=true",
     "fstat -> fd=",
     "getdents64 -> fd=",
     "user bss ok",

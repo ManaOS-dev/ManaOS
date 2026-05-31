@@ -1,6 +1,6 @@
 //! User-space bootstrap stack and page mapping.
 
-use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
+use crate::kernel::memory::{frame_allocator::BumpFrameAllocator, paging};
 use x86_64::{
     registers::control::Cr3,
     structures::paging::{
@@ -88,6 +88,33 @@ pub fn allocate_and_map_user_page(
     }
 
     physical_address
+}
+
+/// Return whether the fixed user stack is writable and its guard page is unmapped.
+///
+/// # Panics
+///
+/// Panics if `pages` is zero or the stack size overflows.
+pub fn verify_user_stack_mapping(pages: u64) -> bool {
+    assert!(
+        pages > 0,
+        "user stack verification requires at least one page"
+    );
+    let stack_size = pages
+        .checked_mul(PAGE_SIZE)
+        .and_then(|bytes| usize::try_from(bytes).ok())
+        .expect("user stack verification size overflowed");
+    let guard_page = USER_STACK_BASE
+        .checked_sub(PAGE_SIZE)
+        .expect("user stack guard address underflowed");
+
+    paging::is_user_range_mapped_writable(
+        usize::try_from(USER_STACK_BASE).expect("user stack base must fit in usize"),
+        stack_size,
+    ) && !paging::is_user_range_mapped_readable(
+        usize::try_from(guard_page).expect("user stack guard must fit in usize"),
+        PAGE_SIZE_USIZE,
+    )
 }
 
 unsafe fn map_user_range(
