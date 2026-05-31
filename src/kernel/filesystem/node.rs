@@ -25,6 +25,8 @@ pub enum FileSystemError {
     IsDirectory,
     /// The path is not valid for this filesystem.
     InvalidPath,
+    /// The caller supplied an invalid argument.
+    InvalidArgument,
 }
 
 /// File node kind.

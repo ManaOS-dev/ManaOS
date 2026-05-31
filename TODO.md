@@ -20,7 +20,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Support multi-sector reads in the AHCI command path.
 - [x] Support reads that cross FAT32 cluster boundaries.
 - [x] Add AHCI error propagation instead of returning only `bool`.
-- [ ] Add AHCI interrupt-driven completion as an alternative to polling.
+- [x] Add AHCI interrupt-driven completion as an alternative to polling.
 - [x] Add cache invalidation or explicit ownership rules for DMA buffers.
 - [x] Add write support for AHCI sectors after read-only storage is stable.
 - [x] Add a QEMU storage test mode that boots and verifies expected serial log lines automatically.
@@ -40,7 +40,7 @@ items have been removed so the file stays useful for deciding the next task.
 ### Virtual Filesystem
 
 - [x] Add a real mount table with mount points and filesystem backends.
-- [ ] Mount FAT32 as a filesystem backend instead of copying one boot-time file into memory.
+- [x] Mount FAT32 as a filesystem backend instead of copying one boot-time file into memory.
 - [x] Add path traversal for directories and nested files.
 - [x] Add file metadata operations such as `stat`.
 - [x] Add `seek` support to file descriptors.
@@ -79,13 +79,13 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Add process identifiers and parent-child relationships.
 - [ ] Add `wait` or `waitpid`.
 - [ ] Add a minimal user shell process.
-- [ ] Add a userland test program that opens `/disk/hello.txt`.
+- [x] Add a userland test program that opens `/disk/hello.txt`.
 
 ### Syscall Surface
 
 - [ ] Define syscall numbers and ABI in a shared generated or copied contract for kernel and userland.
-- [ ] Add `lseek`.
-- [ ] Add `stat` or `newfstatat`.
+- [x] Add `lseek`.
+- [x] Add `stat` or `newfstatat`.
 - [ ] Add `getdents64`.
 - [ ] Add `brk` or another first heap-growth syscall.
 - [ ] Add `mmap` and `munmap` planning.
@@ -101,7 +101,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Add file descriptor wrappers in userland.
 - [x] Add argument parsing helpers.
 - [x] Add fixed-buffer userland command modules with single-pipe execution.
-- [ ] Add build scripts for multiple userland binaries.
+- [x] Add build scripts for multiple userland binaries.
 - [ ] Add a userland smoke-test runner.
 
 ## Phase 7: Kernel Hardening

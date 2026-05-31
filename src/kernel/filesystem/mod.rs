@@ -18,6 +18,7 @@
 //! - [`write`] - Write to an open file descriptor
 //! - [`close`] - Close an open file descriptor
 
+mod backend;
 mod descriptor;
 mod device;
 mod directory;
@@ -33,7 +34,8 @@ use namespace::VirtualFileSystem;
 use node::normalize_path;
 use spin::{LazyLock, Mutex};
 
-pub use descriptor::{FileDescriptor, STANDARD_ERROR, STANDARD_INPUT, STANDARD_OUTPUT};
+pub use backend::{BackendRead, ReadOnlyBackendFile};
+pub use descriptor::{FileDescriptor, SeekWhence, STANDARD_ERROR, STANDARD_INPUT, STANDARD_OUTPUT};
 pub use mount::{MountFlags, MountInfo, MountSource};
 pub use node::{DirectoryEntry, FileMetadata, FileSystemError, FileSystemResult, FileType};
 pub use ramfs::RamFile;
@@ -94,11 +96,11 @@ pub fn mount_read_only_file(path: &str, contents: &[u8]) {
     );
 }
 
-/// Mount a FAT32-backed read-only file snapshot at an absolute path.
-pub fn mount_fat32_file(path: &str, contents: &[u8]) {
+/// Mount a FAT32-backed read-only file at an absolute path.
+pub fn mount_fat32_file(path: &str, size: usize, read: BackendRead) {
     VIRTUAL_FILE_SYSTEM.lock().mount_node(
         path,
-        Arc::new(ReadOnlyFile::from_bytes(contents)),
+        Arc::new(ReadOnlyBackendFile::new(size, read)),
         MountSource::Fat32,
         MountFlags::read_only(),
     );
@@ -128,6 +130,17 @@ pub fn write(descriptor: FileDescriptor, buffer: &[u8]) -> FileSystemResult<usiz
 /// Seek an open file descriptor to an absolute offset.
 pub fn seek(descriptor: FileDescriptor, offset: usize) -> FileSystemResult<usize> {
     FILE_DESCRIPTORS.lock().seek(descriptor, offset)
+}
+
+/// Seek an open file descriptor relative to a base position.
+pub fn seek_from(
+    descriptor: FileDescriptor,
+    offset: i64,
+    whence: SeekWhence,
+) -> FileSystemResult<usize> {
+    FILE_DESCRIPTORS
+        .lock()
+        .seek_from(descriptor, offset, whence)
 }
 
 /// Return metadata for a filesystem path.

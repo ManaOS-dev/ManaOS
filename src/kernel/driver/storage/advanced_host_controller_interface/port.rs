@@ -1,5 +1,6 @@
 //! Advanced Host Controller Interface port lifecycle helpers.
 
+use super::completion::CompletionMode;
 use super::dma::{self, AhciDmaBuffers};
 use super::registers::HbaPort;
 
@@ -7,18 +8,10 @@ const COMMAND_AND_STATUS_START: u32 = 1 << 0;
 const COMMAND_AND_STATUS_FIS_RECEIVE_ENABLE: u32 = 1 << 4;
 const COMMAND_AND_STATUS_FIS_RECEIVE_RUNNING: u32 = 1 << 14;
 const COMMAND_AND_STATUS_COMMAND_LIST_RUNNING: u32 = 1 << 15;
-const INTERRUPT_ENABLE_DEVICE_TO_HOST_REGISTER_FIS: u32 = 1 << 0;
-const INTERRUPT_ENABLE_TASK_FILE_ERROR: u32 = 1 << 30;
 const PORT_POLL_LIMIT: usize = 1_000_000;
 
-/// Advanced Host Controller Interface command completion mode.
-#[derive(Clone, Copy)]
-pub(super) enum CompletionMode {
-    /// Poll the command issue bit until completion.
-    Polling,
-    /// Enable port completion interrupts for future interrupt-driven dispatch.
-    InterruptDriven,
-}
+/// Default completion mode used by the boot-safe AHCI path.
+pub(super) const DEFAULT_COMPLETION_MODE: CompletionMode = CompletionMode::Polling;
 
 pub(super) fn read_signature(port: *const HbaPort) -> u32 {
     // SAFETY: `port` points to an implemented mapped Advanced Host Controller
@@ -60,13 +53,8 @@ pub(super) fn initialize_command_engine(
     }
 
     rebase_port(port, buffers);
-    configure_completion_mode(port, port_index, CompletionMode::Polling);
-    crate::log_debug!(
-        "ahci",
-        "Port {}: alternate completion mode available: {}",
-        port_index,
-        completion_mode_name(CompletionMode::InterruptDriven)
-    );
+    configure_completion_mode(port, port_index, DEFAULT_COMPLETION_MODE);
+    super::completion::log_supported_modes(port_index);
     start_command_engine(port);
     crate::log_info!(
         "ahci",
@@ -81,12 +69,7 @@ pub(super) fn configure_completion_mode(
     port_index: usize,
     completion_mode: CompletionMode,
 ) {
-    let interrupt_enable = match completion_mode {
-        CompletionMode::Polling => 0,
-        CompletionMode::InterruptDriven => {
-            INTERRUPT_ENABLE_DEVICE_TO_HOST_REGISTER_FIS | INTERRUPT_ENABLE_TASK_FILE_ERROR
-        }
-    };
+    let interrupt_enable = completion_mode.interrupt_enable();
 
     // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
     // register block.
@@ -100,16 +83,9 @@ pub(super) fn configure_completion_mode(
         "ahci",
         "Port {}: completion mode configured: {} interrupt_enable={:#010x}",
         port_index,
-        completion_mode_name(completion_mode),
+        completion_mode.name(),
         interrupt_enable
     );
-}
-
-fn completion_mode_name(completion_mode: CompletionMode) -> &'static str {
-    match completion_mode {
-        CompletionMode::Polling => "polling",
-        CompletionMode::InterruptDriven => "interrupt-driven",
-    }
 }
 
 fn stop_command_engine(port: *mut HbaPort, port_index: usize) -> bool {

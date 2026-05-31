@@ -6,15 +6,15 @@ const FRAME_SIZE: u64 = 4096;
 
 #[derive(Clone, Copy)]
 struct Region {
-    start: u64, // Physical address (4KB aligned)
+    start: u64,
     pages: u64,
 }
 
 pub struct BumpFrameAllocator {
     regions: [Region; MAX_REGIONS],
     count: usize,
-    current: usize, // Current region index being processed
-    offset: u64,    // Number of pages already used in the current region
+    current: usize,
+    offset: u64,
 }
 
 impl BumpFrameAllocator {
@@ -29,10 +29,11 @@ impl BumpFrameAllocator {
 
     /// Register a conventional memory region (call before `ExitBootServices`).
     pub fn add_region(&mut self, start: u64, pages: u64) {
-        if self.count < MAX_REGIONS {
-            self.regions[self.count] = Region { start, pages };
-            self.count += 1;
-        }
+        let Some(region) = normalize_region(start, pages) else {
+            return;
+        };
+
+        self.insert_region(region);
     }
 
     /// Allocate a single 4KiB frame.
@@ -50,11 +51,6 @@ impl BumpFrameAllocator {
 
         while self.current < self.count {
             let region = &self.regions[self.current];
-            if region.start == 0 && self.offset == 0 {
-                self.offset = 1;
-                continue;
-            }
-
             let available_pages = region.pages.saturating_sub(self.offset);
             if available_pages >= n {
                 let Some(candidate_offset) = self.offset.checked_mul(FRAME_SIZE) else {
@@ -87,6 +83,77 @@ impl BumpFrameAllocator {
         }
         total
     }
+
+    fn insert_region(&mut self, region: Region) {
+        if self.count == 0 {
+            self.regions[0] = region;
+            self.count = 1;
+            return;
+        }
+
+        let mut index = 0;
+        while index < self.count && self.regions[index].start < region.start {
+            index += 1;
+        }
+
+        if self.count >= MAX_REGIONS {
+            return;
+        }
+
+        for move_index in (index..self.count).rev() {
+            self.regions[move_index + 1] = self.regions[move_index];
+        }
+        self.regions[index] = region;
+        self.count += 1;
+        self.merge_adjacent_regions();
+    }
+
+    fn merge_adjacent_regions(&mut self) {
+        if self.count < 2 {
+            return;
+        }
+
+        let mut write_index = 0;
+        for read_index in 1..self.count {
+            let current_end = region_end(self.regions[write_index]);
+            if current_end == Some(self.regions[read_index].start) {
+                self.regions[write_index].pages = self.regions[write_index]
+                    .pages
+                    .saturating_add(self.regions[read_index].pages);
+            } else {
+                write_index += 1;
+                self.regions[write_index] = self.regions[read_index];
+            }
+        }
+
+        self.count = write_index + 1;
+    }
+}
+
+fn normalize_region(start: u64, pages: u64) -> Option<Region> {
+    let byte_count = pages.checked_mul(FRAME_SIZE)?;
+    let end = start.checked_add(byte_count)?;
+    let aligned_start = align_up(start.max(FRAME_SIZE), FRAME_SIZE)?;
+    if aligned_start >= end {
+        return None;
+    }
+
+    Some(Region {
+        start: aligned_start,
+        pages: (end - aligned_start) / FRAME_SIZE,
+    })
+}
+
+fn align_up(value: u64, alignment: u64) -> Option<u64> {
+    let mask = alignment.checked_sub(1)?;
+    value.checked_add(mask).map(|value| value & !mask)
+}
+
+fn region_end(region: Region) -> Option<u64> {
+    region
+        .pages
+        .checked_mul(FRAME_SIZE)
+        .and_then(|byte_count| region.start.checked_add(byte_count))
 }
 
 /// Verify the frame-zero skip behavior for multi-frame allocations.

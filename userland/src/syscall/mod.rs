@@ -13,6 +13,8 @@
 //! - [`read`] - Read bytes from an open file descriptor
 //! - [`write`] - Write bytes to an open file descriptor
 //! - [`open`] - Open a null-terminated path
+//! - [`fstat`] - Read metadata for an open file descriptor
+//! - [`lseek`] - Seek an open file descriptor
 //! - [`exit`] - Terminate the current user task
 
 mod raw;
@@ -27,6 +29,10 @@ pub const SYS_WRITE: usize = 1;
 pub const SYS_OPEN: usize = 2;
 /// Linux-compatible close syscall number.
 pub const SYS_CLOSE: usize = 3;
+/// Linux-compatible file status syscall number.
+pub const SYS_FSTAT: usize = 5;
+/// Linux-compatible seek syscall number.
+pub const SYS_LSEEK: usize = 8;
 /// Linux-compatible get-process-identifier syscall number.
 pub const SYS_GETPID: usize = 39;
 /// Linux-compatible exit syscall number.
@@ -40,6 +46,18 @@ pub const SYS_OPENAT: usize = 257;
 pub const OPEN_READ_ONLY: usize = 0;
 /// Linux-compatible current-working-directory marker for `openat`.
 pub const AT_FDCWD: usize = usize::MAX - 99;
+/// Seek relative to the start of a file.
+pub const SEEK_SET: usize = 0;
+/// Seek relative to the current file offset.
+pub const SEEK_CUR: usize = 1;
+/// Seek relative to the end of a file.
+pub const SEEK_END: usize = 2;
+/// File status type for a regular file.
+pub const FILE_TYPE_REGULAR: u64 = 1;
+/// File status type for a directory.
+pub const FILE_TYPE_DIRECTORY: u64 = 2;
+/// File status type for a device.
+pub const FILE_TYPE_DEVICE: u64 = 3;
 /// Linux-compatible not found error as a signed syscall result.
 pub const ERROR_NOT_FOUND: isize = -2;
 /// Linux-compatible bad file descriptor error as a signed syscall result.
@@ -48,6 +66,30 @@ pub const ERROR_BAD_FILE_DESCRIPTOR: isize = -9;
 pub const ERROR_BAD_ADDRESS: isize = -14;
 /// Linux-compatible not implemented error as a signed syscall result.
 pub const ERROR_NOT_IMPLEMENTED: isize = -38;
+
+/// Metadata returned by the ManaOS `fstat` syscall.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FileStat {
+    /// File node kind encoded as a `FILE_TYPE_*` value.
+    pub file_type: u64,
+    /// File size in bytes.
+    pub size: u64,
+    /// Non-zero when the file descriptor supports writes.
+    pub writable: u64,
+}
+
+impl FileStat {
+    /// Create an empty metadata record for use as an output buffer.
+    #[inline(always)]
+    pub const fn empty() -> Self {
+        Self {
+            file_type: 0,
+            size: 0,
+            writable: 0,
+        }
+    }
+}
 
 /// Write `buffer` to an open file descriptor.
 #[inline(always)]
@@ -99,6 +141,18 @@ pub fn openat(directory_file_descriptor: usize, path: &[u8], flags: usize, mode:
 #[inline(always)]
 pub fn close(file_descriptor: usize) -> isize {
     syscall1(SYS_CLOSE, file_descriptor)
+}
+
+/// Read metadata for an open file descriptor.
+#[inline(always)]
+pub fn fstat(file_descriptor: usize, stat: &mut FileStat) -> isize {
+    syscall2(SYS_FSTAT, file_descriptor, stat as *mut FileStat as usize)
+}
+
+/// Seek an open file descriptor and return the new offset.
+#[inline(always)]
+pub fn lseek(file_descriptor: usize, offset: isize, whence: usize) -> isize {
+    syscall3(SYS_LSEEK, file_descriptor, offset as usize, whence)
 }
 
 /// Return the current ManaOS task identifier.

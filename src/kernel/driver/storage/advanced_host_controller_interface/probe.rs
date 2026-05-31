@@ -6,7 +6,7 @@ use core::fmt;
 use crate::kernel::driver::storage::block_device::BlockDevice;
 use crate::kernel::driver::storage::{
     file_allocation_table, guid_partition_table, partition::PartitionBlockDevice,
-    set_detected_file, set_selected_partition, StorageFile,
+    set_detected_file, set_selected_partition,
 };
 
 pub(super) fn inspect_initial_storage(block_device: &mut impl BlockDevice, data_address: u64) {
@@ -80,31 +80,14 @@ pub(super) fn inspect_initial_storage(block_device: &mut impl BlockDevice, data_
         entry,
         data_address,
     );
-    let Some(contents) = file_allocation_table::read_file_contents(
-        &mut partition_device,
-        volume,
-        entry,
-        data_address,
-    ) else {
-        crate::log_warn!(
-            "storage",
-            "Failed to load FAT32 file: path={}",
-            entry.disk_mount_path()
-        );
-        return;
-    };
-
     let mount_path = entry.disk_mount_path();
     crate::log_info!(
         "storage",
-        "Loaded FAT32 file for virtual filesystem: path={} bytes={}",
+        "Registered FAT32 file backend for virtual filesystem: path={} bytes={}",
         mount_path,
-        contents.len()
+        entry.file_size()
     );
-    set_detected_file(StorageFile {
-        mount_path,
-        contents,
-    });
+    set_detected_file(partition, volume, entry);
 }
 
 fn dump_sector_prefix(label: &str, data_address: u64) {

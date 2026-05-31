@@ -64,7 +64,8 @@ fn initialize_sata_port(
         return;
     }
 
-    let mut block_device = AhciBlockDevice::new(hba_port, buffers, port_index);
+    let mut block_device =
+        AhciBlockDevice::new(hba_port, buffers, port_index, port::DEFAULT_COMPLETION_MODE);
     let maximum_transfer_sectors = block_device.maximum_transfer_sectors();
     probe::inspect_initial_storage(&mut block_device, buffers.data);
     register_storage_device(

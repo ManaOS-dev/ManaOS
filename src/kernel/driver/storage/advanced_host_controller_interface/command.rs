@@ -1,5 +1,6 @@
 //! Advanced Host Controller Interface DMA command submission.
 
+use super::completion::{self, CompletionMode};
 use super::dma::{self, AhciDmaBuffers};
 use super::registers::{HbaCommandHeader, HbaCommandTable, HbaPort};
 use crate::kernel::driver::storage::block_device::{
@@ -13,12 +14,6 @@ const FIS_TYPE_REGISTER_HOST_TO_DEVICE: u8 = 0x27;
 const FIS_COMMAND_FLAG: u8 = 1 << 7;
 const COMMAND_HEADER_WRITE: u16 = 1 << 6;
 const ATA_DEVICE_LBA_MODE: u8 = 1 << 6;
-const TASK_FILE_DATA_BUSY: u32 = 1 << 7;
-const TASK_FILE_DATA_DATA_REQUEST: u32 = 1 << 3;
-const INTERRUPT_STATUS_TASK_FILE_ERROR: u32 = 1 << 30;
-const INTERRUPT_STATUS_DEVICE_TO_HOST_REGISTER_FIS: u32 = 1 << 0;
-const PORT_POLL_LIMIT: usize = 1_000_000;
-const READ_COMMAND_SLOT: u32 = 1;
 
 #[derive(Clone, Copy)]
 pub(super) enum AhciTransferDirection {
@@ -66,6 +61,7 @@ pub(super) fn issue_dma_transfer(
     logical_block_address: u64,
     sector_count: u16,
     direction: AhciTransferDirection,
+    completion_mode: CompletionMode,
 ) -> BlockDeviceResult<()> {
     let transfer_bytes = validate_transfer(buffers, sector_count)?;
     crate::log_trace!(
@@ -77,7 +73,7 @@ pub(super) fn issue_dma_transfer(
         sector_count,
         buffers.data
     );
-    wait_until_not_busy(port, port_index)?;
+    completion::wait_until_not_busy(port, port_index)?;
 
     if matches!(direction, AhciTransferDirection::Read) {
         zero_data_buffer(buffers, transfer_bytes);
@@ -90,7 +86,7 @@ pub(super) fn issue_dma_transfer(
         core::ptr::write_volatile(core::ptr::addr_of_mut!((*port).interrupt_status), u32::MAX);
         core::ptr::write_volatile(
             core::ptr::addr_of_mut!((*port).command_issue),
-            READ_COMMAND_SLOT,
+            completion::COMMAND_SLOT_MASK,
         );
     }
     crate::log_trace!(
@@ -102,42 +98,15 @@ pub(super) fn issue_dma_transfer(
         sector_count
     );
 
-    for _ in 0..PORT_POLL_LIMIT {
-        // SAFETY: `port` points to a mapped Advanced Host Controller Interface
-        // port register block.
-        let command_issue =
-            unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_issue)) };
-        if command_issue & READ_COMMAND_SLOT == 0 {
-            // SAFETY: `port` points to a mapped Advanced Host Controller
-            // Interface port register block.
-            let interrupt_status =
-                unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).interrupt_status)) };
-            if interrupt_status & INTERRUPT_STATUS_TASK_FILE_ERROR != 0 {
-                crate::log_error!(
-                    "ahci",
-                    "Port {}: {} failed, interrupt_status={:#010x}",
-                    port_index,
-                    direction.label(),
-                    interrupt_status
-                );
-                return Err(BlockDeviceError::TaskFileError);
-            }
-
-            crate::log_debug!(
-                "ahci",
-                "{} LBA {} complete: sectors={} bytes={} interrupt_status={:#010x}",
-                direction.label(),
-                logical_block_address,
-                sector_count,
-                transfer_bytes,
-                interrupt_status
-            );
-            return Ok(());
-        }
-    }
-
-    log_timeout_registers(port, port_index, logical_block_address, direction.label());
-    Err(BlockDeviceError::CommandTimeout)
+    completion::wait_for_command(
+        port,
+        port_index,
+        logical_block_address,
+        sector_count,
+        transfer_bytes,
+        direction.label(),
+        completion_mode,
+    )
 }
 
 fn validate_transfer(buffers: AhciDmaBuffers, sector_count: u16) -> BlockDeviceResult<usize> {
@@ -153,21 +122,6 @@ fn validate_transfer(buffers: AhciDmaBuffers, sector_count: u16) -> BlockDeviceR
     }
 
     Ok(transfer_bytes)
-}
-
-fn wait_until_not_busy(port: *mut HbaPort, port_index: usize) -> BlockDeviceResult<()> {
-    for _ in 0..PORT_POLL_LIMIT {
-        // SAFETY: `port` points to a mapped Advanced Host Controller Interface
-        // port register block.
-        let task_file_data =
-            unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).task_file_data)) };
-        if task_file_data & (TASK_FILE_DATA_BUSY | TASK_FILE_DATA_DATA_REQUEST) == 0 {
-            return Ok(());
-        }
-    }
-
-    log_timeout_registers(port, port_index, 0, "device busy");
-    Err(BlockDeviceError::DeviceBusyTimeout)
 }
 
 fn prepare_dma_command(
@@ -246,44 +200,4 @@ fn lba_byte(logical_block_address: u64, shift: u32) -> u8 {
 
 fn sector_count_byte(sector_count: u16, shift: u32) -> u8 {
     u8::try_from((sector_count >> shift) & 0xff).expect("masked sector count byte must fit in u8")
-}
-
-fn log_timeout_registers(
-    port: *mut HbaPort,
-    port_index: usize,
-    logical_block_address: u64,
-    context: &str,
-) {
-    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
-    // register block.
-    let task_file_data =
-        unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).task_file_data)) };
-    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
-    // register block.
-    let command_issue =
-        unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).command_issue)) };
-    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
-    // register block.
-    let sata_active = unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).sata_active)) };
-    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
-    // register block.
-    let interrupt_status =
-        unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).interrupt_status)) };
-    // SAFETY: `port` points to a mapped Advanced Host Controller Interface port
-    // register block.
-    let sata_error = unsafe { core::ptr::read_volatile(core::ptr::addr_of!((*port).sata_error)) };
-    crate::log_error!(
-        "ahci",
-        "Port {}: {} command timeout lba={} slot_mask={:#010x} task_file_data={:#010x} command_issue={:#010x} sata_active={:#010x} interrupt_status={:#010x} sata_error={:#010x} d2h_fis_seen={}",
-        port_index,
-        context,
-        logical_block_address,
-        READ_COMMAND_SLOT,
-        task_file_data,
-        command_issue,
-        sata_active,
-        interrupt_status,
-        sata_error,
-        interrupt_status & INTERRUPT_STATUS_DEVICE_TO_HOST_REGISTER_FIS != 0
-    );
 }

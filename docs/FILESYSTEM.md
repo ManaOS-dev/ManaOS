@@ -18,3 +18,10 @@ Examples:
 
 The console resolves relative paths against its current working directory before
 passing them to the virtual filesystem.
+
+## FAT32 Backend
+
+FAT32 files mounted under `/disk` are read-only backend files. The virtual
+filesystem stores metadata and a read callback; file bytes are fetched through
+the storage subsystem when the file descriptor is read instead of being copied
+into a heap buffer during boot.

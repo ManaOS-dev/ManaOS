@@ -16,6 +16,8 @@
 //! - [`SYS_WRITE`] - Linux-compatible write syscall number
 //! - [`SYS_OPEN`] - Linux-compatible open syscall number
 //! - [`SYS_CLOSE`] - Linux-compatible close syscall number
+//! - [`SYS_FSTAT`] - Linux-compatible file status syscall number
+//! - [`SYS_LSEEK`] - Linux-compatible seek syscall number
 //! - [`SYS_EXIT`] - Linux-compatible exit syscall number
 //! - [`SYS_EXIT_GROUP`] - Linux-compatible process exit syscall number
 //! - [`SYS_GETPID`] - Linux-compatible get-process-identifier syscall number
@@ -33,6 +35,13 @@ const ERROR_TOO_MANY_OPEN_FILES: u64 = linux_error(24);
 const ERROR_NOT_IMPLEMENTED: u64 = linux_error(38);
 const ERROR_NOT_SUPPORTED: u64 = linux_error(95);
 const AT_FDCWD: u64 = u64::MAX - 99;
+const SEEK_SET: u64 = 0;
+const SEEK_CUR: u64 = 1;
+const SEEK_END: u64 = 2;
+const USER_FILE_STAT_BYTES: usize = 24;
+const USER_FILE_TYPE_REGULAR: u64 = 1;
+const USER_FILE_TYPE_DIRECTORY: u64 = 2;
+const USER_FILE_TYPE_DEVICE: u64 = 3;
 const MAX_USER_STRING_LENGTH: usize = 256;
 const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 
@@ -44,6 +53,10 @@ pub const SYS_WRITE: u64 = 1;
 pub const SYS_OPEN: u64 = 2;
 /// Linux-compatible close syscall number.
 pub const SYS_CLOSE: u64 = 3;
+/// Linux-compatible file status syscall number.
+pub const SYS_FSTAT: u64 = 5;
+/// Linux-compatible seek syscall number.
+pub const SYS_LSEEK: u64 = 8;
 /// Linux-compatible exit syscall number.
 pub const SYS_EXIT: u64 = 60;
 /// Linux-compatible get-process-identifier syscall number.
@@ -86,6 +99,8 @@ pub extern "C" fn syscall_dispatch(
             fourth_argument,
         ),
         SYS_CLOSE => sys_close(first_argument),
+        SYS_FSTAT => sys_fstat(first_argument, second_argument),
+        SYS_LSEEK => sys_lseek(first_argument, second_argument, third_argument),
         SYS_READ => sys_read(first_argument, second_argument, third_argument),
         SYS_GETPID => sys_getpid(),
         _ => ERROR_NOT_IMPLEMENTED,
@@ -160,6 +175,35 @@ fn sys_close(file_descriptor: u64) -> u64 {
     }
 }
 
+fn sys_fstat(file_descriptor: u64, user_stat_pointer: u64) -> u64 {
+    let Ok(file_descriptor) = usize::try_from(file_descriptor) else {
+        return ERROR_BAD_FILE_DESCRIPTOR;
+    };
+    let Ok(user_stat_pointer) = usize::try_from(user_stat_pointer) else {
+        return ERROR_BAD_ADDRESS;
+    };
+
+    let Some(buffer) = copy_to_user(user_stat_pointer, USER_FILE_STAT_BYTES) else {
+        return ERROR_BAD_ADDRESS;
+    };
+
+    match crate::kernel::filesystem::descriptor_metadata(file_descriptor) {
+        Ok(metadata) => {
+            write_user_file_stat(buffer, metadata);
+            crate::log_info!(
+                "syscall",
+                "fstat -> fd={} type={:?} size={} writable={}",
+                file_descriptor,
+                metadata.file_type,
+                metadata.size,
+                metadata.writable
+            );
+            0
+        }
+        Err(error) => filesystem_error_to_linux(error),
+    }
+}
+
 fn sys_read(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
     let Ok(file_descriptor) = usize::try_from(file_descriptor) else {
         return ERROR_BAD_FILE_DESCRIPTOR;
@@ -179,6 +223,54 @@ fn sys_read(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
         Ok(bytes_read) => u64::try_from(bytes_read).unwrap_or(u64::MAX),
         Err(error) => filesystem_error_to_linux(error),
     }
+}
+
+fn sys_lseek(file_descriptor: u64, offset: u64, whence: u64) -> u64 {
+    let Ok(file_descriptor) = usize::try_from(file_descriptor) else {
+        return ERROR_BAD_FILE_DESCRIPTOR;
+    };
+    let offset = i64::from_ne_bytes(offset.to_ne_bytes());
+    let whence_argument = whence;
+    let whence = match whence_argument {
+        SEEK_SET => crate::kernel::filesystem::SeekWhence::Start,
+        SEEK_CUR => crate::kernel::filesystem::SeekWhence::Current,
+        SEEK_END => crate::kernel::filesystem::SeekWhence::End,
+        _ => return ERROR_INVALID_ARGUMENT,
+    };
+
+    match crate::kernel::filesystem::seek_from(file_descriptor, offset, whence) {
+        Ok(next_offset) => {
+            crate::log_info!(
+                "syscall",
+                "lseek -> fd={} offset={} whence={} next={}",
+                file_descriptor,
+                offset,
+                whence_argument,
+                next_offset
+            );
+            u64::try_from(next_offset).unwrap_or(u64::MAX)
+        }
+        Err(error) => filesystem_error_to_linux(error),
+    }
+}
+
+fn write_user_file_stat(buffer: &mut [u8], metadata: crate::kernel::filesystem::FileMetadata) {
+    let file_type = match metadata.file_type {
+        crate::kernel::filesystem::FileType::Regular => USER_FILE_TYPE_REGULAR,
+        crate::kernel::filesystem::FileType::Directory => USER_FILE_TYPE_DIRECTORY,
+        crate::kernel::filesystem::FileType::Device => USER_FILE_TYPE_DEVICE,
+    };
+    write_user_u64(buffer, 0, file_type);
+    write_user_u64(
+        buffer,
+        8,
+        u64::try_from(metadata.size).expect("filesystem metadata size must fit in u64"),
+    );
+    write_user_u64(buffer, 16, u64::from(metadata.writable));
+}
+
+fn write_user_u64(buffer: &mut [u8], offset: usize, value: u64) {
+    buffer[offset..offset + core::mem::size_of::<u64>()].copy_from_slice(&value.to_ne_bytes());
 }
 
 fn sys_exit(exit_code: u64) -> u64 {
@@ -215,7 +307,8 @@ fn filesystem_error_to_linux(error: crate::kernel::filesystem::FileSystemError) 
         crate::kernel::filesystem::FileSystemError::UnsupportedOperation => ERROR_NOT_SUPPORTED,
         crate::kernel::filesystem::FileSystemError::TooManyOpenFiles => ERROR_TOO_MANY_OPEN_FILES,
         crate::kernel::filesystem::FileSystemError::AlreadyInitialized
-        | crate::kernel::filesystem::FileSystemError::InvalidPath => ERROR_INVALID_ARGUMENT,
+        | crate::kernel::filesystem::FileSystemError::InvalidPath
+        | crate::kernel::filesystem::FileSystemError::InvalidArgument => ERROR_INVALID_ARGUMENT,
         crate::kernel::filesystem::FileSystemError::NotDirectory => ERROR_NOT_DIRECTORY,
         crate::kernel::filesystem::FileSystemError::IsDirectory => ERROR_IS_DIRECTORY,
     }

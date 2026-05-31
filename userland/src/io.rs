@@ -56,6 +56,27 @@ impl FileDescriptor {
         Ok(bytes_read as usize)
     }
 
+    /// Seek this descriptor from the beginning of the file.
+    pub fn seek_start(&self, offset: usize) -> Result<usize, IoError> {
+        let next_offset = syscall::lseek(self.descriptor, offset as isize, syscall::SEEK_SET);
+        if next_offset < 0 {
+            return Err(IoError::Syscall(next_offset));
+        }
+
+        Ok(next_offset as usize)
+    }
+
+    /// Return metadata for this descriptor.
+    pub fn metadata(&self) -> Result<syscall::FileStat, IoError> {
+        let mut stat = syscall::FileStat::empty();
+        let result = syscall::fstat(self.descriptor, &mut stat);
+        if result < 0 {
+            return Err(IoError::Syscall(result));
+        }
+
+        Ok(stat)
+    }
+
     /// Write bytes to this descriptor.
     pub fn write(&self, buffer: &[u8]) -> Result<usize, IoError> {
         let bytes_written = syscall::write(self.descriptor, buffer);
