@@ -104,6 +104,21 @@ function Write-LongFileNameEntry {
     }
 }
 
+function Write-FileSystemInformationSector {
+    param(
+        [byte[]]$Image,
+        [int]$Offset,
+        [UInt32]$FreeClusterCount,
+        [UInt32]$NextFreeCluster
+    )
+
+    Write-LeUInt32 $Image $Offset 0x41615252
+    Write-LeUInt32 $Image ($Offset + 484) 0x61417272
+    Write-LeUInt32 $Image ($Offset + 488) $FreeClusterCount
+    Write-LeUInt32 $Image ($Offset + 492) $NextFreeCluster
+    Write-LeUInt32 $Image ($Offset + 508) 2857697280
+}
+
 function Write-GptGuid {
     param([byte[]]$Buffer, [int]$Offset, [string]$Value)
     $bytes = [Guid]::Parse($Value).ToByteArray()
@@ -246,6 +261,13 @@ function Write-FileAllocationTable32BootSector {
     }
     $smokeDemoFirstCluster = [UInt32]5
     $smokeDemoLastCluster = [UInt32]($smokeDemoFirstCluster + $smokeDemoClusterCount - 1)
+    $usedDataClusters = [UInt32](3 + $smokeDemoClusterCount)
+    $dataClusterCount = [UInt32](($partitionSectors - $metadataSectors) / [UInt64]$sectorsPerCluster)
+    if ($usedDataClusters -ge $dataClusterCount) {
+        throw "test FAT32 partition does not have enough data clusters"
+    }
+    $nextFreeCluster = [UInt32]($smokeDemoLastCluster + 1)
+    $freeClusterCount = [UInt32]($dataClusterCount - $usedDataClusters)
 
     foreach ($offset in @($firstFileAllocationTableOffset, $secondFileAllocationTableOffset)) {
         Write-LeUInt32 $Image $offset 0x0FFFFFF8
@@ -277,6 +299,13 @@ function Write-FileAllocationTable32BootSector {
 
     $smokeDemoDataOffset = [int](($firstPartitionLba + $metadataSectors + 3) * $sectorSize)
     [Array]::Copy($smokeDemoElf, 0, $Image, $smokeDemoDataOffset, $smokeDemoElf.Length)
+
+    [Array]::Copy($bootSector, 0, $Image, [int](($firstPartitionLba + 6) * $sectorSize), $sectorSize)
+    Write-FileSystemInformationSector `
+        -Image $Image `
+        -Offset ([int](($firstPartitionLba + 1) * $sectorSize)) `
+        -FreeClusterCount $freeClusterCount `
+        -NextFreeCluster $nextFreeCluster
 }
 
 $image = New-Object byte[] $SizeBytes

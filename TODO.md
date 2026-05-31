@@ -70,11 +70,11 @@ items have been removed so the file stays useful for deciding the next task.
 
 ### ELF And Process Loading
 
-- [ ] Implement a 64-bit ELF loader.
-- [ ] Validate ELF headers, program headers, and segment permissions.
-- [ ] Map user text, rodata, data, bss, stack, and guard pages with correct flags.
+- [x] Implement a 64-bit ELF loader.
+- [x] Validate ELF headers, program headers, and segment permissions.
+- [x] Map user text, rodata, data, bss, stack, and guard pages with correct flags.
 - [ ] Pass `argc`, `argv`, and environment pointers to user entry points.
-- [ ] Load user programs from the filesystem instead of `include_bytes!`.
+- [x] Load user programs from the filesystem instead of `include_bytes!`.
 - [ ] Add `execve`.
 - [ ] Add process identifiers and parent-child relationships.
 - [ ] Add `wait` or `waitpid`.
@@ -168,8 +168,8 @@ items have been removed so the file stays useful for deciding the next task.
 ## Phase 9: Tooling, Tests, And Documentation
 
 - [ ] Add a headless QEMU smoke test script for CI.
-- [ ] Add serial log assertions for boot milestones.
-- [ ] Add a disk-image fixture generator with multiple files and directories.
+- [x] Add serial log assertions for boot milestones.
+- [x] Add a disk-image fixture generator with multiple files and directories.
 - [ ] Add parser unit tests for GPT and FAT32 using byte fixtures.
 - [ ] Add syscall ABI tests for success and errno paths.
 - [ ] Add userland build checks to CI for every committed user program.

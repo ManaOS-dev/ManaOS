@@ -405,7 +405,18 @@ fn main() -> Status {
 
     kernel::runtime::initialize();
 
-    let user_stack_top = kernel::memory::user_stack::allocate_user_stack(&mut frame_allocator, 4);
+    let user_stack_pages = 4;
+    let user_stack_top =
+        kernel::memory::user_stack::allocate_user_stack(&mut frame_allocator, user_stack_pages);
+    assert!(
+        kernel::memory::user_stack::verify_user_stack_mapping(user_stack_pages),
+        "user stack mapping and guard page smoke must pass"
+    );
+    crate::log_info!(
+        "memory",
+        "User stack mapping verified: pages={} guard_unmapped=true",
+        user_stack_pages
+    );
     let user_elf_path = "/disk/bin/smoke_demo";
     let user_elf_bytes =
         read_kernel_file(user_elf_path).expect("user smoke ELF must be readable from /disk/bin");
