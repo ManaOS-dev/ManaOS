@@ -358,8 +358,8 @@ fn main() -> Status {
     kernel::runtime::initialize();
 
     let user_stack_top = kernel::memory::user_stack::allocate_user_stack(&mut frame_allocator, 4);
-    let user_entry_point =
-        kernel::memory::user_stack::allocate_user_file_demo(&mut frame_allocator);
+    let user_elf: kernel::elf::LoadedElf = kernel::elf::load_user_smoke_demo(&mut frame_allocator);
+    let user_entry_point = user_elf.entry_point();
     let user_task_id = kernel::task::spawn_user_task(user_entry_point, user_stack_top);
     crate::log_info!("task", "User task spawned. task_id={}", user_task_id);
     crate::log_info!("task", "User demo started.");

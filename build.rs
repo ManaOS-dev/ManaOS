@@ -46,6 +46,7 @@ fn main() {
         &profile,
         "smoke_demo",
     );
+    let smoke_demo_elf = userland_elf_path(&target_dir, &profile, "smoke_demo");
 
     println!(
         "cargo:rustc-env=MANAOS_USER_FILE_DEMO_BIN={}",
@@ -58,6 +59,10 @@ fn main() {
     println!(
         "cargo:rustc-env=MANAOS_USER_SMOKE_DEMO_BIN={}",
         smoke_demo.display()
+    );
+    println!(
+        "cargo:rustc-env=MANAOS_USER_SMOKE_DEMO_ELF={}",
+        smoke_demo_elf.display()
     );
 }
 
@@ -121,4 +126,16 @@ fn extract_binary(
     assert!(status.success(), "failed to extract flat userland binary");
 
     binary_path
+}
+
+fn userland_elf_path(target_dir: &Path, profile: &str, binary_name: &str) -> PathBuf {
+    let profile_dir = if profile == "release" {
+        "release"
+    } else {
+        "debug"
+    };
+    target_dir
+        .join(USERLAND_TARGET)
+        .join(profile_dir)
+        .join(binary_name)
 }

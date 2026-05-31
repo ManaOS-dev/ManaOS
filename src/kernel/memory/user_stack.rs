@@ -1,4 +1,4 @@
-//! User-space bootstrap stack and code mapping.
+//! User-space bootstrap stack and page mapping.
 
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use x86_64::{
@@ -12,24 +12,12 @@ use x86_64::{
 
 const PAGE_SIZE: u64 = 4096;
 const PAGE_SIZE_USIZE: usize = 4096;
-const USER_PROGRAM_BASE: u64 = 0x0000_4000_0000_0000;
+/// Virtual base used by linked user demo executables.
+pub const USER_PROGRAM_BASE: u64 = 0x0000_4000_0000_0000;
 const USER_DATA_BASE: u64 = USER_PROGRAM_BASE + PAGE_SIZE;
 const USER_BAD_POINTER_BASE: u64 = USER_DATA_BASE + PAGE_SIZE;
 const USER_STACK_BASE: u64 = 0x0000_7fff_f000_0000;
-const USER_DEMO_MODE: UserDemoMode = UserDemoMode::Smoke;
 const _: () = assert!(USER_BAD_POINTER_BASE == 0x0000_4000_0000_2000);
-
-#[allow(dead_code)]
-enum UserDemoMode {
-    Normal,
-    BadPointer,
-    Smoke,
-}
-
-const USER_FILE_DEMO_PROGRAM: &[u8] = include_bytes!(env!("MANAOS_USER_FILE_DEMO_BIN"));
-const USER_BAD_POINTER_DEMO_PROGRAM: &[u8] =
-    include_bytes!(env!("MANAOS_USER_BAD_POINTER_DEMO_BIN"));
-const USER_SMOKE_DEMO_PROGRAM: &[u8] = include_bytes!(env!("MANAOS_USER_SMOKE_DEMO_BIN"));
 
 /// Allocate and map a fixed-base user-space stack.
 ///
@@ -67,64 +55,39 @@ pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64)
         .expect("user stack top address overflowed")
 }
 
-/// Allocate and map the built-in user-space file syscall demo program.
+/// Allocate one physical frame and map it at a page-aligned user virtual address.
 ///
-/// Returns the virtual entry point of the mapped program.
+/// Returns the identity-mapped physical address of the allocated frame.
 ///
 /// # Panics
 ///
-/// Panics if a physical frame cannot be allocated or the program page cannot be
-/// mapped.
-pub fn allocate_user_file_demo(frame_allocator: &mut BumpFrameAllocator) -> u64 {
-    let demo_program = selected_user_file_demo_program();
+/// Panics if the address is not page-aligned, the address is outside user
+/// space, a physical frame cannot be allocated, or page-table mapping fails.
+pub fn allocate_and_map_user_page(
+    frame_allocator: &mut BumpFrameAllocator,
+    virtual_address: u64,
+    flags: PageTableFlags,
+) -> u64 {
     assert!(
-        demo_program.len() <= PAGE_SIZE_USIZE,
-        "built-in user program must fit in one page"
+        virtual_address.is_multiple_of(PAGE_SIZE),
+        "user page virtual address must be 4KiB aligned"
     );
-
-    let physical_start = frame_allocator
+    assert!(
+        virtual_address < USER_STACK_BASE,
+        "user page virtual address must stay below the user stack"
+    );
+    let physical_address = frame_allocator
         .allocate_frame()
-        .expect("OOM: failed to allocate built-in user program page");
-    let data_physical_start = frame_allocator
-        .allocate_frame()
-        .expect("OOM: failed to allocate built-in user data page");
-    let program_page = physical_start as *mut u8;
-    let data_page = data_physical_start as *mut u8;
+        .expect("OOM: failed to allocate user page");
+    let page_pointer = physical_address as *mut u8;
 
-    // SAFETY: `physical_start` is a freshly allocated identity-mapped frame.
-    // The writes initialize the whole page before the user mapping is installed.
+    // SAFETY: `physical_address` is a freshly allocated identity-mapped frame.
     unsafe {
-        core::ptr::write_bytes(program_page, 0, PAGE_SIZE_USIZE);
-        core::ptr::copy_nonoverlapping(demo_program.as_ptr(), program_page, demo_program.len());
-        core::ptr::write_bytes(data_page, 0, PAGE_SIZE_USIZE);
-        map_user_range(
-            frame_allocator,
-            USER_PROGRAM_BASE,
-            physical_start,
-            1,
-            PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE,
-        );
-        map_user_range(
-            frame_allocator,
-            USER_DATA_BASE,
-            data_physical_start,
-            1,
-            PageTableFlags::PRESENT
-                | PageTableFlags::WRITABLE
-                | PageTableFlags::USER_ACCESSIBLE
-                | PageTableFlags::NO_EXECUTE,
-        );
+        core::ptr::write_bytes(page_pointer, 0, PAGE_SIZE_USIZE);
+        map_user_range(frame_allocator, virtual_address, physical_address, 1, flags);
     }
 
-    USER_PROGRAM_BASE
-}
-
-fn selected_user_file_demo_program() -> &'static [u8] {
-    match USER_DEMO_MODE {
-        UserDemoMode::Normal => USER_FILE_DEMO_PROGRAM,
-        UserDemoMode::BadPointer => USER_BAD_POINTER_DEMO_PROGRAM,
-        UserDemoMode::Smoke => USER_SMOKE_DEMO_PROGRAM,
-    }
+    physical_address
 }
 
 unsafe fn map_user_range(
@@ -162,7 +125,7 @@ unsafe fn map_user_range(
         unsafe {
             mapper
                 .map_to(page, frame, flags, &mut wrapper)
-                .expect("failed to map user stack page")
+                .expect("failed to map user page")
                 .flush();
         }
     }

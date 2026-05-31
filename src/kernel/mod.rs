@@ -11,6 +11,7 @@
 //! - [`console`] - Kernel command console
 //! - [`diagnostic`] - Kernel diagnostic logging
 //! - [`driver`] - Kernel device drivers
+//! - [`elf`] - User executable loading
 //! - [`filesystem`] - Kernel virtual filesystem and file descriptors
 //! - [`interrupt`] - Kernel-side interrupt event routing
 //! - [`logger`] - Boot phase logging
@@ -26,6 +27,7 @@ pub mod boot;
 pub mod console;
 pub mod diagnostic;
 pub mod driver;
+pub mod elf;
 pub mod filesystem;
 pub mod interrupt;
 pub mod logger;
