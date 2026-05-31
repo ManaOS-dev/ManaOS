@@ -4,4 +4,5 @@
 
 pub mod command;
 pub mod io;
+mod panic;
 pub mod syscall;

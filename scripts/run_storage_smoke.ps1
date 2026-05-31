@@ -39,6 +39,8 @@ $expectedPatterns = @(
     "Pipeline command smoke passed",
     "ManaOS Kernel is alive\.",
     "fstat -> fd=",
+    "getdents64 -> fd=",
+    "user smoke ok",
     "User task exited: code=0"
 )
 

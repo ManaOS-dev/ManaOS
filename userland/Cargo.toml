@@ -23,6 +23,12 @@ path = "src/bin/bad_pointer_demo.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "smoke_demo"
+path = "src/bin/smoke_demo.rs"
+test = false
+bench = false
+
 [profile.dev]
 opt-level = 1
 panic = "abort"

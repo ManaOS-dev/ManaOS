@@ -5,14 +5,18 @@ use std::{
 };
 
 const USERLAND_TARGET: &str = "x86_64-unknown-none";
+const USERLAND_BINARIES: &[&str] = &["file_demo", "bad_pointer_demo", "smoke_demo"];
 
 fn main() {
     println!("cargo:rerun-if-changed=userland/Cargo.toml");
     println!("cargo:rerun-if-changed=userland/linker.ld");
     println!("cargo:rerun-if-changed=userland/src/lib.rs");
-    println!("cargo:rerun-if-changed=userland/src/syscall.rs");
+    println!("cargo:rerun-if-changed=userland/src/panic.rs");
+    println!("cargo:rerun-if-changed=userland/src/syscall/mod.rs");
+    println!("cargo:rerun-if-changed=src/shared/syscall_contract.rs");
     println!("cargo:rerun-if-changed=userland/src/bin/file_demo.rs");
     println!("cargo:rerun-if-changed=userland/src/bin/bad_pointer_demo.rs");
+    println!("cargo:rerun-if-changed=userland/src/bin/smoke_demo.rs");
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let output_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
@@ -35,6 +39,13 @@ fn main() {
         &profile,
         "bad_pointer_demo",
     );
+    let smoke_demo = extract_binary(
+        &manifest_dir,
+        &target_dir,
+        &output_dir,
+        &profile,
+        "smoke_demo",
+    );
 
     println!(
         "cargo:rustc-env=MANAOS_USER_FILE_DEMO_BIN={}",
@@ -43,6 +54,10 @@ fn main() {
     println!(
         "cargo:rustc-env=MANAOS_USER_BAD_POINTER_DEMO_BIN={}",
         bad_pointer_demo.display()
+    );
+    println!(
+        "cargo:rustc-env=MANAOS_USER_SMOKE_DEMO_BIN={}",
+        smoke_demo.display()
     );
 }
 
@@ -60,8 +75,10 @@ fn build_userland(manifest_dir: &Path, target_dir: &Path, profile: &str) {
             USERLAND_TARGET,
             "--target-dir",
         ])
-        .arg(target_dir)
-        .args(["--bin", "file_demo", "--bin", "bad_pointer_demo"]);
+        .arg(target_dir);
+    for binary in USERLAND_BINARIES {
+        command.args(["--bin", binary]);
+    }
 
     if profile == "release" {
         command.arg("--release");

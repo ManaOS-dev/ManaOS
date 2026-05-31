@@ -1,7 +1,6 @@
 #![no_main]
 #![no_std]
 
-use core::panic::PanicInfo;
 use mana_userland::syscall;
 
 const BAD_USER_POINTER: usize = 0x0000_4000_0000_2000;
@@ -28,9 +27,4 @@ extern "C" fn _start() -> ! {
     }
 
     syscall::exit(2);
-}
-
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    syscall::exit(255);
 }

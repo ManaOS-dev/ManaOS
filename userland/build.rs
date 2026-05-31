@@ -3,7 +3,7 @@ use std::{env, path::PathBuf};
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let linker_script = manifest_dir.join("linker.ld");
-    let binaries = ["file_demo", "bad_pointer_demo"];
+    let binaries = ["file_demo", "bad_pointer_demo", "smoke_demo"];
 
     println!("cargo:rerun-if-changed=linker.ld");
     for binary in binaries {
