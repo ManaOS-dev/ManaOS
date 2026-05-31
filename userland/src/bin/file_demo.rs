@@ -1,7 +1,6 @@
 #![no_main]
 #![no_std]
 
-use core::panic::PanicInfo;
 use mana_userland::syscall;
 
 const STDOUT: usize = 1;
@@ -52,9 +51,4 @@ extern "C" fn _start() -> ! {
         bytes_read,
     );
     syscall::exit(0);
-}
-
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    syscall::exit(255);
 }

@@ -16,18 +16,20 @@ const USER_PROGRAM_BASE: u64 = 0x0000_4000_0000_0000;
 const USER_DATA_BASE: u64 = USER_PROGRAM_BASE + PAGE_SIZE;
 const USER_BAD_POINTER_BASE: u64 = USER_DATA_BASE + PAGE_SIZE;
 const USER_STACK_BASE: u64 = 0x0000_7fff_f000_0000;
-const USER_DEMO_MODE: UserDemoMode = UserDemoMode::Normal;
+const USER_DEMO_MODE: UserDemoMode = UserDemoMode::Smoke;
 const _: () = assert!(USER_BAD_POINTER_BASE == 0x0000_4000_0000_2000);
 
 #[allow(dead_code)]
 enum UserDemoMode {
     Normal,
     BadPointer,
+    Smoke,
 }
 
 const USER_FILE_DEMO_PROGRAM: &[u8] = include_bytes!(env!("MANAOS_USER_FILE_DEMO_BIN"));
 const USER_BAD_POINTER_DEMO_PROGRAM: &[u8] =
     include_bytes!(env!("MANAOS_USER_BAD_POINTER_DEMO_BIN"));
+const USER_SMOKE_DEMO_PROGRAM: &[u8] = include_bytes!(env!("MANAOS_USER_SMOKE_DEMO_BIN"));
 
 /// Allocate and map a fixed-base user-space stack.
 ///
@@ -121,6 +123,7 @@ fn selected_user_file_demo_program() -> &'static [u8] {
     match USER_DEMO_MODE {
         UserDemoMode::Normal => USER_FILE_DEMO_PROGRAM,
         UserDemoMode::BadPointer => USER_BAD_POINTER_DEMO_PROGRAM,
+        UserDemoMode::Smoke => USER_SMOKE_DEMO_PROGRAM,
     }
 }
 

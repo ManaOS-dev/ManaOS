@@ -17,79 +17,60 @@
 //! - [`lseek`] - Seek an open file descriptor
 //! - [`exit`] - Terminate the current user task
 
+#[path = "../../../src/shared/syscall_contract.rs"]
+mod contract;
 mod raw;
 
+pub use contract::{UserDirectoryEntry, UserFileStat as FileStat, DIRECTORY_ENTRY_NAME_BYTES};
 pub use raw::{syscall1, syscall2, syscall3, syscall4};
 
 /// Linux-compatible read syscall number.
-pub const SYS_READ: usize = 0;
+pub const SYS_READ: usize = contract::SYS_READ as usize;
 /// Linux-compatible write syscall number.
-pub const SYS_WRITE: usize = 1;
+pub const SYS_WRITE: usize = contract::SYS_WRITE as usize;
 /// Linux-compatible open syscall number.
-pub const SYS_OPEN: usize = 2;
+pub const SYS_OPEN: usize = contract::SYS_OPEN as usize;
 /// Linux-compatible close syscall number.
-pub const SYS_CLOSE: usize = 3;
+pub const SYS_CLOSE: usize = contract::SYS_CLOSE as usize;
 /// Linux-compatible file status syscall number.
-pub const SYS_FSTAT: usize = 5;
+pub const SYS_FSTAT: usize = contract::SYS_FSTAT as usize;
 /// Linux-compatible seek syscall number.
-pub const SYS_LSEEK: usize = 8;
+pub const SYS_LSEEK: usize = contract::SYS_LSEEK as usize;
 /// Linux-compatible get-process-identifier syscall number.
-pub const SYS_GETPID: usize = 39;
+pub const SYS_GETPID: usize = contract::SYS_GETPID as usize;
 /// Linux-compatible exit syscall number.
-pub const SYS_EXIT: usize = 60;
+pub const SYS_EXIT: usize = contract::SYS_EXIT as usize;
+/// Linux-compatible get-directory-entries syscall number.
+pub const SYS_GETDENTS64: usize = contract::SYS_GETDENTS64 as usize;
 /// Linux-compatible exit-group syscall number.
-pub const SYS_EXIT_GROUP: usize = 231;
+pub const SYS_EXIT_GROUP: usize = contract::SYS_EXIT_GROUP as usize;
 /// Linux-compatible open-at syscall number.
-pub const SYS_OPENAT: usize = 257;
+pub const SYS_OPENAT: usize = contract::SYS_OPENAT as usize;
 
 /// File opened for read-only access.
-pub const OPEN_READ_ONLY: usize = 0;
+pub const OPEN_READ_ONLY: usize = contract::OPEN_READ_ONLY as usize;
 /// Linux-compatible current-working-directory marker for `openat`.
-pub const AT_FDCWD: usize = usize::MAX - 99;
+pub const AT_FDCWD: usize = contract::AT_FDCWD as usize;
 /// Seek relative to the start of a file.
-pub const SEEK_SET: usize = 0;
+pub const SEEK_SET: usize = contract::SEEK_SET as usize;
 /// Seek relative to the current file offset.
-pub const SEEK_CUR: usize = 1;
+pub const SEEK_CUR: usize = contract::SEEK_CUR as usize;
 /// Seek relative to the end of a file.
-pub const SEEK_END: usize = 2;
+pub const SEEK_END: usize = contract::SEEK_END as usize;
 /// File status type for a regular file.
-pub const FILE_TYPE_REGULAR: u64 = 1;
+pub const FILE_TYPE_REGULAR: u64 = contract::FILE_TYPE_REGULAR;
 /// File status type for a directory.
-pub const FILE_TYPE_DIRECTORY: u64 = 2;
+pub const FILE_TYPE_DIRECTORY: u64 = contract::FILE_TYPE_DIRECTORY;
 /// File status type for a device.
-pub const FILE_TYPE_DEVICE: u64 = 3;
+pub const FILE_TYPE_DEVICE: u64 = contract::FILE_TYPE_DEVICE;
 /// Linux-compatible not found error as a signed syscall result.
-pub const ERROR_NOT_FOUND: isize = -2;
+pub const ERROR_NOT_FOUND: isize = contract::ERROR_NOT_FOUND;
 /// Linux-compatible bad file descriptor error as a signed syscall result.
-pub const ERROR_BAD_FILE_DESCRIPTOR: isize = -9;
+pub const ERROR_BAD_FILE_DESCRIPTOR: isize = contract::ERROR_BAD_FILE_DESCRIPTOR;
 /// Bad address error return value as a signed syscall result.
-pub const ERROR_BAD_ADDRESS: isize = -14;
+pub const ERROR_BAD_ADDRESS: isize = contract::ERROR_BAD_ADDRESS;
 /// Linux-compatible not implemented error as a signed syscall result.
-pub const ERROR_NOT_IMPLEMENTED: isize = -38;
-
-/// Metadata returned by the ManaOS `fstat` syscall.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct FileStat {
-    /// File node kind encoded as a `FILE_TYPE_*` value.
-    pub file_type: u64,
-    /// File size in bytes.
-    pub size: u64,
-    /// Non-zero when the file descriptor supports writes.
-    pub writable: u64,
-}
-
-impl FileStat {
-    /// Create an empty metadata record for use as an output buffer.
-    #[inline(always)]
-    pub const fn empty() -> Self {
-        Self {
-            file_type: 0,
-            size: 0,
-            writable: 0,
-        }
-    }
-}
+pub const ERROR_NOT_IMPLEMENTED: isize = contract::ERROR_NOT_IMPLEMENTED;
 
 /// Write `buffer` to an open file descriptor.
 #[inline(always)]
@@ -147,6 +128,17 @@ pub fn close(file_descriptor: usize) -> isize {
 #[inline(always)]
 pub fn fstat(file_descriptor: usize, stat: &mut FileStat) -> isize {
     syscall2(SYS_FSTAT, file_descriptor, stat as *mut FileStat as usize)
+}
+
+/// Read directory entries from an open directory descriptor.
+#[inline(always)]
+pub fn getdents64(file_descriptor: usize, entries: &mut [UserDirectoryEntry]) -> isize {
+    syscall3(
+        SYS_GETDENTS64,
+        file_descriptor,
+        entries.as_mut_ptr() as usize,
+        core::mem::size_of_val(entries),
+    )
 }
 
 /// Seek an open file descriptor and return the new offset.

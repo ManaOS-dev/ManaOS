@@ -83,10 +83,10 @@ items have been removed so the file stays useful for deciding the next task.
 
 ### Syscall Surface
 
-- [ ] Define syscall numbers and ABI in a shared generated or copied contract for kernel and userland.
+- [x] Define syscall numbers and ABI in a shared generated or copied contract for kernel and userland.
 - [x] Add `lseek`.
 - [x] Add `stat` or `newfstatat`.
-- [ ] Add `getdents64`.
+- [x] Add `getdents64`.
 - [ ] Add `brk` or another first heap-growth syscall.
 - [ ] Add `mmap` and `munmap` planning.
 - [ ] Add `nanosleep` or a minimal sleep syscall.
@@ -96,13 +96,13 @@ items have been removed so the file stays useful for deciding the next task.
 ### Userland Runtime
 
 - [x] Grow the no-std userland support crate into a small runtime.
-- [ ] Add panic handling that exits with a clear status.
+- [x] Add panic handling that exits with a clear status.
 - [ ] Add basic formatting helpers for userland output.
 - [x] Add file descriptor wrappers in userland.
 - [x] Add argument parsing helpers.
 - [x] Add fixed-buffer userland command modules with single-pipe execution.
 - [x] Add build scripts for multiple userland binaries.
-- [ ] Add a userland smoke-test runner.
+- [x] Add a userland smoke-test runner.
 
 ## Phase 7: Kernel Hardening
 

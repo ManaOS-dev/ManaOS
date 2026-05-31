@@ -20,6 +20,7 @@
 
 mod bytes;
 mod display;
+mod fsinfo;
 mod parser;
 mod range;
 
