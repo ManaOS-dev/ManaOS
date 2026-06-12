@@ -171,6 +171,9 @@ fn initialize_architecture_and_drivers() {
     kernel::task::architecture::register_returnable_user_mode_entry(
         arch::x86_64::enter_user_mode_once,
     );
+    kernel::task::architecture::register_kernel_stack_installer(
+        arch::x86_64::global_descriptor_table::set_privilege_stack_top,
+    );
     kernel::task::user_mode::register_selectors(kernel::task::user_mode::UserModeSelectors {
         data: arch::x86_64::global_descriptor_table::USER_DATA_SELECTOR,
         code: arch::x86_64::global_descriptor_table::USER_CODE_SELECTOR,

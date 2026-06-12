@@ -67,7 +67,16 @@ enum SwitchAction {
         current_context: *mut u64,
         next_context: *const u64,
     },
-    EnterUser(UserTaskContext),
+    EnterUser {
+        context: UserTaskContext,
+        kernel_stack_top: usize,
+    },
+}
+
+/// Prepared one-shot user task entry state.
+pub(super) struct OneShotUserTask {
+    entry_context: UserTaskContext,
+    kernel_stack_top: usize,
 }
 
 /// A schedulable kernel task.
@@ -137,6 +146,10 @@ impl Task {
     fn kernel_stack_byte_len(&self) -> Option<usize> {
         self.kernel_stack.as_ref().map(KernelStack::byte_len)
     }
+
+    fn kernel_stack_top(&self) -> Option<usize> {
+        self.kernel_stack.as_ref().map(KernelStack::top)
+    }
 }
 
 struct Scheduler {
@@ -205,15 +218,20 @@ impl Scheduler {
             .position(|task| task.metadata.get_identifier().as_u64() == task_id)
     }
 
-    fn prepare_one_shot_user_task(&mut self, task_id: u64) -> Option<UserTaskContext> {
+    fn prepare_one_shot_user_task(&mut self, task_id: u64) -> Option<OneShotUserTask> {
         let task_index = self.get_task_index(task_id)?;
-        let entry_context = match &self.tasks[task_index].kind {
+        let (entry_context, kernel_stack_top) = match &self.tasks[task_index].kind {
             TaskKind::User(user_runtime) => {
                 debug_assert!(
                     user_runtime.saved_trap_frame.is_none(),
                     "run-once user tasks must not have saved trap frames before preemption support"
                 );
-                user_runtime.entry_context
+                (
+                    user_runtime.entry_context,
+                    self.tasks[task_index]
+                        .kernel_stack_top()
+                        .expect("user tasks must own a kernel stack before entry"),
+                )
             }
             TaskKind::Kernel => return None,
         };
@@ -227,7 +245,10 @@ impl Scheduler {
             return None;
         }
         self.current_index = task_index;
-        Some(entry_context)
+        Some(OneShotUserTask {
+            entry_context,
+            kernel_stack_top,
+        })
     }
 
     fn finish_current_task(&mut self) -> Option<u64> {
@@ -272,7 +293,12 @@ impl Scheduler {
                 "scheduler cannot resume saved user trap frames before preemption support"
             );
             if self.tasks[next_index].context.is_empty() {
-                return Some(SwitchAction::EnterUser(user_runtime.entry_context));
+                return Some(SwitchAction::EnterUser {
+                    context: user_runtime.entry_context,
+                    kernel_stack_top: self.tasks[next_index]
+                        .kernel_stack_top()
+                        .expect("user tasks must own a kernel stack before entry"),
+                });
             }
         }
 
@@ -398,7 +424,13 @@ pub fn process_timer_tick() {
                 architecture::switch_context(current_context, next_context);
             }
         }
-        SwitchAction::EnterUser(user_context) => {
+        SwitchAction::EnterUser {
+            context: user_context,
+            kernel_stack_top,
+        } => {
+            architecture::install_kernel_stack(
+                u64::try_from(kernel_stack_top).expect("kernel stack top must fit in u64"),
+            );
             // SAFETY: The user task context was created from a mapped entry
             // point and stack, and the assembly stub consumes it immediately.
             unsafe {
