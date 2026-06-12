@@ -10,6 +10,7 @@ static TICKS: AtomicU64 = AtomicU64::new(0);
 static TIMER_TICK_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
 static KEYBOARD_BYTE_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
 static MOUSE_BYTE_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
+static PAGE_FAULT_REPORTER: AtomicUsize = AtomicUsize::new(0);
 
 /// Kernel callbacks invoked by architecture interrupt handlers.
 #[derive(Clone, Copy)]
@@ -22,6 +23,9 @@ pub struct InterruptProcessors {
     pub mouse_byte: fn(u8),
 }
 
+/// Callback invoked before the page fault handler panics.
+pub type PageFaultReporter = fn(fault_address: u64, error_code: u64, instruction_pointer: u64);
+
 /// Return the number of timer ticks since interrupt initialization.
 pub fn get_ticks() -> u64 {
     TICKS.load(Ordering::Relaxed)
@@ -32,6 +36,11 @@ pub fn register_processors(processors: InterruptProcessors) {
     TIMER_TICK_PROCESSOR.store(processors.timer_tick as usize, Ordering::Release);
     KEYBOARD_BYTE_PROCESSOR.store(processors.keyboard_byte as usize, Ordering::Release);
     MOUSE_BYTE_PROCESSOR.store(processors.mouse_byte as usize, Ordering::Release);
+}
+
+/// Register the kernel page-fault diagnostic reporter.
+pub fn register_page_fault_reporter(reporter: PageFaultReporter) {
+    PAGE_FAULT_REPORTER.store(reporter as usize, Ordering::Release);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -79,12 +88,11 @@ extern "x86-interrupt" fn page_fault_handler(
     error_code: PageFaultErrorCode,
 ) {
     use x86_64::registers::control::Cr2;
-    panic!(
-        "[EXCEPT] PAGE FAULT\nAddr: {:?}\nCode: {:?}\n{:#?}",
-        Cr2::read(),
-        error_code,
-        stack_frame
-    );
+    let fault_address = Cr2::read_raw();
+    let error_code_bits = error_code.bits();
+    let instruction_pointer = stack_frame.instruction_pointer.as_u64();
+    call_page_fault_reporter(fault_address, error_code_bits, instruction_pointer);
+    panic!("[EXCEPT] PAGE FAULT\nAddr: {fault_address:#x}\nCode: {error_code:?}\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn general_protection_fault_handler(
@@ -182,4 +190,16 @@ fn call_mouse_byte_processor(byte: u8) {
     // SAFETY: register_processors stores only valid fn(u8) pointers.
     let processor: fn(u8) = unsafe { core::mem::transmute(processor) };
     processor(byte);
+}
+
+fn call_page_fault_reporter(fault_address: u64, error_code: u64, instruction_pointer: u64) {
+    let reporter = PAGE_FAULT_REPORTER.load(Ordering::Acquire);
+    if reporter == 0 {
+        return;
+    }
+
+    // SAFETY: register_page_fault_reporter stores only valid PageFaultReporter
+    // function pointers.
+    let reporter: PageFaultReporter = unsafe { core::mem::transmute(reporter) };
+    reporter(fault_address, error_code, instruction_pointer);
 }

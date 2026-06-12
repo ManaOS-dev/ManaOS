@@ -128,6 +128,9 @@ fn initialize_scheduler() {
 
 fn initialize_architecture_and_drivers() {
     arch::init(kernel::interrupt::syscall_entry as *const () as u64);
+    arch::x86_64::interrupt_descriptor_table::register_page_fault_reporter(
+        kernel::interrupt::process_page_fault,
+    );
     kernel::time::register_timer_ticks_provider(
         arch::x86_64::interrupt_descriptor_table::get_ticks,
     );
