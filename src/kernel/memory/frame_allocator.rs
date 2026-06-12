@@ -1,6 +1,6 @@
 //! A simple bump physical frame allocator.
 
-use super::address::{PhysicalFrameRange, PhysicalFrameStart};
+use super::address::{PhysAddr, PhysicalFrameRange, PhysicalFrameStart};
 
 const MAX_REGIONS: usize = 128;
 const MAX_TRACKED_RANGES: usize = 512;
@@ -128,7 +128,7 @@ impl BumpFrameAllocator {
     }
 
     /// Register a conventional memory region (call before `ExitBootServices`).
-    pub fn add_region(&mut self, start: u64, pages: u64) {
+    pub fn add_region(&mut self, start: PhysAddr, pages: u64) {
         let Some(region) = normalize_region(start, pages) else {
             return;
         };
@@ -138,12 +138,12 @@ impl BumpFrameAllocator {
     }
 
     /// Register a reserved physical memory region.
-    pub fn reserve_region(&mut self, start: u64, pages: u64) {
+    pub fn reserve_region(&mut self, start: PhysAddr, pages: u64) {
         self.reserve_region_for(start, pages, FrameRangeOwner::FirmwareReserved);
     }
 
     /// Register a reserved physical memory region with an explicit owner.
-    pub fn reserve_region_for(&mut self, start: u64, pages: u64, owner: FrameRangeOwner) {
+    pub fn reserve_region_for(&mut self, start: PhysAddr, pages: u64, owner: FrameRangeOwner) {
         let Some(region) = normalize_reserved_region(start, pages) else {
             return;
         };
@@ -569,7 +569,8 @@ impl BumpFrameAllocator {
     }
 }
 
-fn normalize_region(start: u64, pages: u64) -> Option<Region> {
+fn normalize_region(start: PhysAddr, pages: u64) -> Option<Region> {
+    let start = start.as_u64();
     let byte_count = pages.checked_mul(FRAME_SIZE)?;
     let end = start.checked_add(byte_count)?;
     let aligned_start = align_up(start.max(FRAME_SIZE), FRAME_SIZE)?;
@@ -583,7 +584,8 @@ fn normalize_region(start: u64, pages: u64) -> Option<Region> {
     })
 }
 
-fn normalize_reserved_region(start: u64, pages: u64) -> Option<Region> {
+fn normalize_reserved_region(start: PhysAddr, pages: u64) -> Option<Region> {
+    let start = start.as_u64();
     let byte_count = pages.checked_mul(FRAME_SIZE)?;
     let end = start.checked_add(byte_count)?;
     let aligned_start = align_up(start, FRAME_SIZE)?;
@@ -613,7 +615,7 @@ fn region_end(region: Region) -> Option<u64> {
 #[allow(dead_code)]
 pub fn verify_zero_address_skip_for_multi_frame_allocations() -> bool {
     let mut frame_allocator = BumpFrameAllocator::new();
-    frame_allocator.add_region(0, 3);
+    frame_allocator.add_region(PhysAddr::new(0), 3);
 
     frame_allocator
         .allocate_frames(2)
@@ -625,8 +627,8 @@ pub fn verify_zero_address_skip_for_multi_frame_allocations() -> bool {
 #[allow(dead_code)]
 pub fn verify_reserved_used_and_free_range_tracking() -> bool {
     let mut frame_allocator = BumpFrameAllocator::new();
-    frame_allocator.reserve_region(0, 1);
-    frame_allocator.add_region(FRAME_SIZE, 4);
+    frame_allocator.reserve_region(PhysAddr::new(0), 1);
+    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 4);
 
     if frame_allocator.allocate_frames(2).is_none() {
         return false;
@@ -644,7 +646,7 @@ pub fn verify_reserved_used_and_free_range_tracking() -> bool {
 #[allow(dead_code)]
 pub fn verify_duplicate_allocation_rejection() -> bool {
     let mut frame_allocator = BumpFrameAllocator::new();
-    frame_allocator.add_region(0, 4);
+    frame_allocator.add_region(PhysAddr::new(0), 4);
 
     let Some(first_frame) = frame_allocator.allocate_frame() else {
         return false;
@@ -666,8 +668,8 @@ pub fn verify_duplicate_allocation_rejection() -> bool {
 #[allow(dead_code)]
 pub fn verify_contiguous_allocation_boundaries() -> bool {
     let mut frame_allocator = BumpFrameAllocator::new();
-    frame_allocator.add_region(FRAME_SIZE, 1);
-    frame_allocator.add_region(3 * FRAME_SIZE, 2);
+    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 1);
+    frame_allocator.add_region(PhysAddr::new(3 * FRAME_SIZE), 2);
 
     frame_allocator
         .allocate_frames(2)
@@ -679,8 +681,8 @@ pub fn verify_contiguous_allocation_boundaries() -> bool {
 #[allow(dead_code)]
 pub fn verify_reserved_range_exclusion() -> bool {
     let mut frame_allocator = BumpFrameAllocator::new();
-    frame_allocator.add_region(FRAME_SIZE, 4);
-    frame_allocator.reserve_region(2 * FRAME_SIZE, 1);
+    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 4);
+    frame_allocator.reserve_region(PhysAddr::new(2 * FRAME_SIZE), 1);
 
     let Some(first_frame) = frame_allocator.allocate_frame() else {
         return false;
@@ -703,7 +705,7 @@ pub fn verify_reserved_range_exclusion() -> bool {
 #[allow(dead_code)]
 pub fn verify_owner_tracking() -> bool {
     let mut frame_allocator = BumpFrameAllocator::new();
-    frame_allocator.add_region(FRAME_SIZE, 8);
+    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 8);
 
     if frame_allocator
         .allocate_frames_for(2, FrameRangeOwner::KernelHeap)
@@ -732,10 +734,14 @@ pub fn verify_owner_tracking() -> bool {
 #[allow(dead_code)]
 pub fn verify_explicit_owner_coverage() -> bool {
     let mut frame_allocator = BumpFrameAllocator::new();
-    frame_allocator.reserve_region_for(0, 1, FrameRangeOwner::KernelImage);
-    frame_allocator.reserve_region_for(FRAME_SIZE, 1, FrameRangeOwner::Mmio);
-    frame_allocator.reserve_region_for(2 * FRAME_SIZE, 1, FrameRangeOwner::GuardPage);
-    frame_allocator.add_region(3 * FRAME_SIZE, 16);
+    frame_allocator.reserve_region_for(PhysAddr::new(0), 1, FrameRangeOwner::KernelImage);
+    frame_allocator.reserve_region_for(PhysAddr::new(FRAME_SIZE), 1, FrameRangeOwner::Mmio);
+    frame_allocator.reserve_region_for(
+        PhysAddr::new(2 * FRAME_SIZE),
+        1,
+        FrameRangeOwner::GuardPage,
+    );
+    frame_allocator.add_region(PhysAddr::new(3 * FRAME_SIZE), 16);
 
     let allocation_plan = [
         (FrameRangeOwner::PageTable, 1),
