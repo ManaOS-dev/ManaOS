@@ -94,10 +94,11 @@ pub fn allocate_user_stack(
         );
     }
 
-    let stack_top = USER_STACK_BASE
+    let stack_base =
+        UserVirtualAddress::new(USER_STACK_BASE).expect("user stack base must be valid");
+    stack_base
         .checked_add(stack_size)
-        .expect("user stack top address overflowed");
-    UserVirtualAddress::new(stack_top).expect("user stack top must be a valid user address")
+        .expect("user stack top address overflowed")
 }
 
 /// Place `argv` and environment strings on the mapped user stack.
@@ -114,7 +115,8 @@ pub fn prepare_initial_stack(
     arguments: &[&str],
     environment: &[&str],
 ) -> PreparedUserStack {
-    let stack_top = stack_top.as_u64();
+    let stack_top_address = stack_top;
+    let stack_top = stack_top_address.as_u64();
     assert!(
         stack_top > USER_STACK_BASE,
         "user stack top must be above the fixed user stack base"
@@ -137,41 +139,34 @@ pub fn prepare_initial_stack(
         "too many user entry environment entries"
     );
 
-    let mut stack_pointer = stack_top;
-    let mut argument_pointers = [0_u64; MAX_USER_ENTRY_ARGUMENTS];
-    let mut environment_pointers = [0_u64; MAX_USER_ENTRY_ENVIRONMENT];
+    let stack_base =
+        UserVirtualAddress::new(USER_STACK_BASE).expect("user stack base must be valid");
+    let mut stack_cursor = UserStackCursor::new(stack_top_address, stack_base);
+    let mut argument_pointers = [None; MAX_USER_ENTRY_ARGUMENTS];
+    let mut environment_pointers = [None; MAX_USER_ENTRY_ENVIRONMENT];
 
     for index in (0..arguments.len()).rev() {
-        argument_pointers[index] =
-            push_c_string(&mut stack_pointer, USER_STACK_BASE, arguments[index]);
+        argument_pointers[index] = Some(push_c_string(&mut stack_cursor, arguments[index]));
     }
     for index in (0..environment.len()).rev() {
-        environment_pointers[index] =
-            push_c_string(&mut stack_pointer, USER_STACK_BASE, environment[index]);
+        environment_pointers[index] = Some(push_c_string(&mut stack_cursor, environment[index]));
     }
 
-    stack_pointer = align_down(stack_pointer, POINTER_SIZE);
+    stack_cursor.align_down(POINTER_SIZE);
     let environment_values_pointer = push_pointer_array(
-        &mut stack_pointer,
-        USER_STACK_BASE,
+        &mut stack_cursor,
         &environment_pointers[..environment.len()],
     );
-    let argument_values_pointer = push_pointer_array(
-        &mut stack_pointer,
-        USER_STACK_BASE,
-        &argument_pointers[..arguments.len()],
-    );
-    stack_pointer = align_down(stack_pointer, USER_STACK_ALIGNMENT);
+    let argument_values_pointer =
+        push_pointer_array(&mut stack_cursor, &argument_pointers[..arguments.len()]);
+    stack_cursor.align_down(USER_STACK_ALIGNMENT);
 
     PreparedUserStack {
-        stack_pointer: UserVirtualAddress::new(stack_pointer)
-            .expect("initial stack pointer must be a valid user address"),
+        stack_pointer: stack_cursor.into_user_address(),
         argument_count: u64::try_from(arguments.len())
             .expect("argument count must fit in user entry register"),
-        argument_values_pointer: UserVirtualAddress::new(argument_values_pointer)
-            .expect("argv pointer array must be a valid user address"),
-        environment_values_pointer: UserVirtualAddress::new(environment_values_pointer)
-            .expect("environment pointer array must be a valid user address"),
+        argument_values_pointer,
+        environment_values_pointer,
     }
 }
 
@@ -246,19 +241,56 @@ pub fn verify_user_stack_mapping(pages: u64) -> bool {
     )
 }
 
-fn push_c_string(stack_pointer: &mut u64, stack_base: u64, value: &str) -> u64 {
+struct UserStackCursor {
+    pointer: UserVirtualAddress,
+    base: UserVirtualAddress,
+}
+
+impl UserStackCursor {
+    fn new(pointer: UserVirtualAddress, base: UserVirtualAddress) -> Self {
+        assert!(
+            pointer.as_u64() > base.as_u64(),
+            "user stack cursor must start above the stack base"
+        );
+        Self { pointer, base }
+    }
+
+    fn push_bytes(&mut self, byte_count: u64) -> UserVirtualAddress {
+        let next_pointer = self
+            .pointer
+            .checked_sub(byte_count)
+            .expect("user stack cursor underflowed");
+        assert!(
+            next_pointer.as_u64() >= self.base.as_u64(),
+            "user entry data must fit in the mapped user stack"
+        );
+        self.pointer = next_pointer;
+        self.pointer
+    }
+
+    fn align_down(&mut self, alignment: u64) {
+        debug_assert!(alignment.is_power_of_two());
+        let aligned_pointer = self.pointer.as_u64() & !(alignment - 1);
+        let aligned_pointer = UserVirtualAddress::new(aligned_pointer)
+            .expect("aligned user stack pointer must remain valid");
+        assert!(
+            aligned_pointer.as_u64() >= self.base.as_u64(),
+            "aligned user stack pointer must stay inside the mapped user stack"
+        );
+        self.pointer = aligned_pointer;
+    }
+
+    fn into_user_address(self) -> UserVirtualAddress {
+        self.pointer
+    }
+}
+
+fn push_c_string(stack_cursor: &mut UserStackCursor, value: &str) -> UserVirtualAddress {
     let length = u64::try_from(value.len().saturating_add(1))
         .expect("user entry string length must fit in u64");
-    *stack_pointer = stack_pointer
-        .checked_sub(length)
-        .expect("user entry string stack pointer underflowed");
-    assert!(
-        *stack_pointer >= stack_base,
-        "user entry strings must fit in the mapped user stack"
-    );
+    let stack_pointer = stack_cursor.push_bytes(length);
 
-    let destination = usize::try_from(*stack_pointer)
-        .expect("user entry string address must fit in usize") as *mut u8;
+    let destination = stack_pointer.as_usize() as *mut u8;
     // SAFETY: The destination range was carved out of the mapped user stack,
     // and the source string plus trailing NUL fits in that range.
     unsafe {
@@ -266,52 +298,52 @@ fn push_c_string(stack_pointer: &mut u64, stack_base: u64, value: &str) -> u64 {
         destination.add(value.len()).write(0);
     }
 
-    *stack_pointer
+    stack_pointer
 }
 
-fn push_pointer_array(stack_pointer: &mut u64, stack_base: u64, pointers: &[u64]) -> u64 {
+fn push_pointer_array(
+    stack_cursor: &mut UserStackCursor,
+    pointers: &[Option<UserVirtualAddress>],
+) -> UserVirtualAddress {
     let entries = u64::try_from(pointers.len().saturating_add(1))
         .expect("user entry pointer count must fit in u64");
     let byte_count = entries
         .checked_mul(POINTER_SIZE)
         .expect("user entry pointer array size overflowed");
-    *stack_pointer = stack_pointer
-        .checked_sub(byte_count)
-        .expect("user entry pointer array stack pointer underflowed");
-    assert!(
-        *stack_pointer >= stack_base,
-        "user entry pointer arrays must fit in the mapped user stack"
-    );
+    let stack_pointer = stack_cursor.push_bytes(byte_count);
 
     for (index, pointer) in pointers.iter().enumerate() {
         let offset = u64::try_from(index)
             .expect("user entry pointer index must fit in u64")
             .checked_mul(POINTER_SIZE)
             .expect("user entry pointer offset overflowed");
-        write_stack_u64(*stack_pointer + offset, *pointer);
+        let slot_address = stack_pointer
+            .checked_add(offset)
+            .expect("user entry pointer slot address overflowed");
+        let pointer = pointer
+            .expect("user entry pointer array slot must be initialized")
+            .as_u64();
+        write_stack_u64(slot_address, pointer);
     }
     let terminator_offset = u64::try_from(pointers.len())
         .expect("user entry pointer terminator index must fit in u64")
         .checked_mul(POINTER_SIZE)
         .expect("user entry pointer terminator offset overflowed");
-    write_stack_u64(*stack_pointer + terminator_offset, 0);
+    let terminator_address = stack_pointer
+        .checked_add(terminator_offset)
+        .expect("user entry pointer terminator address overflowed");
+    write_stack_u64(terminator_address, 0);
 
-    *stack_pointer
+    stack_pointer
 }
 
-fn write_stack_u64(address: u64, value: u64) {
-    let pointer =
-        usize::try_from(address).expect("user stack pointer must fit in usize") as *mut u64;
+fn write_stack_u64(address: UserVirtualAddress, value: u64) {
+    let pointer = address.as_usize() as *mut u64;
     // SAFETY: The caller provides an address inside a writable mapped user
     // stack slot reserved for one 64-bit pointer value.
     unsafe {
         pointer.write(value);
     }
-}
-
-fn align_down(value: u64, alignment: u64) -> u64 {
-    debug_assert!(alignment.is_power_of_two());
-    value & !(alignment - 1)
 }
 
 unsafe fn map_user_range(
