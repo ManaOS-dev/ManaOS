@@ -128,13 +128,18 @@ The shrink path is therefore staged:
 - [x] Import the boot memory map as `Reserved` and `Free` ranges explicitly.
 - [x] Track explicit owners for page-table, heap, framebuffer backbuffer, DMA,
       user stack, and user ELF allocations.
-- [ ] Mark kernel image, page tables, heap, framebuffer, MMIO, DMA, user stack,
-      user ELF, and guard pages with owners.
+- [x] Add owner classes and boot self-check coverage for kernel image, page
+      tables, heap, framebuffer, MMIO, DMA, user stack, user ELF, and guard
+      pages.
+- [ ] Mark runtime kernel image, MMIO, and future guard-page reservations with
+      their precise owners instead of relying on generic firmware reservations.
 - [ ] Keep `BumpFrameAllocator`-equivalent monotonic behavior until each owner
       has a verified release path.
 - [x] Add boot self-checks for duplicate allocation, contiguous allocation
       boundaries, and reserved-range exclusion.
 - [x] Add boot self-checks for zero-frame reservation and reserved/free/used
       range tracking.
-- [ ] Prove the boot path with `just storage-smoke` after every allocator
-      behavior change.
+- [x] Prove the owner-coverage allocator behavior change with
+      `just storage-smoke`.
+- [ ] Continue proving the boot path with `just storage-smoke` after every
+      future allocator behavior change.

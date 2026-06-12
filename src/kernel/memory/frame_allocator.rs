@@ -37,6 +37,12 @@ pub enum FrameRangeOwner {
     Free,
     /// Frames are unavailable because firmware did not report them as conventional memory.
     FirmwareReserved,
+    /// Frames contain the loaded kernel image and must never be reused.
+    KernelImage,
+    /// Frames are reserved for memory-mapped I/O and must never be allocated as RAM.
+    Mmio,
+    /// Frames are reserved as unmapped guard pages.
+    GuardPage,
     /// Frames are used by an owner that has not been classified yet.
     UnknownUsed,
     /// Frames store page-table structures.
@@ -62,6 +68,35 @@ pub struct FrameAllocatorStatistics {
     pub free: u64,
     /// Number of tracked used 4 KiB frames.
     pub used: u64,
+}
+
+/// Page totals grouped by tracked frame-range owner.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct FrameAllocatorOwnerStatistics {
+    /// Number of frames with no active owner.
+    pub free: u64,
+    /// Number of firmware-reserved frames.
+    pub firmware_reserved: u64,
+    /// Number of frames containing the loaded kernel image.
+    pub kernel_image: u64,
+    /// Number of memory-mapped I/O frames.
+    pub mmio: u64,
+    /// Number of guard-page frames.
+    pub guard_page: u64,
+    /// Number of used frames whose owner has not been classified.
+    pub unknown_used: u64,
+    /// Number of page-table frames.
+    pub page_table: u64,
+    /// Number of kernel heap frames.
+    pub kernel_heap: u64,
+    /// Number of framebuffer backbuffer frames.
+    pub framebuffer_backbuffer: u64,
+    /// Number of AHCI DMA frames.
+    pub ahci_dma: u64,
+    /// Number of user stack frames.
+    pub user_stack: u64,
+    /// Number of user ELF frames.
+    pub user_elf: u64,
 }
 
 /// A linear allocator for 4 KiB physical frames registered from UEFI memory map
@@ -202,6 +237,53 @@ impl BumpFrameAllocator {
                 }
                 FrameRangeState::Used => {
                     statistics.used = statistics.used.saturating_add(range.region.pages);
+                }
+            }
+        }
+        statistics
+    }
+
+    /// Return page totals grouped by tracked frame-range owner.
+    #[allow(dead_code)]
+    pub fn owner_statistics(&self) -> FrameAllocatorOwnerStatistics {
+        let mut statistics = FrameAllocatorOwnerStatistics::default();
+        for index in 0..self.tracked_count {
+            let range = self.tracked_ranges[index];
+            let pages = range.region.pages;
+            match range.owner {
+                FrameRangeOwner::Free => statistics.free = statistics.free.saturating_add(pages),
+                FrameRangeOwner::FirmwareReserved => {
+                    statistics.firmware_reserved =
+                        statistics.firmware_reserved.saturating_add(pages);
+                }
+                FrameRangeOwner::KernelImage => {
+                    statistics.kernel_image = statistics.kernel_image.saturating_add(pages);
+                }
+                FrameRangeOwner::Mmio => statistics.mmio = statistics.mmio.saturating_add(pages),
+                FrameRangeOwner::GuardPage => {
+                    statistics.guard_page = statistics.guard_page.saturating_add(pages);
+                }
+                FrameRangeOwner::UnknownUsed => {
+                    statistics.unknown_used = statistics.unknown_used.saturating_add(pages);
+                }
+                FrameRangeOwner::PageTable => {
+                    statistics.page_table = statistics.page_table.saturating_add(pages);
+                }
+                FrameRangeOwner::KernelHeap => {
+                    statistics.kernel_heap = statistics.kernel_heap.saturating_add(pages);
+                }
+                FrameRangeOwner::FramebufferBackbuffer => {
+                    statistics.framebuffer_backbuffer =
+                        statistics.framebuffer_backbuffer.saturating_add(pages);
+                }
+                FrameRangeOwner::AhciDma => {
+                    statistics.ahci_dma = statistics.ahci_dma.saturating_add(pages);
+                }
+                FrameRangeOwner::UserStack => {
+                    statistics.user_stack = statistics.user_stack.saturating_add(pages);
+                }
+                FrameRangeOwner::UserElf => {
+                    statistics.user_elf = statistics.user_elf.saturating_add(pages);
                 }
             }
         }
@@ -644,4 +726,45 @@ pub fn verify_owner_tracking() -> bool {
                 free: 3,
                 used: 5,
             }
+}
+
+/// Verify that tracked reserved and used ranges can record every current owner class.
+#[allow(dead_code)]
+pub fn verify_explicit_owner_coverage() -> bool {
+    let mut frame_allocator = BumpFrameAllocator::new();
+    frame_allocator.reserve_region_for(0, 1, FrameRangeOwner::KernelImage);
+    frame_allocator.reserve_region_for(FRAME_SIZE, 1, FrameRangeOwner::Mmio);
+    frame_allocator.reserve_region_for(2 * FRAME_SIZE, 1, FrameRangeOwner::GuardPage);
+    frame_allocator.add_region(3 * FRAME_SIZE, 16);
+
+    let allocation_plan = [
+        (FrameRangeOwner::PageTable, 1),
+        (FrameRangeOwner::KernelHeap, 2),
+        (FrameRangeOwner::FramebufferBackbuffer, 2),
+        (FrameRangeOwner::AhciDma, 3),
+        (FrameRangeOwner::UserStack, 2),
+        (FrameRangeOwner::UserElf, 4),
+    ];
+
+    for (owner, pages) in allocation_plan {
+        if frame_allocator.allocate_frames_for(pages, owner).is_none() {
+            return false;
+        }
+    }
+
+    frame_allocator.owner_statistics()
+        == FrameAllocatorOwnerStatistics {
+            free: 2,
+            firmware_reserved: 0,
+            kernel_image: 1,
+            mmio: 1,
+            guard_page: 1,
+            unknown_used: 0,
+            page_table: 1,
+            kernel_heap: 2,
+            framebuffer_backbuffer: 2,
+            ahci_dma: 3,
+            user_stack: 2,
+            user_elf: 4,
+        }
 }

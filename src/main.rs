@@ -230,27 +230,30 @@ fn verify_frame_allocator_rules() {
         kernel::memory::frame_allocator::verify_contiguous_allocation_boundaries();
     let reserved_exclusion_ok = kernel::memory::frame_allocator::verify_reserved_range_exclusion();
     let owner_tracking_ok = kernel::memory::frame_allocator::verify_owner_tracking();
+    let owner_coverage_ok = kernel::memory::frame_allocator::verify_explicit_owner_coverage();
     if zero_skip_ok
         && range_tracking_ok
         && duplicate_allocation_ok
         && contiguous_boundaries_ok
         && reserved_exclusion_ok
         && owner_tracking_ok
+        && owner_coverage_ok
     {
         crate::log_info!(
             "memory",
-            "Frame allocator self-checks passed: zero_skip=true range_tracking=true duplicate_allocation=true contiguous_boundaries=true reserved_exclusion=true owner_tracking=true"
+            "Frame allocator self-checks passed: zero_skip=true range_tracking=true duplicate_allocation=true contiguous_boundaries=true reserved_exclusion=true owner_tracking=true owner_coverage=true"
         );
     } else {
         crate::log_error!(
             "memory",
-            "Frame allocator self-checks failed: zero_skip={} range_tracking={} duplicate_allocation={} contiguous_boundaries={} reserved_exclusion={} owner_tracking={}",
+            "Frame allocator self-checks failed: zero_skip={} range_tracking={} duplicate_allocation={} contiguous_boundaries={} reserved_exclusion={} owner_tracking={} owner_coverage={}",
             zero_skip_ok,
             range_tracking_ok,
             duplicate_allocation_ok,
             contiguous_boundaries_ok,
             reserved_exclusion_ok,
-            owner_tracking_ok
+            owner_tracking_ok,
+            owner_coverage_ok
         );
     }
 }
