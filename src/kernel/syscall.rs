@@ -24,7 +24,7 @@
 //! - [`SYS_GETPID`] - Linux-compatible get-process-identifier syscall number
 //! - [`SYS_OPENAT`] - Linux-compatible open-at syscall number
 
-use crate::kernel::memory::user_pointer;
+use crate::kernel::memory::{address::UserVirtualRange, user_pointer};
 
 #[allow(dead_code)]
 #[path = "../shared/syscall_contract.rs"]
@@ -94,14 +94,8 @@ fn sys_write(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
     let Ok(file_descriptor) = usize::try_from(file_descriptor) else {
         return ERROR_BAD_FILE_DESCRIPTOR;
     };
-    let Ok(user_pointer) = usize::try_from(user_pointer) else {
-        return ERROR_BAD_ADDRESS;
-    };
-    let Ok(length) = usize::try_from(length) else {
-        return ERROR_BAD_ADDRESS;
-    };
 
-    let Some(buffer) = user_pointer::copy_from_user(user_pointer, length) else {
+    let Some(buffer) = copy_input_buffer(user_pointer, length) else {
         return ERROR_BAD_ADDRESS;
     };
 
@@ -120,12 +114,7 @@ fn sys_open(user_path_pointer: u64, flags: u64, mode: u64) -> u64 {
         mode
     );
 
-    let Ok(user_path_pointer) = usize::try_from(user_path_pointer) else {
-        return ERROR_BAD_ADDRESS;
-    };
-
-    let Some(path) = user_pointer::copy_cstr_from_user(user_path_pointer, MAX_USER_STRING_LENGTH)
-    else {
+    let Some(path) = copy_path_argument(user_path_pointer) else {
         return ERROR_BAD_ADDRESS;
     };
 
@@ -163,11 +152,11 @@ fn sys_fstat(file_descriptor: u64, user_stat_pointer: u64) -> u64 {
     let Ok(file_descriptor) = usize::try_from(file_descriptor) else {
         return ERROR_BAD_FILE_DESCRIPTOR;
     };
-    let Ok(user_stat_pointer) = usize::try_from(user_stat_pointer) else {
-        return ERROR_BAD_ADDRESS;
-    };
 
-    let Some(buffer) = user_pointer::copy_to_user(user_stat_pointer, USER_FILE_STAT_BYTES) else {
+    let Some(buffer) = copy_output_buffer(
+        user_stat_pointer,
+        u64::try_from(USER_FILE_STAT_BYTES).expect("user file stat size must fit in u64"),
+    ) else {
         return ERROR_BAD_ADDRESS;
     };
 
@@ -192,14 +181,8 @@ fn sys_read(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
     let Ok(file_descriptor) = usize::try_from(file_descriptor) else {
         return ERROR_BAD_FILE_DESCRIPTOR;
     };
-    let Ok(user_pointer) = usize::try_from(user_pointer) else {
-        return ERROR_BAD_ADDRESS;
-    };
-    let Ok(length) = usize::try_from(length) else {
-        return ERROR_BAD_ADDRESS;
-    };
 
-    let Some(buffer) = user_pointer::copy_to_user(user_pointer, length) else {
+    let Some(buffer) = copy_output_buffer(user_pointer, length) else {
         return ERROR_BAD_ADDRESS;
     };
 
@@ -213,9 +196,7 @@ fn sys_getdents64(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
     let Ok(file_descriptor) = usize::try_from(file_descriptor) else {
         return ERROR_BAD_FILE_DESCRIPTOR;
     };
-    let Ok(user_pointer) = usize::try_from(user_pointer) else {
-        return ERROR_BAD_ADDRESS;
-    };
+    let length_argument = length;
     let Ok(length) = usize::try_from(length) else {
         return ERROR_BAD_ADDRESS;
     };
@@ -223,7 +204,7 @@ fn sys_getdents64(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
         return ERROR_INVALID_ARGUMENT;
     }
 
-    let Some(buffer) = user_pointer::copy_to_user(user_pointer, length) else {
+    let Some(buffer) = copy_output_buffer(user_pointer, length_argument) else {
         return ERROR_BAD_ADDRESS;
     };
 
@@ -291,6 +272,32 @@ fn sys_lseek(file_descriptor: u64, offset: u64, whence: u64) -> u64 {
         }
         Err(error) => filesystem_error_to_linux(error),
     }
+}
+
+fn copy_input_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static [u8]> {
+    if byte_len == 0 {
+        return Some(&[]);
+    }
+
+    let range = UserVirtualRange::from_syscall_arguments(user_pointer, byte_len)?;
+    user_pointer::copy_from_user(range)
+}
+
+fn copy_output_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static mut [u8]> {
+    if byte_len == 0 {
+        return Some(&mut []);
+    }
+
+    let range = UserVirtualRange::from_syscall_arguments(user_pointer, byte_len)?;
+    user_pointer::copy_to_user(range)
+}
+
+fn copy_path_argument(user_pointer: u64) -> Option<alloc::string::String> {
+    let range = UserVirtualRange::from_syscall_arguments(
+        user_pointer,
+        u64::try_from(MAX_USER_STRING_LENGTH).expect("max user path length must fit in u64"),
+    )?;
+    user_pointer::copy_cstr_from_user(range)
 }
 
 fn write_user_file_stat(buffer: &mut [u8], metadata: crate::kernel::filesystem::FileMetadata) {

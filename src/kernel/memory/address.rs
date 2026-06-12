@@ -108,3 +108,44 @@ impl UserVirtualAddress {
         Self::new(address)
     }
 }
+
+/// A non-empty byte range fully contained in user virtual address space.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserVirtualRange {
+    start: UserVirtualAddress,
+    byte_len: usize,
+}
+
+impl UserVirtualRange {
+    /// Create a non-empty user virtual byte range.
+    pub fn new(start: UserVirtualAddress, byte_len: usize) -> Option<Self> {
+        if byte_len == 0 {
+            return None;
+        }
+
+        let byte_len_u64 = u64::try_from(byte_len).ok()?;
+        let end = start.as_u64().checked_add(byte_len_u64)?;
+        if end > USER_SPACE_END {
+            return None;
+        }
+
+        Some(Self { start, byte_len })
+    }
+
+    /// Convert raw syscall ABI pointer and length arguments into a user range.
+    pub fn from_syscall_arguments(user_pointer: u64, byte_len: u64) -> Option<Self> {
+        let byte_len = usize::try_from(byte_len).ok()?;
+        let start = UserVirtualAddress::new(user_pointer)?;
+        Self::new(start, byte_len)
+    }
+
+    /// Return the first address in the range.
+    pub const fn start(self) -> UserVirtualAddress {
+        self.start
+    }
+
+    /// Return the range length in bytes.
+    pub const fn byte_len(self) -> usize {
+        self.byte_len
+    }
+}

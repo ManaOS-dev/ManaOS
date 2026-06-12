@@ -15,6 +15,8 @@ The implementation entry point is `kernel::memory::user_pointer`.
   user-accessible mapping.
 - NUL-terminated path strings must use `copy_cstr_from_user` with a syscall
   specific maximum length.
+- Non-zero syscall pointer arguments are converted from raw `u64` ABI values to
+  `UserVirtualRange` before the copy helpers run.
 - Syscalls return Linux-like `-EFAULT` (`ERROR_BAD_ADDRESS`) when pointer
   validation fails.
 
@@ -40,12 +42,14 @@ The implementation entry point is `kernel::memory::user_pointer`.
 - Kernel/user mapping permission self-checks should prove that kernel-only pages
   are not `USER_ACCESSIBLE` and user pages carry the expected readable/writable
   permissions.
-- The syscall ABI still receives raw `u64` arguments. Typed user pointer wrappers
-  should be introduced after dispatch converts from the raw ABI values.
+- `UserVirtualRange` is shared by readable, writable, and C-string copies. It
+  does not yet encode direction-specific readability or writability in the type
+  system.
 
 ## Future Typed Pointer Split
 
-The `user_pointer` module should eventually expose typed validated ranges:
+The `user_pointer` module should eventually split validated ranges by access
+direction:
 
 - `UserReadableRange`
 - `UserWritableRange`
@@ -53,4 +57,4 @@ The `user_pointer` module should eventually expose typed validated ranges:
 
 Those types should be created only by validation helpers and should carry the
 length used for page-table validation. Syscall handlers should accept those
-types internally instead of passing raw `usize` pointers after validation.
+types internally instead of using a shared `UserVirtualRange`.
