@@ -93,8 +93,34 @@ fn import_boot_memory_map<'a>(
         if descriptor.ty == MemoryType::CONVENTIONAL {
             frame_allocator.add_region(descriptor.phys_start, descriptor.page_count);
         } else {
-            frame_allocator.reserve_region(descriptor.phys_start, descriptor.page_count);
+            frame_allocator.reserve_region_for(
+                descriptor.phys_start,
+                descriptor.page_count,
+                boot_memory_owner_for(descriptor.ty),
+            );
         }
+    }
+
+    let owner_statistics = frame_allocator.owner_statistics();
+    crate::log_info!(
+        "memory",
+        "Boot memory owner import: free={} firmware_reserved={} kernel_image={} mmio={}",
+        owner_statistics.free,
+        owner_statistics.firmware_reserved,
+        owner_statistics.kernel_image,
+        owner_statistics.mmio
+    );
+}
+
+fn boot_memory_owner_for(
+    memory_type: MemoryType,
+) -> kernel::memory::frame_allocator::FrameRangeOwner {
+    match memory_type {
+        MemoryType::LOADER_CODE => kernel::memory::frame_allocator::FrameRangeOwner::KernelImage,
+        MemoryType::MMIO | MemoryType::MMIO_PORT_SPACE => {
+            kernel::memory::frame_allocator::FrameRangeOwner::Mmio
+        }
+        _ => kernel::memory::frame_allocator::FrameRangeOwner::FirmwareReserved,
     }
 }
 

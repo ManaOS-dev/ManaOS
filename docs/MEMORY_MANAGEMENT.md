@@ -131,8 +131,12 @@ The shrink path is therefore staged:
 - [x] Add owner classes and boot self-check coverage for kernel image, page
       tables, heap, framebuffer, MMIO, DMA, user stack, user ELF, and guard
       pages.
-- [ ] Mark runtime kernel image, MMIO, and future guard-page reservations with
-      their precise owners instead of relying on generic firmware reservations.
+- [x] Mark runtime `LOADER_CODE` and UEFI MMIO reservations with precise
+      kernel-image and MMIO owners during boot memory-map import.
+- [ ] Mark future guard-page reservations with precise owners instead of
+      relying on generic firmware reservations.
+- [ ] Split `LOADER_DATA` reservations into narrower owners once boot pool
+      allocations, font assets, and kernel image data have separate ranges.
 - [ ] Keep `BumpFrameAllocator`-equivalent monotonic behavior until each owner
       has a verified release path.
 - [x] Add boot self-checks for duplicate allocation, contiguous allocation
