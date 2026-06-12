@@ -149,7 +149,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Separate kernel task context and user task context responsibilities.
 - [x] Document the context switch ABI.
 - [x] Verify the `UserTaskContext` register layout against `context_switch.s` offsets.
-- [ ] Move user task exit and run-once lifecycle handling into a process lifecycle module.
+- [x] Move user task exit and run-once lifecycle handling into a process lifecycle module.
 - [ ] Normalize user task scheduler state transitions.
 - [ ] Define the task metadata model needed before process identifiers and parent-child relationships.
 
