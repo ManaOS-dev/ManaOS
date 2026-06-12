@@ -114,7 +114,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Design ownership rules for free, used, and reserved physical frame ranges.
 - [ ] Add a kernel virtual memory allocator for dynamic mappings.
 - [ ] Add guard pages for kernel stacks.
-- [ ] Design kernel stack guard page placement and fault diagnostics.
+- [x] Design kernel stack guard page placement and fault diagnostics.
 - [ ] Add per-process page tables.
 - [x] Document the page ownership model required before per-process page tables.
 - [x] Add copy-in/copy-out helpers with consistent user pointer validation.
@@ -142,7 +142,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Checklist the prerequisites for enabling user task preemption.
 - [ ] Add scheduler accounting and task state diagnostics.
 - [ ] Add kernel stack switching per task where needed.
-- [ ] Design the per-task kernel stack switching policy.
+- [x] Design the per-task kernel stack switching policy.
 
 ### Context Switch And Task Refactoring
 
