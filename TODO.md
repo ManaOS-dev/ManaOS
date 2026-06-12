@@ -136,10 +136,10 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Calibrate and use the Local APIC timer.
 - [ ] Replace PIT scheduling ticks after Local APIC timer validation.
 - [ ] Save and restore a full user trap frame on interrupt and syscall paths.
-- [ ] Design the full user trap frame register layout.
-- [ ] Document the interrupt and syscall register sets that must be saved.
+- [x] Design the full user trap frame register layout.
+- [x] Document the interrupt and syscall register sets that must be saved.
 - [ ] Make preemptive scheduling safe for user tasks.
-- [ ] Checklist the prerequisites for enabling user task preemption.
+- [x] Checklist the prerequisites for enabling user task preemption.
 - [ ] Add scheduler accounting and task state diagnostics.
 - [ ] Add kernel stack switching per task where needed.
 - [x] Design the per-task kernel stack switching policy.
