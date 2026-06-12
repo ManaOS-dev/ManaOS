@@ -5,21 +5,49 @@ use core::mem;
 /// A kernel task entry point.
 pub type TaskEntry = extern "C" fn() -> !;
 
+const TASK_CONTEXT_STACK_POINTER_OFFSET: usize = 0;
+const TASK_CONTEXT_REGISTER_15_OFFSET: usize = 8;
+const TASK_CONTEXT_REGISTER_14_OFFSET: usize = 16;
+const TASK_CONTEXT_REGISTER_13_OFFSET: usize = 24;
+const TASK_CONTEXT_REGISTER_12_OFFSET: usize = 32;
+const TASK_CONTEXT_REGISTER_BX_OFFSET: usize = 40;
+const TASK_CONTEXT_BASE_POINTER_OFFSET: usize = 48;
+const TASK_CONTEXT_FLAGS_OFFSET: usize = 56;
+const TASK_CONTEXT_BYTES: usize = 64;
+
+const USER_CONTEXT_INSTRUCTION_POINTER_OFFSET: usize = 0;
+const USER_CONTEXT_CODE_SEGMENT_OFFSET: usize = 8;
+const USER_CONTEXT_CPU_FLAGS_OFFSET: usize = 16;
+const USER_CONTEXT_STACK_POINTER_OFFSET: usize = 24;
+const USER_CONTEXT_STACK_SEGMENT_OFFSET: usize = 32;
+const USER_CONTEXT_ARGUMENT_COUNT_OFFSET: usize = 40;
+const USER_CONTEXT_ARGUMENT_VALUES_POINTER_OFFSET: usize = 48;
+const USER_CONTEXT_ENVIRONMENT_VALUES_POINTER_OFFSET: usize = 56;
+const USER_CONTEXT_BYTES: usize = 64;
+
 /// Saved callee-saved context for an `x86_64` kernel task.
 ///
 /// The field order is part of the assembly contract with
-/// `arch/x86_64/context_switch.s`.
+/// `arch/x86_64/context_switch.s`:
+/// - offset 0: `rsp`
+/// - offset 8: `r15`
+/// - offset 16: `r14`
+/// - offset 24: `r13`
+/// - offset 32: `r12`
+/// - offset 40: `rbx`
+/// - offset 48: `rbp`
+/// - offset 56: `rflags`
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct TaskContext {
-    stack_pointer: u64, // rsp (offset 0)
-    register_15: u64,   // r15 (offset 8)
-    register_14: u64,   // r14 (offset 16)
-    register_13: u64,   // r13 (offset 24)
-    register_12: u64,   // r12 (offset 32)
-    register_bx: u64,   // rbx (offset 40)
-    base_pointer: u64,  // rbp (offset 48)
-    flags: u64,         // rflags (offset 56)
+    stack_pointer: u64,
+    register_15: u64,
+    register_14: u64,
+    register_13: u64,
+    register_12: u64,
+    register_bx: u64,
+    base_pointer: u64,
+    flags: u64,
 }
 
 impl TaskContext {
@@ -82,7 +110,17 @@ impl Default for TaskContext {
     }
 }
 
-const _: () = assert!(mem::size_of::<TaskContext>() == 64);
+const _: () = {
+    assert!(mem::size_of::<TaskContext>() == TASK_CONTEXT_BYTES);
+    assert!(mem::offset_of!(TaskContext, stack_pointer) == TASK_CONTEXT_STACK_POINTER_OFFSET);
+    assert!(mem::offset_of!(TaskContext, register_15) == TASK_CONTEXT_REGISTER_15_OFFSET);
+    assert!(mem::offset_of!(TaskContext, register_14) == TASK_CONTEXT_REGISTER_14_OFFSET);
+    assert!(mem::offset_of!(TaskContext, register_13) == TASK_CONTEXT_REGISTER_13_OFFSET);
+    assert!(mem::offset_of!(TaskContext, register_12) == TASK_CONTEXT_REGISTER_12_OFFSET);
+    assert!(mem::offset_of!(TaskContext, register_bx) == TASK_CONTEXT_REGISTER_BX_OFFSET);
+    assert!(mem::offset_of!(TaskContext, base_pointer) == TASK_CONTEXT_BASE_POINTER_OFFSET);
+    assert!(mem::offset_of!(TaskContext, flags) == TASK_CONTEXT_FLAGS_OFFSET);
+};
 
 /// General-purpose user entry registers supplied at first instruction.
 #[derive(Debug, Clone, Copy)]
@@ -96,6 +134,17 @@ pub struct UserEntryArguments {
 }
 
 /// User-mode transition frame and first-entry argument registers.
+///
+/// The field order is part of the `enter_user_mode*` assembly contract in
+/// `arch/x86_64/context_switch.s`:
+/// - offset 0: instruction pointer pushed into the `iretq` frame
+/// - offset 8: code segment pushed into the `iretq` frame
+/// - offset 16: CPU flags pushed into the `iretq` frame
+/// - offset 24: stack pointer pushed into the `iretq` frame
+/// - offset 32: stack segment pushed into the `iretq` frame
+/// - offset 40: `argc` loaded into `rdi`
+/// - offset 48: `argv` loaded into `rsi`
+/// - offset 56: `envp` loaded into `rdx`
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct UserTaskContext {
@@ -154,4 +203,23 @@ impl UserTaskContext {
     }
 }
 
-const _: () = assert!(mem::size_of::<UserTaskContext>() == 64);
+const _: () = {
+    assert!(mem::size_of::<UserTaskContext>() == USER_CONTEXT_BYTES);
+    assert!(
+        mem::offset_of!(UserTaskContext, instruction_pointer)
+            == USER_CONTEXT_INSTRUCTION_POINTER_OFFSET
+    );
+    assert!(mem::offset_of!(UserTaskContext, code_segment) == USER_CONTEXT_CODE_SEGMENT_OFFSET);
+    assert!(mem::offset_of!(UserTaskContext, cpu_flags) == USER_CONTEXT_CPU_FLAGS_OFFSET);
+    assert!(mem::offset_of!(UserTaskContext, stack_pointer) == USER_CONTEXT_STACK_POINTER_OFFSET);
+    assert!(mem::offset_of!(UserTaskContext, stack_segment) == USER_CONTEXT_STACK_SEGMENT_OFFSET);
+    assert!(mem::offset_of!(UserTaskContext, argument_count) == USER_CONTEXT_ARGUMENT_COUNT_OFFSET);
+    assert!(
+        mem::offset_of!(UserTaskContext, argument_values_pointer)
+            == USER_CONTEXT_ARGUMENT_VALUES_POINTER_OFFSET
+    );
+    assert!(
+        mem::offset_of!(UserTaskContext, environment_values_pointer)
+            == USER_CONTEXT_ENVIRONMENT_VALUES_POINTER_OFFSET
+    );
+};
