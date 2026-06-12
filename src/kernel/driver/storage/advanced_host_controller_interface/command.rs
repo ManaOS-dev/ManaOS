@@ -71,7 +71,7 @@ pub(super) fn issue_dma_transfer(
         direction.label(),
         logical_block_address,
         sector_count,
-        buffers.data
+        buffers.data.as_u64()
     );
     completion::wait_until_not_busy(port, port_index)?;
 
@@ -130,8 +130,8 @@ fn prepare_dma_command(
     sector_count: u16,
     direction: AhciTransferDirection,
 ) {
-    let command_headers = buffers.command_list as *mut HbaCommandHeader;
-    let command_table = buffers.command_table as *mut HbaCommandTable;
+    let command_headers = buffers.command_list.as_usize() as *mut HbaCommandHeader;
+    let command_table = buffers.command_table.as_usize() as *mut HbaCommandTable;
     let (command_table_low, command_table_high) = dma::split_address(buffers.command_table);
     let (data_low, data_high) = dma::split_address(buffers.data);
     let transfer_bytes = usize::from(sector_count)
@@ -190,7 +190,7 @@ fn zero_data_buffer(buffers: AhciDmaBuffers, transfer_bytes: usize) {
     // SAFETY: `buffers.data` is the serialized AHCI-owned DMA data buffer, and
     // `transfer_bytes` has already been validated to fit in that buffer.
     unsafe {
-        core::ptr::write_bytes(buffers.data as *mut u8, 0, transfer_bytes);
+        core::ptr::write_bytes(buffers.data.as_usize() as *mut u8, 0, transfer_bytes);
     }
 }
 

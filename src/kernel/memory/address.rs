@@ -36,6 +36,31 @@ impl PhysAddr {
     }
 }
 
+/// A physical byte address owned by a DMA-capable device descriptor.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DmaPhysicalAddress(PhysAddr);
+
+impl DmaPhysicalAddress {
+    /// Create a DMA physical address from an owned physical address.
+    pub const fn new(address: PhysAddr) -> Self {
+        Self(address)
+    }
+
+    /// Return the raw DMA physical address as a `u64`.
+    pub const fn as_u64(self) -> u64 {
+        self.0.as_u64()
+    }
+
+    /// Return the raw DMA physical address as a `usize`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the DMA physical address does not fit in `usize`.
+    pub fn as_usize(self) -> usize {
+        self.0.as_usize()
+    }
+}
+
 /// A raw virtual byte address kept distinct from physical addresses.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct VirtAddr(u64);
@@ -82,6 +107,11 @@ impl PhysicalFrameStart {
     /// Return this frame start as a physical byte address.
     pub const fn as_address(self) -> PhysAddr {
         PhysAddr::new(self.0)
+    }
+
+    /// Return this frame start as a DMA physical byte address.
+    pub const fn as_dma_address(self) -> DmaPhysicalAddress {
+        DmaPhysicalAddress::new(self.as_address())
     }
 
     /// Return the raw physical address as a `usize`.
