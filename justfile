@@ -45,6 +45,12 @@ lint:
     cargo clippy --target x86_64-unknown-uefi -- -D warnings
     @echo "[lint] Running userland clippy..."
     cargo clippy --manifest-path userland/Cargo.toml --target x86_64-unknown-none --target-dir target/userland --lib --bin file_demo --bin bad_pointer_demo --bin smoke_demo -- -D warnings
+    just architecture-boundaries
+
+# Check architecture-to-kernel dependency boundaries
+architecture-boundaries:
+    @echo "[lint] Checking architecture boundaries..."
+    {{ if os == "windows" { "powershell -ExecutionPolicy Bypass -File scripts/check_architecture_boundaries.ps1" } else { "pwsh -File scripts/check_architecture_boundaries.ps1" } }}
 
 # Regenerate bundled third-party license metadata
 licenses:

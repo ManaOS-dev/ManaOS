@@ -327,6 +327,63 @@ fn read_kernel_file(path: &str) -> Option<Vec<u8>> {
     Some(contents)
 }
 
+fn run_user_smoke_demo(frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator) {
+    let user_stack_pages = 4;
+    let user_stack_top =
+        kernel::memory::user_stack::allocate_user_stack(frame_allocator, user_stack_pages);
+    assert!(
+        kernel::memory::user_stack::verify_user_stack_mapping(user_stack_pages),
+        "user stack mapping and guard page smoke must pass"
+    );
+    crate::log_info!(
+        "memory",
+        "User stack mapping verified: pages={} guard_unmapped=true",
+        user_stack_pages
+    );
+
+    let user_elf_path = "/disk/bin/smoke_demo";
+    let user_elf_bytes =
+        read_kernel_file(user_elf_path).expect("user smoke ELF must be readable from /disk/bin");
+    crate::log_info!(
+        "elf",
+        "Loading user ELF from filesystem: path={} bytes={}",
+        user_elf_path,
+        user_elf_bytes.len()
+    );
+    let user_elf: kernel::elf::LoadedElf =
+        kernel::elf::load_user_program(frame_allocator, &user_elf_bytes, user_elf_path);
+    let user_entry_point = user_elf.entry_point();
+    let user_entry_arguments = [user_elf_path, "--storage-smoke"];
+    let user_entry_environment = ["MANAOS_BOOT=storage-smoke"];
+    let prepared_user_stack = kernel::memory::user_stack::prepare_initial_stack(
+        user_stack_top,
+        &user_entry_arguments,
+        &user_entry_environment,
+    );
+    crate::log_info!(
+        "task",
+        "User entry arguments prepared: argc={} argv={:#x} envp={:#x}",
+        prepared_user_stack.argument_count(),
+        prepared_user_stack.argument_values_pointer(),
+        prepared_user_stack.environment_values_pointer()
+    );
+
+    let user_task_id = kernel::task::spawn_user_task(
+        user_entry_point,
+        prepared_user_stack.stack_pointer(),
+        kernel::task::UserEntryArguments {
+            argument_count: prepared_user_stack.argument_count(),
+            argument_values_pointer: prepared_user_stack.argument_values_pointer(),
+            environment_values_pointer: prepared_user_stack.environment_values_pointer(),
+        },
+    );
+    crate::log_info!("task", "User task spawned. task_id={}", user_task_id);
+    crate::log_info!("task", "User demo started.");
+    if let Some(exit_code) = kernel::task::run_user_task_once(user_task_id) {
+        crate::log_info!("task", "UI resumed after user exit: code={}", exit_code);
+    }
+}
+
 #[entry]
 fn main() -> Status {
     // ────────────────────────────────────────────────
@@ -405,36 +462,7 @@ fn main() -> Status {
 
     kernel::runtime::initialize();
 
-    let user_stack_pages = 4;
-    let user_stack_top =
-        kernel::memory::user_stack::allocate_user_stack(&mut frame_allocator, user_stack_pages);
-    assert!(
-        kernel::memory::user_stack::verify_user_stack_mapping(user_stack_pages),
-        "user stack mapping and guard page smoke must pass"
-    );
-    crate::log_info!(
-        "memory",
-        "User stack mapping verified: pages={} guard_unmapped=true",
-        user_stack_pages
-    );
-    let user_elf_path = "/disk/bin/smoke_demo";
-    let user_elf_bytes =
-        read_kernel_file(user_elf_path).expect("user smoke ELF must be readable from /disk/bin");
-    crate::log_info!(
-        "elf",
-        "Loading user ELF from filesystem: path={} bytes={}",
-        user_elf_path,
-        user_elf_bytes.len()
-    );
-    let user_elf: kernel::elf::LoadedElf =
-        kernel::elf::load_user_program(&mut frame_allocator, &user_elf_bytes, user_elf_path);
-    let user_entry_point = user_elf.entry_point();
-    let user_task_id = kernel::task::spawn_user_task(user_entry_point, user_stack_top);
-    crate::log_info!("task", "User task spawned. task_id={}", user_task_id);
-    crate::log_info!("task", "User demo started.");
-    if let Some(exit_code) = kernel::task::run_user_task_once(user_task_id) {
-        crate::log_info!("task", "UI resumed after user exit: code={}", exit_code);
-    }
+    run_user_smoke_demo(&mut frame_allocator);
 
     // Main Loop
     loop {

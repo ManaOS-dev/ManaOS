@@ -44,6 +44,9 @@ enter_user_mode:
     push rax
     mov rax, qword ptr [rcx + 0]
     push rax
+    mov rdi, qword ptr [rcx + 40]
+    mov rsi, qword ptr [rcx + 48]
+    mov rdx, qword ptr [rcx + 56]
     iretq
 
 .def enter_user_mode_returnable
@@ -80,6 +83,9 @@ enter_user_mode_returnable:
     push rax
     mov rax, qword ptr [rcx + 0]
     push rax
+    mov rdi, qword ptr [rcx + 40]
+    mov rsi, qword ptr [rcx + 48]
+    mov rdx, qword ptr [rcx + 56]
     iretq
 
 enter_user_mode_returnable_exit:

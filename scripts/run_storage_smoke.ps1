@@ -47,8 +47,11 @@ $expectedPatterns = @(
     "ELF segment mapped: .*perms=R--",
     "ELF segment mapped: .*perms=RW-",
     "User stack mapping verified: pages=4 guard_unmapped=true",
+    "User entry arguments prepared: argc=2",
     "fstat -> fd=",
     "getdents64 -> fd=",
+    "user entry arguments ok",
+    "user shell ok",
     "user bss ok",
     "user smoke ok",
     "User task exited: code=0"

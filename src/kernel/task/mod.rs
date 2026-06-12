@@ -23,6 +23,7 @@ pub mod user_mode;
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
+pub use context::UserEntryArguments;
 use context::{TaskContext, TaskEntry, UserTaskContext};
 use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use spin::Mutex;
@@ -137,11 +138,17 @@ impl Scheduler {
         task_id
     }
 
-    fn spawn_user_task(&mut self, entry_point: u64, user_stack_top: u64) -> u64 {
+    fn spawn_user_task(
+        &mut self,
+        entry_point: u64,
+        user_stack_top: u64,
+        entry_arguments: UserEntryArguments,
+    ) -> u64 {
         let task_id = self.next_task_id;
         self.next_task_id += 1;
         // SAFETY: The caller provides a mapped user entry point and user stack.
-        let user_context = unsafe { UserTaskContext::new(entry_point, user_stack_top) };
+        let user_context =
+            unsafe { UserTaskContext::new(entry_point, user_stack_top, entry_arguments) };
         self.tasks.push(Task::user(task_id, user_context));
         task_id
     }
@@ -258,12 +265,16 @@ pub fn spawn(entry: TaskEntry) -> u64 {
 /// # Panics
 ///
 /// Panics if the scheduler has not been initialized.
-pub fn spawn_user_task(entry_point: u64, user_stack_top: u64) -> u64 {
+pub fn spawn_user_task(
+    entry_point: u64,
+    user_stack_top: u64,
+    entry_arguments: UserEntryArguments,
+) -> u64 {
     let mut scheduler = SCHEDULER.lock();
     scheduler
         .as_mut()
         .expect("scheduler must be initialized before spawning user tasks")
-        .spawn_user_task(entry_point, user_stack_top)
+        .spawn_user_task(entry_point, user_stack_top, entry_arguments)
 }
 
 /// Run one user-space task until it exits through `SYS_EXIT`.
