@@ -84,6 +84,7 @@ impl BumpFrameAllocator {
         };
 
         self.insert_tracked_range(region, FrameRangeState::Reserved);
+        self.remove_reserved_region_from_free_ranges(region);
     }
 
     /// Allocate a single 4KiB frame.
@@ -118,7 +119,8 @@ impl BumpFrameAllocator {
                     start: candidate_address,
                     pages: n,
                 }) {
-                    return None;
+                    self.offset = self.offset.saturating_add(1);
+                    continue;
                 }
                 self.offset += n;
                 let start = PhysicalFrameStart::new(candidate_address)
@@ -240,6 +242,72 @@ impl BumpFrameAllocator {
         }
         self.tracked_ranges[index] = range;
         self.tracked_count += 1;
+    }
+
+    fn remove_tracked_range_at(&mut self, index: usize) {
+        assert!(
+            index < self.tracked_count,
+            "frame allocator range tracking remove index out of bounds"
+        );
+
+        for move_index in index..self.tracked_count - 1 {
+            self.tracked_ranges[move_index] = self.tracked_ranges[move_index + 1];
+        }
+        self.tracked_count -= 1;
+    }
+
+    fn remove_reserved_region_from_free_ranges(&mut self, reserved_region: Region) {
+        let Some(reserved_end) = region_end(reserved_region) else {
+            return;
+        };
+
+        let mut index = 0;
+        while index < self.tracked_count {
+            let tracked = self.tracked_ranges[index];
+            if tracked.state != FrameRangeState::Free {
+                index += 1;
+                continue;
+            }
+
+            let Some(tracked_end) = region_end(tracked.region) else {
+                index += 1;
+                continue;
+            };
+            let overlap_start = tracked.region.start.max(reserved_region.start);
+            let overlap_end = tracked_end.min(reserved_end);
+            if overlap_start >= overlap_end {
+                index += 1;
+                continue;
+            }
+
+            let before_pages = (overlap_start - tracked.region.start) / FRAME_SIZE;
+            let after_pages = (tracked_end - overlap_end) / FRAME_SIZE;
+            if before_pages > 0 && after_pages > 0 {
+                self.tracked_ranges[index].region.pages = before_pages;
+                self.insert_tracked_range_at(
+                    index + 1,
+                    TrackedRange {
+                        region: Region {
+                            start: overlap_end,
+                            pages: after_pages,
+                        },
+                        state: FrameRangeState::Free,
+                    },
+                );
+                index += 2;
+            } else if before_pages > 0 {
+                self.tracked_ranges[index].region.pages = before_pages;
+                index += 1;
+            } else if after_pages > 0 {
+                self.tracked_ranges[index].region.start = overlap_end;
+                self.tracked_ranges[index].region.pages = after_pages;
+                index += 1;
+            } else {
+                self.remove_tracked_range_at(index);
+            }
+        }
+
+        self.merge_adjacent_tracked_ranges();
     }
 
     fn mark_range_used(&mut self, used_region: Region) -> bool {
@@ -407,4 +475,63 @@ pub fn verify_reserved_used_and_free_range_tracking() -> bool {
             free: 2,
             used: 2,
         }
+}
+
+/// Verify that allocations never return the same physical frame twice.
+#[allow(dead_code)]
+pub fn verify_duplicate_allocation_rejection() -> bool {
+    let mut frame_allocator = BumpFrameAllocator::new();
+    frame_allocator.add_region(0, 4);
+
+    let Some(first_frame) = frame_allocator.allocate_frame() else {
+        return false;
+    };
+    let Some(second_frame) = frame_allocator.allocate_frame() else {
+        return false;
+    };
+
+    first_frame != second_frame
+        && frame_allocator.statistics()
+            == FrameAllocatorStatistics {
+                reserved: 0,
+                free: 1,
+                used: 2,
+            }
+}
+
+/// Verify that contiguous allocations do not cross registered region gaps.
+#[allow(dead_code)]
+pub fn verify_contiguous_allocation_boundaries() -> bool {
+    let mut frame_allocator = BumpFrameAllocator::new();
+    frame_allocator.add_region(FRAME_SIZE, 1);
+    frame_allocator.add_region(3 * FRAME_SIZE, 2);
+
+    frame_allocator
+        .allocate_frames(2)
+        .map(|range| range.start().as_u64())
+        == Some(3 * FRAME_SIZE)
+}
+
+/// Verify that reserved ranges inside a free region are not allocated.
+#[allow(dead_code)]
+pub fn verify_reserved_range_exclusion() -> bool {
+    let mut frame_allocator = BumpFrameAllocator::new();
+    frame_allocator.add_region(FRAME_SIZE, 4);
+    frame_allocator.reserve_region(2 * FRAME_SIZE, 1);
+
+    let Some(first_frame) = frame_allocator.allocate_frame() else {
+        return false;
+    };
+    let Some(second_frame) = frame_allocator.allocate_frame() else {
+        return false;
+    };
+
+    first_frame.as_u64() == FRAME_SIZE
+        && second_frame.as_u64() == 3 * FRAME_SIZE
+        && frame_allocator.statistics()
+            == FrameAllocatorStatistics {
+                reserved: 1,
+                free: 1,
+                used: 2,
+            }
 }

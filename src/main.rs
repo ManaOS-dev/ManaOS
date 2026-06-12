@@ -216,17 +216,30 @@ fn verify_frame_allocator_rules() {
         kernel::memory::frame_allocator::verify_zero_address_skip_for_multi_frame_allocations();
     let range_tracking_ok =
         kernel::memory::frame_allocator::verify_reserved_used_and_free_range_tracking();
-    if zero_skip_ok && range_tracking_ok {
+    let duplicate_allocation_ok =
+        kernel::memory::frame_allocator::verify_duplicate_allocation_rejection();
+    let contiguous_boundaries_ok =
+        kernel::memory::frame_allocator::verify_contiguous_allocation_boundaries();
+    let reserved_exclusion_ok = kernel::memory::frame_allocator::verify_reserved_range_exclusion();
+    if zero_skip_ok
+        && range_tracking_ok
+        && duplicate_allocation_ok
+        && contiguous_boundaries_ok
+        && reserved_exclusion_ok
+    {
         crate::log_info!(
             "memory",
-            "Frame allocator self-checks passed: zero_skip=true range_tracking=true"
+            "Frame allocator self-checks passed: zero_skip=true range_tracking=true duplicate_allocation=true contiguous_boundaries=true reserved_exclusion=true"
         );
     } else {
         crate::log_error!(
             "memory",
-            "Frame allocator self-checks failed: zero_skip={} range_tracking={}",
+            "Frame allocator self-checks failed: zero_skip={} range_tracking={} duplicate_allocation={} contiguous_boundaries={} reserved_exclusion={}",
             zero_skip_ok,
-            range_tracking_ok
+            range_tracking_ok,
+            duplicate_allocation_ok,
+            contiguous_boundaries_ok,
+            reserved_exclusion_ok
         );
     }
 }
