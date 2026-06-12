@@ -2,6 +2,8 @@
 
 use core::mem;
 
+use crate::kernel::memory::address::UserVirtualAddress;
+
 /// A kernel task entry point.
 pub type TaskEntry = extern "C" fn() -> !;
 
@@ -128,9 +130,9 @@ pub struct UserEntryArguments {
     /// Number of entries in the `argv` pointer array.
     pub argument_count: u64,
     /// User virtual address of the null-terminated `argv` pointer array.
-    pub argument_values_pointer: u64,
+    pub argument_values_pointer: UserVirtualAddress,
     /// User virtual address of the null-terminated environment pointer array.
-    pub environment_values_pointer: u64,
+    pub environment_values_pointer: UserVirtualAddress,
 }
 
 /// User-mode transition frame and first-entry argument registers.
@@ -175,8 +177,8 @@ impl UserTaskContext {
     /// page. `entry_point` must be a valid mapped user-space instruction
     /// address.
     pub unsafe fn new(
-        entry_point: u64,
-        stack_top: u64,
+        entry_point: UserVirtualAddress,
+        stack_top: UserVirtualAddress,
         entry_arguments: UserEntryArguments,
     ) -> Self {
         let selectors = crate::kernel::task::user_mode::get_selectors();
@@ -186,14 +188,14 @@ impl UserTaskContext {
         );
 
         Self {
-            instruction_pointer: entry_point,
+            instruction_pointer: entry_point.as_u64(),
             code_segment: u64::from(selectors.code),
             cpu_flags: 0x202,
-            stack_pointer: stack_top,
+            stack_pointer: stack_top.as_u64(),
             stack_segment: u64::from(selectors.data),
             argument_count: entry_arguments.argument_count,
-            argument_values_pointer: entry_arguments.argument_values_pointer,
-            environment_values_pointer: entry_arguments.environment_values_pointer,
+            argument_values_pointer: entry_arguments.argument_values_pointer.as_u64(),
+            environment_values_pointer: entry_arguments.environment_values_pointer.as_u64(),
         }
     }
 

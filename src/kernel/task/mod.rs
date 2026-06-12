@@ -24,6 +24,7 @@ pub mod process_lifecycle;
 mod state;
 pub mod user_mode;
 
+use crate::kernel::memory::address::UserVirtualAddress;
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -143,8 +144,8 @@ impl Scheduler {
 
     fn spawn_user_task(
         &mut self,
-        entry_point: u64,
-        user_stack_top: u64,
+        entry_point: UserVirtualAddress,
+        user_stack_top: UserVirtualAddress,
         entry_arguments: UserEntryArguments,
     ) -> u64 {
         let task_identifier = self.next_task_identifier.allocate();
@@ -287,8 +288,8 @@ pub fn spawn(entry: TaskEntry) -> u64 {
 ///
 /// Panics if the scheduler has not been initialized.
 pub fn spawn_user_task(
-    entry_point: u64,
-    user_stack_top: u64,
+    entry_point: UserVirtualAddress,
+    user_stack_top: UserVirtualAddress,
     entry_arguments: UserEntryArguments,
 ) -> u64 {
     let mut scheduler = SCHEDULER.lock();

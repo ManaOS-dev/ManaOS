@@ -1,6 +1,8 @@
 //! User-space bootstrap stack and page mapping.
 
-use crate::kernel::memory::{frame_allocator::BumpFrameAllocator, paging};
+use crate::kernel::memory::{
+    address::UserVirtualAddress, frame_allocator::BumpFrameAllocator, paging,
+};
 use x86_64::{
     registers::control::Cr3,
     structures::paging::{
@@ -22,19 +24,21 @@ const USER_DATA_BASE: u64 = USER_PROGRAM_BASE + PAGE_SIZE;
 const USER_BAD_POINTER_BASE: u64 = USER_DATA_BASE + PAGE_SIZE;
 const USER_STACK_BASE: u64 = 0x0000_7fff_f000_0000;
 const _: () = assert!(USER_BAD_POINTER_BASE == 0x0000_4000_0000_2000);
+const _: () = assert!(UserVirtualAddress::new(USER_PROGRAM_BASE).is_some());
+const _: () = assert!(UserVirtualAddress::new(USER_STACK_BASE).is_some());
 
 /// Prepared user stack metadata for first user-mode entry.
 #[derive(Debug, Clone, Copy)]
 pub struct PreparedUserStack {
-    stack_pointer: u64,
+    stack_pointer: UserVirtualAddress,
     argument_count: u64,
-    argument_values_pointer: u64,
-    environment_values_pointer: u64,
+    argument_values_pointer: UserVirtualAddress,
+    environment_values_pointer: UserVirtualAddress,
 }
 
 impl PreparedUserStack {
     /// Return the initial user stack pointer.
-    pub fn stack_pointer(&self) -> u64 {
+    pub fn stack_pointer(&self) -> UserVirtualAddress {
         self.stack_pointer
     }
 
@@ -44,12 +48,12 @@ impl PreparedUserStack {
     }
 
     /// Return the user virtual address of the `argv` pointer array.
-    pub fn argument_values_pointer(&self) -> u64 {
+    pub fn argument_values_pointer(&self) -> UserVirtualAddress {
         self.argument_values_pointer
     }
 
     /// Return the user virtual address of the environment pointer array.
-    pub fn environment_values_pointer(&self) -> u64 {
+    pub fn environment_values_pointer(&self) -> UserVirtualAddress {
         self.environment_values_pointer
     }
 }
@@ -61,7 +65,10 @@ impl PreparedUserStack {
 /// # Panics
 ///
 /// Panics if physical frames cannot be allocated or page-table mapping fails.
-pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64) -> u64 {
+pub fn allocate_user_stack(
+    frame_allocator: &mut BumpFrameAllocator,
+    pages: u64,
+) -> UserVirtualAddress {
     assert!(pages > 0, "user stack must contain at least one page");
     let physical_range = frame_allocator
         .allocate_frames(pages)
@@ -86,9 +93,10 @@ pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64)
         );
     }
 
-    USER_STACK_BASE
+    let stack_top = USER_STACK_BASE
         .checked_add(stack_size)
-        .expect("user stack top address overflowed")
+        .expect("user stack top address overflowed");
+    UserVirtualAddress::new(stack_top).expect("user stack top must be a valid user address")
 }
 
 /// Place `argv` and environment strings on the mapped user stack.
@@ -101,10 +109,11 @@ pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64)
 /// Panics if the stack is invalid, the fixed argument limits are exceeded, or
 /// the argument block does not fit in the mapped stack range.
 pub fn prepare_initial_stack(
-    stack_top: u64,
+    stack_top: UserVirtualAddress,
     arguments: &[&str],
     environment: &[&str],
 ) -> PreparedUserStack {
+    let stack_top = stack_top.as_u64();
     assert!(
         stack_top > USER_STACK_BASE,
         "user stack top must be above the fixed user stack base"
@@ -154,11 +163,14 @@ pub fn prepare_initial_stack(
     stack_pointer = align_down(stack_pointer, USER_STACK_ALIGNMENT);
 
     PreparedUserStack {
-        stack_pointer,
+        stack_pointer: UserVirtualAddress::new(stack_pointer)
+            .expect("initial stack pointer must be a valid user address"),
         argument_count: u64::try_from(arguments.len())
             .expect("argument count must fit in user entry register"),
-        argument_values_pointer,
-        environment_values_pointer,
+        argument_values_pointer: UserVirtualAddress::new(argument_values_pointer)
+            .expect("argv pointer array must be a valid user address"),
+        environment_values_pointer: UserVirtualAddress::new(environment_values_pointer)
+            .expect("environment pointer array must be a valid user address"),
     }
 }
 
@@ -172,9 +184,10 @@ pub fn prepare_initial_stack(
 /// space, a physical frame cannot be allocated, or page-table mapping fails.
 pub fn allocate_and_map_user_page(
     frame_allocator: &mut BumpFrameAllocator,
-    virtual_address: u64,
+    virtual_address: UserVirtualAddress,
     flags: PageTableFlags,
 ) -> u64 {
+    let virtual_address = virtual_address.as_u64();
     assert!(
         virtual_address.is_multiple_of(PAGE_SIZE),
         "user page virtual address must be 4KiB aligned"

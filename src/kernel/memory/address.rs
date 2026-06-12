@@ -1,6 +1,7 @@
 //! Typed memory address wrappers.
 
 const PAGE_SIZE: u64 = 4096;
+const USER_SPACE_END: u64 = 0x0000_8000_0000_0000;
 
 /// A 4 KiB-aligned physical frame start address.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -67,5 +68,43 @@ impl PhysicalFrameRange {
         self.page_count
             .checked_mul(PAGE_SIZE)
             .expect("physical frame range byte length overflowed")
+    }
+}
+
+/// A non-null virtual address in the user half of the address space.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserVirtualAddress(u64);
+
+impl UserVirtualAddress {
+    /// Create a user virtual address if `address` is non-zero and below the
+    /// user-space ceiling.
+    pub const fn new(address: u64) -> Option<Self> {
+        if address != 0 && address < USER_SPACE_END {
+            Some(Self(address))
+        } else {
+            None
+        }
+    }
+
+    /// Return the raw virtual address as a `u64`.
+    pub const fn as_u64(self) -> u64 {
+        self.0
+    }
+
+    /// Return the raw virtual address as a `usize`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the user virtual address does not fit in `usize`.
+    pub fn as_usize(self) -> usize {
+        usize::try_from(self.0).expect("user virtual address must fit in usize")
+    }
+
+    /// Return a user virtual address moved backward by `offset` bytes.
+    pub const fn checked_sub(self, offset: u64) -> Option<Self> {
+        let Some(address) = self.0.checked_sub(offset) else {
+            return None;
+        };
+        Self::new(address)
     }
 }
