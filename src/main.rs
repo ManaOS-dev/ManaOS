@@ -91,10 +91,13 @@ fn import_boot_memory_map<'a>(
 ) {
     for descriptor in memory_descriptors {
         if descriptor.ty == MemoryType::CONVENTIONAL {
-            frame_allocator.add_region(descriptor.phys_start, descriptor.page_count);
+            frame_allocator.add_region(
+                kernel::memory::address::PhysAddr::new(descriptor.phys_start),
+                descriptor.page_count,
+            );
         } else {
             frame_allocator.reserve_region_for(
-                descriptor.phys_start,
+                kernel::memory::address::PhysAddr::new(descriptor.phys_start),
                 descriptor.page_count,
                 boot_memory_owner_for(descriptor.ty),
             );

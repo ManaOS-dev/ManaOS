@@ -28,6 +28,8 @@ the boot composition root into subsystems that need physical memory:
 The current bump allocator relies on these properties:
 
 - Only UEFI `CONVENTIONAL` memory is registered before `ExitBootServices`.
+- Memory registration APIs accept `PhysAddr` starts so reusable allocator
+  callers cannot pass virtual addresses into the physical range model.
 - Registered ranges are normalized to 4 KiB pages and skip physical address
   zero.
 - Registered ranges are sorted and adjacent ranges are merged before

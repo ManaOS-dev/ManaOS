@@ -48,6 +48,8 @@ untyped cross-domain `u64` values:
   physical base address.
 - PCI AHCI discovery stores BAR5 as `PhysAddr` and keeps that type through
   AHCI controller initialization and HBA MMIO mapping.
+- `BumpFrameAllocator::add_region(...)` and `reserve_region*` accept
+  `PhysAddr` physical starts before normalizing frame ranges.
 - `AhciDmaBuffers` stores `DmaPhysicalAddress` fields internally, and
   `dma::split_address(...)` accepts `DmaPhysicalAddress`.
 - `StorageDataAddress` represents the active DMA data buffer used by
@@ -75,9 +77,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 
 ### Frame Allocation And Heap
 
-- `kernel::memory::frame_allocator::BumpFrameAllocator::add_region(start, pages)`
-  and `reserve_region*` accept raw physical start addresses from the UEFI
-  memory map and boot reservations.
+- UEFI memory-map descriptors still expose raw physical starts at the firmware
+  ABI boundary. The boot composition root wraps those starts as `PhysAddr`
+  before registering regions with the frame allocator.
 - `BumpFrameAllocator::allocate_frame() -> Option<PhysicalFrameStart>` returns
   a typed 4 KiB-aligned physical frame start.
 - `BumpFrameAllocator::allocate_frames(n) -> Option<PhysicalFrameRange>`
