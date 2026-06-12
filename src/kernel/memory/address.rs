@@ -3,6 +3,63 @@
 const PAGE_SIZE: u64 = 4096;
 const USER_SPACE_END: u64 = 0x0000_8000_0000_0000;
 
+/// A raw physical byte address kept distinct from virtual addresses.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PhysAddr(u64);
+
+impl PhysAddr {
+    /// Create a physical byte address.
+    pub const fn new(address: u64) -> Self {
+        Self(address)
+    }
+
+    /// Return the raw physical address as a `u64`.
+    pub const fn as_u64(self) -> u64 {
+        self.0
+    }
+
+    /// Return the raw physical address as a `usize`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the physical address does not fit in `usize`.
+    pub fn as_usize(self) -> usize {
+        usize::try_from(self.0).expect("physical address must fit in usize")
+    }
+
+    /// Return a physical address advanced by `offset` bytes.
+    pub const fn checked_add(self, offset: u64) -> Option<Self> {
+        let Some(address) = self.0.checked_add(offset) else {
+            return None;
+        };
+        Some(Self(address))
+    }
+}
+
+/// A raw virtual byte address kept distinct from physical addresses.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct VirtAddr(u64);
+
+impl VirtAddr {
+    /// Create a virtual byte address.
+    pub const fn new(address: u64) -> Self {
+        Self(address)
+    }
+
+    /// Return the raw virtual address as a `u64`.
+    pub const fn as_u64(self) -> u64 {
+        self.0
+    }
+
+    /// Return a virtual address advanced by `offset` bytes.
+    pub const fn checked_add(self, offset: u64) -> Option<Self> {
+        let Some(address) = self.0.checked_add(offset) else {
+            return None;
+        };
+        Some(Self(address))
+    }
+}
+
 /// A 4 KiB-aligned physical frame start address.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PhysicalFrameStart(u64);
@@ -20,6 +77,11 @@ impl PhysicalFrameStart {
     /// Return the raw physical address as a `u64`.
     pub const fn as_u64(self) -> u64 {
         self.0
+    }
+
+    /// Return this frame start as a physical byte address.
+    pub const fn as_address(self) -> PhysAddr {
+        PhysAddr::new(self.0)
     }
 
     /// Return the raw physical address as a `usize`.
