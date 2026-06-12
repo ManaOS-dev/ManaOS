@@ -1,6 +1,6 @@
 use crate::kernel::elf::parser::{ElfError, ElfFile, ProgramHeader};
 use crate::kernel::memory::{
-    address::UserVirtualAddress,
+    address::{PhysicalFrameStart, UserVirtualAddress},
     frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
     user_stack,
 };
@@ -312,7 +312,7 @@ fn copy_segment_page(
     program_header: ProgramHeader,
     page_start: u64,
     file_backed_end: u64,
-    physical_address: u64,
+    physical_address: PhysicalFrameStart,
 ) -> Result<(), LoadError> {
     let copy_start = max(page_start, program_header.virtual_address());
     let copy_end = min(
@@ -341,7 +341,8 @@ fn copy_segment_page(
         .ok_or(LoadError::SegmentFileOutOfBounds)?;
     let destination_offset =
         usize::try_from(copy_start - page_start).map_err(|_| LoadError::SegmentAddressOverflow)?;
-    let destination = (physical_address as *mut u8).wrapping_add(destination_offset);
+    let destination =
+        (physical_address.as_address().as_usize() as *mut u8).wrapping_add(destination_offset);
 
     // SAFETY: `destination` points inside the freshly allocated page returned by
     // allocate_and_map_user_page, and `source` was bounds-checked above.

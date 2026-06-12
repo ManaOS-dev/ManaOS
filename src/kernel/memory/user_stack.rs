@@ -1,7 +1,7 @@
 //! User-space bootstrap stack and page mapping.
 
 use crate::kernel::memory::{
-    address::UserVirtualAddress,
+    address::{PhysicalFrameStart, UserVirtualAddress, VirtAddr},
     frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
     paging,
 };
@@ -11,7 +11,7 @@ use x86_64::{
         FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags, PhysFrame,
         Size4KiB,
     },
-    PhysAddr, VirtAddr,
+    PhysAddr as X86PhysAddr, VirtAddr as X86VirtAddr,
 };
 
 const PAGE_SIZE: u64 = 4096;
@@ -75,7 +75,6 @@ pub fn allocate_user_stack(
     let physical_range = frame_allocator
         .allocate_frames_for(pages, FrameRangeOwner::UserStack)
         .unwrap_or_else(|| panic!("OOM: failed to allocate {pages} pages for user stack"));
-    let physical_start_address = physical_range.start().as_u64();
     let stack_size = pages
         .checked_mul(PAGE_SIZE)
         .expect("user stack size overflowed");
@@ -85,8 +84,8 @@ pub fn allocate_user_stack(
     unsafe {
         map_user_range(
             frame_allocator,
-            USER_STACK_BASE,
-            physical_start_address,
+            UserVirtualAddress::new(USER_STACK_BASE).expect("user stack base must be valid"),
+            physical_range.start(),
             pages,
             PageTableFlags::PRESENT
                 | PageTableFlags::WRITABLE
@@ -178,7 +177,7 @@ pub fn prepare_initial_stack(
 
 /// Allocate one physical frame and map it at a page-aligned user virtual address.
 ///
-/// Returns the identity-mapped physical address of the allocated frame.
+/// Returns the allocated physical frame start.
 ///
 /// # Panics
 ///
@@ -189,7 +188,7 @@ pub fn allocate_and_map_user_page(
     virtual_address: UserVirtualAddress,
     flags: PageTableFlags,
     owner: FrameRangeOwner,
-) -> u64 {
+) -> PhysicalFrameStart {
     let virtual_address = virtual_address.as_u64();
     assert!(
         virtual_address.is_multiple_of(PAGE_SIZE),
@@ -202,13 +201,19 @@ pub fn allocate_and_map_user_page(
     let physical_address = frame_allocator
         .allocate_frame_for(owner)
         .expect("OOM: failed to allocate user page");
-    let physical_address = physical_address.as_u64();
-    let page_pointer = physical_address as *mut u8;
+    let page_pointer = physical_address.as_usize() as *mut u8;
 
     // SAFETY: `physical_address` is a freshly allocated identity-mapped frame.
     unsafe {
         core::ptr::write_bytes(page_pointer, 0, PAGE_SIZE_USIZE);
-        map_user_range(frame_allocator, virtual_address, physical_address, 1, flags);
+        map_user_range(
+            frame_allocator,
+            UserVirtualAddress::new(virtual_address)
+                .expect("validated user page address must remain valid"),
+            physical_address,
+            1,
+            flags,
+        );
     }
 
     physical_address
@@ -311,8 +316,8 @@ fn align_down(value: u64, alignment: u64) -> u64 {
 
 unsafe fn map_user_range(
     frame_allocator: &mut BumpFrameAllocator,
-    virtual_start: u64,
-    physical_start: u64,
+    virtual_start: UserVirtualAddress,
+    physical_start: PhysicalFrameStart,
     pages: u64,
     flags: PageTableFlags,
 ) {
@@ -322,8 +327,10 @@ unsafe fn map_user_range(
     // is a valid virtual address in the current address space.
     let level_4_table = unsafe { &mut *level_4_table };
     // SAFETY: ManaOS uses identity-mapped physical memory for page-table access.
-    let mut mapper = unsafe { OffsetPageTable::new(level_4_table, VirtAddr::new(0)) };
+    let mut mapper = unsafe { OffsetPageTable::new(level_4_table, X86VirtAddr::new(0)) };
     let mut wrapper = UserFrameAllocator { frame_allocator };
+    let virtual_start = VirtAddr::new(virtual_start.as_u64());
+    let physical_start = physical_start.as_address();
 
     for index in 0..pages {
         let offset = index
@@ -335,8 +342,8 @@ unsafe fn map_user_range(
         let physical_address = physical_start
             .checked_add(offset)
             .expect("user physical address overflowed");
-        let page = Page::<Size4KiB>::containing_address(VirtAddr::new(virtual_address));
-        let frame = PhysFrame::containing_address(PhysAddr::new(physical_address));
+        let page = Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_address.as_u64()));
+        let frame = PhysFrame::containing_address(X86PhysAddr::new(physical_address.as_u64()));
 
         // SAFETY: `frame` is owned by the caller for this range, `page` is in
         // the fixed user stack range, and `wrapper` allocates new page-table
@@ -360,6 +367,6 @@ unsafe impl FrameAllocator<Size4KiB> for UserFrameAllocator<'_> {
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
         self.frame_allocator
             .allocate_frame_for(FrameRangeOwner::PageTable)
-            .map(|address| PhysFrame::containing_address(PhysAddr::new(address.as_u64())))
+            .map(|address| PhysFrame::containing_address(X86PhysAddr::new(address.as_u64())))
     }
 }
