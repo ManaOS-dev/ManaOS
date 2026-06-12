@@ -285,6 +285,14 @@ impl UserVirtualAddress {
         usize::try_from(self.0).expect("user virtual address must fit in usize")
     }
 
+    /// Return a user virtual address advanced by `offset` bytes.
+    pub const fn checked_add(self, offset: u64) -> Option<Self> {
+        let Some(address) = self.0.checked_add(offset) else {
+            return None;
+        };
+        Self::new(address)
+    }
+
     /// Return a user virtual address moved backward by `offset` bytes.
     pub const fn checked_sub(self, offset: u64) -> Option<Self> {
         let Some(address) = self.0.checked_sub(offset) else {

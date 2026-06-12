@@ -98,6 +98,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   UserVirtualAddress` returns a typed user virtual stack top.
 - `PreparedUserStack` exposes typed user virtual `stack_pointer`,
   `argument_values_pointer`, and `environment_values_pointer`.
+- Initial user stack argument layout uses a local `UserVirtualAddress` cursor;
+  raw writes are limited to copying bytes and pointer values into already
+  reserved stack slots.
 - `kernel::memory::user_pointer::copy_from_user` accepts
   `UserReadableRange`, and `copy_to_user` accepts `UserWritableRange`; syscall
   helpers convert raw ABI arguments first.
