@@ -107,21 +107,21 @@
 
 ### Memory Management
 
-- [ ] `BumpFrameAllocator` の利用箇所を audit し、置き換え前に必要な不変条件を文書化する。
+- [x] `BumpFrameAllocator` の利用箇所を audit し、置き換え前に必要な不変条件を文書化する。
 - [ ] bump frame allocator を再利用可能な physical frame allocator に置き換える。
 - [ ] reserved / used / free physical frame range を追跡する。
-- [ ] free / used / reserved physical frame range の所有権ルールを設計する。
+- [x] free / used / reserved physical frame range の所有権ルールを設計する。
 - [ ] dynamic mapping 用 kernel virtual memory allocator を追加する。
 - [ ] kernel stack に guard page を追加する。
 - [ ] kernel stack guard page の配置と fault diagnostics を設計する。
 - [ ] process ごとの page table を追加する。
-- [ ] per-process page table 導入前に必要な page ownership model を文書化する。
+- [x] per-process page table 導入前に必要な page ownership model を文書化する。
 - [x] user pointer validation を一貫させる copy-in / copy-out helper を追加する。
 - [ ] syscall ごとの user pointer validation policy を定義する。
 - [ ] syscall validation で writable / user / executable page permission を検証する。
 - [ ] kernel / user mapping permission を検査する boot-time self-check を追加する。
-- [ ] identity mapping の寿命を audit し、可能なら縮小する。
-- [ ] boot-time hardware setup 後に削除できる identity mapping を特定する。
+- [x] identity mapping の寿命を audit し、可能なら縮小する。
+- [x] boot-time hardware setup 後に削除できる identity mapping を特定する。
 - [ ] raw `u64` が boundary を漏れている箇所に typed physical / virtual address wrapper を追加する。
 - [ ] raw `u64` の physical / virtual address が module boundary を越える API を一覧化する。
 - [ ] page fault diagnostics に current task と access type を含める。
