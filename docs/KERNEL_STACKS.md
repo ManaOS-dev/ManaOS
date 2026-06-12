@@ -12,8 +12,8 @@ ManaOS currently has three kernel stack categories:
 - Kernel task stacks: owned by `kernel::task::stack::KernelStack` metadata and
   currently backed by contiguous heap buffers with no unmapped guard page.
 - User task kernel stacks: also owned by `KernelStack` metadata before Ring 3
-  entry, but the current one-shot user path has not installed them in the TSS
-  yet.
+  entry, and the one-shot user path installs the stack top in the x86_64 TSS
+  through a registered architecture provider before entering Ring 3.
 - Architecture stacks: `arch::x86_64::global_descriptor_table` owns a Ring 0
   privilege stack and a double-fault interrupt stack table entry in the TSS.
   Both are currently static byte arrays.
@@ -111,8 +111,9 @@ by the faulting path.
 3. Move kernel task stack allocation from heap-backed `KernelStack` to guarded
    mapped stacks.
 4. Add an architecture provider for updating the x86_64 TSS Ring 0 stack.
+   This is complete for the one-shot user entry path.
 5. Give user tasks kernel stacks and install the stack before Ring 3 entry.
-   The metadata allocation is complete; TSS installation is still pending.
+   This is complete for the one-shot user entry path.
 6. Add page-fault diagnostics that detect known guard pages.
 7. Enable user task preemption only after full user trap frames and per-task
    kernel stack switching are both verified.

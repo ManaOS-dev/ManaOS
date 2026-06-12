@@ -1,3 +1,5 @@
+use core::cell::UnsafeCell;
+
 use spin::LazyLock;
 use x86_64::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector};
 use x86_64::structures::tss::TaskStateSegment;
@@ -11,24 +13,59 @@ pub const USER_DATA_SELECTOR: u16 = 0x1b;
 /// Ring 3 code segment selector.
 pub const USER_CODE_SELECTOR: u16 = 0x23;
 
-static TSS: LazyLock<TaskStateSegment> = LazyLock::new(|| {
-    let mut tss = TaskStateSegment::new();
-    tss.privilege_stack_table[0] = {
-        const STACK_SIZE: usize = 4096 * 5;
-        static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
+static TSS: LazyLock<MutableTaskStateSegment> = LazyLock::new(MutableTaskStateSegment::new);
 
-        let stack_start = VirtAddr::from_ptr(&raw const STACK);
-        stack_start + STACK_SIZE as u64
-    };
-    tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
-        const STACK_SIZE: usize = 4096 * 5;
-        static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
+struct MutableTaskStateSegment {
+    segment: UnsafeCell<TaskStateSegment>,
+}
 
-        let stack_start = VirtAddr::from_ptr(&raw const STACK);
-        stack_start + STACK_SIZE as u64
-    };
-    tss
-});
+// SAFETY: ManaOS currently runs on one CPU. TSS updates are requested by the
+// scheduler before entering user mode, and the GDT initialization only reads
+// the stable TSS address.
+unsafe impl Sync for MutableTaskStateSegment {}
+
+impl MutableTaskStateSegment {
+    fn new() -> Self {
+        let mut segment = TaskStateSegment::new();
+        segment.privilege_stack_table[0] = default_privilege_stack_top();
+        segment.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] =
+            default_double_fault_stack_top();
+        Self {
+            segment: UnsafeCell::new(segment),
+        }
+    }
+
+    fn as_ref(&self) -> &TaskStateSegment {
+        // SAFETY: The TSS storage has a stable address for the lifetime of the
+        // kernel. Shared reads are used for GDT descriptor creation.
+        unsafe { &*self.segment.get() }
+    }
+
+    fn set_privilege_stack_top(&self, stack_top: VirtAddr) {
+        // SAFETY: The scheduler requests updates before Ring 3 entry on the
+        // single active CPU, so no concurrent CPU can read a partially updated
+        // stack pointer.
+        unsafe {
+            (*self.segment.get()).privilege_stack_table[0] = stack_top;
+        }
+    }
+}
+
+fn default_privilege_stack_top() -> VirtAddr {
+    const STACK_SIZE: usize = 4096 * 5;
+    static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
+
+    let stack_start = VirtAddr::from_ptr(&raw const STACK);
+    stack_start + STACK_SIZE as u64
+}
+
+fn default_double_fault_stack_top() -> VirtAddr {
+    const STACK_SIZE: usize = 4096 * 5;
+    static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
+
+    let stack_start = VirtAddr::from_ptr(&raw const STACK);
+    stack_start + STACK_SIZE as u64
+}
 
 struct Selectors {
     code: SegmentSelector,
@@ -47,7 +84,7 @@ static GLOBAL_DESCRIPTOR_TABLE: LazyLock<(GlobalDescriptorTable, Selectors)> =
         let mut user_code_selector = table.append(Descriptor::user_code_segment());
         user_data_selector.set_rpl(PrivilegeLevel::Ring3);
         user_code_selector.set_rpl(PrivilegeLevel::Ring3);
-        let tss_selector = table.append(Descriptor::tss_segment(&TSS));
+        let tss_selector = table.append(Descriptor::tss_segment(TSS.as_ref()));
         (
             table,
             Selectors {
@@ -74,6 +111,11 @@ pub fn init() {
         SS::set_reg(GLOBAL_DESCRIPTOR_TABLE.1.data);
         load_tss(GLOBAL_DESCRIPTOR_TABLE.1.tss);
     }
+}
+
+/// Install the Ring 0 stack used by the next Ring 3 privilege transition.
+pub fn set_privilege_stack_top(stack_top: u64) {
+    TSS.set_privilege_stack_top(VirtAddr::new(stack_top));
 }
 
 /// Return the user data segment selector.

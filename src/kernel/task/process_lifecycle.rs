@@ -15,18 +15,27 @@ static LAST_USER_EXIT_CODE: AtomicU64 = AtomicU64::new(0);
 ///
 /// Panics if the scheduler has not been initialized.
 pub fn run_user_task_once(task_id: u64) -> Option<u64> {
-    let user_context = {
+    let user_task = {
         let mut scheduler = super::SCHEDULER.lock();
         scheduler
             .as_mut()
             .expect("scheduler must be initialized before running user tasks")
             .prepare_one_shot_user_task(task_id)?
     };
+    architecture::install_kernel_stack(
+        u64::try_from(user_task.kernel_stack_top).expect("kernel stack top must fit in u64"),
+    );
+    crate::log_info!(
+        "task",
+        "Installed user task kernel stack: task={} top={:#x}",
+        task_id,
+        user_task.kernel_stack_top
+    );
 
     // SAFETY: The user task context was created from mapped user code and stack
     // addresses, and this path returns only through SYS_EXIT.
     unsafe {
-        architecture::enter_user_mode_once(user_context.as_pointer());
+        architecture::enter_user_mode_once(user_task.entry_context.as_pointer());
     }
 
     Some(LAST_USER_EXIT_CODE.load(Ordering::Acquire))
