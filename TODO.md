@@ -119,7 +119,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Document the page ownership model required before per-process page tables.
 - [x] Add copy-in/copy-out helpers with consistent user pointer validation.
 - [x] Define a syscall-by-syscall user pointer validation policy.
-- [ ] Enforce writable, user, and executable page permissions in syscall validation.
+- [x] Enforce writable, user, and executable page permissions in syscall validation.
 - [x] Add boot-time self-checks for kernel and user mapping permissions.
 - [x] Audit identity mapping lifetime and shrink it when possible.
 - [x] Identify identity mappings that can be removed after boot-time hardware setup.

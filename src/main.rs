@@ -399,6 +399,14 @@ fn run_user_smoke_demo(frame_allocator: &mut kernel::memory::frame_allocator::Bu
         "memory",
         "Kernel/user mapping permission self-check passed."
     );
+    assert!(
+        kernel::memory::paging::verify_syscall_user_data_permissions(
+            user_stack_probe.as_usize(),
+            user_entry_point.as_usize(),
+        ),
+        "syscall user data permission smoke must pass"
+    );
+    crate::log_info!("memory", "Syscall user data permission self-check passed.");
     let user_entry_arguments = [user_elf_path, "--storage-smoke"];
     let user_entry_environment = ["MANAOS_BOOT=storage-smoke"];
     let prepared_user_stack = kernel::memory::user_stack::prepare_initial_stack(

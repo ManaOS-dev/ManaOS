@@ -65,14 +65,18 @@ pub unsafe fn init<'a>(
     crate::log_info!("paging", "Identity mapping complete.");
 }
 
-/// Return whether the whole user range is mapped as readable user memory.
+/// Return whether the whole user range is mapped as readable non-executable user data.
 pub fn is_user_range_mapped_readable(user_pointer: usize, length: usize) -> bool {
-    validate_user_mapping(user_pointer, length, PageTableFlags::empty())
+    validate_user_mapping(user_pointer, length, PageTableFlags::NO_EXECUTE)
 }
 
-/// Return whether the whole user range is mapped as writable user memory.
+/// Return whether the whole user range is mapped as writable non-executable user data.
 pub fn is_user_range_mapped_writable(user_pointer: usize, length: usize) -> bool {
-    validate_user_mapping(user_pointer, length, PageTableFlags::WRITABLE)
+    validate_user_mapping(
+        user_pointer,
+        length,
+        PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
+    )
 }
 
 /// Verify representative kernel and user mapping permissions.
@@ -111,6 +115,21 @@ pub fn verify_kernel_user_mapping_permissions(
     user_entry_flags.contains(PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
         && !user_entry_flags.contains(PageTableFlags::WRITABLE)
         && !user_entry_flags.contains(PageTableFlags::NO_EXECUTE)
+}
+
+/// Verify syscall user-data pointer permission enforcement.
+///
+/// The writable stack pointer must pass readable and writable user-data checks.
+/// The executable user entry pointer must fail both checks because syscall data
+/// buffers are required to be non-executable.
+pub fn verify_syscall_user_data_permissions(
+    user_stack_pointer: usize,
+    user_entry_pointer: usize,
+) -> bool {
+    is_user_range_mapped_readable(user_stack_pointer, 1)
+        && is_user_range_mapped_writable(user_stack_pointer, 1)
+        && !is_user_range_mapped_readable(user_entry_pointer, 1)
+        && !is_user_range_mapped_writable(user_entry_pointer, 1)
 }
 
 /// Identity-map a kernel MMIO range as writable and uncached.
