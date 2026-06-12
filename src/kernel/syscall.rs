@@ -24,7 +24,10 @@
 //! - [`SYS_GETPID`] - Linux-compatible get-process-identifier syscall number
 //! - [`SYS_OPENAT`] - Linux-compatible open-at syscall number
 
-use crate::kernel::memory::{address::UserVirtualRange, user_pointer};
+use crate::kernel::memory::{
+    address::{UserReadableRange, UserVirtualRange, UserWritableRange},
+    user_pointer,
+};
 
 #[allow(dead_code)]
 #[path = "../shared/syscall_contract.rs"]
@@ -280,7 +283,7 @@ fn copy_input_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static [u8]> 
     }
 
     let range = UserVirtualRange::from_syscall_arguments(user_pointer, byte_len)?;
-    user_pointer::copy_from_user(range)
+    user_pointer::copy_from_user(UserReadableRange::new(range))
 }
 
 fn copy_output_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static mut [u8]> {
@@ -289,7 +292,7 @@ fn copy_output_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static mut [
     }
 
     let range = UserVirtualRange::from_syscall_arguments(user_pointer, byte_len)?;
-    user_pointer::copy_to_user(range)
+    user_pointer::copy_to_user(UserWritableRange::new(range))
 }
 
 fn copy_path_argument(user_pointer: u64) -> Option<alloc::string::String> {
@@ -297,7 +300,7 @@ fn copy_path_argument(user_pointer: u64) -> Option<alloc::string::String> {
         user_pointer,
         u64::try_from(MAX_USER_STRING_LENGTH).expect("max user path length must fit in u64"),
     )?;
-    user_pointer::copy_cstr_from_user(range)
+    user_pointer::copy_cstr_from_user(UserReadableRange::new(range))
 }
 
 fn write_user_file_stat(buffer: &mut [u8], metadata: crate::kernel::filesystem::FileMetadata) {

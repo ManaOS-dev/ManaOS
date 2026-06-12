@@ -2,10 +2,14 @@
 
 use alloc::string::String;
 
-use crate::kernel::memory::{address::UserVirtualRange, paging};
+use crate::kernel::memory::{
+    address::{UserReadableRange, UserWritableRange},
+    paging,
+};
 
 /// Read a mapped user range as a kernel byte slice.
-pub fn copy_from_user(range: UserVirtualRange) -> Option<&'static [u8]> {
+pub fn copy_from_user(range: UserReadableRange) -> Option<&'static [u8]> {
+    let range = range.as_range();
     let user_pointer = range.start().as_usize();
     let byte_len = range.byte_len();
     if !paging::is_user_range_mapped_readable(user_pointer, byte_len) {
@@ -18,7 +22,8 @@ pub fn copy_from_user(range: UserVirtualRange) -> Option<&'static [u8]> {
 }
 
 /// Read a mapped writable user range as a mutable kernel byte slice.
-pub fn copy_to_user(range: UserVirtualRange) -> Option<&'static mut [u8]> {
+pub fn copy_to_user(range: UserWritableRange) -> Option<&'static mut [u8]> {
+    let range = range.as_range();
     let user_pointer = range.start().as_usize();
     let byte_len = range.byte_len();
     if !paging::is_user_range_mapped_writable(user_pointer, byte_len) {
@@ -31,7 +36,7 @@ pub fn copy_to_user(range: UserVirtualRange) -> Option<&'static mut [u8]> {
 }
 
 /// Copy a NUL-terminated user string into a kernel-owned [`String`].
-pub fn copy_cstr_from_user(range: UserVirtualRange) -> Option<String> {
+pub fn copy_cstr_from_user(range: UserReadableRange) -> Option<String> {
     let bytes = copy_from_user(range)?;
 
     let mut value = String::new();

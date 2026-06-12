@@ -149,3 +149,35 @@ impl UserVirtualRange {
         self.byte_len
     }
 }
+
+/// A user virtual range intended for kernel reads from user memory.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserReadableRange(UserVirtualRange);
+
+impl UserReadableRange {
+    /// Create a readable user range from a validated user virtual range.
+    pub const fn new(range: UserVirtualRange) -> Self {
+        Self(range)
+    }
+
+    /// Return the underlying user virtual range.
+    pub const fn as_range(self) -> UserVirtualRange {
+        self.0
+    }
+}
+
+/// A user virtual range intended for kernel writes to user memory.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserWritableRange(UserVirtualRange);
+
+impl UserWritableRange {
+    /// Create a writable user range from a validated user virtual range.
+    pub const fn new(range: UserVirtualRange) -> Self {
+        Self(range)
+    }
+
+    /// Return the underlying user virtual range.
+    pub const fn as_range(self) -> UserVirtualRange {
+        self.0
+    }
+}
