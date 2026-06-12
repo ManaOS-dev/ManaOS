@@ -1,6 +1,6 @@
 //! Advanced Host Controller Interface host bus adapter MMIO setup.
 
-use crate::kernel::memory::{frame_allocator::BumpFrameAllocator, paging};
+use crate::kernel::memory::{address::PhysAddr, frame_allocator::BumpFrameAllocator, paging};
 
 use super::registers::{HbaMemory, HbaPort, MAX_PORTS};
 
@@ -23,7 +23,7 @@ pub(super) fn map_memory(
     unsafe {
         paging::map_kernel_mmio_range(
             frame_allocator,
-            base_address_register5,
+            PhysAddr::new(base_address_register5),
             HOST_BUS_ADAPTER_MEMORY_SIZE,
         );
     }
