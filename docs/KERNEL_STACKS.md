@@ -9,8 +9,8 @@ ManaOS currently has three kernel stack categories:
 
 - Bootstrap stack: the stack active when the kernel enters from UEFI. It is not
   currently represented by `kernel::task`.
-- Kernel task stacks: allocated as `Box<[u8]>` in `kernel::task::Task::kernel`.
-  These are contiguous heap buffers with no unmapped guard page.
+- Kernel task stacks: owned by `kernel::task::stack::KernelStack` metadata and
+  currently backed by contiguous heap buffers with no unmapped guard page.
 - Architecture stacks: `arch::x86_64::global_descriptor_table` owns a Ring 0
   privilege stack and a double-fault interrupt stack table entry in the TSS.
   Both are currently static byte arrays.
@@ -104,7 +104,8 @@ by the faulting path.
 
 1. Add kernel virtual address range allocation for stack mappings.
 2. Introduce `kernel::task::stack` metadata without changing scheduling.
-3. Move kernel task stack allocation from heap `Box<[u8]>` to guarded mapped
+   This is complete for heap-backed kernel tasks.
+3. Move kernel task stack allocation from heap-backed `KernelStack` to guarded mapped
    stacks.
 4. Add an architecture provider for updating the x86_64 TSS Ring 0 stack.
 5. Give user tasks kernel stacks and install the stack before Ring 3 entry.
