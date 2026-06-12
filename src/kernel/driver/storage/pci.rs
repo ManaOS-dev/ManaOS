@@ -1,5 +1,7 @@
 //! PCI bus scanning for storage controllers.
 
+use crate::kernel::memory::address::PhysAddr;
+
 const CONFIG_ENABLE_BIT: u32 = 1 << 31;
 const MAX_BUS: u16 = 256;
 const MAX_DEVICE: u8 = 32;
@@ -59,7 +61,7 @@ pub struct AhciController {
     /// PCI function number.
     pub function: u8,
     /// Fifth base address register memory base address.
-    pub base_address_register5: u64,
+    pub base_address_register5: PhysAddr,
 }
 
 /// Find the first AHCI controller exposed through PCI config space.
@@ -131,7 +133,7 @@ pub fn find_advanced_host_controller_interface_controller(
                         BASE_ADDRESS_REGISTER5_OFFSET,
                     );
                     let base_address_register5 =
-                        u64::from(raw_base_address_register5 & BAR_MEMORY_MASK);
+                        PhysAddr::new(u64::from(raw_base_address_register5 & BAR_MEMORY_MASK));
                     crate::log_debug!(
                         "pci",
                         "AHCI command register: before={:#010x} after={:#010x}",
@@ -142,7 +144,7 @@ pub fn find_advanced_host_controller_interface_controller(
                         "pci",
                         "AHCI BAR5: raw={:#010x} memory_base={:#010x}",
                         raw_base_address_register5,
-                        base_address_register5
+                        base_address_register5.as_u64()
                     );
                     crate::log_info!(
                         "pci",
@@ -150,7 +152,7 @@ pub fn find_advanced_host_controller_interface_controller(
                         bus,
                         device,
                         function,
-                        base_address_register5
+                        base_address_register5.as_u64()
                     );
 
                     return Some(AhciController {

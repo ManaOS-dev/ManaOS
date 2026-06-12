@@ -9,12 +9,12 @@ const GLOBAL_HOST_CONTROL_AHCI_ENABLE: u32 = 1 << 31;
 
 pub(super) fn map_memory(
     frame_allocator: &mut BumpFrameAllocator,
-    base_address_register5: u64,
+    base_address_register5: PhysAddr,
 ) -> *mut HbaMemory {
     crate::log_debug!(
         "ahci",
         "Mapping HBA MMIO: base={:#010x} size={:#x}",
-        base_address_register5,
+        base_address_register5.as_u64(),
         HOST_BUS_ADAPTER_MEMORY_SIZE
     );
     // SAFETY: base address register 5 is reported by a PCI mass-storage SATA
@@ -23,13 +23,13 @@ pub(super) fn map_memory(
     unsafe {
         paging::map_kernel_mmio_range(
             frame_allocator,
-            PhysAddr::new(base_address_register5),
+            base_address_register5,
             HOST_BUS_ADAPTER_MEMORY_SIZE,
         );
     }
     crate::log_debug!("ahci", "HBA MMIO mapping complete.");
 
-    base_address_register5 as *mut HbaMemory
+    base_address_register5.as_usize() as *mut HbaMemory
 }
 
 pub(super) fn enable_ahci(hba_memory: *mut HbaMemory) {

@@ -46,6 +46,8 @@ untyped cross-domain `u64` values:
   domains with raw `u64` parameters.
 - `paging::map_kernel_mmio_range(...)` now accepts `PhysAddr` for the MMIO
   physical base address.
+- PCI AHCI discovery stores BAR5 as `PhysAddr` and keeps that type through
+  AHCI controller initialization and HBA MMIO mapping.
 - `AhciDmaBuffers` stores `DmaPhysicalAddress` fields internally, and
   `dma::split_address(...)` accepts `DmaPhysicalAddress`.
 - `StorageDataAddress` represents the active DMA data buffer used by

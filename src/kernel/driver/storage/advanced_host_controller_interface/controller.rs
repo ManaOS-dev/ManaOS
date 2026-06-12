@@ -1,6 +1,6 @@
 //! Advanced Host Controller Interface controller initialization.
 
-use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
+use crate::kernel::memory::{address::PhysAddr, frame_allocator::BumpFrameAllocator};
 
 use super::block_device::AhciBlockDevice;
 use super::registers::MAX_PORTS;
@@ -14,7 +14,7 @@ use crate::kernel::driver::storage::{
 const SATA_SIGNATURE: u32 = 0x0000_0101;
 
 /// Initialize an Advanced Host Controller Interface controller from its base address register 5 MMIO base.
-pub fn init(frame_allocator: &mut BumpFrameAllocator, base_address_register5: u64) {
+pub fn init(frame_allocator: &mut BumpFrameAllocator, base_address_register5: PhysAddr) {
     let hba_memory = host::map_memory(frame_allocator, base_address_register5);
     host::enable_ahci(hba_memory);
     let ports_implemented = host::read_ports_implemented(hba_memory);
