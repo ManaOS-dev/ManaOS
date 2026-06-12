@@ -1,6 +1,8 @@
 use crate::kernel::elf::parser::{ElfError, ElfFile, ProgramHeader};
 use crate::kernel::memory::{
-    address::UserVirtualAddress, frame_allocator::BumpFrameAllocator, user_stack,
+    address::UserVirtualAddress,
+    frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
+    user_stack,
 };
 use core::cmp::{max, min};
 use x86_64::structures::paging::PageTableFlags;
@@ -220,8 +222,12 @@ fn map_load_segment(
     loop {
         let user_page_start =
             UserVirtualAddress::new(page_start).ok_or(LoadError::SegmentAddressOutOfRange)?;
-        let physical_address =
-            user_stack::allocate_and_map_user_page(frame_allocator, user_page_start, page_flags);
+        let physical_address = user_stack::allocate_and_map_user_page(
+            frame_allocator,
+            user_page_start,
+            page_flags,
+            FrameRangeOwner::UserElf,
+        );
         copy_segment_page(
             image,
             program_header,

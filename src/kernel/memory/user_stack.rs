@@ -1,7 +1,9 @@
 //! User-space bootstrap stack and page mapping.
 
 use crate::kernel::memory::{
-    address::UserVirtualAddress, frame_allocator::BumpFrameAllocator, paging,
+    address::UserVirtualAddress,
+    frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
+    paging,
 };
 use x86_64::{
     registers::control::Cr3,
@@ -71,7 +73,7 @@ pub fn allocate_user_stack(
 ) -> UserVirtualAddress {
     assert!(pages > 0, "user stack must contain at least one page");
     let physical_range = frame_allocator
-        .allocate_frames(pages)
+        .allocate_frames_for(pages, FrameRangeOwner::UserStack)
         .unwrap_or_else(|| panic!("OOM: failed to allocate {pages} pages for user stack"));
     let physical_start_address = physical_range.start().as_u64();
     let stack_size = pages
@@ -186,6 +188,7 @@ pub fn allocate_and_map_user_page(
     frame_allocator: &mut BumpFrameAllocator,
     virtual_address: UserVirtualAddress,
     flags: PageTableFlags,
+    owner: FrameRangeOwner,
 ) -> u64 {
     let virtual_address = virtual_address.as_u64();
     assert!(
@@ -197,7 +200,7 @@ pub fn allocate_and_map_user_page(
         "user page virtual address must stay below the user stack"
     );
     let physical_address = frame_allocator
-        .allocate_frame()
+        .allocate_frame_for(owner)
         .expect("OOM: failed to allocate user page");
     let physical_address = physical_address.as_u64();
     let page_pointer = physical_address as *mut u8;
@@ -356,7 +359,7 @@ struct UserFrameAllocator<'a> {
 unsafe impl FrameAllocator<Size4KiB> for UserFrameAllocator<'_> {
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
         self.frame_allocator
-            .allocate_frame()
+            .allocate_frame_for(FrameRangeOwner::PageTable)
             .map(|address| PhysFrame::containing_address(PhysAddr::new(address.as_u64())))
     }
 }

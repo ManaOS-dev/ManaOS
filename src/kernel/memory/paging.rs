@@ -1,4 +1,4 @@
-use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
+use crate::kernel::memory::frame_allocator::{BumpFrameAllocator, FrameRangeOwner};
 use uefi::mem::memory_map::{MemoryDescriptor, MemoryType};
 use x86_64::{
     registers::{
@@ -244,7 +244,7 @@ fn mapping_flags_for_address(address: u64) -> Option<PageTableFlags> {
 
 unsafe fn create_pml4(frame_allocator: &mut BumpFrameAllocator) -> PhysFrame {
     let pml4_frame_start = frame_allocator
-        .allocate_frame()
+        .allocate_frame_for(FrameRangeOwner::PageTable)
         .expect("OOM: failed to allocate PML4 frame");
     let frame = PhysFrame::containing_address(PhysAddr::new(pml4_frame_start.as_u64()));
     let ptr = frame.start_address().as_u64() as *mut PageTable;
@@ -466,7 +466,7 @@ struct FrameAllocWrapper<'a> {
 unsafe impl x86_64::structures::paging::FrameAllocator<Size4KiB> for FrameAllocWrapper<'_> {
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
         self.frame_allocator
-            .allocate_frame()
+            .allocate_frame_for(FrameRangeOwner::PageTable)
             .map(|address| PhysFrame::containing_address(PhysAddr::new(address.as_u64())))
     }
 }

@@ -110,7 +110,10 @@ fn allocate_backbuffer(
 ) -> *mut u8 {
     let backbuffer_pages = framebuffer_size.div_ceil(4096);
     let backbuffer_physical_range = frame_allocator
-        .allocate_frames(backbuffer_pages)
+        .allocate_frames_for(
+            backbuffer_pages,
+            kernel::memory::frame_allocator::FrameRangeOwner::FramebufferBackbuffer,
+        )
         .expect("OOM: failed to allocate framebuffer backbuffer");
     backbuffer_physical_range.start().as_usize() as *mut u8
 }
@@ -221,25 +224,28 @@ fn verify_frame_allocator_rules() {
     let contiguous_boundaries_ok =
         kernel::memory::frame_allocator::verify_contiguous_allocation_boundaries();
     let reserved_exclusion_ok = kernel::memory::frame_allocator::verify_reserved_range_exclusion();
+    let owner_tracking_ok = kernel::memory::frame_allocator::verify_owner_tracking();
     if zero_skip_ok
         && range_tracking_ok
         && duplicate_allocation_ok
         && contiguous_boundaries_ok
         && reserved_exclusion_ok
+        && owner_tracking_ok
     {
         crate::log_info!(
             "memory",
-            "Frame allocator self-checks passed: zero_skip=true range_tracking=true duplicate_allocation=true contiguous_boundaries=true reserved_exclusion=true"
+            "Frame allocator self-checks passed: zero_skip=true range_tracking=true duplicate_allocation=true contiguous_boundaries=true reserved_exclusion=true owner_tracking=true"
         );
     } else {
         crate::log_error!(
             "memory",
-            "Frame allocator self-checks failed: zero_skip={} range_tracking={} duplicate_allocation={} contiguous_boundaries={} reserved_exclusion={}",
+            "Frame allocator self-checks failed: zero_skip={} range_tracking={} duplicate_allocation={} contiguous_boundaries={} reserved_exclusion={} owner_tracking={}",
             zero_skip_ok,
             range_tracking_ok,
             duplicate_allocation_ok,
             contiguous_boundaries_ok,
-            reserved_exclusion_ok
+            reserved_exclusion_ok,
+            owner_tracking_ok
         );
     }
 }

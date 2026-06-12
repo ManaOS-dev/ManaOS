@@ -126,6 +126,8 @@ The shrink path is therefore staged:
 
 - [x] Add frame-range state storage before adding `free`.
 - [x] Import the boot memory map as `Reserved` and `Free` ranges explicitly.
+- [x] Track explicit owners for page-table, heap, framebuffer backbuffer, DMA,
+      user stack, and user ELF allocations.
 - [ ] Mark kernel image, page tables, heap, framebuffer, MMIO, DMA, user stack,
       user ELF, and guard pages with owners.
 - [ ] Keep `BumpFrameAllocator`-equivalent monotonic behavior until each owner

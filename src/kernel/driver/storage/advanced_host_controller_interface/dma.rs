@@ -1,6 +1,6 @@
 //! Advanced Host Controller Interface DMA buffer allocation.
 
-use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
+use crate::kernel::memory::frame_allocator::{BumpFrameAllocator, FrameRangeOwner};
 
 const DMA_PAGE_SIZE: usize = 4096;
 const DATA_BUFFER_PAGES: u64 = 16;
@@ -16,10 +16,10 @@ pub(super) struct AhciDmaBuffers {
 }
 
 pub(super) fn allocate(frame_allocator: &mut BumpFrameAllocator) -> Option<AhciDmaBuffers> {
-    let command_list = frame_allocator.allocate_frame()?;
-    let received_fis = frame_allocator.allocate_frame()?;
-    let command_table = frame_allocator.allocate_frame()?;
-    let data = frame_allocator.allocate_frames(DATA_BUFFER_PAGES)?;
+    let command_list = frame_allocator.allocate_frame_for(FrameRangeOwner::AhciDma)?;
+    let received_fis = frame_allocator.allocate_frame_for(FrameRangeOwner::AhciDma)?;
+    let command_table = frame_allocator.allocate_frame_for(FrameRangeOwner::AhciDma)?;
+    let data = frame_allocator.allocate_frames_for(DATA_BUFFER_PAGES, FrameRangeOwner::AhciDma)?;
     let command_list_address = command_list.as_u64();
     let received_fis_address = received_fis.as_u64();
     let command_table_address = command_table.as_u64();
