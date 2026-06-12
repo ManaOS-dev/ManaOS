@@ -9,10 +9,10 @@ The implementation entry point is `kernel::memory::user_pointer`.
 - Non-zero user pointers must be non-null and below the canonical user-space
   limit `0x0000_8000_0000_0000`.
 - Pointer plus length must not overflow.
-- Input buffers must use `copy_from_user`, which requires a present
-  user-accessible mapping.
+- Input buffers must use `copy_from_user`, which requires a present,
+  user-accessible, non-executable mapping.
 - Output buffers must use `copy_to_user`, which requires a present writable
-  user-accessible mapping.
+  user-accessible, non-executable mapping.
 - NUL-terminated path strings must use `copy_cstr_from_user` with a syscall
   specific maximum length.
 - Non-zero syscall pointer arguments are converted from raw `u64` ABI values to
@@ -40,14 +40,15 @@ The implementation entry point is `kernel::memory::user_pointer`.
 
 ## Current Enforcement Gaps
 
-- Execute permission is not yet a syscall pointer validation requirement; it
-  belongs to ELF loading and future user instruction-fetch page-fault checks.
 - Kernel/user mapping permission self-checks should prove that kernel-only pages
   are not `USER_ACCESSIBLE` and user pages carry the expected readable/writable
   permissions.
 - `UserReadableRange`, `UserWritableRange`, and `UserCString` encode syscall
-  pointer intent, but page-table permission checks still happen inside the
-  copy helpers.
+  pointer intent, but page-table permission checks still happen inside the copy
+  helpers.
+- Execute permission is enforced for syscall data pointers by rejecting
+  executable user pages. Future instruction-fetch page-fault checks should
+  still report executable permission faults separately.
 
 ## Future Typed Pointer Split
 
