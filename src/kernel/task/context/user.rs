@@ -17,12 +17,39 @@ const USER_CONTEXT_BYTES: usize = 64;
 /// General-purpose user entry registers supplied at first instruction.
 #[derive(Debug, Clone, Copy)]
 pub struct UserEntryArguments {
-    /// Number of entries in the `argv` pointer array.
-    pub argument_count: u64,
-    /// User virtual address of the null-terminated `argv` pointer array.
-    pub argument_values_pointer: UserVirtualAddress,
-    /// User virtual address of the null-terminated environment pointer array.
-    pub environment_values_pointer: UserVirtualAddress,
+    argument_count: u64,
+    argument_values_pointer: UserVirtualAddress,
+    environment_values_pointer: UserVirtualAddress,
+}
+
+impl UserEntryArguments {
+    /// Create user entry argument registers from typed user-space pointers.
+    pub const fn new(
+        argument_count: u64,
+        argument_values_pointer: UserVirtualAddress,
+        environment_values_pointer: UserVirtualAddress,
+    ) -> Self {
+        Self {
+            argument_count,
+            argument_values_pointer,
+            environment_values_pointer,
+        }
+    }
+
+    /// Return the number of entries in the `argv` pointer array.
+    pub const fn argument_count(self) -> u64 {
+        self.argument_count
+    }
+
+    /// Return the user virtual address of the null-terminated `argv` pointer array.
+    pub const fn argument_values_pointer(self) -> UserVirtualAddress {
+        self.argument_values_pointer
+    }
+
+    /// Return the user virtual address of the null-terminated environment pointer array.
+    pub const fn environment_values_pointer(self) -> UserVirtualAddress {
+        self.environment_values_pointer
+    }
 }
 
 /// User-mode transition frame and first-entry argument registers.
@@ -40,22 +67,14 @@ pub struct UserEntryArguments {
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct UserTaskContext {
-    /// User entry point instruction pointer.
-    pub instruction_pointer: u64,
-    /// Ring 3 code segment selector.
-    pub code_segment: u64,
-    /// Initial CPU flags with interrupts enabled and IOPL set to zero.
-    pub cpu_flags: u64,
-    /// Top of the mapped user stack.
-    pub stack_pointer: u64,
-    /// Ring 3 stack segment selector.
-    pub stack_segment: u64,
-    /// Number of entries in the user `argv` pointer array.
-    pub argument_count: u64,
-    /// User virtual address of the null-terminated `argv` pointer array.
-    pub argument_values_pointer: u64,
-    /// User virtual address of the null-terminated environment pointer array.
-    pub environment_values_pointer: u64,
+    instruction_pointer: u64,
+    code_segment: u64,
+    cpu_flags: u64,
+    stack_pointer: u64,
+    stack_segment: u64,
+    argument_count: u64,
+    argument_values_pointer: u64,
+    environment_values_pointer: u64,
 }
 
 impl UserTaskContext {
@@ -83,9 +102,9 @@ impl UserTaskContext {
             cpu_flags: 0x202,
             stack_pointer: stack_top.as_u64(),
             stack_segment: u64::from(selectors.data),
-            argument_count: entry_arguments.argument_count,
-            argument_values_pointer: entry_arguments.argument_values_pointer.as_u64(),
-            environment_values_pointer: entry_arguments.environment_values_pointer.as_u64(),
+            argument_count: entry_arguments.argument_count(),
+            argument_values_pointer: entry_arguments.argument_values_pointer().as_u64(),
+            environment_values_pointer: entry_arguments.environment_values_pointer().as_u64(),
         }
     }
 

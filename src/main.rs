@@ -430,11 +430,11 @@ fn run_user_smoke_demo(frame_allocator: &mut kernel::memory::frame_allocator::Bu
     let user_task_id = kernel::task::spawn_user_task(
         user_entry_point,
         prepared_user_stack.stack_pointer(),
-        kernel::task::UserEntryArguments {
-            argument_count: prepared_user_stack.argument_count(),
-            argument_values_pointer: prepared_user_stack.argument_values_pointer(),
-            environment_values_pointer: prepared_user_stack.environment_values_pointer(),
-        },
+        kernel::task::UserEntryArguments::new(
+            prepared_user_stack.argument_count(),
+            prepared_user_stack.argument_values_pointer(),
+            prepared_user_stack.environment_values_pointer(),
+        ),
     );
     crate::log_info!("task", "User task spawned. task_id={}", user_task_id);
     crate::log_info!("task", "User demo started.");
