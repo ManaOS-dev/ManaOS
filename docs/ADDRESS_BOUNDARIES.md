@@ -85,9 +85,12 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 
 ### Paging
 
-- Internal page-table helpers convert raw `u64` values into `PhysAddr` /
-  `VirtAddr` locally; those conversions should move behind typed range
-  wrappers.
+- Internal page-table helpers use local `PhysAddr` / `VirtAddr` arithmetic for
+  page alignment, range ends, and page walks before converting to `x86_64`
+  address types at mapper boundaries.
+- UEFI memory-map descriptors still expose raw physical starts because they are
+  firmware ABI records; paging wraps those starts before internal identity-map
+  calculations.
 
 ### User Memory
 
@@ -142,10 +145,10 @@ Continue introducing wrappers in small steps:
 - `StorageDataAddress` for the active DMA data buffer passed through generic
   storage parsing. This now exists in `kernel::memory::address`.
 
-The next implementation steps should focus on internal page-table helper
-arithmetic, file-format raw fields, and the remaining architecture ABI
-boundaries. They should avoid broad mechanical renames until the remaining
-high-risk boundaries have typed constructors and callers.
+The next implementation steps should focus on file-format raw fields and the
+remaining architecture ABI boundaries. They should avoid broad mechanical
+renames until the remaining high-risk boundaries have typed constructors and
+callers.
 
 ## Migration Order
 
@@ -161,7 +164,5 @@ high-risk boundaries have typed constructors and callers.
 
 ## Remaining Migration Order
 
-1. Move internal paging helpers from raw `u64` arithmetic to local `PhysAddr` /
-   `VirtAddr` arithmetic where this improves boundary clarity.
-2. Keep ELF parser fields raw at the file-format layer, but convert loadable
+1. Keep ELF parser fields raw at the file-format layer, but convert loadable
    segment virtual addresses to typed user virtual ranges before mapping.
