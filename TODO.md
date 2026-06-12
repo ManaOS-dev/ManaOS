@@ -151,7 +151,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Verify the `UserTaskContext` register layout against `context_switch.s` offsets.
 - [x] Move user task exit and run-once lifecycle handling into a process lifecycle module.
 - [x] Normalize user task scheduler state transitions.
-- [ ] Define the task metadata model needed before process identifiers and parent-child relationships.
+- [x] Define the task metadata model needed before process identifiers and parent-child relationships.
 
 ### Synchronization And Concurrency
 
