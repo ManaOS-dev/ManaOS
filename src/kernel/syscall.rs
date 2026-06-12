@@ -3,11 +3,11 @@
 //! ## Owns
 //! - Kernel syscall number definitions
 //! - Syscall argument dispatch
-//! - Minimal user pointer copying for early userland I/O
+//! - Mapping kernel filesystem errors to Linux-like syscall results
 //!
 //! ## Does NOT own
 //! - Architecture-specific `SYSCALL`/`SYSRET` register entry
-//! - Full user pointer validation
+//! - User pointer validation (-> `kernel::memory::user_pointer`)
 //! - Per-process file descriptor tables
 //!
 //! ## Public API
@@ -24,7 +24,7 @@
 //! - [`SYS_GETPID`] - Linux-compatible get-process-identifier syscall number
 //! - [`SYS_OPENAT`] - Linux-compatible open-at syscall number
 
-use alloc::string::String;
+use crate::kernel::memory::user_pointer;
 
 #[allow(dead_code)]
 #[path = "../shared/syscall_contract.rs"]
@@ -47,7 +47,6 @@ const ERROR_NOT_SUPPORTED: u64 = linux_error(95);
 const USER_FILE_STAT_BYTES: usize = core::mem::size_of::<contract::UserFileStat>();
 const USER_DIRECTORY_ENTRY_BYTES: usize = core::mem::size_of::<contract::UserDirectoryEntry>();
 const MAX_USER_STRING_LENGTH: usize = 256;
-const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 /// Internal sentinel telling the syscall entry code to return to the kernel.
 pub const USER_EXIT_SENTINEL: u64 = u64::MAX;
 
@@ -102,7 +101,7 @@ fn sys_write(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
         return ERROR_BAD_ADDRESS;
     };
 
-    let Some(buffer) = copy_from_user(user_pointer, length) else {
+    let Some(buffer) = user_pointer::copy_from_user(user_pointer, length) else {
         return ERROR_BAD_ADDRESS;
     };
 
@@ -125,7 +124,8 @@ fn sys_open(user_path_pointer: u64, flags: u64, mode: u64) -> u64 {
         return ERROR_BAD_ADDRESS;
     };
 
-    let Some(path) = copy_cstr_from_user(user_path_pointer) else {
+    let Some(path) = user_pointer::copy_cstr_from_user(user_path_pointer, MAX_USER_STRING_LENGTH)
+    else {
         return ERROR_BAD_ADDRESS;
     };
 
@@ -167,7 +167,7 @@ fn sys_fstat(file_descriptor: u64, user_stat_pointer: u64) -> u64 {
         return ERROR_BAD_ADDRESS;
     };
 
-    let Some(buffer) = copy_to_user(user_stat_pointer, USER_FILE_STAT_BYTES) else {
+    let Some(buffer) = user_pointer::copy_to_user(user_stat_pointer, USER_FILE_STAT_BYTES) else {
         return ERROR_BAD_ADDRESS;
     };
 
@@ -199,7 +199,7 @@ fn sys_read(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
         return ERROR_BAD_ADDRESS;
     };
 
-    let Some(buffer) = copy_to_user(user_pointer, length) else {
+    let Some(buffer) = user_pointer::copy_to_user(user_pointer, length) else {
         return ERROR_BAD_ADDRESS;
     };
 
@@ -223,7 +223,7 @@ fn sys_getdents64(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
         return ERROR_INVALID_ARGUMENT;
     }
 
-    let Some(buffer) = copy_to_user(user_pointer, length) else {
+    let Some(buffer) = user_pointer::copy_to_user(user_pointer, length) else {
         return ERROR_BAD_ADDRESS;
     };
 
@@ -378,62 +378,4 @@ fn filesystem_error_to_linux(error: crate::kernel::filesystem::FileSystemError) 
         crate::kernel::filesystem::FileSystemError::NotDirectory => ERROR_NOT_DIRECTORY,
         crate::kernel::filesystem::FileSystemError::IsDirectory => ERROR_IS_DIRECTORY,
     }
-}
-
-fn validate_user_range(user_pointer: usize, length: usize) -> Option<()> {
-    if length == 0 {
-        return Some(());
-    }
-
-    let end = user_pointer.checked_add(length)?;
-    if user_pointer == 0 || end > USER_SPACE_END {
-        return None;
-    }
-
-    Some(())
-}
-
-fn copy_from_user(user_pointer: usize, length: usize) -> Option<&'static [u8]> {
-    if length == 0 {
-        return Some(&[]);
-    }
-
-    validate_user_range(user_pointer, length)?;
-    if !crate::kernel::memory::paging::is_user_range_mapped_readable(user_pointer, length) {
-        return None;
-    }
-
-    // SAFETY: The range has been bounds-checked and page-table validated as
-    // present user-accessible memory before creating the kernel slice.
-    Some(unsafe { core::slice::from_raw_parts(user_pointer as *const u8, length) })
-}
-
-fn copy_to_user(user_pointer: usize, length: usize) -> Option<&'static mut [u8]> {
-    if length == 0 {
-        return Some(&mut []);
-    }
-
-    validate_user_range(user_pointer, length)?;
-    if !crate::kernel::memory::paging::is_user_range_mapped_writable(user_pointer, length) {
-        return None;
-    }
-
-    // SAFETY: The range has been bounds-checked and page-table validated as
-    // present writable user-accessible memory before creating the kernel slice.
-    Some(unsafe { core::slice::from_raw_parts_mut(user_pointer as *mut u8, length) })
-}
-
-fn copy_cstr_from_user(user_pointer: usize) -> Option<String> {
-    let bytes = copy_from_user(user_pointer, MAX_USER_STRING_LENGTH)?;
-
-    let mut path = String::new();
-    for byte in bytes {
-        if *byte == 0 {
-            return Some(path);
-        }
-
-        path.push(char::from(*byte));
-    }
-
-    None
 }
