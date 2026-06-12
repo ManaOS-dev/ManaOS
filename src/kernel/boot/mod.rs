@@ -15,6 +15,7 @@
 use crate::kernel::driver::display::font::FontAssets;
 use crate::kernel::driver::display::framebuffer::{self, FrameBufferInfo};
 use crate::kernel::driver::display::renderer;
+use crate::kernel::memory::address::{FramebufferPhysicalRange, KernelVirtualAddress, PhysAddr};
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use crate::kernel::memory::frame_allocator::FrameRangeOwner;
 use crate::kernel::memory::heap;
@@ -27,21 +28,24 @@ pub fn initialize<'a>(
     mmap_entries: impl Iterator<Item = &'a MemoryDescriptor>,
     framebuffer_info: FrameBufferInfo,
     fonts: FontAssets,
-    backbuffer_ptr: *mut u8,
+    backbuffer_address: KernelVirtualAddress,
 ) {
-    let framebuffer_base = framebuffer_info.base_ptr as u64;
-    let framebuffer_size =
-        (framebuffer_info.stride * framebuffer_info.vertical_resolution * 4) as u64;
+    let framebuffer_size = framebuffer_info
+        .stride
+        .checked_mul(framebuffer_info.vertical_resolution)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .and_then(|bytes| u64::try_from(bytes).ok())
+        .expect("framebuffer byte size must fit in u64");
+    let framebuffer_range = FramebufferPhysicalRange::new(
+        PhysAddr::new(framebuffer_info.base_ptr as u64),
+        framebuffer_size,
+    )
+    .expect("framebuffer range must be non-empty");
 
     // SAFETY: The frame allocator owns conventional memory from the boot memory
     // map, and the framebuffer range comes from the active UEFI graphics mode.
     unsafe {
-        paging::init(
-            frame_allocator,
-            mmap_entries,
-            framebuffer_base,
-            framebuffer_size,
-        );
+        paging::init(frame_allocator, mmap_entries, framebuffer_range);
     }
     crate::log_info!("paging", "Page table switched.");
 
@@ -60,6 +64,6 @@ pub fn initialize<'a>(
         heap::HEAP_SIZE / (1024 * 1024)
     );
 
-    framebuffer::init_global_graphics(framebuffer_info, fonts, backbuffer_ptr);
+    framebuffer::init_global_graphics(framebuffer_info, fonts, backbuffer_address.as_mut_ptr());
     renderer::draw_boot_screen();
 }
