@@ -5,6 +5,15 @@
 .endef
 .globl context_switch
 
+# TaskContext layout, kept in sync with kernel::task::context:
+#   +0  rsp
+#   +8  r15
+#   +16 r14
+#   +24 r13
+#   +32 r12
+#   +40 rbx
+#   +48 rbp
+#   +56 rflags
 context_switch:
     mov qword ptr [rcx + 0], rsp
     mov qword ptr [rcx + 8], r15
@@ -33,6 +42,15 @@ context_switch:
 .endef
 .globl enter_user_mode
 
+# UserTaskContext layout, kept in sync with kernel::task::context:
+#   +0  user rip
+#   +8  user cs
+#   +16 user rflags
+#   +24 user rsp
+#   +32 user ss
+#   +40 argc -> rdi
+#   +48 argv -> rsi
+#   +56 envp -> rdx
 enter_user_mode:
     mov rax, qword ptr [rcx + 32]
     push rax
@@ -55,6 +73,7 @@ enter_user_mode:
 .endef
 .globl enter_user_mode_returnable
 
+# Returnable entry consumes the same UserTaskContext layout as enter_user_mode.
 enter_user_mode_returnable:
     push r15
     push r14
