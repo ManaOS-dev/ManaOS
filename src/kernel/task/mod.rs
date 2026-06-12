@@ -20,6 +20,7 @@
 pub mod architecture;
 pub mod context;
 pub mod process_lifecycle;
+mod state;
 pub mod user_mode;
 
 use alloc::boxed::Box;
@@ -29,6 +30,7 @@ pub use context::UserEntryArguments;
 use context::{TaskContext, TaskEntry, UserTaskContext};
 use core::sync::atomic::{AtomicBool, Ordering};
 use spin::Mutex;
+pub use state::TaskState;
 
 const TASK_STACK_SIZE: usize = 16 * 1024;
 const USER_TASK_PREEMPTION_ENABLED: bool = false;
@@ -48,20 +50,6 @@ enum SwitchAction {
         next_context: *const u64,
     },
     EnterUser(UserTaskContext),
-}
-
-/// Current lifecycle state of a kernel task.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum TaskState {
-    /// The task is ready to run.
-    Ready,
-    /// The task is currently running on the CPU.
-    Running,
-    /// The task is blocked and must not be scheduled.
-    Blocked,
-    /// The task has finished and must not be scheduled.
-    Finished,
 }
 
 /// A schedulable kernel task.
@@ -167,22 +155,30 @@ impl Scheduler {
             return None;
         };
 
-        self.tasks[self.current_index].state = TaskState::Ready;
-        self.tasks[task_index].state = TaskState::Running;
+        if !self.tasks[task_index].state.is_ready() {
+            return None;
+        }
+
+        self.tasks[self.current_index].state.prepare_to_wait();
+        if !self.tasks[task_index].state.prepare_to_run() {
+            return None;
+        }
         self.current_index = task_index;
         Some(user_context)
     }
 
-    fn finish_current_task(&mut self) -> u64 {
+    fn finish_current_task(&mut self) -> Option<u64> {
         let task_id = self.tasks[self.current_index].id;
-        self.tasks[self.current_index].state = TaskState::Finished;
+        if !self.tasks[self.current_index].state.finish_running() {
+            return None;
+        }
 
         if let Some(bootstrap_task) = self.tasks.first_mut() {
-            bootstrap_task.state = TaskState::Running;
+            bootstrap_task.state.prepare_to_run();
             self.current_index = 0;
         }
 
-        task_id
+        Some(task_id)
     }
 
     fn prepare_next_switch(&mut self) -> Option<SwitchAction> {
@@ -198,8 +194,12 @@ impl Scheduler {
         }
 
         let current_index = self.current_index;
-        self.tasks[current_index].state = TaskState::Ready;
-        self.tasks[next_index].state = TaskState::Running;
+        if !self.tasks[current_index].state.prepare_to_wait() {
+            return None;
+        }
+        if !self.tasks[next_index].state.prepare_to_run() {
+            return None;
+        }
         self.current_index = next_index;
 
         let current_context = self.tasks[current_index].context.as_mut_pointer();
@@ -229,7 +229,7 @@ impl Scheduler {
                 // restore a full user trap frame.
                 continue;
             }
-            if self.tasks[index].state == TaskState::Ready {
+            if self.tasks[index].state.is_ready() {
                 return Some(index);
             }
         }
