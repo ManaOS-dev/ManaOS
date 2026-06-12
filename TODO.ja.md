@@ -113,7 +113,7 @@
 - [x] free / used / reserved physical frame range の所有権ルールを設計する。
 - [ ] dynamic mapping 用 kernel virtual memory allocator を追加する。
 - [ ] kernel stack に guard page を追加する。
-- [ ] kernel stack guard page の配置と fault diagnostics を設計する。
+- [x] kernel stack guard page の配置と fault diagnostics を設計する。
 - [ ] process ごとの page table を追加する。
 - [x] per-process page table 導入前に必要な page ownership model を文書化する。
 - [x] user pointer validation を一貫させる copy-in / copy-out helper を追加する。
@@ -141,7 +141,7 @@
 - [ ] user task preemption を有効化する前提条件を checklist 化する。
 - [ ] scheduler accounting と task state diagnostics を追加する。
 - [ ] 必要な箇所で task ごとの kernel stack switching を追加する。
-- [ ] task ごとの kernel stack switching 方針を設計する。
+- [x] task ごとの kernel stack switching 方針を設計する。
 
 ### Context Switch And Task Refactoring
 
