@@ -85,13 +85,15 @@ fn get_framebuffer_info() -> kernel::driver::display::framebuffer::FrameBufferIn
     kernel::driver::display::framebuffer::get_info(&mut graphics_output)
 }
 
-fn add_conventional_memory_regions<'a>(
+fn import_boot_memory_map<'a>(
     frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator,
     memory_descriptors: impl Iterator<Item = &'a MemoryDescriptor>,
 ) {
     for descriptor in memory_descriptors {
         if descriptor.ty == MemoryType::CONVENTIONAL {
             frame_allocator.add_region(descriptor.phys_start, descriptor.page_count);
+        } else {
+            frame_allocator.reserve_region(descriptor.phys_start, descriptor.page_count);
         }
     }
 }
@@ -212,10 +214,20 @@ fn verify_kernel_filesystem() {
 fn verify_frame_allocator_rules() {
     let zero_skip_ok =
         kernel::memory::frame_allocator::verify_zero_address_skip_for_multi_frame_allocations();
-    if zero_skip_ok {
-        crate::log_info!("memory", "Frame allocator zero-address skip check passed.");
+    let range_tracking_ok =
+        kernel::memory::frame_allocator::verify_reserved_used_and_free_range_tracking();
+    if zero_skip_ok && range_tracking_ok {
+        crate::log_info!(
+            "memory",
+            "Frame allocator self-checks passed: zero_skip=true range_tracking=true"
+        );
     } else {
-        crate::log_error!("memory", "Frame allocator zero-address skip check failed.");
+        crate::log_error!(
+            "memory",
+            "Frame allocator self-checks failed: zero_skip={} range_tracking={}",
+            zero_skip_ok,
+            range_tracking_ok
+        );
     }
 }
 
@@ -430,7 +442,7 @@ fn main() -> Status {
     kernel::serial::init();
     crate::log_info!("serial", "ExitBootServices OK.");
     let mut frame_allocator = kernel::memory::frame_allocator::BumpFrameAllocator::new();
-    add_conventional_memory_regions(&mut frame_allocator, mmap.entries());
+    import_boot_memory_map(&mut frame_allocator, mmap.entries());
     verify_frame_allocator_rules();
     verify_elf_loader_rules();
 

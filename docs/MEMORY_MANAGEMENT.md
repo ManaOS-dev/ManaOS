@@ -124,13 +124,15 @@ The shrink path is therefore staged:
 
 ## Replacement Checklist
 
-- [ ] Add frame-range state storage before adding `free`.
-- [ ] Import the boot memory map as `Reserved` and `Free` ranges explicitly.
+- [x] Add frame-range state storage before adding `free`.
+- [x] Import the boot memory map as `Reserved` and `Free` ranges explicitly.
 - [ ] Mark kernel image, page tables, heap, framebuffer, MMIO, DMA, user stack,
       user ELF, and guard pages with owners.
 - [ ] Keep `BumpFrameAllocator`-equivalent monotonic behavior until each owner
       has a verified release path.
-- [ ] Add boot self-checks for zero-frame reservation, duplicate allocation,
-      contiguous allocation boundaries, and reserved-range exclusion.
+- [ ] Add boot self-checks for duplicate allocation, contiguous allocation
+      boundaries, and reserved-range exclusion.
+- [x] Add boot self-checks for zero-frame reservation and reserved/free/used
+      range tracking.
 - [ ] Prove the boot path with `just storage-smoke` after every allocator
       behavior change.
