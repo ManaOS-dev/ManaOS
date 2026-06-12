@@ -149,7 +149,7 @@
 - [x] context switch ABI を文書化する。
 - [x] `UserTaskContext` の register layout と `context_switch.s` の offset contract を検証する。
 - [x] user task exit / run-once lifecycle handling を process lifecycle module へ移動する。
-- [ ] user task scheduler state transition を整理する。
+- [x] user task scheduler state transition を整理する。
 - [ ] process identifier と parent-child relationship 導入前に必要な task metadata model を定義する。
 
 ### Synchronization And Concurrency

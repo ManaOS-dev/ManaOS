@@ -37,7 +37,7 @@ pub fn finish_current_task(exit_code: u64) -> Option<u64> {
     let task_id = super::SCHEDULER
         .lock()
         .as_mut()
-        .map(super::Scheduler::finish_current_task)?;
+        .and_then(super::Scheduler::finish_current_task)?;
     LAST_USER_EXIT_CODE.store(exit_code, Ordering::Release);
     Some(task_id)
 }
