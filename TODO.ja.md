@@ -117,13 +117,13 @@
 - [ ] process ごとの page table を追加する。
 - [x] per-process page table 導入前に必要な page ownership model を文書化する。
 - [x] user pointer validation を一貫させる copy-in / copy-out helper を追加する。
-- [ ] syscall ごとの user pointer validation policy を定義する。
+- [x] syscall ごとの user pointer validation policy を定義する。
 - [ ] syscall validation で writable / user / executable page permission を検証する。
 - [ ] kernel / user mapping permission を検査する boot-time self-check を追加する。
 - [x] identity mapping の寿命を audit し、可能なら縮小する。
 - [x] boot-time hardware setup 後に削除できる identity mapping を特定する。
 - [ ] raw `u64` が boundary を漏れている箇所に typed physical / virtual address wrapper を追加する。
-- [ ] raw `u64` の physical / virtual address が module boundary を越える API を一覧化する。
+- [x] raw `u64` の physical / virtual address が module boundary を越える API を一覧化する。
 - [ ] page fault diagnostics に current task と access type を含める。
 
 ### Interrupts And Scheduling

@@ -118,13 +118,13 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Add per-process page tables.
 - [x] Document the page ownership model required before per-process page tables.
 - [x] Add copy-in/copy-out helpers with consistent user pointer validation.
-- [ ] Define a syscall-by-syscall user pointer validation policy.
+- [x] Define a syscall-by-syscall user pointer validation policy.
 - [ ] Enforce writable, user, and executable page permissions in syscall validation.
 - [ ] Add boot-time self-checks for kernel and user mapping permissions.
 - [x] Audit identity mapping lifetime and shrink it when possible.
 - [x] Identify identity mappings that can be removed after boot-time hardware setup.
 - [ ] Add typed physical and virtual address wrappers where raw `u64` still leaks across boundaries.
-- [ ] Inventory APIs where raw `u64` physical or virtual addresses cross module boundaries.
+- [x] Inventory APIs where raw `u64` physical or virtual addresses cross module boundaries.
 - [ ] Add page fault diagnostics that include the current task and access type.
 
 ### Interrupts And Scheduling
