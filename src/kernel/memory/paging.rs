@@ -1,4 +1,7 @@
-use crate::kernel::memory::frame_allocator::{BumpFrameAllocator, FrameRangeOwner};
+use crate::kernel::memory::{
+    address::PhysAddr as KernelPhysAddr,
+    frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
+};
 use uefi::mem::memory_map::{MemoryDescriptor, MemoryType};
 use x86_64::{
     registers::{
@@ -144,15 +147,16 @@ pub fn verify_syscall_user_data_permissions(
 /// mapping it into the kernel address space does not alias regular RAM.
 pub unsafe fn map_kernel_mmio_range(
     frame_allocator: &mut BumpFrameAllocator,
-    physical_start: u64,
+    physical_start: KernelPhysAddr,
     size: u64,
 ) {
     assert!(size > 0, "MMIO mapping size must be non-zero");
 
-    let start_page_address = align_down_to_page(physical_start);
+    let start_page_address = align_down_to_page(physical_start.as_u64());
     let end_address = physical_start
         .checked_add(size - 1)
-        .expect("MMIO mapping end address overflowed");
+        .expect("MMIO mapping end address overflowed")
+        .as_u64();
     let end_page_address = align_down_to_page(end_address);
     let page_count = ((end_page_address - start_page_address) / PAGE_SIZE) + 1;
     let flags = PageTableFlags::PRESENT
