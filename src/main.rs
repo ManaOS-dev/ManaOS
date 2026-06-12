@@ -359,8 +359,8 @@ fn run_user_smoke_demo(frame_allocator: &mut kernel::memory::frame_allocator::Bu
     assert!(
         kernel::memory::paging::verify_kernel_user_mapping_permissions(
             verify_kernel_filesystem as *const () as usize,
-            usize::try_from(user_stack_probe).expect("user stack probe must fit in usize"),
-            usize::try_from(user_entry_point).expect("user entry point must fit in usize"),
+            user_stack_probe.as_usize(),
+            user_entry_point.as_usize(),
         ),
         "kernel and user mapping permission smoke must pass"
     );
@@ -379,8 +379,8 @@ fn run_user_smoke_demo(frame_allocator: &mut kernel::memory::frame_allocator::Bu
         "task",
         "User entry arguments prepared: argc={} argv={:#x} envp={:#x}",
         prepared_user_stack.argument_count(),
-        prepared_user_stack.argument_values_pointer(),
-        prepared_user_stack.environment_values_pointer()
+        prepared_user_stack.argument_values_pointer().as_u64(),
+        prepared_user_stack.environment_values_pointer().as_u64()
     );
 
     let user_task_id = kernel::task::spawn_user_task(

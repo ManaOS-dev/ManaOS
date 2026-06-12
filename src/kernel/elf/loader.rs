@@ -1,10 +1,11 @@
 use crate::kernel::elf::parser::{ElfError, ElfFile, ProgramHeader};
-use crate::kernel::memory::{frame_allocator::BumpFrameAllocator, user_stack};
+use crate::kernel::memory::{
+    address::UserVirtualAddress, frame_allocator::BumpFrameAllocator, user_stack,
+};
 use core::cmp::{max, min};
 use x86_64::structures::paging::PageTableFlags;
 
 const PAGE_SIZE: u64 = 4096;
-const USER_SPACE_END: u64 = 0x0000_8000_0000_0000;
 const PF_EXECUTE: u32 = 1;
 const PF_WRITE: u32 = 2;
 const PF_READ: u32 = 4;
@@ -12,12 +13,12 @@ const INVALID_ELF_REJECTION_CASES: usize = 10;
 
 /// Metadata returned after a user ELF image has been loaded.
 pub struct LoadedElf {
-    entry_point: u64,
+    entry_point: UserVirtualAddress,
 }
 
 impl LoadedElf {
     /// Return the executable entry point.
-    pub fn entry_point(&self) -> u64 {
+    pub fn entry_point(&self) -> UserVirtualAddress {
         self.entry_point
     }
 }
@@ -38,7 +39,7 @@ pub fn load_user_program(
         "elf",
         "User ELF demo loaded: path={} entry={:#x}",
         source_path,
-        loaded.entry_point()
+        loaded.entry_point().as_u64()
     );
     loaded
 }
@@ -171,12 +172,13 @@ fn load_user_elf(
     }
 
     Ok(LoadedElf {
-        entry_point: elf.entry(),
+        entry_point: UserVirtualAddress::new(elf.entry())
+            .expect("validated ELF entry point must be a valid user address"),
     })
 }
 
 fn validate_entry_point(entry_point: u64) -> Result<(), LoadError> {
-    if entry_point == 0 || entry_point >= USER_SPACE_END {
+    if UserVirtualAddress::new(entry_point).is_none() {
         return Err(LoadError::EntryOutOfRange);
     }
     Ok(())
@@ -200,7 +202,7 @@ fn map_load_segment(
         .offset()
         .checked_add(program_header.file_size())
         .ok_or(LoadError::SegmentFileOutOfBounds)?;
-    if memory_end > USER_SPACE_END {
+    if UserVirtualAddress::new(memory_end - 1).is_none() {
         return Err(LoadError::SegmentAddressOutOfRange);
     }
     if usize::try_from(file_end).map_or(true, |end| end > image.len()) {
@@ -216,8 +218,10 @@ fn map_load_segment(
 
     let mut page_start = first_page;
     loop {
+        let user_page_start =
+            UserVirtualAddress::new(page_start).ok_or(LoadError::SegmentAddressOutOfRange)?;
         let physical_address =
-            user_stack::allocate_and_map_user_page(frame_allocator, page_start, page_flags);
+            user_stack::allocate_and_map_user_page(frame_allocator, user_page_start, page_flags);
         copy_segment_page(
             image,
             program_header,
@@ -259,7 +263,7 @@ fn validate_load_segment(image: &[u8], program_header: ProgramHeader) -> Result<
         .offset()
         .checked_add(program_header.file_size())
         .ok_or(LoadError::SegmentFileOutOfBounds)?;
-    if memory_end > USER_SPACE_END {
+    if UserVirtualAddress::new(memory_end - 1).is_none() {
         return Err(LoadError::SegmentAddressOutOfRange);
     }
     if usize::try_from(file_end).map_or(true, |end| end > image.len()) {
@@ -398,7 +402,8 @@ fn load_user_elf_metadata(image: &[u8]) -> Result<LoadedElf, LoadError> {
         return Err(LoadError::EntryOutOfRange);
     }
     Ok(LoadedElf {
-        entry_point: elf.entry(),
+        entry_point: UserVirtualAddress::new(elf.entry())
+            .expect("validated ELF entry point must be a valid user address"),
     })
 }
 

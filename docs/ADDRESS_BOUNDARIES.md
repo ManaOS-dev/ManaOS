@@ -60,12 +60,13 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 
 ### User Memory
 
-- `kernel::memory::user_stack::allocate_user_stack(..., pages) -> u64` returns a
-  raw user virtual stack top.
-- `PreparedUserStack` exposes raw user virtual `stack_pointer`,
+- `kernel::memory::user_stack::allocate_user_stack(..., pages) ->
+  UserVirtualAddress` returns a typed user virtual stack top.
+- `PreparedUserStack` exposes typed user virtual `stack_pointer`,
   `argument_values_pointer`, and `environment_values_pointer`.
-- `user_stack::allocate_and_map_user_page(virtual_address: u64, flags) -> u64`
-  accepts a raw user virtual address and returns a raw physical frame address.
+- `user_stack::allocate_and_map_user_page(virtual_address: UserVirtualAddress,
+  flags) -> u64` accepts a typed user virtual address and returns a raw
+  physical frame address.
 - `user_stack::map_user_range(virtual_start, physical_start, pages, flags)`
   crosses both virtual and physical address domains with raw `u64`.
 - `kernel::memory::user_pointer::copy_from_user` and `copy_to_user` accept raw
@@ -73,8 +74,8 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 
 ### ELF Loading
 
-- `kernel::elf::LoadedUserProgram::entry_point() -> u64` exposes a raw user
-  virtual entry point.
+- `kernel::elf::LoadedElf::entry_point() -> UserVirtualAddress` exposes a typed
+  user virtual entry point.
 - `ProgramHeader::virtual_address() -> u64` exposes a raw user virtual segment
   address parsed from ELF.
 - `loader::map_segment(...)` and related helpers pass raw physical frames and
@@ -100,7 +101,9 @@ Introduce wrappers in small steps:
 - `PhysicalFrameRange` for frame start plus page count. This is now the return
   type for contiguous bump allocations.
 - `KernelVirtualAddress` for mapped kernel virtual addresses.
-- `UserVirtualAddress` for raw user pointers and ELF virtual addresses.
+- `UserVirtualAddress` for non-null user pointers and ELF virtual addresses.
+  This now covers loaded ELF entry points, prepared user stack pointers, and
+  user page mapping requests.
 - `UserVirtualRange` for validated user pointer ranges.
 - `DmaPhysicalAddress` for physical addresses that may be programmed into
   device descriptors.
