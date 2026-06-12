@@ -67,8 +67,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - `src/main.rs`
   - `arch::init(kernel::interrupt::syscall_entry as *const () as u64)` passes a
     function address as a raw architecture argument.
-  - `run_user_smoke_demo(...)` passes user entry, user stack, `argv`, and `envp`
-    addresses as raw `u64`.
+  - `run_user_smoke_demo(...)` keeps user entry, user stack, `argv`, and `envp`
+    addresses typed until `UserTaskContext` lowers them into the private
+    `repr(C)` assembly ABI layout.
 
 ### Frame Allocation And Heap
 
@@ -101,6 +102,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - Initial user stack argument layout uses a local `UserVirtualAddress` cursor;
   raw writes are limited to copying bytes and pointer values into already
   reserved stack slots.
+- `task::UserEntryArguments` is constructed from typed user pointers, and
+  `UserTaskContext` keeps its raw `u64` register layout private to the
+  `repr(C)` architecture entry ABI.
 - `kernel::memory::user_pointer::copy_from_user` accepts
   `UserReadableRange`, and `copy_to_user` accepts `UserWritableRange`; syscall
   helpers convert raw ABI arguments first.
