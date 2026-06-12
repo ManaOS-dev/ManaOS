@@ -66,6 +66,7 @@ pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64)
     let physical_start = frame_allocator
         .allocate_frames(pages)
         .unwrap_or_else(|| panic!("OOM: failed to allocate {pages} pages for user stack"));
+    let physical_start_address = physical_start.as_u64();
     let stack_size = pages
         .checked_mul(PAGE_SIZE)
         .expect("user stack size overflowed");
@@ -76,7 +77,7 @@ pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64)
         map_user_range(
             frame_allocator,
             USER_STACK_BASE,
-            physical_start,
+            physical_start_address,
             pages,
             PageTableFlags::PRESENT
                 | PageTableFlags::WRITABLE
@@ -185,6 +186,7 @@ pub fn allocate_and_map_user_page(
     let physical_address = frame_allocator
         .allocate_frame()
         .expect("OOM: failed to allocate user page");
+    let physical_address = physical_address.as_u64();
     let page_pointer = physical_address as *mut u8;
 
     // SAFETY: `physical_address` is a freshly allocated identity-mapped frame.
@@ -342,6 +344,6 @@ unsafe impl FrameAllocator<Size4KiB> for UserFrameAllocator<'_> {
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
         self.frame_allocator
             .allocate_frame()
-            .map(|address| PhysFrame::containing_address(PhysAddr::new(address)))
+            .map(|address| PhysFrame::containing_address(PhysAddr::new(address.as_u64())))
     }
 }

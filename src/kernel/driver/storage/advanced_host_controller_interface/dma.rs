@@ -20,19 +20,23 @@ pub(super) fn allocate(frame_allocator: &mut BumpFrameAllocator) -> Option<AhciD
     let received_fis = frame_allocator.allocate_frame()?;
     let command_table = frame_allocator.allocate_frame()?;
     let data = frame_allocator.allocate_frames(DATA_BUFFER_PAGES)?;
+    let command_list_address = command_list.as_u64();
+    let received_fis_address = received_fis.as_u64();
+    let command_table_address = command_table.as_u64();
+    let data_address = data.as_u64();
 
-    zero_page(command_list);
-    zero_page(received_fis);
-    zero_page(command_table);
-    zero_range(data, DATA_BUFFER_BYTES);
+    zero_page(command_list_address);
+    zero_page(received_fis_address);
+    zero_page(command_table_address);
+    zero_range(data_address, DATA_BUFFER_BYTES);
 
     crate::log_debug!(
         "ahci",
         "DMA buffers: command_list={:#018x} received_fis={:#018x} command_table={:#018x} data={:#018x} data_bytes={}",
-        command_list,
-        received_fis,
-        command_table,
-        data,
+        command_list_address,
+        received_fis_address,
+        command_table_address,
+        data_address,
         DATA_BUFFER_BYTES
     );
     crate::log_info!(
@@ -41,10 +45,10 @@ pub(super) fn allocate(frame_allocator: &mut BumpFrameAllocator) -> Option<AhciD
     );
 
     Some(AhciDmaBuffers {
-        command_list,
-        received_fis,
-        command_table,
-        data,
+        command_list: command_list_address,
+        received_fis: received_fis_address,
+        command_table: command_table_address,
+        data: data_address,
         data_bytes: DATA_BUFFER_BYTES,
     })
 }
