@@ -42,11 +42,10 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   accepts a raw physical start address from the UEFI memory map.
 - `BumpFrameAllocator::allocate_frame() -> Option<PhysicalFrameStart>` returns
   a typed 4 KiB-aligned physical frame start.
-- `BumpFrameAllocator::allocate_frames(n) -> Option<PhysicalFrameStart>`
-  returns the typed physical start of a contiguous frame range. The page count
-  is still carried separately, so range ownership is not yet explicit.
-- `kernel::memory::heap::init(heap_start: PhysicalFrameStart)` accepts a typed
-  physical frame start that is also used as a virtual address while identity
+- `BumpFrameAllocator::allocate_frames(n) -> Option<PhysicalFrameRange>`
+  returns the typed physical start and page count of a contiguous frame range.
+- `kernel::memory::heap::init(heap_range: PhysicalFrameRange)` accepts a typed
+  physical frame range that is also used as a virtual range while identity
   mapping is active.
 
 ### Paging And MMIO
@@ -98,7 +97,8 @@ Introduce wrappers in small steps:
 
 - `PhysicalAddress` for physical byte addresses.
 - `PhysicalFrameStart` for 4 KiB-aligned physical frame starts.
-- `PhysicalFrameRange` for frame start plus page count.
+- `PhysicalFrameRange` for frame start plus page count. This is now the return
+  type for contiguous bump allocations.
 - `KernelVirtualAddress` for mapped kernel virtual addresses.
 - `UserVirtualAddress` for raw user pointers and ELF virtual addresses.
 - `UserVirtualRange` for validated user pointer ranges.

@@ -23,7 +23,7 @@ pub(super) fn allocate(frame_allocator: &mut BumpFrameAllocator) -> Option<AhciD
     let command_list_address = command_list.as_u64();
     let received_fis_address = received_fis.as_u64();
     let command_table_address = command_table.as_u64();
-    let data_address = data.as_u64();
+    let data_address = data.start().as_u64();
 
     zero_page(command_list_address);
     zero_page(received_fis_address);

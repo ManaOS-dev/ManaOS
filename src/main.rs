@@ -107,10 +107,10 @@ fn allocate_backbuffer(
     framebuffer_size: u64,
 ) -> *mut u8 {
     let backbuffer_pages = framebuffer_size.div_ceil(4096);
-    let backbuffer_physical_address = frame_allocator
+    let backbuffer_physical_range = frame_allocator
         .allocate_frames(backbuffer_pages)
         .expect("OOM: failed to allocate framebuffer backbuffer");
-    backbuffer_physical_address.as_usize() as *mut u8
+    backbuffer_physical_range.start().as_usize() as *mut u8
 }
 
 fn initialize_scheduler() {
