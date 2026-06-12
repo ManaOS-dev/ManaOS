@@ -141,7 +141,7 @@ pub fn init(
             controller.bus,
             controller.device,
             controller.function,
-            controller.base_address_register5
+            controller.base_address_register5.as_u64()
         );
         advanced_host_controller_interface::init(
             frame_allocator,
