@@ -146,7 +146,7 @@ items have been removed so the file stays useful for deciding the next task.
 
 ### Context Switch And Task Refactoring
 
-- [ ] Separate kernel task context and user task context responsibilities.
+- [x] Separate kernel task context and user task context responsibilities.
 - [x] Document the context switch ABI.
 - [x] Verify the `UserTaskContext` register layout against `context_switch.s` offsets.
 - [x] Move user task exit and run-once lifecycle handling into a process lifecycle module.
