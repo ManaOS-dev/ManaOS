@@ -2,45 +2,37 @@
 
 use alloc::string::String;
 
-use crate::kernel::memory::paging;
-
-const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
+use crate::kernel::memory::{address::UserVirtualRange, paging};
 
 /// Read a mapped user range as a kernel byte slice.
-pub fn copy_from_user(user_pointer: usize, length: usize) -> Option<&'static [u8]> {
-    if length == 0 {
-        return Some(&[]);
-    }
-
-    validate_user_range(user_pointer, length)?;
-    if !paging::is_user_range_mapped_readable(user_pointer, length) {
+pub fn copy_from_user(range: UserVirtualRange) -> Option<&'static [u8]> {
+    let user_pointer = range.start().as_usize();
+    let byte_len = range.byte_len();
+    if !paging::is_user_range_mapped_readable(user_pointer, byte_len) {
         return None;
     }
 
     // SAFETY: The range has been bounds-checked and page-table validated as
     // present user-accessible memory before creating the kernel slice.
-    Some(unsafe { core::slice::from_raw_parts(user_pointer as *const u8, length) })
+    Some(unsafe { core::slice::from_raw_parts(user_pointer as *const u8, byte_len) })
 }
 
 /// Read a mapped writable user range as a mutable kernel byte slice.
-pub fn copy_to_user(user_pointer: usize, length: usize) -> Option<&'static mut [u8]> {
-    if length == 0 {
-        return Some(&mut []);
-    }
-
-    validate_user_range(user_pointer, length)?;
-    if !paging::is_user_range_mapped_writable(user_pointer, length) {
+pub fn copy_to_user(range: UserVirtualRange) -> Option<&'static mut [u8]> {
+    let user_pointer = range.start().as_usize();
+    let byte_len = range.byte_len();
+    if !paging::is_user_range_mapped_writable(user_pointer, byte_len) {
         return None;
     }
 
     // SAFETY: The range has been bounds-checked and page-table validated as
     // present writable user-accessible memory before creating the kernel slice.
-    Some(unsafe { core::slice::from_raw_parts_mut(user_pointer as *mut u8, length) })
+    Some(unsafe { core::slice::from_raw_parts_mut(user_pointer as *mut u8, byte_len) })
 }
 
 /// Copy a NUL-terminated user string into a kernel-owned [`String`].
-pub fn copy_cstr_from_user(user_pointer: usize, max_length: usize) -> Option<String> {
-    let bytes = copy_from_user(user_pointer, max_length)?;
+pub fn copy_cstr_from_user(range: UserVirtualRange) -> Option<String> {
+    let bytes = copy_from_user(range)?;
 
     let mut value = String::new();
     for byte in bytes {
@@ -52,17 +44,4 @@ pub fn copy_cstr_from_user(user_pointer: usize, max_length: usize) -> Option<Str
     }
 
     None
-}
-
-fn validate_user_range(user_pointer: usize, length: usize) -> Option<()> {
-    if length == 0 {
-        return Some(());
-    }
-
-    let end = user_pointer.checked_add(length)?;
-    if user_pointer == 0 || end > USER_SPACE_END {
-        return None;
-    }
-
-    Some(())
 }

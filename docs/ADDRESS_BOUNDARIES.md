@@ -69,8 +69,8 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   physical frame address.
 - `user_stack::map_user_range(virtual_start, physical_start, pages, flags)`
   crosses both virtual and physical address domains with raw `u64`.
-- `kernel::memory::user_pointer::copy_from_user` and `copy_to_user` accept raw
-  user virtual pointers as `usize`.
+- `kernel::memory::user_pointer::copy_from_user` and `copy_to_user` accept
+  `UserVirtualRange`; syscall helpers convert raw ABI arguments first.
 
 ### ELF Loading
 
@@ -104,7 +104,9 @@ Introduce wrappers in small steps:
 - `UserVirtualAddress` for non-null user pointers and ELF virtual addresses.
   This now covers loaded ELF entry points, prepared user stack pointers, and
   user page mapping requests.
-- `UserVirtualRange` for validated user pointer ranges.
+- `UserVirtualRange` for non-empty validated user pointer ranges. This now
+  covers syscall copy-in, copy-out, and C-string validation before page-table
+  permission checks.
 - `DmaPhysicalAddress` for physical addresses that may be programmed into
   device descriptors.
 
