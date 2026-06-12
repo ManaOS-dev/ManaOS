@@ -1,6 +1,6 @@
 use crate::kernel::elf::parser::{ElfError, ElfFile, ProgramHeader};
 use crate::kernel::memory::{
-    address::{PhysicalFrameStart, UserVirtualAddress},
+    address::{PhysicalFrameStart, UserVirtualAddress, UserVirtualRange},
     frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
     user_stack,
 };
@@ -113,6 +113,56 @@ enum LoadError {
     SegmentFileLargerThanMemory,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct LoadSegmentRange {
+    memory_range: UserVirtualRange,
+    first_page: UserVirtualAddress,
+    last_page: UserVirtualAddress,
+    file_backed_end: u64,
+}
+
+impl LoadSegmentRange {
+    fn from_program_header(program_header: ProgramHeader) -> Result<Self, LoadError> {
+        if program_header.memory_size() == 0 {
+            return Err(LoadError::SegmentAddressOutOfRange);
+        }
+
+        let segment_start = UserVirtualAddress::new(program_header.virtual_address())
+            .ok_or(LoadError::SegmentAddressOutOfRange)?;
+        let memory_size = usize::try_from(program_header.memory_size())
+            .map_err(|_| LoadError::SegmentAddressOverflow)?;
+        let memory_range = UserVirtualRange::new(segment_start, memory_size)
+            .ok_or(LoadError::SegmentAddressOutOfRange)?;
+        let last_byte_address = memory_range
+            .end_exclusive()
+            .checked_sub(1)
+            .ok_or(LoadError::SegmentAddressOverflow)?;
+        let last_byte_address = UserVirtualAddress::new(last_byte_address)
+            .ok_or(LoadError::SegmentAddressOutOfRange)?;
+        let first_page = segment_start.align_down_to_page();
+        let last_page = last_byte_address.align_down_to_page();
+        let file_backed_end = segment_start
+            .as_u64()
+            .checked_add(program_header.file_size())
+            .ok_or(LoadError::SegmentAddressOverflow)?;
+
+        Ok(Self {
+            memory_range,
+            first_page,
+            last_page,
+            file_backed_end,
+        })
+    }
+
+    fn start(self) -> UserVirtualAddress {
+        self.memory_range.start()
+    }
+
+    fn end_exclusive(self) -> u64 {
+        self.memory_range.end_exclusive()
+    }
+}
+
 impl LoadError {
     fn message(self) -> &'static str {
         match self {
@@ -196,47 +246,34 @@ fn map_load_segment(
     }
     validate_load_segment(image, program_header)?;
 
-    let segment_start = program_header.virtual_address();
-    let memory_end = segment_start
-        .checked_add(program_header.memory_size())
-        .ok_or(LoadError::SegmentAddressOverflow)?;
+    let segment_range = LoadSegmentRange::from_program_header(program_header)?;
     let file_end = program_header
         .offset()
         .checked_add(program_header.file_size())
         .ok_or(LoadError::SegmentFileOutOfBounds)?;
-    if UserVirtualAddress::new(memory_end - 1).is_none() {
-        return Err(LoadError::SegmentAddressOutOfRange);
-    }
     if usize::try_from(file_end).map_or(true, |end| end > image.len()) {
         return Err(LoadError::SegmentFileOutOfBounds);
     }
 
-    let first_page = align_down_to_page(segment_start);
-    let last_page = align_down_to_page(memory_end - 1);
     let page_flags = page_flags_for_segment(program_header.flags());
-    let file_backed_end = segment_start
-        .checked_add(program_header.file_size())
-        .ok_or(LoadError::SegmentAddressOverflow)?;
 
-    let mut page_start = first_page;
+    let mut page_start = segment_range.first_page;
     loop {
-        let user_page_start =
-            UserVirtualAddress::new(page_start).ok_or(LoadError::SegmentAddressOutOfRange)?;
         let physical_address = user_stack::allocate_and_map_user_page(
             frame_allocator,
-            user_page_start,
+            page_start,
             page_flags,
             FrameRangeOwner::UserElf,
         );
         copy_segment_page(
             image,
             program_header,
+            segment_range,
             page_start,
-            file_backed_end,
             physical_address,
         )?;
 
-        if page_start == last_page {
+        if page_start == segment_range.last_page {
             break;
         }
         page_start = page_start
@@ -261,19 +298,16 @@ fn validate_load_segment(image: &[u8], program_header: ProgramHeader) -> Result<
         return Err(LoadError::SegmentPermissionUnsupported);
     }
 
-    let memory_end = program_header
-        .virtual_address()
-        .checked_add(program_header.memory_size())
-        .ok_or(LoadError::SegmentAddressOverflow)?;
+    let segment_range = LoadSegmentRange::from_program_header(program_header)?;
     let file_end = program_header
         .offset()
         .checked_add(program_header.file_size())
         .ok_or(LoadError::SegmentFileOutOfBounds)?;
-    if UserVirtualAddress::new(memory_end - 1).is_none() {
-        return Err(LoadError::SegmentAddressOutOfRange);
-    }
     if usize::try_from(file_end).map_or(true, |end| end > image.len()) {
         return Err(LoadError::SegmentFileOutOfBounds);
+    }
+    if segment_range.file_backed_end > segment_range.end_exclusive() {
+        return Err(LoadError::SegmentFileLargerThanMemory);
     }
 
     Ok(())
@@ -300,26 +334,26 @@ fn executable_segment_contains_entry(program_header: ProgramHeader, entry_point:
     if program_header.flags() & PF_EXECUTE == 0 {
         return false;
     }
-    let segment_start = program_header.virtual_address();
-    let Some(segment_end) = segment_start.checked_add(program_header.memory_size()) else {
+    let Ok(segment_range) = LoadSegmentRange::from_program_header(program_header) else {
         return false;
     };
-    entry_point >= segment_start && entry_point < segment_end
+    entry_point >= segment_range.start().as_u64() && entry_point < segment_range.end_exclusive()
 }
 
 fn copy_segment_page(
     image: &[u8],
     program_header: ProgramHeader,
-    page_start: u64,
-    file_backed_end: u64,
+    segment_range: LoadSegmentRange,
+    page_start: UserVirtualAddress,
     physical_address: PhysicalFrameStart,
 ) -> Result<(), LoadError> {
-    let copy_start = max(page_start, program_header.virtual_address());
+    let page_start = page_start.as_u64();
+    let copy_start = max(page_start, segment_range.start().as_u64());
     let copy_end = min(
         page_start
             .checked_add(PAGE_SIZE)
             .ok_or(LoadError::SegmentAddressOverflow)?,
-        file_backed_end,
+        segment_range.file_backed_end,
     );
     if copy_start >= copy_end {
         return Ok(());
@@ -327,7 +361,7 @@ fn copy_segment_page(
 
     let source_offset = program_header
         .offset()
-        .checked_add(copy_start - program_header.virtual_address())
+        .checked_add(copy_start - segment_range.start().as_u64())
         .ok_or(LoadError::SegmentFileOutOfBounds)?;
     let copy_length =
         usize::try_from(copy_end - copy_start).map_err(|_| LoadError::SegmentFileOutOfBounds)?;
@@ -374,10 +408,6 @@ fn segment_permission_label(segment_flags: u32) -> &'static str {
         (true, false, false) => "R--",
         _ => "unsupported",
     }
-}
-
-fn align_down_to_page(address: u64) -> u64 {
-    address & !(PAGE_SIZE - 1)
 }
 
 fn rejects_mutated_elf(mutate: impl FnOnce(&mut [u8])) -> bool {
