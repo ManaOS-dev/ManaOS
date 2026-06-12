@@ -19,6 +19,7 @@
 
 pub mod architecture;
 pub mod context;
+mod metadata;
 pub mod process_lifecycle;
 mod state;
 pub mod user_mode;
@@ -29,6 +30,7 @@ use alloc::vec::Vec;
 pub use context::UserEntryArguments;
 use context::{TaskContext, TaskEntry, UserTaskContext};
 use core::sync::atomic::{AtomicBool, Ordering};
+pub use metadata::{TaskIdentifier, TaskMetadata};
 use spin::Mutex;
 pub use state::TaskState;
 
@@ -54,7 +56,7 @@ enum SwitchAction {
 
 /// A schedulable kernel task.
 pub struct Task {
-    id: u64,
+    metadata: TaskMetadata,
     state: TaskState,
     kind: TaskKind,
     context: TaskContext,
@@ -62,9 +64,9 @@ pub struct Task {
 }
 
 impl Task {
-    fn bootstrap(id: u64) -> Self {
+    fn bootstrap() -> Self {
         Self {
-            id,
+            metadata: TaskMetadata::bootstrap(),
             state: TaskState::Running,
             kind: TaskKind::Kernel,
             context: TaskContext::new(),
@@ -72,7 +74,11 @@ impl Task {
         }
     }
 
-    fn kernel(id: u64, entry: TaskEntry) -> Self {
+    fn kernel(
+        identifier: TaskIdentifier,
+        parent_identifier: TaskIdentifier,
+        entry: TaskEntry,
+    ) -> Self {
         let mut stack = vec![0; TASK_STACK_SIZE].into_boxed_slice();
         let stack_top = stack.as_mut_ptr() as usize + stack.len();
         // SAFETY: The stack is heap allocated, writable, and retained in the
@@ -80,7 +86,7 @@ impl Task {
         let context = unsafe { TaskContext::from_stack(stack_top, entry) };
 
         Self {
-            id,
+            metadata: TaskMetadata::child(identifier, parent_identifier),
             state: TaskState::Ready,
             kind: TaskKind::Kernel,
             context,
@@ -88,9 +94,13 @@ impl Task {
         }
     }
 
-    fn user(id: u64, user_context: UserTaskContext) -> Self {
+    fn user(
+        identifier: TaskIdentifier,
+        parent_identifier: TaskIdentifier,
+        user_context: UserTaskContext,
+    ) -> Self {
         Self {
-            id,
+            metadata: TaskMetadata::child(identifier, parent_identifier),
             state: TaskState::Ready,
             kind: TaskKind::User(user_context),
             context: TaskContext::new(),
@@ -100,30 +110,35 @@ impl Task {
 
     /// Return this task's unique identifier.
     pub fn get_id(&self) -> u64 {
-        self.id
+        self.metadata.get_identifier().as_u64()
     }
 }
 
 struct Scheduler {
     tasks: Vec<Task>,
     current_index: usize,
-    next_task_id: u64,
+    next_task_identifier: TaskIdentifier,
 }
 
 impl Scheduler {
     fn new() -> Self {
         Self {
-            tasks: vec![Task::bootstrap(0)],
+            tasks: vec![Task::bootstrap()],
             current_index: 0,
-            next_task_id: 1,
+            next_task_identifier: TaskIdentifier::first_dynamic(),
         }
     }
 
     fn spawn(&mut self, entry: TaskEntry) -> u64 {
-        let task_id = self.next_task_id;
-        self.next_task_id += 1;
-        self.tasks.push(Task::kernel(task_id, entry));
-        task_id
+        let task_identifier = self.next_task_identifier.allocate();
+        let parent_identifier = self.tasks[self.current_index].metadata.get_identifier();
+        let task = Task::kernel(task_identifier, parent_identifier, entry);
+        debug_assert_eq!(
+            task.metadata.get_parent_identifier(),
+            Some(parent_identifier)
+        );
+        self.tasks.push(task);
+        task_identifier.as_u64()
     }
 
     fn spawn_user_task(
@@ -132,13 +147,18 @@ impl Scheduler {
         user_stack_top: u64,
         entry_arguments: UserEntryArguments,
     ) -> u64 {
-        let task_id = self.next_task_id;
-        self.next_task_id += 1;
+        let task_identifier = self.next_task_identifier.allocate();
+        let parent_identifier = self.tasks[self.current_index].metadata.get_identifier();
         // SAFETY: The caller provides a mapped user entry point and user stack.
         let user_context =
             unsafe { UserTaskContext::new(entry_point, user_stack_top, entry_arguments) };
-        self.tasks.push(Task::user(task_id, user_context));
-        task_id
+        let task = Task::user(task_identifier, parent_identifier, user_context);
+        debug_assert_eq!(
+            task.metadata.get_parent_identifier(),
+            Some(parent_identifier)
+        );
+        self.tasks.push(task);
+        task_identifier.as_u64()
     }
 
     fn get_current_task_id(&self) -> u64 {
@@ -146,7 +166,9 @@ impl Scheduler {
     }
 
     fn get_task_index(&self, task_id: u64) -> Option<usize> {
-        self.tasks.iter().position(|task| task.id == task_id)
+        self.tasks
+            .iter()
+            .position(|task| task.metadata.get_identifier().as_u64() == task_id)
     }
 
     fn prepare_one_shot_user_task(&mut self, task_id: u64) -> Option<UserTaskContext> {
@@ -168,7 +190,7 @@ impl Scheduler {
     }
 
     fn finish_current_task(&mut self) -> Option<u64> {
-        let task_id = self.tasks[self.current_index].id;
+        let task_id = self.tasks[self.current_index].get_id();
         if !self.tasks[self.current_index].state.finish_running() {
             return None;
         }
