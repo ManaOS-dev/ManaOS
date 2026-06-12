@@ -108,15 +108,23 @@ items have been removed so the file stays useful for deciding the next task.
 
 ### Memory Management
 
+- [ ] Audit `BumpFrameAllocator` call sites and document invariants required before replacing it.
 - [ ] Replace the bump frame allocator with a reusable physical frame allocator.
 - [ ] Track reserved, used, and free physical frame ranges.
+- [ ] Design ownership rules for free, used, and reserved physical frame ranges.
 - [ ] Add a kernel virtual memory allocator for dynamic mappings.
 - [ ] Add guard pages for kernel stacks.
+- [ ] Design kernel stack guard page placement and fault diagnostics.
 - [ ] Add per-process page tables.
-- [ ] Add copy-in/copy-out helpers with consistent user pointer validation.
+- [ ] Document the page ownership model required before per-process page tables.
+- [x] Add copy-in/copy-out helpers with consistent user pointer validation.
+- [ ] Define a syscall-by-syscall user pointer validation policy.
 - [ ] Enforce writable, user, and executable page permissions in syscall validation.
+- [ ] Add boot-time self-checks for kernel and user mapping permissions.
 - [ ] Audit identity mapping lifetime and shrink it when possible.
+- [ ] Identify identity mappings that can be removed after boot-time hardware setup.
 - [ ] Add typed physical and virtual address wrappers where raw `u64` still leaks across boundaries.
+- [ ] Inventory APIs where raw `u64` physical or virtual addresses cross module boundaries.
 - [ ] Add page fault diagnostics that include the current task and access type.
 
 ### Interrupts And Scheduling
@@ -128,9 +136,22 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Calibrate and use the Local APIC timer.
 - [ ] Replace PIT scheduling ticks after Local APIC timer validation.
 - [ ] Save and restore a full user trap frame on interrupt and syscall paths.
+- [ ] Design the full user trap frame register layout.
+- [ ] Document the interrupt and syscall register sets that must be saved.
 - [ ] Make preemptive scheduling safe for user tasks.
+- [ ] Checklist the prerequisites for enabling user task preemption.
 - [ ] Add scheduler accounting and task state diagnostics.
 - [ ] Add kernel stack switching per task where needed.
+- [ ] Design the per-task kernel stack switching policy.
+
+### Context Switch And Task Refactoring
+
+- [ ] Separate kernel task context and user task context responsibilities.
+- [ ] Document the context switch ABI.
+- [ ] Verify the `UserTaskContext` register layout against `context_switch.s` offsets.
+- [ ] Move user task exit and run-once lifecycle handling into a process lifecycle module.
+- [ ] Normalize user task scheduler state transitions.
+- [ ] Define the task metadata model needed before process identifiers and parent-child relationships.
 
 ### Synchronization And Concurrency
 

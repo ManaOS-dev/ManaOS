@@ -107,15 +107,23 @@
 
 ### Memory Management
 
+- [ ] `BumpFrameAllocator` の利用箇所を audit し、置き換え前に必要な不変条件を文書化する。
 - [ ] bump frame allocator を再利用可能な physical frame allocator に置き換える。
 - [ ] reserved / used / free physical frame range を追跡する。
+- [ ] free / used / reserved physical frame range の所有権ルールを設計する。
 - [ ] dynamic mapping 用 kernel virtual memory allocator を追加する。
 - [ ] kernel stack に guard page を追加する。
+- [ ] kernel stack guard page の配置と fault diagnostics を設計する。
 - [ ] process ごとの page table を追加する。
-- [ ] user pointer validation を一貫させる copy-in / copy-out helper を追加する。
+- [ ] per-process page table 導入前に必要な page ownership model を文書化する。
+- [x] user pointer validation を一貫させる copy-in / copy-out helper を追加する。
+- [ ] syscall ごとの user pointer validation policy を定義する。
 - [ ] syscall validation で writable / user / executable page permission を検証する。
+- [ ] kernel / user mapping permission を検査する boot-time self-check を追加する。
 - [ ] identity mapping の寿命を audit し、可能なら縮小する。
+- [ ] boot-time hardware setup 後に削除できる identity mapping を特定する。
 - [ ] raw `u64` が boundary を漏れている箇所に typed physical / virtual address wrapper を追加する。
+- [ ] raw `u64` の physical / virtual address が module boundary を越える API を一覧化する。
 - [ ] page fault diagnostics に current task と access type を含める。
 
 ### Interrupts And Scheduling
@@ -127,9 +135,22 @@
 - [ ] Local APIC timer を calibrate して使用する。
 - [ ] Local APIC timer 検証後に PIT scheduling tick を置き換える。
 - [ ] interrupt / syscall path で完全な user trap frame を保存・復元する。
+- [ ] full user trap frame の register layout を設計する。
+- [ ] interrupt / syscall path で保存すべき register set を文書化する。
 - [ ] user task の preemptive scheduling を安全にする。
+- [ ] user task preemption を有効化する前提条件を checklist 化する。
 - [ ] scheduler accounting と task state diagnostics を追加する。
 - [ ] 必要な箇所で task ごとの kernel stack switching を追加する。
+- [ ] task ごとの kernel stack switching 方針を設計する。
+
+### Context Switch And Task Refactoring
+
+- [ ] kernel task context と user task context の責務を分離する。
+- [ ] context switch ABI を文書化する。
+- [ ] `UserTaskContext` の register layout と `context_switch.s` の offset contract を検証する。
+- [ ] user task exit / run-once lifecycle handling を process lifecycle module へ移動する。
+- [ ] user task scheduler state transition を整理する。
+- [ ] process identifier と parent-child relationship 導入前に必要な task metadata model を定義する。
 
 ### Synchronization And Concurrency
 
