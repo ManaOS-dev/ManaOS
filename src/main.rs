@@ -353,6 +353,21 @@ fn run_user_smoke_demo(frame_allocator: &mut kernel::memory::frame_allocator::Bu
     let user_elf: kernel::elf::LoadedElf =
         kernel::elf::load_user_program(frame_allocator, &user_elf_bytes, user_elf_path);
     let user_entry_point = user_elf.entry_point();
+    let user_stack_probe = user_stack_top
+        .checked_sub(1)
+        .expect("user stack top must be above the mapped stack");
+    assert!(
+        kernel::memory::paging::verify_kernel_user_mapping_permissions(
+            verify_kernel_filesystem as *const () as usize,
+            usize::try_from(user_stack_probe).expect("user stack probe must fit in usize"),
+            usize::try_from(user_entry_point).expect("user entry point must fit in usize"),
+        ),
+        "kernel and user mapping permission smoke must pass"
+    );
+    crate::log_info!(
+        "memory",
+        "Kernel/user mapping permission self-check passed."
+    );
     let user_entry_arguments = [user_elf_path, "--storage-smoke"];
     let user_entry_environment = ["MANAOS_BOOT=storage-smoke"];
     let prepared_user_stack = kernel::memory::user_stack::prepare_initial_stack(
