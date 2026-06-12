@@ -243,10 +243,10 @@ fn mapping_flags_for_address(address: u64) -> Option<PageTableFlags> {
 }
 
 unsafe fn create_pml4(frame_allocator: &mut BumpFrameAllocator) -> PhysFrame {
-    let addr = frame_allocator
+    let pml4_frame_start = frame_allocator
         .allocate_frame()
         .expect("OOM: failed to allocate PML4 frame");
-    let frame = PhysFrame::containing_address(PhysAddr::new(addr));
+    let frame = PhysFrame::containing_address(PhysAddr::new(pml4_frame_start.as_u64()));
     let ptr = frame.start_address().as_u64() as *mut PageTable;
     // SAFETY: ptr points to a freshly allocated 4KiB page table frame.
     unsafe {
@@ -467,6 +467,6 @@ unsafe impl x86_64::structures::paging::FrameAllocator<Size4KiB> for FrameAllocW
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
         self.frame_allocator
             .allocate_frame()
-            .map(|address| PhysFrame::containing_address(PhysAddr::new(address)))
+            .map(|address| PhysFrame::containing_address(PhysAddr::new(address.as_u64())))
     }
 }

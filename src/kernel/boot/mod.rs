@@ -44,11 +44,9 @@ pub fn initialize<'a>(
     }
     crate::log_info!("paging", "Page table switched.");
 
-    let heap_start_raw = frame_allocator
+    let heap_start = frame_allocator
         .allocate_frames(heap::HEAP_PAGES)
         .expect("OOM: failed to allocate pages for kernel heap");
-    let heap_start =
-        usize::try_from(heap_start_raw).expect("failed to convert kernel heap address to usize");
     // SAFETY: heap_start was allocated from the frame allocator and is
     // exclusively reserved for the kernel heap.
     unsafe {
@@ -57,7 +55,7 @@ pub fn initialize<'a>(
     crate::log_info!(
         "heap",
         "Initialized at {:#010x}, size: {} MB",
-        heap_start,
+        heap_start.as_u64(),
         heap::HEAP_SIZE / (1024 * 1024)
     );
 

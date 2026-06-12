@@ -40,12 +40,14 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 
 - `kernel::memory::frame_allocator::BumpFrameAllocator::add_region(start, pages)`
   accepts a raw physical start address from the UEFI memory map.
-- `BumpFrameAllocator::allocate_frame() -> Option<u64>` returns a raw physical
-  frame address.
-- `BumpFrameAllocator::allocate_frames(n) -> Option<u64>` returns the raw
-  physical start of a contiguous frame range.
-- `kernel::memory::heap::init(heap_start: usize)` accepts a raw physical address
-  that is also used as a virtual address while identity mapping is active.
+- `BumpFrameAllocator::allocate_frame() -> Option<PhysicalFrameStart>` returns
+  a typed 4 KiB-aligned physical frame start.
+- `BumpFrameAllocator::allocate_frames(n) -> Option<PhysicalFrameStart>`
+  returns the typed physical start of a contiguous frame range. The page count
+  is still carried separately, so range ownership is not yet explicit.
+- `kernel::memory::heap::init(heap_start: PhysicalFrameStart)` accepts a typed
+  physical frame start that is also used as a virtual address while identity
+  mapping is active.
 
 ### Paging And MMIO
 
@@ -110,11 +112,12 @@ callers.
 
 ## Migration Order
 
-1. Wrap frame allocator return values and UEFI memory-map physical starts.
-2. Wrap user virtual addresses used by ELF loading and user stack setup.
-3. Wrap syscall user pointer arguments after syscall dispatch converts from the
+1. Wrap frame allocator return values.
+2. Wrap UEFI memory-map physical starts and contiguous physical frame ranges.
+3. Wrap user virtual addresses used by ELF loading and user stack setup.
+4. Wrap syscall user pointer arguments after syscall dispatch converts from the
    raw ABI.
-4. Wrap AHCI DMA physical addresses and keep register splitting at the hardware
+5. Wrap AHCI DMA physical addresses and keep register splitting at the hardware
    boundary.
-5. Wrap MMIO and framebuffer physical ranges separately from allocatable RAM.
-6. Replace internal raw address arithmetic after the boundary wrappers exist.
+6. Wrap MMIO and framebuffer physical ranges separately from allocatable RAM.
+7. Replace internal raw address arithmetic after the boundary wrappers exist.

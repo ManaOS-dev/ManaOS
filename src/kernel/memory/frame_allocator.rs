@@ -1,6 +1,7 @@
-/// A simple bump (linear) physical frame allocator.
-/// Conventional memory regions are registered before `ExitBootServices`,
-/// and physical frames (4KB units) are allocated after `ExitBootServices`.
+//! A simple bump physical frame allocator.
+
+use super::address::PhysicalFrameStart;
+
 const MAX_REGIONS: usize = 128;
 const FRAME_SIZE: u64 = 4096;
 
@@ -10,6 +11,8 @@ struct Region {
     pages: u64,
 }
 
+/// A linear allocator for 4 KiB physical frames registered from UEFI memory map
+/// regions.
 pub struct BumpFrameAllocator {
     regions: [Region; MAX_REGIONS],
     count: usize,
@@ -18,6 +21,7 @@ pub struct BumpFrameAllocator {
 }
 
 impl BumpFrameAllocator {
+    /// Create an empty physical frame allocator.
     pub const fn new() -> Self {
         Self {
             regions: [Region { start: 0, pages: 0 }; MAX_REGIONS],
@@ -38,13 +42,13 @@ impl BumpFrameAllocator {
 
     /// Allocate a single 4KiB frame.
     #[allow(dead_code)]
-    pub fn allocate_frame(&mut self) -> Option<u64> {
+    pub fn allocate_frame(&mut self) -> Option<PhysicalFrameStart> {
         self.allocate_frames(1)
     }
 
     /// Allocate `n` contiguous 4KiB frames.
     /// Contiguous allocation is only guaranteed within a single region.
-    pub fn allocate_frames(&mut self, n: u64) -> Option<u64> {
+    pub fn allocate_frames(&mut self, n: u64) -> Option<PhysicalFrameStart> {
         if n == 0 {
             return None;
         }
@@ -65,7 +69,10 @@ impl BumpFrameAllocator {
                 };
 
                 self.offset += n;
-                return Some(candidate_address);
+                return Some(
+                    PhysicalFrameStart::new(candidate_address)
+                        .expect("frame allocator returned an unaligned physical frame"),
+                );
             }
             // Move to the next region
             self.current += 1;
@@ -162,5 +169,8 @@ pub fn verify_zero_address_skip_for_multi_frame_allocations() -> bool {
     let mut frame_allocator = BumpFrameAllocator::new();
     frame_allocator.add_region(0, 3);
 
-    frame_allocator.allocate_frames(2) == Some(FRAME_SIZE)
+    frame_allocator
+        .allocate_frames(2)
+        .map(PhysicalFrameStart::as_u64)
+        == Some(FRAME_SIZE)
 }
