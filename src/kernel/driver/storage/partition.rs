@@ -1,6 +1,7 @@
 //! Partition-relative block device adapter.
 
 use super::block_device::{BlockDevice, BlockDeviceError, BlockDeviceResult};
+use crate::kernel::memory::address::StorageDataAddress;
 
 /// Block-device view that translates partition-relative LBAs to disk LBAs.
 pub(super) struct PartitionBlockDevice<'a, T: BlockDevice> {
@@ -30,7 +31,7 @@ impl<T: BlockDevice> BlockDevice for PartitionBlockDevice<'_, T> {
         &mut self,
         logical_block_address: u64,
         sector_count: u16,
-        data_address: u64,
+        data_address: StorageDataAddress,
     ) -> BlockDeviceResult<()> {
         if sector_count == 0 {
             return Err(BlockDeviceError::InvalidTransferLength);
@@ -63,7 +64,7 @@ impl<T: BlockDevice> BlockDevice for PartitionBlockDevice<'_, T> {
         &mut self,
         logical_block_address: u64,
         sector_count: u16,
-        data_address: u64,
+        data_address: StorageDataAddress,
     ) -> BlockDeviceResult<()> {
         if sector_count == 0 {
             return Err(BlockDeviceError::InvalidTransferLength);

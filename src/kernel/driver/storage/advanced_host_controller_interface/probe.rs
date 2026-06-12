@@ -8,8 +8,12 @@ use crate::kernel::driver::storage::{
     file_allocation_table, guid_partition_table, partition::PartitionBlockDevice,
     set_detected_file, set_selected_partition,
 };
+use crate::kernel::memory::address::StorageDataAddress;
 
-pub(super) fn inspect_initial_storage(block_device: &mut impl BlockDevice, data_address: u64) {
+pub(super) fn inspect_initial_storage(
+    block_device: &mut impl BlockDevice,
+    data_address: StorageDataAddress,
+) {
     if block_device.read_logical_block(0, data_address).is_ok() {
         dump_sector_prefix("LBA0", data_address);
     }
@@ -119,17 +123,17 @@ fn register_detected_file(
     set_detected_file(partition, volume, entry, mount_path);
 }
 
-fn dump_sector_prefix(label: &str, data_address: u64) {
+fn dump_sector_prefix(label: &str, data_address: StorageDataAddress) {
     crate::log_debug!("ahci", "{}: {}", label, SectorPrefix { data_address });
 }
 
 struct SectorPrefix {
-    data_address: u64,
+    data_address: StorageDataAddress,
 }
 
 impl fmt::Display for SectorPrefix {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let data = self.data_address as *const u8;
+        let data = self.data_address.as_usize() as *const u8;
         for offset in 0..16 {
             // SAFETY: `data_address` points to a 512-byte DMA read buffer.
             let byte = unsafe { core::ptr::read_volatile(data.add(offset)) };

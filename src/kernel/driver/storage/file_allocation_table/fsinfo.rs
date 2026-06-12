@@ -5,6 +5,7 @@ use core::fmt;
 use super::super::block_device::{BlockDevice, SECTOR_BYTES};
 use super::bytes::read_le_u32;
 use super::parser::FileAllocationTable32Volume;
+use crate::kernel::memory::address::StorageDataAddress;
 
 const FILE_SYSTEM_INFORMATION_LEAD_SIGNATURE_OFFSET: usize = 0;
 const FILE_SYSTEM_INFORMATION_STRUCT_SIGNATURE_OFFSET: usize = 484;
@@ -36,7 +37,7 @@ impl fmt::Display for FileSystemInformationValue {
 pub(super) fn inspect_file_system_information(
     block_device: &mut impl BlockDevice,
     volume: &FileAllocationTable32Volume,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) {
     if volume.file_system_information_sector() == 0
         || volume.file_system_information_sector() >= volume.reserved_sector_count()
@@ -63,7 +64,7 @@ pub(super) fn inspect_file_system_information(
         return;
     }
 
-    let sector = data_address as *const u8;
+    let sector = data_address.as_usize() as *const u8;
     // SAFETY: `data_address` points to a 512-byte DMA buffer filled from the
     // FAT32 FSInfo sector.
     let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };

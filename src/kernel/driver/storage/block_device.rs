@@ -1,5 +1,7 @@
 //! Block-device abstraction for storage parsers.
 
+use crate::kernel::memory::address::StorageDataAddress;
+
 /// Number of bytes in one storage sector used by early block readers.
 pub(super) const SECTOR_BYTES: usize = 512;
 
@@ -33,7 +35,7 @@ pub(super) trait BlockDevice {
     fn read_logical_block(
         &mut self,
         logical_block_address: u64,
-        data_address: u64,
+        data_address: StorageDataAddress,
     ) -> BlockDeviceResult<()> {
         self.read_logical_blocks(logical_block_address, 1, data_address)
     }
@@ -43,7 +45,7 @@ pub(super) trait BlockDevice {
         &mut self,
         logical_block_address: u64,
         sector_count: u16,
-        data_address: u64,
+        data_address: StorageDataAddress,
     ) -> BlockDeviceResult<()>;
 
     /// Write one or more contiguous sectors from the provided physical address.
@@ -52,7 +54,7 @@ pub(super) trait BlockDevice {
         &mut self,
         _logical_block_address: u64,
         _sector_count: u16,
-        _data_address: u64,
+        _data_address: StorageDataAddress,
     ) -> BlockDeviceResult<()> {
         Err(BlockDeviceError::Unsupported)
     }

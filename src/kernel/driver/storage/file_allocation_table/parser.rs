@@ -8,6 +8,7 @@ use core::{fmt, str};
 use super::super::block_device::{BlockDevice, SECTOR_BYTES};
 use super::bytes::{ascii_field, read_le_u16, read_le_u32};
 use super::display::EscapedAscii;
+use crate::kernel::memory::address::StorageDataAddress;
 
 const BOOT_SECTOR_LBA: u64 = 0;
 const JUMP_INSTRUCTION_OFFSET: usize = 0;
@@ -127,14 +128,14 @@ pub(in crate::kernel::driver::storage) struct FileAllocationTable32WritePlan {
 /// Inspect a partition boot sector as File Allocation Table 32 metadata.
 pub(in crate::kernel::driver::storage) fn inspect_boot_sector(
     block_device: &mut impl BlockDevice,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) -> Option<FileAllocationTable32Volume> {
     if let Err(error) = block_device.read_logical_block(BOOT_SECTOR_LBA, data_address) {
         crate::log_warn!("fat32", "Failed to read boot sector: {error:?}");
         return None;
     }
 
-    let sector = data_address as *const u8;
+    let sector = data_address.as_usize() as *const u8;
     // SAFETY: `data_address` points to a 512-byte DMA buffer filled from the
     // selected partition boot sector.
     let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
@@ -156,7 +157,7 @@ pub(in crate::kernel::driver::storage) fn inspect_boot_sector(
 pub(in crate::kernel::driver::storage) fn inspect_root_directory(
     block_device: &mut impl BlockDevice,
     volume: FileAllocationTable32Volume,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) -> Option<FileAllocationTable32DirectoryEntry> {
     let listing = list_directory(block_device, volume, volume.root_cluster, data_address)?;
     let file_entries = listing
@@ -183,7 +184,7 @@ pub(in crate::kernel::driver::storage) fn inspect_root_directory(
 pub(in crate::kernel::driver::storage) fn list_root_directory(
     block_device: &mut impl BlockDevice,
     volume: FileAllocationTable32Volume,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) -> Option<FileAllocationTable32DirectoryListing> {
     list_directory(block_device, volume, volume.root_cluster, data_address)
 }
@@ -193,7 +194,7 @@ pub(in crate::kernel::driver::storage) fn inspect_file_contents(
     block_device: &mut impl BlockDevice,
     volume: FileAllocationTable32Volume,
     entry: FileAllocationTable32DirectoryEntry,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) -> Option<()> {
     if entry.file_size == 0 {
         crate::log_info!("fat32", "Read {}: \"\"", entry.name());
@@ -210,7 +211,7 @@ pub(in crate::kernel::driver::storage) fn inspect_file_contents(
         return None;
     }
 
-    let sector = data_address as *const u8;
+    let sector = data_address.as_usize() as *const u8;
     // SAFETY: `data_address` points to a 512-byte DMA buffer filled from the
     // file's first data sector.
     let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
@@ -240,7 +241,7 @@ pub(in crate::kernel::driver::storage) fn read_file_contents(
     block_device: &mut impl BlockDevice,
     volume: FileAllocationTable32Volume,
     entry: FileAllocationTable32DirectoryEntry,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) -> Option<Vec<u8>> {
     let file_size = usize::try_from(entry.file_size).expect("file size must fit in usize");
     let mut contents = Vec::new();
@@ -339,7 +340,7 @@ pub(in crate::kernel::driver::storage) fn find_entry_by_path(
     block_device: &mut impl BlockDevice,
     volume: FileAllocationTable32Volume,
     path: &str,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) -> Option<FileAllocationTable32DirectoryEntry> {
     let mut current_cluster = volume.root_cluster;
     let mut components = path
@@ -503,7 +504,7 @@ fn validate_backup_boot_sector(
     block_device: &mut impl BlockDevice,
     volume: &FileAllocationTable32Volume,
     primary_sector: &[u8],
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) {
     if volume.backup_boot_sector == 0 || volume.backup_boot_sector >= volume.reserved_sector_count {
         crate::log_warn!(
@@ -527,7 +528,7 @@ fn validate_backup_boot_sector(
         return;
     }
 
-    let sector = data_address as *const u8;
+    let sector = data_address.as_usize() as *const u8;
     // SAFETY: `data_address` points to a 512-byte DMA buffer filled from the
     // FAT32 backup boot sector.
     let backup_sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
@@ -628,7 +629,7 @@ fn list_directory(
     block_device: &mut impl BlockDevice,
     volume: FileAllocationTable32Volume,
     directory_cluster: u32,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) -> Option<FileAllocationTable32DirectoryListing> {
     let mut listing = FileAllocationTable32DirectoryListing {
         entries: Vec::new(),
@@ -656,7 +657,7 @@ fn list_directory(
                 return None;
             }
 
-            let sector = data_address as *const u8;
+            let sector = data_address.as_usize() as *const u8;
             // SAFETY: `data_address` points to a 512-byte DMA buffer filled from
             // a directory sector.
             let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
@@ -775,7 +776,7 @@ fn read_cluster_contents(
     block_device: &mut impl BlockDevice,
     volume: &FileAllocationTable32Volume,
     cluster: u32,
-    data_address: u64,
+    data_address: StorageDataAddress,
     file_size: usize,
     contents: &mut Vec<u8>,
 ) -> Option<()> {
@@ -793,7 +794,7 @@ fn read_cluster_contents(
             return None;
         }
 
-        let sector = data_address as *const u8;
+        let sector = data_address.as_usize() as *const u8;
         // SAFETY: `data_address` points to a 512-byte DMA buffer filled from a
         // file data sector.
         let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
@@ -813,7 +814,7 @@ pub(in crate::kernel::driver::storage::file_allocation_table) fn read_next_clust
     block_device: &mut impl BlockDevice,
     volume: &FileAllocationTable32Volume,
     cluster: u32,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) -> Option<u32> {
     let byte_offset = cluster.checked_mul(FILE_ALLOCATION_TABLE_ENTRY_BYTES)?;
     let sector_offset = byte_offset / u32::from(volume.bytes_per_sector);
@@ -829,7 +830,7 @@ pub(in crate::kernel::driver::storage::file_allocation_table) fn read_next_clust
         return None;
     }
 
-    let sector = data_address as *const u8;
+    let sector = data_address.as_usize() as *const u8;
     // SAFETY: `data_address` points to a 512-byte DMA buffer filled from a file
     // allocation table sector.
     let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
