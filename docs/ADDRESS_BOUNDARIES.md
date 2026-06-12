@@ -72,6 +72,8 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - `kernel::memory::user_pointer::copy_from_user` accepts
   `UserReadableRange`, and `copy_to_user` accepts `UserWritableRange`; syscall
   helpers convert raw ABI arguments first.
+- `kernel::memory::user_pointer::copy_cstr_from_user` accepts `UserCString`,
+  which wraps a readable range capped by the syscall path-length policy.
 
 ### ELF Loading
 
@@ -108,6 +110,7 @@ Introduce wrappers in small steps:
 - `UserVirtualRange` for non-empty validated user pointer ranges.
 - `UserReadableRange` and `UserWritableRange` for syscall copy direction before
   page-table permission checks.
+- `UserCString` for readable syscall string candidates before NUL validation.
 - `DmaPhysicalAddress` for physical addresses that may be programmed into
   device descriptors.
 
