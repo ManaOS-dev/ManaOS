@@ -76,7 +76,7 @@ pub struct Task {
     state: TaskState,
     kind: TaskKind,
     context: TaskContext,
-    _kernel_stack: Option<KernelStack>,
+    kernel_stack: Option<KernelStack>,
 }
 
 impl Task {
@@ -86,7 +86,7 @@ impl Task {
             state: TaskState::Running,
             kind: TaskKind::Kernel,
             context: TaskContext::new(),
-            _kernel_stack: None,
+            kernel_stack: None,
         }
     }
 
@@ -95,7 +95,7 @@ impl Task {
         parent_identifier: TaskIdentifier,
         entry: TaskEntry,
     ) -> Self {
-        let mut kernel_stack = KernelStack::new_default();
+        let kernel_stack = KernelStack::new_default();
         let stack_top = kernel_stack.top();
         debug_assert!(kernel_stack.base() < stack_top);
         debug_assert!(kernel_stack.byte_len() >= 16);
@@ -108,7 +108,7 @@ impl Task {
             state: TaskState::Ready,
             kind: TaskKind::Kernel,
             context,
-            _kernel_stack: Some(kernel_stack),
+            kernel_stack: Some(kernel_stack),
         }
     }
 
@@ -117,18 +117,25 @@ impl Task {
         parent_identifier: TaskIdentifier,
         user_context: UserTaskContext,
     ) -> Self {
+        let kernel_stack = KernelStack::new_default();
+        debug_assert!(kernel_stack.base() < kernel_stack.top());
+        debug_assert!(kernel_stack.byte_len() >= 16);
         Self {
             metadata: TaskMetadata::child(identifier, parent_identifier),
             state: TaskState::Ready,
             kind: TaskKind::User(Box::new(UserTaskRuntime::new(user_context))),
             context: TaskContext::new(),
-            _kernel_stack: None,
+            kernel_stack: Some(kernel_stack),
         }
     }
 
     /// Return this task's unique identifier.
     pub fn get_id(&self) -> u64 {
         self.metadata.get_identifier().as_u64()
+    }
+
+    fn kernel_stack_byte_len(&self) -> Option<usize> {
+        self.kernel_stack.as_ref().map(KernelStack::byte_len)
     }
 }
 
@@ -171,11 +178,20 @@ impl Scheduler {
         let user_context =
             unsafe { UserTaskContext::new(entry_point, user_stack_top, entry_arguments) };
         let task = Task::user(task_identifier, parent_identifier, user_context);
+        let kernel_stack_bytes = task
+            .kernel_stack_byte_len()
+            .expect("user tasks must own a kernel stack record");
         debug_assert_eq!(
             task.metadata.get_parent_identifier(),
             Some(parent_identifier)
         );
         self.tasks.push(task);
+        crate::log_info!(
+            "task",
+            "User task kernel stack prepared: task={} bytes={}",
+            task_identifier.as_u64(),
+            kernel_stack_bytes
+        );
         task_identifier.as_u64()
     }
 

@@ -29,8 +29,8 @@ impl KernelStack {
     }
 
     /// Return one byte past the highest writable address in this stack buffer.
-    pub(super) fn top(&mut self) -> usize {
-        self.buffer.as_mut_ptr() as usize + self.buffer.len()
+    pub(super) fn top(&self) -> usize {
+        self.buffer.as_ptr() as usize + self.buffer.len()
     }
 
     /// Return the writable stack size in bytes.
