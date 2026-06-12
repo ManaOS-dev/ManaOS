@@ -73,7 +73,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Implement a 64-bit ELF loader.
 - [x] Validate ELF headers, program headers, and segment permissions.
 - [x] Map user text, rodata, data, bss, stack, and guard pages with correct flags.
-- [ ] Pass `argc`, `argv`, and environment pointers to user entry points.
+- [x] Pass `argc`, `argv`, and environment pointers to user entry points.
 - [x] Load user programs from the filesystem instead of `include_bytes!`.
 - [ ] Add `execve`.
 - [ ] Add process identifiers and parent-child relationships.
@@ -173,7 +173,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Add parser unit tests for GPT and FAT32 using byte fixtures.
 - [ ] Add syscall ABI tests for success and errno paths.
 - [ ] Add userland build checks to CI for every committed user program.
-- [ ] Add architecture boundary checks that reject `arch` to `kernel` imports.
+- [x] Add architecture boundary checks that reject `arch` to `kernel` imports.
 - [ ] Add docs for the direct maintainer branch workflow.
 - [ ] Add docs for manual QEMU validation commands.
 - [ ] Add a contributor-facing architecture map generated from the current module tree.

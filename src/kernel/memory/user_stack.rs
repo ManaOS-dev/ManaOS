@@ -12,12 +12,47 @@ use x86_64::{
 
 const PAGE_SIZE: u64 = 4096;
 const PAGE_SIZE_USIZE: usize = 4096;
+const POINTER_SIZE: u64 = core::mem::size_of::<u64>() as u64;
+const USER_STACK_ALIGNMENT: u64 = 16;
+const MAX_USER_ENTRY_ARGUMENTS: usize = 8;
+const MAX_USER_ENTRY_ENVIRONMENT: usize = 8;
 /// Virtual base used by linked user demo executables.
 pub const USER_PROGRAM_BASE: u64 = 0x0000_4000_0000_0000;
 const USER_DATA_BASE: u64 = USER_PROGRAM_BASE + PAGE_SIZE;
 const USER_BAD_POINTER_BASE: u64 = USER_DATA_BASE + PAGE_SIZE;
 const USER_STACK_BASE: u64 = 0x0000_7fff_f000_0000;
 const _: () = assert!(USER_BAD_POINTER_BASE == 0x0000_4000_0000_2000);
+
+/// Prepared user stack metadata for first user-mode entry.
+#[derive(Debug, Clone, Copy)]
+pub struct PreparedUserStack {
+    stack_pointer: u64,
+    argument_count: u64,
+    argument_values_pointer: u64,
+    environment_values_pointer: u64,
+}
+
+impl PreparedUserStack {
+    /// Return the initial user stack pointer.
+    pub fn stack_pointer(&self) -> u64 {
+        self.stack_pointer
+    }
+
+    /// Return the number of entries in the user `argv` array.
+    pub fn argument_count(&self) -> u64 {
+        self.argument_count
+    }
+
+    /// Return the user virtual address of the `argv` pointer array.
+    pub fn argument_values_pointer(&self) -> u64 {
+        self.argument_values_pointer
+    }
+
+    /// Return the user virtual address of the environment pointer array.
+    pub fn environment_values_pointer(&self) -> u64 {
+        self.environment_values_pointer
+    }
+}
 
 /// Allocate and map a fixed-base user-space stack.
 ///
@@ -53,6 +88,77 @@ pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64)
     USER_STACK_BASE
         .checked_add(stack_size)
         .expect("user stack top address overflowed")
+}
+
+/// Place `argv` and environment strings on the mapped user stack.
+///
+/// Returns the adjusted stack pointer and user virtual addresses for the
+/// null-terminated pointer arrays.
+///
+/// # Panics
+///
+/// Panics if the stack is invalid, the fixed argument limits are exceeded, or
+/// the argument block does not fit in the mapped stack range.
+pub fn prepare_initial_stack(
+    stack_top: u64,
+    arguments: &[&str],
+    environment: &[&str],
+) -> PreparedUserStack {
+    assert!(
+        stack_top > USER_STACK_BASE,
+        "user stack top must be above the fixed user stack base"
+    );
+    let stack_size = usize::try_from(stack_top - USER_STACK_BASE)
+        .expect("user stack size must fit in usize before preparing arguments");
+    assert!(
+        paging::is_user_range_mapped_writable(
+            usize::try_from(USER_STACK_BASE).expect("user stack base must fit in usize"),
+            stack_size,
+        ),
+        "user entry arguments require a mapped writable user stack"
+    );
+    assert!(
+        arguments.len() <= MAX_USER_ENTRY_ARGUMENTS,
+        "too many user entry arguments"
+    );
+    assert!(
+        environment.len() <= MAX_USER_ENTRY_ENVIRONMENT,
+        "too many user entry environment entries"
+    );
+
+    let mut stack_pointer = stack_top;
+    let mut argument_pointers = [0_u64; MAX_USER_ENTRY_ARGUMENTS];
+    let mut environment_pointers = [0_u64; MAX_USER_ENTRY_ENVIRONMENT];
+
+    for index in (0..arguments.len()).rev() {
+        argument_pointers[index] =
+            push_c_string(&mut stack_pointer, USER_STACK_BASE, arguments[index]);
+    }
+    for index in (0..environment.len()).rev() {
+        environment_pointers[index] =
+            push_c_string(&mut stack_pointer, USER_STACK_BASE, environment[index]);
+    }
+
+    stack_pointer = align_down(stack_pointer, POINTER_SIZE);
+    let environment_values_pointer = push_pointer_array(
+        &mut stack_pointer,
+        USER_STACK_BASE,
+        &environment_pointers[..environment.len()],
+    );
+    let argument_values_pointer = push_pointer_array(
+        &mut stack_pointer,
+        USER_STACK_BASE,
+        &argument_pointers[..arguments.len()],
+    );
+    stack_pointer = align_down(stack_pointer, USER_STACK_ALIGNMENT);
+
+    PreparedUserStack {
+        stack_pointer,
+        argument_count: u64::try_from(arguments.len())
+            .expect("argument count must fit in user entry register"),
+        argument_values_pointer,
+        environment_values_pointer,
+    }
 }
 
 /// Allocate one physical frame and map it at a page-aligned user virtual address.
@@ -115,6 +221,74 @@ pub fn verify_user_stack_mapping(pages: u64) -> bool {
         usize::try_from(guard_page).expect("user stack guard must fit in usize"),
         PAGE_SIZE_USIZE,
     )
+}
+
+fn push_c_string(stack_pointer: &mut u64, stack_base: u64, value: &str) -> u64 {
+    let length = u64::try_from(value.len().saturating_add(1))
+        .expect("user entry string length must fit in u64");
+    *stack_pointer = stack_pointer
+        .checked_sub(length)
+        .expect("user entry string stack pointer underflowed");
+    assert!(
+        *stack_pointer >= stack_base,
+        "user entry strings must fit in the mapped user stack"
+    );
+
+    let destination = usize::try_from(*stack_pointer)
+        .expect("user entry string address must fit in usize") as *mut u8;
+    // SAFETY: The destination range was carved out of the mapped user stack,
+    // and the source string plus trailing NUL fits in that range.
+    unsafe {
+        core::ptr::copy_nonoverlapping(value.as_ptr(), destination, value.len());
+        destination.add(value.len()).write(0);
+    }
+
+    *stack_pointer
+}
+
+fn push_pointer_array(stack_pointer: &mut u64, stack_base: u64, pointers: &[u64]) -> u64 {
+    let entries = u64::try_from(pointers.len().saturating_add(1))
+        .expect("user entry pointer count must fit in u64");
+    let byte_count = entries
+        .checked_mul(POINTER_SIZE)
+        .expect("user entry pointer array size overflowed");
+    *stack_pointer = stack_pointer
+        .checked_sub(byte_count)
+        .expect("user entry pointer array stack pointer underflowed");
+    assert!(
+        *stack_pointer >= stack_base,
+        "user entry pointer arrays must fit in the mapped user stack"
+    );
+
+    for (index, pointer) in pointers.iter().enumerate() {
+        let offset = u64::try_from(index)
+            .expect("user entry pointer index must fit in u64")
+            .checked_mul(POINTER_SIZE)
+            .expect("user entry pointer offset overflowed");
+        write_stack_u64(*stack_pointer + offset, *pointer);
+    }
+    let terminator_offset = u64::try_from(pointers.len())
+        .expect("user entry pointer terminator index must fit in u64")
+        .checked_mul(POINTER_SIZE)
+        .expect("user entry pointer terminator offset overflowed");
+    write_stack_u64(*stack_pointer + terminator_offset, 0);
+
+    *stack_pointer
+}
+
+fn write_stack_u64(address: u64, value: u64) {
+    let pointer =
+        usize::try_from(address).expect("user stack pointer must fit in usize") as *mut u64;
+    // SAFETY: The caller provides an address inside a writable mapped user
+    // stack slot reserved for one 64-bit pointer value.
+    unsafe {
+        pointer.write(value);
+    }
+}
+
+fn align_down(value: u64, alignment: u64) -> u64 {
+    debug_assert!(alignment.is_power_of_two());
+    value & !(alignment - 1)
 }
 
 unsafe fn map_user_range(
