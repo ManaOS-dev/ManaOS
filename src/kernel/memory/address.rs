@@ -61,6 +61,31 @@ impl DmaPhysicalAddress {
     }
 }
 
+/// A physical DMA data buffer address used by storage parsers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StorageDataAddress(DmaPhysicalAddress);
+
+impl StorageDataAddress {
+    /// Create a storage data-buffer address from a DMA physical address.
+    pub const fn new(address: DmaPhysicalAddress) -> Self {
+        Self(address)
+    }
+
+    /// Return the raw storage data-buffer address as a `u64`.
+    pub const fn as_u64(self) -> u64 {
+        self.0.as_u64()
+    }
+
+    /// Return the raw storage data-buffer address as a `usize`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the storage data-buffer address does not fit in `usize`.
+    pub fn as_usize(self) -> usize {
+        self.0.as_usize()
+    }
+}
+
 /// A raw virtual byte address kept distinct from physical addresses.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct VirtAddr(u64);

@@ -5,6 +5,7 @@ use alloc::vec::Vec;
 use super::super::block_device::{BlockDevice, SECTOR_BYTES};
 use super::bytes::{read_le_u32, read_le_u64};
 use super::display::GuidPartitionTableGuid;
+use crate::kernel::memory::address::StorageDataAddress;
 
 const GUID_PARTITION_TABLE_SIGNATURE: &[u8; 8] = b"EFI PART";
 const REVISION_OFFSET: usize = 8;
@@ -88,8 +89,8 @@ pub struct GuidPartitionTablePartition {
 }
 
 /// Inspect a 512-byte sector as a GUID partition table header and print key fields.
-pub fn inspect_header(data_address: u64) -> Option<GuidPartitionTableHeader> {
-    let sector = data_address as *const u8;
+pub fn inspect_header(data_address: StorageDataAddress) -> Option<GuidPartitionTableHeader> {
+    let sector = data_address.as_usize() as *const u8;
     // SAFETY: `data_address` points to a 512-byte DMA buffer filled from logical block address 1.
     let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
 
@@ -181,7 +182,7 @@ pub fn inspect_header(data_address: u64) -> Option<GuidPartitionTableHeader> {
 /// Inspect the primary GUID partition table header, falling back to the backup header when possible.
 pub(in crate::kernel::driver::storage) fn inspect_header_with_fallback(
     block_device: &mut impl BlockDevice,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) -> Option<GuidPartitionTableHeader> {
     if let Err(error) = block_device.read_logical_block(1, data_address) {
         crate::log_warn!("gpt", "Failed to read primary GPT header: {error:?}");
@@ -215,7 +216,7 @@ pub(in crate::kernel::driver::storage) fn inspect_header_with_fallback(
 
 /// Inspect GUID partition table partition entries contained in one 512-byte sector.
 pub fn inspect_partition_entries(
-    data_address: u64,
+    data_address: StorageDataAddress,
     first_entry_index: u32,
     entry_count: u32,
     entry_size: u32,
@@ -226,7 +227,7 @@ pub fn inspect_partition_entries(
         usize::try_from(entry_count).expect("GUID partition table entry count must fit in usize");
     let first_entry_index = usize::try_from(first_entry_index)
         .expect("GUID partition table entry index must fit in usize");
-    let sector = data_address as *const u8;
+    let sector = data_address.as_usize() as *const u8;
     // SAFETY: `data_address` points to a 512-byte DMA buffer filled from a GUID partition table
     // partition entry sector.
     let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
@@ -271,7 +272,7 @@ pub fn inspect_partition_entries(
 pub(in crate::kernel::driver::storage) fn inspect_partition_table(
     block_device: &mut impl BlockDevice,
     header: GuidPartitionTableHeader,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) -> Option<GuidPartitionTablePartition> {
     let entry_size =
         usize::try_from(header.size).expect("GUID partition table entry size must fit in usize");
@@ -333,7 +334,7 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
             .expect("GUID partition table entry count must fit in usize")
             .checked_mul(entry_size)
             .expect("GUID partition table checksum byte count must not overflow");
-        let sector = data_address as *const u8;
+        let sector = data_address.as_usize() as *const u8;
         // SAFETY: `data_address` points to a 512-byte DMA buffer filled from a
         // GUID partition table partition entry sector.
         let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
@@ -394,8 +395,8 @@ pub(in crate::kernel::driver::storage) fn inspect_partition_table(
     select_partition(&partitions)
 }
 
-fn backup_lba_hint(data_address: u64) -> Option<u64> {
-    let sector = data_address as *const u8;
+fn backup_lba_hint(data_address: StorageDataAddress) -> Option<u64> {
+    let sector = data_address.as_usize() as *const u8;
     // SAFETY: `data_address` points to a 512-byte DMA buffer filled from a GPT
     // header candidate sector.
     let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };

@@ -13,6 +13,7 @@
 //! - [`PciConfigurationAccess`] - Provider for PCI configuration-space access
 //! - [`get_detected_files`] - Return files detected from disk during probing
 
+use crate::kernel::memory::address::StorageDataAddress;
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use alloc::format;
 use alloc::string::String;
@@ -171,7 +172,7 @@ pub fn get_storage_devices() -> Vec<StorageDevice> {
 pub fn read_primary_blocks(
     logical_block_address: u64,
     sector_count: u16,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) -> bool {
     match advanced_host_controller_interface::read_primary_blocks(
         logical_block_address,
@@ -187,7 +188,7 @@ pub fn read_primary_blocks(
 }
 
 /// Return the primary block device DMA data buffer address.
-pub fn get_primary_data_address() -> Option<u64> {
+pub fn get_primary_data_address() -> Option<StorageDataAddress> {
     advanced_host_controller_interface::get_primary_data_address()
 }
 
@@ -223,7 +224,7 @@ pub fn read_detected_file_range(
 pub fn write_primary_blocks(
     logical_block_address: u64,
     sector_count: u16,
-    data_address: u64,
+    data_address: StorageDataAddress,
 ) -> bool {
     match advanced_host_controller_interface::write_primary_blocks(
         logical_block_address,

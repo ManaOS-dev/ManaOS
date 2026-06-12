@@ -48,6 +48,8 @@ untyped cross-domain `u64` values:
   physical base address.
 - `AhciDmaBuffers` stores `DmaPhysicalAddress` fields internally, and
   `dma::split_address(...)` accepts `DmaPhysicalAddress`.
+- `StorageDataAddress` represents the active DMA data buffer used by
+  `BlockDevice`, AHCI service helpers, GPT parsing, and FAT32 parsing.
 
 ## Remaining Raw Address API Inventory
 
@@ -108,13 +110,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 
 ### Storage And AHCI DMA
 
-- `BlockDevice::read_logical_block(..., data_address: u64)` and related methods
-  still use raw physical DMA buffer addresses at the storage abstraction
-  boundary.
-- `advanced_host_controller_interface::block_device::AhciBlockDevice::data_address()
-  -> u64` exposes the active DMA data buffer to the generic storage service.
-- FAT32 and GPT parsers accept `data_address: u64` and read through it as an
-  identity-mapped pointer after storage fills the DMA buffer.
+- The storage parser and block-device path now uses `StorageDataAddress`. Raw
+  pointer conversion is limited to sector-slice creation after the block device
+  fills the active DMA data buffer.
 
 ## Recommended Wrapper Types
 
@@ -137,6 +135,8 @@ Continue introducing wrappers in small steps:
 - `UserCString` for readable syscall string candidates before NUL validation.
 - `DmaPhysicalAddress` for physical addresses that may be programmed into
   device descriptors. This now exists in `kernel::memory::address`.
+- `StorageDataAddress` for the active DMA data buffer passed through generic
+  storage parsing. This now exists in `kernel::memory::address`.
 
 The next implementation steps should focus on storage abstraction boundaries,
 framebuffer/MMIO range wrappers, and internal page-table helper arithmetic. They
@@ -157,11 +157,9 @@ have typed constructors and callers.
 
 ## Remaining Migration Order
 
-1. Introduce a typed storage data-buffer address for `BlockDevice`, AHCI service,
-   GPT, and FAT32 parser calls.
-2. Introduce framebuffer physical range and kernel virtual pointer wrappers for
+1. Introduce framebuffer physical range and kernel virtual pointer wrappers for
    `paging::init`, `map_framebuffer`, and `main.rs` backbuffer setup.
-3. Move internal paging helpers from raw `u64` arithmetic to local `PhysAddr` /
+2. Move internal paging helpers from raw `u64` arithmetic to local `PhysAddr` /
    `VirtAddr` arithmetic where this improves boundary clarity.
-4. Keep ELF parser fields raw at the file-format layer, but convert loadable
+3. Keep ELF parser fields raw at the file-format layer, but convert loadable
    segment virtual addresses to typed user virtual ranges before mapping.

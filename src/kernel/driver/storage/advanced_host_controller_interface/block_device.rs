@@ -3,6 +3,7 @@
 use crate::kernel::driver::storage::block_device::{
     BlockDevice, BlockDeviceError, BlockDeviceResult, SECTOR_BYTES,
 };
+use crate::kernel::memory::address::StorageDataAddress;
 
 use super::command::{self, AhciTransferDirection};
 use super::completion::CompletionMode;
@@ -44,8 +45,8 @@ impl AhciBlockDevice {
     }
 
     /// Return the physical address of the persistent DMA data buffer.
-    pub(super) fn data_address(&self) -> u64 {
-        self.buffers.data.as_u64()
+    pub(super) fn data_address(&self) -> StorageDataAddress {
+        StorageDataAddress::new(self.buffers.data)
     }
 
     /// Return the HBA port index served by this block device.
@@ -53,12 +54,16 @@ impl AhciBlockDevice {
         self.port_index
     }
 
-    fn validate_data_buffer(&self, sector_count: u16, data_address: u64) -> BlockDeviceResult<()> {
-        if data_address != self.buffers.data.as_u64() {
+    fn validate_data_buffer(
+        &self,
+        sector_count: u16,
+        data_address: StorageDataAddress,
+    ) -> BlockDeviceResult<()> {
+        if data_address != self.data_address() {
             crate::log_error!(
                 "ahci",
                 "unexpected AHCI transfer buffer: requested={:#018x} owned={:#018x}",
-                data_address,
+                data_address.as_u64(),
                 self.buffers.data.as_u64()
             );
             return Err(BlockDeviceError::BufferMismatch);
@@ -83,7 +88,7 @@ impl BlockDevice for AhciBlockDevice {
         &mut self,
         logical_block_address: u64,
         sector_count: u16,
-        data_address: u64,
+        data_address: StorageDataAddress,
     ) -> BlockDeviceResult<()> {
         self.validate_data_buffer(sector_count, data_address)?;
 
@@ -102,7 +107,7 @@ impl BlockDevice for AhciBlockDevice {
         &mut self,
         logical_block_address: u64,
         sector_count: u16,
-        data_address: u64,
+        data_address: StorageDataAddress,
     ) -> BlockDeviceResult<()> {
         self.validate_data_buffer(sector_count, data_address)?;
 

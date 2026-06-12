@@ -7,6 +7,7 @@ use super::parser::{
     is_bad_cluster, is_end_of_chain, read_next_cluster, validate_cluster,
     FileAllocationTable32DirectoryEntry, FileAllocationTable32Volume,
 };
+use crate::kernel::memory::address::StorageDataAddress;
 
 #[derive(Clone, Copy)]
 struct RangeReadWindow {
@@ -25,7 +26,7 @@ pub(in crate::kernel::driver::storage) fn read_file_range(
     block_device: &mut impl BlockDevice,
     volume: FileAllocationTable32Volume,
     entry: FileAllocationTable32DirectoryEntry,
-    data_address: u64,
+    data_address: StorageDataAddress,
     offset: usize,
     output: &mut [u8],
 ) -> Option<usize> {
@@ -101,7 +102,7 @@ fn read_cluster_range_contents(
     block_device: &mut impl BlockDevice,
     volume: &FileAllocationTable32Volume,
     cluster: u32,
-    data_address: u64,
+    data_address: StorageDataAddress,
     window: RangeReadWindow,
     output: &mut RangeOutput<'_>,
 ) -> Option<()> {
@@ -122,7 +123,7 @@ fn read_cluster_range_contents(
                 return None;
             }
 
-            let sector = data_address as *const u8;
+            let sector = data_address.as_usize() as *const u8;
             // SAFETY: `data_address` points to a 512-byte DMA buffer filled from
             // a FAT32 file data sector.
             let sector = unsafe { core::slice::from_raw_parts(sector, SECTOR_BYTES) };
