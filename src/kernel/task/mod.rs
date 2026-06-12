@@ -21,6 +21,7 @@ pub mod architecture;
 pub mod context;
 mod metadata;
 pub mod process_lifecycle;
+mod stack;
 mod state;
 pub mod user_mode;
 
@@ -33,9 +34,9 @@ use context::{TaskContext, TaskEntry, UserTaskContext, UserTrapFrame};
 use core::sync::atomic::{AtomicBool, Ordering};
 pub use metadata::{TaskIdentifier, TaskMetadata};
 use spin::Mutex;
+use stack::KernelStack;
 pub use state::TaskState;
 
-const TASK_STACK_SIZE: usize = 16 * 1024;
 const USER_TASK_PREEMPTION_ENABLED: bool = false;
 
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
@@ -75,7 +76,7 @@ pub struct Task {
     state: TaskState,
     kind: TaskKind,
     context: TaskContext,
-    _stack: Option<Box<[u8]>>,
+    _kernel_stack: Option<KernelStack>,
 }
 
 impl Task {
@@ -85,7 +86,7 @@ impl Task {
             state: TaskState::Running,
             kind: TaskKind::Kernel,
             context: TaskContext::new(),
-            _stack: None,
+            _kernel_stack: None,
         }
     }
 
@@ -94,8 +95,10 @@ impl Task {
         parent_identifier: TaskIdentifier,
         entry: TaskEntry,
     ) -> Self {
-        let mut stack = vec![0; TASK_STACK_SIZE].into_boxed_slice();
-        let stack_top = stack.as_mut_ptr() as usize + stack.len();
+        let mut kernel_stack = KernelStack::new_default();
+        let stack_top = kernel_stack.top();
+        debug_assert!(kernel_stack.base() < stack_top);
+        debug_assert!(kernel_stack.byte_len() >= 16);
         // SAFETY: The stack is heap allocated, writable, and retained in the
         // task object for as long as the context can be scheduled.
         let context = unsafe { TaskContext::from_stack(stack_top, entry) };
@@ -105,7 +108,7 @@ impl Task {
             state: TaskState::Ready,
             kind: TaskKind::Kernel,
             context,
-            _stack: Some(stack),
+            _kernel_stack: Some(kernel_stack),
         }
     }
 
@@ -119,7 +122,7 @@ impl Task {
             state: TaskState::Ready,
             kind: TaskKind::User(Box::new(UserTaskRuntime::new(user_context))),
             context: TaskContext::new(),
-            _stack: None,
+            _kernel_stack: None,
         }
     }
 
