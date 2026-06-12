@@ -125,7 +125,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Identify identity mappings that can be removed after boot-time hardware setup.
 - [ ] Add typed physical and virtual address wrappers where raw `u64` still leaks across boundaries.
 - [x] Inventory APIs where raw `u64` physical or virtual addresses cross module boundaries.
-- [ ] Add page fault diagnostics that include the current task and access type.
+- [x] Add page fault diagnostics that include the current task and access type.
 
 ### Interrupts And Scheduling
 
