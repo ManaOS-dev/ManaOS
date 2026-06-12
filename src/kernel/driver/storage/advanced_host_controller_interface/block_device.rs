@@ -45,7 +45,7 @@ impl AhciBlockDevice {
 
     /// Return the physical address of the persistent DMA data buffer.
     pub(super) fn data_address(&self) -> u64 {
-        self.buffers.data
+        self.buffers.data.as_u64()
     }
 
     /// Return the HBA port index served by this block device.
@@ -54,12 +54,12 @@ impl AhciBlockDevice {
     }
 
     fn validate_data_buffer(&self, sector_count: u16, data_address: u64) -> BlockDeviceResult<()> {
-        if data_address != self.buffers.data {
+        if data_address != self.buffers.data.as_u64() {
             crate::log_error!(
                 "ahci",
                 "unexpected AHCI transfer buffer: requested={:#018x} owned={:#018x}",
                 data_address,
-                self.buffers.data
+                self.buffers.data.as_u64()
             );
             return Err(BlockDeviceError::BufferMismatch);
         }
