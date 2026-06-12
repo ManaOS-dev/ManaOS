@@ -1,6 +1,6 @@
 //! A simple bump physical frame allocator.
 
-use super::address::PhysicalFrameStart;
+use super::address::{PhysicalFrameRange, PhysicalFrameStart};
 
 const MAX_REGIONS: usize = 128;
 const FRAME_SIZE: u64 = 4096;
@@ -43,12 +43,12 @@ impl BumpFrameAllocator {
     /// Allocate a single 4KiB frame.
     #[allow(dead_code)]
     pub fn allocate_frame(&mut self) -> Option<PhysicalFrameStart> {
-        self.allocate_frames(1)
+        self.allocate_frames(1).map(PhysicalFrameRange::start)
     }
 
     /// Allocate `n` contiguous 4KiB frames.
     /// Contiguous allocation is only guaranteed within a single region.
-    pub fn allocate_frames(&mut self, n: u64) -> Option<PhysicalFrameStart> {
+    pub fn allocate_frames(&mut self, n: u64) -> Option<PhysicalFrameRange> {
         if n == 0 {
             return None;
         }
@@ -69,9 +69,11 @@ impl BumpFrameAllocator {
                 };
 
                 self.offset += n;
+                let start = PhysicalFrameStart::new(candidate_address)
+                    .expect("frame allocator returned an unaligned physical frame");
                 return Some(
-                    PhysicalFrameStart::new(candidate_address)
-                        .expect("frame allocator returned an unaligned physical frame"),
+                    PhysicalFrameRange::new(start, n)
+                        .expect("frame allocator returned an empty physical frame range"),
                 );
             }
             // Move to the next region
@@ -171,6 +173,6 @@ pub fn verify_zero_address_skip_for_multi_frame_allocations() -> bool {
 
     frame_allocator
         .allocate_frames(2)
-        .map(PhysicalFrameStart::as_u64)
+        .map(|range| range.start().as_u64())
         == Some(FRAME_SIZE)
 }

@@ -63,10 +63,10 @@ impl PreparedUserStack {
 /// Panics if physical frames cannot be allocated or page-table mapping fails.
 pub fn allocate_user_stack(frame_allocator: &mut BumpFrameAllocator, pages: u64) -> u64 {
     assert!(pages > 0, "user stack must contain at least one page");
-    let physical_start = frame_allocator
+    let physical_range = frame_allocator
         .allocate_frames(pages)
         .unwrap_or_else(|| panic!("OOM: failed to allocate {pages} pages for user stack"));
-    let physical_start_address = physical_start.as_u64();
+    let physical_start_address = physical_range.start().as_u64();
     let stack_size = pages
         .checked_mul(PAGE_SIZE)
         .expect("user stack size overflowed");
