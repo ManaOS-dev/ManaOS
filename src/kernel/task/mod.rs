@@ -29,7 +29,7 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 pub use context::UserEntryArguments;
-use context::{TaskContext, TaskEntry, UserTaskContext};
+use context::{TaskContext, TaskEntry, UserTaskContext, UserTrapFrame};
 use core::sync::atomic::{AtomicBool, Ordering};
 pub use metadata::{TaskIdentifier, TaskMetadata};
 use spin::Mutex;
@@ -41,10 +41,24 @@ const USER_TASK_PREEMPTION_ENABLED: bool = false;
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
 static PREEMPTION_ENABLED: AtomicBool = AtomicBool::new(true);
 
-#[derive(Debug, Clone, Copy)]
 enum TaskKind {
     Kernel,
-    User(UserTaskContext),
+    User(Box<UserTaskRuntime>),
+}
+
+#[derive(Debug)]
+struct UserTaskRuntime {
+    entry_context: UserTaskContext,
+    saved_trap_frame: Option<UserTrapFrame>,
+}
+
+impl UserTaskRuntime {
+    fn new(entry_context: UserTaskContext) -> Self {
+        Self {
+            entry_context,
+            saved_trap_frame: None,
+        }
+    }
 }
 
 enum SwitchAction {
@@ -103,7 +117,7 @@ impl Task {
         Self {
             metadata: TaskMetadata::child(identifier, parent_identifier),
             state: TaskState::Ready,
-            kind: TaskKind::User(user_context),
+            kind: TaskKind::User(Box::new(UserTaskRuntime::new(user_context))),
             context: TaskContext::new(),
             _stack: None,
         }
@@ -174,8 +188,15 @@ impl Scheduler {
 
     fn prepare_one_shot_user_task(&mut self, task_id: u64) -> Option<UserTaskContext> {
         let task_index = self.get_task_index(task_id)?;
-        let TaskKind::User(user_context) = self.tasks[task_index].kind else {
-            return None;
+        let entry_context = match &self.tasks[task_index].kind {
+            TaskKind::User(user_runtime) => {
+                debug_assert!(
+                    user_runtime.saved_trap_frame.is_none(),
+                    "run-once user tasks must not have saved trap frames before preemption support"
+                );
+                user_runtime.entry_context
+            }
+            TaskKind::Kernel => return None,
         };
 
         if !self.tasks[task_index].state.is_ready() {
@@ -187,7 +208,7 @@ impl Scheduler {
             return None;
         }
         self.current_index = task_index;
-        Some(user_context)
+        Some(entry_context)
     }
 
     fn finish_current_task(&mut self) -> Option<u64> {
@@ -226,9 +247,13 @@ impl Scheduler {
         self.current_index = next_index;
 
         let current_context = self.tasks[current_index].context.as_mut_pointer();
-        if let TaskKind::User(user_context) = self.tasks[next_index].kind {
+        if let TaskKind::User(user_runtime) = &self.tasks[next_index].kind {
+            debug_assert!(
+                user_runtime.saved_trap_frame.is_none(),
+                "scheduler cannot resume saved user trap frames before preemption support"
+            );
             if self.tasks[next_index].context.is_empty() {
-                return Some(SwitchAction::EnterUser(user_context));
+                return Some(SwitchAction::EnterUser(user_runtime.entry_context));
             }
         }
 
