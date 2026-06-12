@@ -16,6 +16,7 @@ use crate::kernel::driver::display::font::FontAssets;
 use crate::kernel::driver::display::framebuffer::{self, FrameBufferInfo};
 use crate::kernel::driver::display::renderer;
 use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
+use crate::kernel::memory::frame_allocator::FrameRangeOwner;
 use crate::kernel::memory::heap;
 use crate::kernel::memory::paging;
 use uefi::mem::memory_map::MemoryDescriptor;
@@ -45,7 +46,7 @@ pub fn initialize<'a>(
     crate::log_info!("paging", "Page table switched.");
 
     let heap_range = frame_allocator
-        .allocate_frames(heap::HEAP_PAGES)
+        .allocate_frames_for(heap::HEAP_PAGES, FrameRangeOwner::KernelHeap)
         .expect("OOM: failed to allocate pages for kernel heap");
     // SAFETY: heap_range was allocated from the frame allocator and is
     // exclusively reserved for the kernel heap.

@@ -16,6 +16,7 @@ struct Region {
 struct TrackedRange {
     region: Region,
     state: FrameRangeState,
+    owner: FrameRangeOwner,
 }
 
 /// Physical frame range state tracked by the frame allocator.
@@ -27,6 +28,29 @@ pub enum FrameRangeState {
     Free,
     /// Frames are owned by a kernel subsystem, user mapping, page table, or device.
     Used,
+}
+
+/// Owner recorded for a tracked physical frame range.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FrameRangeOwner {
+    /// Frames are available and have no active owner.
+    Free,
+    /// Frames are unavailable because firmware did not report them as conventional memory.
+    FirmwareReserved,
+    /// Frames are used by an owner that has not been classified yet.
+    UnknownUsed,
+    /// Frames store page-table structures.
+    PageTable,
+    /// Frames back the kernel heap.
+    KernelHeap,
+    /// Frames back the display backbuffer.
+    FramebufferBackbuffer,
+    /// Frames back Advanced Host Controller Interface DMA buffers.
+    AhciDma,
+    /// Frames back a user stack.
+    UserStack,
+    /// Frames back loaded user ELF segments.
+    UserElf,
 }
 
 /// Page totals for tracked physical frame ranges.
@@ -62,6 +86,7 @@ impl BumpFrameAllocator {
             tracked_ranges: [TrackedRange {
                 region: Region { start: 0, pages: 0 },
                 state: FrameRangeState::Reserved,
+                owner: FrameRangeOwner::FirmwareReserved,
             }; MAX_TRACKED_RANGES],
             tracked_count: 0,
         }
@@ -74,28 +99,50 @@ impl BumpFrameAllocator {
         };
 
         self.insert_region(region);
-        self.insert_tracked_range(region, FrameRangeState::Free);
+        self.insert_tracked_range(region, FrameRangeState::Free, FrameRangeOwner::Free);
     }
 
     /// Register a reserved physical memory region.
     pub fn reserve_region(&mut self, start: u64, pages: u64) {
+        self.reserve_region_for(start, pages, FrameRangeOwner::FirmwareReserved);
+    }
+
+    /// Register a reserved physical memory region with an explicit owner.
+    pub fn reserve_region_for(&mut self, start: u64, pages: u64, owner: FrameRangeOwner) {
         let Some(region) = normalize_reserved_region(start, pages) else {
             return;
         };
 
-        self.insert_tracked_range(region, FrameRangeState::Reserved);
+        self.insert_tracked_range(region, FrameRangeState::Reserved, owner);
         self.remove_reserved_region_from_free_ranges(region);
     }
 
     /// Allocate a single 4KiB frame.
     #[allow(dead_code)]
     pub fn allocate_frame(&mut self) -> Option<PhysicalFrameStart> {
-        self.allocate_frames(1).map(PhysicalFrameRange::start)
+        self.allocate_frame_for(FrameRangeOwner::UnknownUsed)
+    }
+
+    /// Allocate a single 4KiB frame for `owner`.
+    pub fn allocate_frame_for(&mut self, owner: FrameRangeOwner) -> Option<PhysicalFrameStart> {
+        self.allocate_frames_for(1, owner)
+            .map(PhysicalFrameRange::start)
     }
 
     /// Allocate `n` contiguous 4KiB frames.
     /// Contiguous allocation is only guaranteed within a single region.
     pub fn allocate_frames(&mut self, n: u64) -> Option<PhysicalFrameRange> {
+        self.allocate_frames_for(n, FrameRangeOwner::UnknownUsed)
+    }
+
+    /// Allocate `n` contiguous 4KiB frames for `owner`.
+    ///
+    /// Contiguous allocation is only guaranteed within a single region.
+    pub fn allocate_frames_for(
+        &mut self,
+        n: u64,
+        owner: FrameRangeOwner,
+    ) -> Option<PhysicalFrameRange> {
         if n == 0 {
             return None;
         }
@@ -115,10 +162,13 @@ impl BumpFrameAllocator {
                     continue;
                 };
 
-                if !self.mark_range_used(Region {
-                    start: candidate_address,
-                    pages: n,
-                }) {
+                if !self.mark_range_used(
+                    Region {
+                        start: candidate_address,
+                        pages: n,
+                    },
+                    owner,
+                ) {
                     self.offset = self.offset.saturating_add(1);
                     continue;
                 }
@@ -156,6 +206,17 @@ impl BumpFrameAllocator {
             }
         }
         statistics
+    }
+
+    fn pages_owned_by(&self, owner: FrameRangeOwner) -> u64 {
+        let mut pages = 0_u64;
+        for index in 0..self.tracked_count {
+            let range = self.tracked_ranges[index];
+            if range.owner == owner {
+                pages = pages.saturating_add(range.region.pages);
+            }
+        }
+        pages
     }
 
     /// Total number of registered conventional memory in bytes.
@@ -213,7 +274,12 @@ impl BumpFrameAllocator {
         self.count = write_index + 1;
     }
 
-    fn insert_tracked_range(&mut self, region: Region, state: FrameRangeState) {
+    fn insert_tracked_range(
+        &mut self,
+        region: Region,
+        state: FrameRangeState,
+        owner: FrameRangeOwner,
+    ) {
         if region.pages == 0 {
             return;
         }
@@ -223,7 +289,14 @@ impl BumpFrameAllocator {
             index += 1;
         }
 
-        self.insert_tracked_range_at(index, TrackedRange { region, state });
+        self.insert_tracked_range_at(
+            index,
+            TrackedRange {
+                region,
+                state,
+                owner,
+            },
+        );
         self.merge_adjacent_tracked_ranges();
     }
 
@@ -292,6 +365,7 @@ impl BumpFrameAllocator {
                             pages: after_pages,
                         },
                         state: FrameRangeState::Free,
+                        owner: FrameRangeOwner::Free,
                     },
                 );
                 index += 2;
@@ -310,7 +384,7 @@ impl BumpFrameAllocator {
         self.merge_adjacent_tracked_ranges();
     }
 
-    fn mark_range_used(&mut self, used_region: Region) -> bool {
+    fn mark_range_used(&mut self, used_region: Region, owner: FrameRangeOwner) -> bool {
         let Some(used_end) = region_end(used_region) else {
             return false;
         };
@@ -332,6 +406,7 @@ impl BumpFrameAllocator {
             self.tracked_ranges[index] = TrackedRange {
                 region: used_region,
                 state: FrameRangeState::Used,
+                owner,
             };
 
             if before_pages > 0 {
@@ -341,12 +416,14 @@ impl BumpFrameAllocator {
                         pages: before_pages,
                     },
                     state: FrameRangeState::Free,
+                    owner: FrameRangeOwner::Free,
                 };
                 self.insert_tracked_range_at(
                     index + 1,
                     TrackedRange {
                         region: used_region,
                         state: FrameRangeState::Used,
+                        owner,
                     },
                 );
                 if after_pages > 0 {
@@ -358,6 +435,7 @@ impl BumpFrameAllocator {
                                 pages: after_pages,
                             },
                             state: FrameRangeState::Free,
+                            owner: FrameRangeOwner::Free,
                         },
                     );
                 }
@@ -370,6 +448,7 @@ impl BumpFrameAllocator {
                             pages: after_pages,
                         },
                         state: FrameRangeState::Free,
+                        owner: FrameRangeOwner::Free,
                     },
                 );
             }
@@ -390,7 +469,9 @@ impl BumpFrameAllocator {
         for read_index in 1..self.tracked_count {
             let current = self.tracked_ranges[write_index];
             let next = self.tracked_ranges[read_index];
-            if current.state == next.state && region_end(current.region) == Some(next.region.start)
+            if current.state == next.state
+                && current.owner == next.owner
+                && region_end(current.region) == Some(next.region.start)
             {
                 self.tracked_ranges[write_index].region.pages = self.tracked_ranges[write_index]
                     .region
@@ -533,5 +614,34 @@ pub fn verify_reserved_range_exclusion() -> bool {
                 reserved: 1,
                 free: 1,
                 used: 2,
+            }
+}
+
+/// Verify that used frame ranges record their explicit owners.
+#[allow(dead_code)]
+pub fn verify_owner_tracking() -> bool {
+    let mut frame_allocator = BumpFrameAllocator::new();
+    frame_allocator.add_region(FRAME_SIZE, 8);
+
+    if frame_allocator
+        .allocate_frames_for(2, FrameRangeOwner::KernelHeap)
+        .is_none()
+    {
+        return false;
+    }
+    if frame_allocator
+        .allocate_frames_for(3, FrameRangeOwner::UserElf)
+        .is_none()
+    {
+        return false;
+    }
+
+    frame_allocator.pages_owned_by(FrameRangeOwner::KernelHeap) == 2
+        && frame_allocator.pages_owned_by(FrameRangeOwner::UserElf) == 3
+        && frame_allocator.statistics()
+            == FrameAllocatorStatistics {
+                reserved: 0,
+                free: 3,
+                used: 5,
             }
 }
