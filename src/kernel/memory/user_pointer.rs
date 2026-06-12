@@ -3,7 +3,7 @@
 use alloc::string::String;
 
 use crate::kernel::memory::{
-    address::{UserReadableRange, UserWritableRange},
+    address::{UserCString, UserReadableRange, UserWritableRange},
     paging,
 };
 
@@ -36,8 +36,8 @@ pub fn copy_to_user(range: UserWritableRange) -> Option<&'static mut [u8]> {
 }
 
 /// Copy a NUL-terminated user string into a kernel-owned [`String`].
-pub fn copy_cstr_from_user(range: UserReadableRange) -> Option<String> {
-    let bytes = copy_from_user(range)?;
+pub fn copy_cstr_from_user(user_string: UserCString) -> Option<String> {
+    let bytes = copy_from_user(user_string.as_readable_range())?;
 
     let mut value = String::new();
     for byte in bytes {

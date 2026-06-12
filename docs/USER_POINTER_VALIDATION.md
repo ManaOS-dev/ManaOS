@@ -18,6 +18,8 @@ The implementation entry point is `kernel::memory::user_pointer`.
 - Non-zero syscall pointer arguments are converted from raw `u64` ABI values to
   `UserVirtualRange`, then wrapped as `UserReadableRange` or
   `UserWritableRange` before the copy helpers run.
+- NUL-terminated path arguments are additionally wrapped as `UserCString`
+  before `copy_cstr_from_user` scans for the terminator.
 - Syscalls return Linux-like `-EFAULT` (`ERROR_BAD_ADDRESS`) when pointer
   validation fails.
 
@@ -43,16 +45,16 @@ The implementation entry point is `kernel::memory::user_pointer`.
 - Kernel/user mapping permission self-checks should prove that kernel-only pages
   are not `USER_ACCESSIBLE` and user pages carry the expected readable/writable
   permissions.
-- `UserReadableRange` and `UserWritableRange` encode syscall copy direction, but
-  page-table permission checks still happen inside `copy_from_user` and
-  `copy_to_user`.
+- `UserReadableRange`, `UserWritableRange`, and `UserCString` encode syscall
+  pointer intent, but page-table permission checks still happen inside the
+  copy helpers.
 
 ## Future Typed Pointer Split
 
-The `user_pointer` module should eventually split C strings into a dedicated
-validated type:
+The `user_pointer` module should eventually split terminated strings from
+candidate string ranges:
 
-- `UserCString`
+- `ValidatedUserCString`
 
-That type should be created only by validation helpers after finding a
-terminating NUL byte inside a readable range.
+That type should be created only after finding a terminating NUL byte inside a
+readable range.

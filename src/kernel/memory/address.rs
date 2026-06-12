@@ -166,6 +166,22 @@ impl UserReadableRange {
     }
 }
 
+/// A readable user range intended to contain a NUL-terminated C string.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserCString(UserReadableRange);
+
+impl UserCString {
+    /// Create a user C-string candidate from a readable user range.
+    pub const fn new(range: UserReadableRange) -> Self {
+        Self(range)
+    }
+
+    /// Return the underlying readable user range.
+    pub const fn as_readable_range(self) -> UserReadableRange {
+        self.0
+    }
+}
+
 /// A user virtual range intended for kernel writes to user memory.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserWritableRange(UserVirtualRange);

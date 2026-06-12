@@ -25,7 +25,7 @@
 //! - [`SYS_OPENAT`] - Linux-compatible open-at syscall number
 
 use crate::kernel::memory::{
-    address::{UserReadableRange, UserVirtualRange, UserWritableRange},
+    address::{UserCString, UserReadableRange, UserVirtualRange, UserWritableRange},
     user_pointer,
 };
 
@@ -300,7 +300,7 @@ fn copy_path_argument(user_pointer: u64) -> Option<alloc::string::String> {
         user_pointer,
         u64::try_from(MAX_USER_STRING_LENGTH).expect("max user path length must fit in u64"),
     )?;
-    user_pointer::copy_cstr_from_user(UserReadableRange::new(range))
+    user_pointer::copy_cstr_from_user(UserCString::new(UserReadableRange::new(range)))
 }
 
 fn write_user_file_stat(buffer: &mut [u8], metadata: crate::kernel::filesystem::FileMetadata) {
