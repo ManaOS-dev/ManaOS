@@ -34,6 +34,11 @@ impl PhysAddr {
         };
         Some(Self(address))
     }
+
+    /// Return this physical address rounded down to a 4 KiB page boundary.
+    pub const fn align_down_to_page(self) -> Self {
+        Self(self.0 & !(PAGE_SIZE - 1))
+    }
 }
 
 /// A physical byte address owned by a DMA-capable device descriptor.
@@ -107,6 +112,11 @@ impl VirtAddr {
             return None;
         };
         Some(Self(address))
+    }
+
+    /// Return this virtual address rounded down to a 4 KiB page boundary.
+    pub const fn align_down_to_page(self) -> Self {
+        Self(self.0 & !(PAGE_SIZE - 1))
     }
 }
 

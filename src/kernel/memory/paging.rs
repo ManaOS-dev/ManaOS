@@ -1,5 +1,5 @@
 use crate::kernel::memory::{
-    address::{FramebufferPhysicalRange, PhysAddr as KernelPhysAddr},
+    address::{FramebufferPhysicalRange, PhysAddr as KernelPhysAddr, VirtAddr as KernelVirtAddr},
     frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
 };
 use uefi::mem::memory_map::{MemoryDescriptor, MemoryType};
@@ -12,7 +12,7 @@ use x86_64::{
         mapper::TranslateResult, Mapper, OffsetPageTable, PageTable, PageTableFlags, PhysFrame,
         Size4KiB, Translate,
     },
-    PhysAddr, VirtAddr,
+    PhysAddr as X86PhysAddr, VirtAddr as X86VirtAddr,
 };
 
 const PAGE_SIZE: u64 = 4096;
@@ -45,7 +45,7 @@ pub unsafe fn init<'a>(
 
     // SAFETY: ManaOS uses identity-mapped physical memory during early paging
     // setup, so a zero physical memory offset is valid here.
-    let mut mapper = unsafe { OffsetPageTable::new(pml4_table, VirtAddr::new(0)) };
+    let mut mapper = unsafe { OffsetPageTable::new(pml4_table, X86VirtAddr::new(0)) };
 
     // SAFETY: The caller provides the boot memory map and a valid allocator for
     // page-table frames.
@@ -87,7 +87,8 @@ pub fn verify_kernel_user_mapping_permissions(
     user_stack_pointer: usize,
     user_entry_pointer: usize,
 ) -> bool {
-    let Some(kernel_flags) = mapping_flags_for_address(kernel_pointer as u64) else {
+    let Some(kernel_flags) = mapping_flags_for_address(KernelVirtAddr::new(kernel_pointer as u64))
+    else {
         return false;
     };
     if !kernel_flags.contains(PageTableFlags::PRESENT)
@@ -96,7 +97,9 @@ pub fn verify_kernel_user_mapping_permissions(
         return false;
     }
 
-    let Some(user_stack_flags) = mapping_flags_for_address(user_stack_pointer as u64) else {
+    let Some(user_stack_flags) =
+        mapping_flags_for_address(KernelVirtAddr::new(user_stack_pointer as u64))
+    else {
         return false;
     };
     if !user_stack_flags.contains(PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
@@ -106,7 +109,9 @@ pub fn verify_kernel_user_mapping_permissions(
         return false;
     }
 
-    let Some(user_entry_flags) = mapping_flags_for_address(user_entry_pointer as u64) else {
+    let Some(user_entry_flags) =
+        mapping_flags_for_address(KernelVirtAddr::new(user_entry_pointer as u64))
+    else {
         return false;
     };
     user_entry_flags.contains(PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
@@ -146,13 +151,12 @@ pub unsafe fn map_kernel_mmio_range(
 ) {
     assert!(size > 0, "MMIO mapping size must be non-zero");
 
-    let start_page_address = align_down_to_page(physical_start.as_u64());
+    let start_page_address = physical_start.align_down_to_page();
     let end_address = physical_start
         .checked_add(size - 1)
-        .expect("MMIO mapping end address overflowed")
-        .as_u64();
-    let end_page_address = align_down_to_page(end_address);
-    let page_count = ((end_page_address - start_page_address) / PAGE_SIZE) + 1;
+        .expect("MMIO mapping end address overflowed");
+    let end_page_address = end_address.align_down_to_page();
+    let page_count = ((end_page_address.as_u64() - start_page_address.as_u64()) / PAGE_SIZE) + 1;
     let flags = PageTableFlags::PRESENT
         | PageTableFlags::WRITABLE
         | PageTableFlags::NO_CACHE
@@ -164,7 +168,7 @@ pub unsafe fn map_kernel_mmio_range(
     // address from CR3 is directly usable as a kernel virtual address.
     let level_4_table = unsafe { &mut *level_4_table };
     // SAFETY: The active address space uses an identity physical memory offset.
-    let mut mapper = unsafe { OffsetPageTable::new(level_4_table, VirtAddr::new(0)) };
+    let mut mapper = unsafe { OffsetPageTable::new(level_4_table, X86VirtAddr::new(0)) };
 
     // SAFETY: The caller guarantees this is an MMIO range, and this helper
     // identity maps exactly the pages covering that range as uncached memory.
@@ -199,8 +203,8 @@ fn validate_user_mapping(
         return false;
     }
 
-    let first_page_start = align_down_to_page(user_pointer as u64);
-    let last_page_start = align_down_to_page(last_byte_pointer as u64);
+    let first_page_start = KernelVirtAddr::new(user_pointer as u64).align_down_to_page();
+    let last_page_start = KernelVirtAddr::new(last_byte_pointer as u64).align_down_to_page();
 
     let (level_4_frame, _) = Cr3::read();
     let level_4_table = level_4_frame.start_address().as_u64() as *mut PageTable;
@@ -208,7 +212,7 @@ fn validate_user_mapping(
     // address from CR3 is directly usable as a kernel virtual address.
     let level_4_table = unsafe { &mut *level_4_table };
     // SAFETY: The active address space uses an identity physical memory offset.
-    let mapper = unsafe { OffsetPageTable::new(level_4_table, VirtAddr::new(0)) };
+    let mapper = unsafe { OffsetPageTable::new(level_4_table, X86VirtAddr::new(0)) };
 
     let mut page_start = first_page_start;
     loop {
@@ -227,33 +231,29 @@ fn validate_user_mapping(
     }
 }
 
-fn align_down_to_page(address: u64) -> u64 {
-    address & !(PAGE_SIZE - 1)
-}
-
 fn is_page_mapped_with_flags(
     mapper: &OffsetPageTable,
-    page_start: u64,
+    page_start: KernelVirtAddr,
     required_flags: PageTableFlags,
 ) -> bool {
     let required_flags = required_flags | PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
 
-    match mapper.translate(VirtAddr::new(page_start)) {
+    match mapper.translate(X86VirtAddr::new(page_start.as_u64())) {
         TranslateResult::Mapped { flags, .. } => flags.contains(required_flags),
         TranslateResult::NotMapped | TranslateResult::InvalidFrameAddress(_) => false,
     }
 }
 
-fn mapping_flags_for_address(address: u64) -> Option<PageTableFlags> {
+fn mapping_flags_for_address(address: KernelVirtAddr) -> Option<PageTableFlags> {
     let (level_4_frame, _) = Cr3::read();
     let level_4_table = level_4_frame.start_address().as_u64() as *mut PageTable;
     // SAFETY: ManaOS keeps active page tables identity mapped, so the physical
     // address from CR3 is directly usable as a kernel virtual address.
     let level_4_table = unsafe { &mut *level_4_table };
     // SAFETY: The active address space uses an identity physical memory offset.
-    let mapper = unsafe { OffsetPageTable::new(level_4_table, VirtAddr::new(0)) };
+    let mapper = unsafe { OffsetPageTable::new(level_4_table, X86VirtAddr::new(0)) };
 
-    match mapper.translate(VirtAddr::new(address)) {
+    match mapper.translate(X86VirtAddr::new(address.as_u64())) {
         TranslateResult::Mapped { flags, .. } => Some(flags),
         TranslateResult::NotMapped | TranslateResult::InvalidFrameAddress(_) => None,
     }
@@ -263,7 +263,7 @@ unsafe fn create_pml4(frame_allocator: &mut BumpFrameAllocator) -> PhysFrame {
     let pml4_frame_start = frame_allocator
         .allocate_frame_for(FrameRangeOwner::PageTable)
         .expect("OOM: failed to allocate PML4 frame");
-    let frame = PhysFrame::containing_address(PhysAddr::new(pml4_frame_start.as_u64()));
+    let frame = PhysFrame::containing_address(X86PhysAddr::new(pml4_frame_start.as_u64()));
     let ptr = frame.start_address().as_u64() as *mut PageTable;
     // SAFETY: ptr points to a freshly allocated 4KiB page table frame.
     unsafe {
@@ -286,7 +286,7 @@ unsafe fn map_memory_regions<'a>(
         } else {
             executable_pages = executable_pages.saturating_add(desc.page_count);
         }
-        let start = desc.phys_start;
+        let start = KernelPhysAddr::new(desc.phys_start);
         let size = desc
             .page_count
             .checked_mul(4096)
@@ -296,15 +296,22 @@ unsafe fn map_memory_regions<'a>(
             .expect("memory map region end address overflowed");
 
         let mut current_start = start;
-        while current_start < end {
+        while current_start.as_u64() < end.as_u64() {
             let next_huge_page_start = current_start
                 .checked_add(0x200_000)
                 .expect("2MiB mapping address overflowed");
-            if current_start % 0x200_000 == 0 && next_huge_page_start <= end {
-                let page = x86_64::structures::paging::Page::<x86_64::structures::paging::Size2MiB>::containing_address(VirtAddr::new(current_start));
+            let current_start_raw = current_start.as_u64();
+            if current_start_raw.is_multiple_of(0x200_000)
+                && next_huge_page_start.as_u64() <= end.as_u64()
+            {
+                let page = x86_64::structures::paging::Page::<
+                    x86_64::structures::paging::Size2MiB,
+                >::containing_address(X86VirtAddr::new(current_start_raw));
                 let frame = x86_64::structures::paging::PhysFrame::<
                     x86_64::structures::paging::Size2MiB,
-                >::containing_address(PhysAddr::new(current_start));
+                >::containing_address(X86PhysAddr::new(
+                    current_start_raw,
+                ));
 
                 match mapper.map_to(
                     page,
@@ -318,15 +325,15 @@ unsafe fn map_memory_regions<'a>(
                             e,
                             x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)
                         ),
-                        "Failed to map 2MiB page {current_start:#x}: {e:?}"
+                        "Failed to map 2MiB page {current_start_raw:#x}: {e:?}"
                     ),
                 }
                 current_start = next_huge_page_start;
             } else {
                 let page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
-                    VirtAddr::new(current_start),
+                    X86VirtAddr::new(current_start_raw),
                 );
-                let frame = PhysFrame::containing_address(PhysAddr::new(current_start));
+                let frame = PhysFrame::containing_address(X86PhysAddr::new(current_start_raw));
 
                 match mapper.map_to(
                     page,
@@ -340,7 +347,7 @@ unsafe fn map_memory_regions<'a>(
                             e,
                             x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)
                         ),
-                        "Failed to map 4KiB page {current_start:#x}: {e:?}"
+                        "Failed to map 4KiB page {current_start_raw:#x}: {e:?}"
                     ),
                 }
                 current_start = current_start
@@ -378,7 +385,7 @@ fn is_executable_memory_type(memory_type: MemoryType) -> bool {
 unsafe fn map_identity_pages(
     mapper: &mut OffsetPageTable,
     frame_allocator: &mut BumpFrameAllocator,
-    start_address: u64,
+    start_address: KernelPhysAddr,
     page_count: u64,
     flags: PageTableFlags,
 ) {
@@ -389,10 +396,11 @@ unsafe fn map_identity_pages(
         let address = start_address
             .checked_add(offset)
             .expect("identity mapping address overflowed");
-        let page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(VirtAddr::new(
-            address,
-        ));
-        let frame = PhysFrame::containing_address(PhysAddr::new(address));
+        let raw_address = address.as_u64();
+        let page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
+            X86VirtAddr::new(raw_address),
+        );
+        let frame = PhysFrame::containing_address(X86PhysAddr::new(raw_address));
 
         if let x86_64::structures::paging::mapper::TranslateResult::Mapped { .. } =
             mapper.translate(page.start_address())
@@ -412,7 +420,7 @@ unsafe fn map_identity_pages(
                     e,
                     x86_64::structures::paging::mapper::MapToError::PageAlreadyMapped(_)
                 ),
-                "Failed to map identity page {address:#x}: {e:?}"
+                "Failed to map identity page {raw_address:#x}: {e:?}"
             ),
         }
     }
@@ -423,26 +431,30 @@ unsafe fn map_framebuffer(
     frame_allocator: &mut BumpFrameAllocator,
     framebuffer_range: FramebufferPhysicalRange,
 ) {
-    let framebuffer_base = framebuffer_range.start().as_u64();
+    let framebuffer_start = framebuffer_range.start();
     let framebuffer_size = framebuffer_range.byte_len();
+    let framebuffer_base = framebuffer_start.as_u64();
     crate::log_info!(
         "paging",
         "Mapping framebuffer: base={:#x} size={} bytes",
         framebuffer_base,
         framebuffer_size
     );
+    let start_page_address = KernelVirtAddr::new(framebuffer_start.align_down_to_page().as_u64());
     let start_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
-        VirtAddr::new(framebuffer_base),
+        X86VirtAddr::new(start_page_address.as_u64()),
     );
-    let end_address = framebuffer_base
+    let end_address = framebuffer_start
         .checked_add(framebuffer_size - 1)
         .expect("framebuffer end address overflowed");
-    let end_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(VirtAddr::new(
-        end_address,
-    ));
+    let end_page_address = KernelVirtAddr::new(end_address.align_down_to_page().as_u64());
+    let end_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
+        X86VirtAddr::new(end_page_address.as_u64()),
+    );
 
     for page in x86_64::structures::paging::Page::range_inclusive(start_page, end_page) {
-        let frame = PhysFrame::containing_address(PhysAddr::new(page.start_address().as_u64()));
+        let frame_address = KernelPhysAddr::new(page.start_address().as_u64());
+        let frame = PhysFrame::containing_address(X86PhysAddr::new(frame_address.as_u64()));
         let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
 
         if let x86_64::structures::paging::mapper::TranslateResult::Mapped { .. } =
@@ -481,6 +493,6 @@ unsafe impl x86_64::structures::paging::FrameAllocator<Size4KiB> for FrameAllocW
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
         self.frame_allocator
             .allocate_frame_for(FrameRangeOwner::PageTable)
-            .map(|address| PhysFrame::containing_address(PhysAddr::new(address.as_u64())))
+            .map(|address| PhysFrame::containing_address(X86PhysAddr::new(address.as_u64())))
     }
 }
