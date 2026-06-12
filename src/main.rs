@@ -107,7 +107,7 @@ fn get_framebuffer_size(
 fn allocate_backbuffer(
     frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator,
     framebuffer_size: u64,
-) -> *mut u8 {
+) -> kernel::memory::address::KernelVirtualAddress {
     let backbuffer_pages = framebuffer_size.div_ceil(4096);
     let backbuffer_physical_range = frame_allocator
         .allocate_frames_for(
@@ -115,7 +115,9 @@ fn allocate_backbuffer(
             kernel::memory::frame_allocator::FrameRangeOwner::FramebufferBackbuffer,
         )
         .expect("OOM: failed to allocate framebuffer backbuffer");
-    backbuffer_physical_range.start().as_usize() as *mut u8
+    backbuffer_physical_range
+        .start()
+        .as_identity_mapped_kernel_address()
 }
 
 fn initialize_scheduler() {
@@ -482,7 +484,7 @@ fn main() -> Status {
     crate::log_info!("kernel", "ManaOS Kernel phase started.");
 
     let framebuffer_size = get_framebuffer_size(framebuffer_info);
-    let backbuffer_ptr = allocate_backbuffer(&mut frame_allocator, framebuffer_size);
+    let backbuffer_address = allocate_backbuffer(&mut frame_allocator, framebuffer_size);
 
     kernel::boot::initialize(
         &mut frame_allocator,
@@ -492,7 +494,7 @@ fn main() -> Status {
             inter: font_inter,
             noto: font_noto,
         },
-        backbuffer_ptr,
+        backbuffer_address,
     );
     kernel::filesystem::initialize();
     crate::log_info!("fs", "Kernel filesystem initialized.");

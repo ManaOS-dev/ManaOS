@@ -1,5 +1,5 @@
 use crate::kernel::memory::{
-    address::PhysAddr as KernelPhysAddr,
+    address::{FramebufferPhysicalRange, PhysAddr as KernelPhysAddr},
     frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
 };
 use uefi::mem::memory_map::{MemoryDescriptor, MemoryType};
@@ -28,8 +28,7 @@ const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 pub unsafe fn init<'a>(
     frame_allocator: &mut BumpFrameAllocator,
     mmap_iter: impl Iterator<Item = &'a MemoryDescriptor>,
-    framebuffer_base: u64,
-    framebuffer_size: u64,
+    framebuffer_range: FramebufferPhysicalRange,
 ) {
     // SAFETY: Setting NXE enables honoring the NO_EXECUTE page-table flag while
     // preserving all other EFER bits.
@@ -52,12 +51,7 @@ pub unsafe fn init<'a>(
     // page-table frames.
     unsafe {
         map_memory_regions(&mut mapper, frame_allocator, mmap_iter);
-        map_framebuffer(
-            &mut mapper,
-            frame_allocator,
-            framebuffer_base,
-            framebuffer_size,
-        );
+        map_framebuffer(&mut mapper, frame_allocator, framebuffer_range);
     }
 
     // Switch to the new page table
@@ -427,18 +421,15 @@ unsafe fn map_identity_pages(
 unsafe fn map_framebuffer(
     mapper: &mut OffsetPageTable,
     frame_allocator: &mut BumpFrameAllocator,
-    framebuffer_base: u64,
-    framebuffer_size: u64,
+    framebuffer_range: FramebufferPhysicalRange,
 ) {
+    let framebuffer_base = framebuffer_range.start().as_u64();
+    let framebuffer_size = framebuffer_range.byte_len();
     crate::log_info!(
         "paging",
         "Mapping framebuffer: base={:#x} size={} bytes",
         framebuffer_base,
         framebuffer_size
-    );
-    assert!(
-        framebuffer_size > 0,
-        "framebuffer size must be non-zero before paging setup"
     );
     let start_page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
         VirtAddr::new(framebuffer_base),

@@ -50,6 +50,11 @@ untyped cross-domain `u64` values:
   `dma::split_address(...)` accepts `DmaPhysicalAddress`.
 - `StorageDataAddress` represents the active DMA data buffer used by
   `BlockDevice`, AHCI service helpers, GPT parsing, and FAT32 parsing.
+- `FramebufferPhysicalRange` represents the active graphics-mode framebuffer
+  range passed from boot setup into paging.
+- `KernelVirtualAddress` represents identity-mapped kernel virtual addresses
+  such as the framebuffer backbuffer before display initialization converts it
+  to a raw pointer.
 
 ## Remaining Raw Address API Inventory
 
@@ -60,8 +65,6 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 ### Boot And Composition Root
 
 - `src/main.rs`
-  - `allocate_backbuffer(...) -> *mut u8` converts a physical frame allocation
-    into a pointer under the identity-mapping assumption.
   - `arch::init(kernel::interrupt::syscall_entry as *const () as u64)` passes a
     function address as a raw architecture argument.
   - `run_user_smoke_demo(...)` passes user entry, user stack, `argv`, and `envp`
@@ -80,10 +83,8 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   physical frame range that is also used as a virtual range while identity
   mapping is active.
 
-### Paging And Framebuffer
+### Paging
 
-- `kernel::memory::paging::init(..., framebuffer_base: u64, framebuffer_size:
-  u64)` accepts a raw framebuffer physical range.
 - Internal page-table helpers convert raw `u64` values into `PhysAddr` /
   `VirtAddr` locally; those conversions should move behind typed range
   wrappers.
@@ -125,7 +126,10 @@ Continue introducing wrappers in small steps:
 - `PhysicalFrameStart` for 4 KiB-aligned physical frame starts.
 - `PhysicalFrameRange` for frame start plus page count. This is now the return
   type for contiguous bump allocations.
-- `KernelVirtualAddress` for mapped kernel virtual addresses.
+- `FramebufferPhysicalRange` for the active graphics-mode framebuffer physical
+  range. This now exists in `kernel::memory::address`.
+- `KernelVirtualAddress` for mapped kernel virtual addresses. This now exists
+  in `kernel::memory::address`.
 - `UserVirtualAddress` for non-null user pointers and ELF virtual addresses.
   This now covers loaded ELF entry points, prepared user stack pointers, and
   user page mapping requests.
@@ -138,10 +142,10 @@ Continue introducing wrappers in small steps:
 - `StorageDataAddress` for the active DMA data buffer passed through generic
   storage parsing. This now exists in `kernel::memory::address`.
 
-The next implementation steps should focus on storage abstraction boundaries,
-framebuffer/MMIO range wrappers, and internal page-table helper arithmetic. They
-should avoid broad mechanical renames until the remaining high-risk boundaries
-have typed constructors and callers.
+The next implementation steps should focus on internal page-table helper
+arithmetic, file-format raw fields, and the remaining architecture ABI
+boundaries. They should avoid broad mechanical renames until the remaining
+high-risk boundaries have typed constructors and callers.
 
 ## Migration Order
 
@@ -157,9 +161,7 @@ have typed constructors and callers.
 
 ## Remaining Migration Order
 
-1. Introduce framebuffer physical range and kernel virtual pointer wrappers for
-   `paging::init`, `map_framebuffer`, and `main.rs` backbuffer setup.
-2. Move internal paging helpers from raw `u64` arithmetic to local `PhysAddr` /
+1. Move internal paging helpers from raw `u64` arithmetic to local `PhysAddr` /
    `VirtAddr` arithmetic where this improves boundary clarity.
-3. Keep ELF parser fields raw at the file-format layer, but convert loadable
+2. Keep ELF parser fields raw at the file-format layer, but convert loadable
    segment virtual addresses to typed user virtual ranges before mapping.

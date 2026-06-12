@@ -110,6 +110,59 @@ impl VirtAddr {
     }
 }
 
+/// A mapped kernel virtual byte address.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct KernelVirtualAddress(VirtAddr);
+
+impl KernelVirtualAddress {
+    /// Create a mapped kernel virtual address.
+    pub const fn new(address: VirtAddr) -> Self {
+        Self(address)
+    }
+
+    /// Return the raw kernel virtual address as a `u64`.
+    pub const fn as_u64(self) -> u64 {
+        self.0.as_u64()
+    }
+
+    /// Return the kernel virtual address as a mutable byte pointer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the kernel virtual address does not fit in `usize`.
+    pub fn as_mut_ptr(self) -> *mut u8 {
+        usize::try_from(self.as_u64()).expect("kernel virtual address must fit in usize") as *mut u8
+    }
+}
+
+/// A physical framebuffer range reported by the active graphics mode.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FramebufferPhysicalRange {
+    start: PhysAddr,
+    byte_len: u64,
+}
+
+impl FramebufferPhysicalRange {
+    /// Create a non-empty framebuffer physical range.
+    pub const fn new(start: PhysAddr, byte_len: u64) -> Option<Self> {
+        if byte_len == 0 {
+            return None;
+        }
+
+        Some(Self { start, byte_len })
+    }
+
+    /// Return the framebuffer physical base address.
+    pub const fn start(self) -> PhysAddr {
+        self.start
+    }
+
+    /// Return the framebuffer range length in bytes.
+    pub const fn byte_len(self) -> u64 {
+        self.byte_len
+    }
+}
+
 /// A 4 KiB-aligned physical frame start address.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PhysicalFrameStart(u64);
@@ -132,6 +185,11 @@ impl PhysicalFrameStart {
     /// Return this frame start as a physical byte address.
     pub const fn as_address(self) -> PhysAddr {
         PhysAddr::new(self.0)
+    }
+
+    /// Return this identity-mapped frame start as a kernel virtual address.
+    pub const fn as_identity_mapped_kernel_address(self) -> KernelVirtualAddress {
+        KernelVirtualAddress::new(VirtAddr::new(self.0))
     }
 
     /// Return this frame start as a DMA physical byte address.
