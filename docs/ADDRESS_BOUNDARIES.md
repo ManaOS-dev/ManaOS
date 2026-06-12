@@ -117,7 +117,8 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   user virtual entry point.
 - `ProgramHeader::virtual_address() -> u64` remains raw because it exposes a
   field parsed directly from the ELF file. Loader validation converts accepted
-  segment starts to `UserVirtualAddress` before mapping.
+  loadable segments to a local typed `UserVirtualRange` before page mapping and
+  file-backed copying.
 
 ### Storage And AHCI DMA
 
@@ -152,10 +153,9 @@ Continue introducing wrappers in small steps:
 - `StorageDataAddress` for the active DMA data buffer passed through generic
   storage parsing. This now exists in `kernel::memory::address`.
 
-The next implementation steps should focus on file-format raw fields and the
-remaining architecture ABI boundaries. They should avoid broad mechanical
-renames until the remaining high-risk boundaries have typed constructors and
-callers.
+The next implementation steps should focus on the remaining architecture ABI
+boundaries. They should avoid broad mechanical renames until the remaining
+high-risk boundaries have typed constructors and callers.
 
 ## Migration Order
 
@@ -171,5 +171,5 @@ callers.
 
 ## Remaining Migration Order
 
-1. Keep ELF parser fields raw at the file-format layer, but convert loadable
-   segment virtual addresses to typed user virtual ranges before mapping.
+1. Keep architecture ABI fields raw at the assembly boundary, but keep their
+   constructors and callers typed.

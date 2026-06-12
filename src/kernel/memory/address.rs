@@ -293,6 +293,11 @@ impl UserVirtualAddress {
         Self::new(address)
     }
 
+    /// Return this user virtual address rounded down to a 4 KiB page boundary.
+    pub const fn align_down_to_page(self) -> Self {
+        Self(self.0 & !(PAGE_SIZE - 1))
+    }
+
     /// Return a user virtual address moved backward by `offset` bytes.
     pub const fn checked_sub(self, offset: u64) -> Option<Self> {
         let Some(address) = self.0.checked_sub(offset) else {
@@ -340,6 +345,19 @@ impl UserVirtualRange {
     /// Return the range length in bytes.
     pub const fn byte_len(self) -> usize {
         self.byte_len
+    }
+
+    /// Return the first address after this range.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the range end overflows `u64`. Construction prevents this for
+    /// valid ranges.
+    pub const fn end_exclusive(self) -> u64 {
+        self.start
+            .as_u64()
+            .checked_add(self.byte_len as u64)
+            .expect("user virtual range end overflowed")
     }
 }
 
