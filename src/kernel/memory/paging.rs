@@ -75,6 +75,44 @@ pub fn is_user_range_mapped_writable(user_pointer: usize, length: usize) -> bool
     validate_user_mapping(user_pointer, length, PageTableFlags::WRITABLE)
 }
 
+/// Verify representative kernel and user mapping permissions.
+///
+/// The kernel pointer must be mapped but not user-accessible. The user stack
+/// pointer must be mapped as writable, user-accessible, and non-executable. The
+/// user entry pointer must be mapped as user-accessible executable code and not
+/// writable.
+pub fn verify_kernel_user_mapping_permissions(
+    kernel_pointer: usize,
+    user_stack_pointer: usize,
+    user_entry_pointer: usize,
+) -> bool {
+    let Some(kernel_flags) = mapping_flags_for_address(kernel_pointer as u64) else {
+        return false;
+    };
+    if !kernel_flags.contains(PageTableFlags::PRESENT)
+        || kernel_flags.contains(PageTableFlags::USER_ACCESSIBLE)
+    {
+        return false;
+    }
+
+    let Some(user_stack_flags) = mapping_flags_for_address(user_stack_pointer as u64) else {
+        return false;
+    };
+    if !user_stack_flags.contains(PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
+        || !user_stack_flags.contains(PageTableFlags::WRITABLE)
+        || !user_stack_flags.contains(PageTableFlags::NO_EXECUTE)
+    {
+        return false;
+    }
+
+    let Some(user_entry_flags) = mapping_flags_for_address(user_entry_pointer as u64) else {
+        return false;
+    };
+    user_entry_flags.contains(PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
+        && !user_entry_flags.contains(PageTableFlags::WRITABLE)
+        && !user_entry_flags.contains(PageTableFlags::NO_EXECUTE)
+}
+
 /// Identity-map a kernel MMIO range as writable and uncached.
 ///
 /// # Panics
@@ -186,6 +224,21 @@ fn is_page_mapped_with_flags(
     match mapper.translate(VirtAddr::new(page_start)) {
         TranslateResult::Mapped { flags, .. } => flags.contains(required_flags),
         TranslateResult::NotMapped | TranslateResult::InvalidFrameAddress(_) => false,
+    }
+}
+
+fn mapping_flags_for_address(address: u64) -> Option<PageTableFlags> {
+    let (level_4_frame, _) = Cr3::read();
+    let level_4_table = level_4_frame.start_address().as_u64() as *mut PageTable;
+    // SAFETY: ManaOS keeps active page tables identity mapped, so the physical
+    // address from CR3 is directly usable as a kernel virtual address.
+    let level_4_table = unsafe { &mut *level_4_table };
+    // SAFETY: The active address space uses an identity physical memory offset.
+    let mapper = unsafe { OffsetPageTable::new(level_4_table, VirtAddr::new(0)) };
+
+    match mapper.translate(VirtAddr::new(address)) {
+        TranslateResult::Mapped { flags, .. } => Some(flags),
+        TranslateResult::NotMapped | TranslateResult::InvalidFrameAddress(_) => None,
     }
 }
 
