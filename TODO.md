@@ -110,7 +110,7 @@ items have been removed so the file stays useful for deciding the next task.
 
 - [x] Audit `BumpFrameAllocator` call sites and document invariants required before replacing it.
 - [ ] Replace the bump frame allocator with a reusable physical frame allocator.
-- [ ] Track reserved, used, and free physical frame ranges.
+- [x] Track reserved, used, and free physical frame ranges.
 - [x] Design ownership rules for free, used, and reserved physical frame ranges.
 - [ ] Add a kernel virtual memory allocator for dynamic mappings.
 - [ ] Add guard pages for kernel stacks.

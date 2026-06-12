@@ -3,12 +3,41 @@
 use super::address::{PhysicalFrameRange, PhysicalFrameStart};
 
 const MAX_REGIONS: usize = 128;
+const MAX_TRACKED_RANGES: usize = 512;
 const FRAME_SIZE: u64 = 4096;
 
 #[derive(Clone, Copy)]
 struct Region {
     start: u64,
     pages: u64,
+}
+
+#[derive(Clone, Copy)]
+struct TrackedRange {
+    region: Region,
+    state: FrameRangeState,
+}
+
+/// Physical frame range state tracked by the frame allocator.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FrameRangeState {
+    /// Frames are unavailable for allocation.
+    Reserved,
+    /// Frames are available for allocation.
+    Free,
+    /// Frames are owned by a kernel subsystem, user mapping, page table, or device.
+    Used,
+}
+
+/// Page totals for tracked physical frame ranges.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct FrameAllocatorStatistics {
+    /// Number of tracked reserved 4 KiB frames.
+    pub reserved: u64,
+    /// Number of tracked free 4 KiB frames.
+    pub free: u64,
+    /// Number of tracked used 4 KiB frames.
+    pub used: u64,
 }
 
 /// A linear allocator for 4 KiB physical frames registered from UEFI memory map
@@ -18,6 +47,8 @@ pub struct BumpFrameAllocator {
     count: usize,
     current: usize,
     offset: u64,
+    tracked_ranges: [TrackedRange; MAX_TRACKED_RANGES],
+    tracked_count: usize,
 }
 
 impl BumpFrameAllocator {
@@ -28,6 +59,11 @@ impl BumpFrameAllocator {
             count: 0,
             current: 0,
             offset: 0,
+            tracked_ranges: [TrackedRange {
+                region: Region { start: 0, pages: 0 },
+                state: FrameRangeState::Reserved,
+            }; MAX_TRACKED_RANGES],
+            tracked_count: 0,
         }
     }
 
@@ -38,6 +74,16 @@ impl BumpFrameAllocator {
         };
 
         self.insert_region(region);
+        self.insert_tracked_range(region, FrameRangeState::Free);
+    }
+
+    /// Register a reserved physical memory region.
+    pub fn reserve_region(&mut self, start: u64, pages: u64) {
+        let Some(region) = normalize_reserved_region(start, pages) else {
+            return;
+        };
+
+        self.insert_tracked_range(region, FrameRangeState::Reserved);
     }
 
     /// Allocate a single 4KiB frame.
@@ -68,6 +114,12 @@ impl BumpFrameAllocator {
                     continue;
                 };
 
+                if !self.mark_range_used(Region {
+                    start: candidate_address,
+                    pages: n,
+                }) {
+                    return None;
+                }
                 self.offset += n;
                 let start = PhysicalFrameStart::new(candidate_address)
                     .expect("frame allocator returned an unaligned physical frame");
@@ -81,6 +133,27 @@ impl BumpFrameAllocator {
             self.offset = 0;
         }
         None
+    }
+
+    /// Return page totals for reserved, free, and used tracked frame ranges.
+    #[allow(dead_code)]
+    pub fn statistics(&self) -> FrameAllocatorStatistics {
+        let mut statistics = FrameAllocatorStatistics::default();
+        for index in 0..self.tracked_count {
+            let range = self.tracked_ranges[index];
+            match range.state {
+                FrameRangeState::Reserved => {
+                    statistics.reserved = statistics.reserved.saturating_add(range.region.pages);
+                }
+                FrameRangeState::Free => {
+                    statistics.free = statistics.free.saturating_add(range.region.pages);
+                }
+                FrameRangeState::Used => {
+                    statistics.used = statistics.used.saturating_add(range.region.pages);
+                }
+            }
+        }
+        statistics
     }
 
     /// Total number of registered conventional memory in bytes.
@@ -137,12 +210,152 @@ impl BumpFrameAllocator {
 
         self.count = write_index + 1;
     }
+
+    fn insert_tracked_range(&mut self, region: Region, state: FrameRangeState) {
+        if region.pages == 0 {
+            return;
+        }
+
+        let mut index = 0;
+        while index < self.tracked_count && self.tracked_ranges[index].region.start < region.start {
+            index += 1;
+        }
+
+        self.insert_tracked_range_at(index, TrackedRange { region, state });
+        self.merge_adjacent_tracked_ranges();
+    }
+
+    fn insert_tracked_range_at(&mut self, index: usize, range: TrackedRange) {
+        assert!(
+            self.tracked_count < MAX_TRACKED_RANGES,
+            "frame allocator range tracking capacity exhausted"
+        );
+        assert!(
+            index <= self.tracked_count,
+            "frame allocator range tracking insert index out of bounds"
+        );
+
+        for move_index in (index..self.tracked_count).rev() {
+            self.tracked_ranges[move_index + 1] = self.tracked_ranges[move_index];
+        }
+        self.tracked_ranges[index] = range;
+        self.tracked_count += 1;
+    }
+
+    fn mark_range_used(&mut self, used_region: Region) -> bool {
+        let Some(used_end) = region_end(used_region) else {
+            return false;
+        };
+
+        for index in 0..self.tracked_count {
+            let tracked = self.tracked_ranges[index];
+            if tracked.state != FrameRangeState::Free {
+                continue;
+            }
+            let Some(tracked_end) = region_end(tracked.region) else {
+                return false;
+            };
+            if used_region.start < tracked.region.start || used_end > tracked_end {
+                continue;
+            }
+
+            let before_pages = (used_region.start - tracked.region.start) / FRAME_SIZE;
+            let after_pages = (tracked_end - used_end) / FRAME_SIZE;
+            self.tracked_ranges[index] = TrackedRange {
+                region: used_region,
+                state: FrameRangeState::Used,
+            };
+
+            if before_pages > 0 {
+                self.tracked_ranges[index] = TrackedRange {
+                    region: Region {
+                        start: tracked.region.start,
+                        pages: before_pages,
+                    },
+                    state: FrameRangeState::Free,
+                };
+                self.insert_tracked_range_at(
+                    index + 1,
+                    TrackedRange {
+                        region: used_region,
+                        state: FrameRangeState::Used,
+                    },
+                );
+                if after_pages > 0 {
+                    self.insert_tracked_range_at(
+                        index + 2,
+                        TrackedRange {
+                            region: Region {
+                                start: used_end,
+                                pages: after_pages,
+                            },
+                            state: FrameRangeState::Free,
+                        },
+                    );
+                }
+            } else if after_pages > 0 {
+                self.insert_tracked_range_at(
+                    index + 1,
+                    TrackedRange {
+                        region: Region {
+                            start: used_end,
+                            pages: after_pages,
+                        },
+                        state: FrameRangeState::Free,
+                    },
+                );
+            }
+
+            self.merge_adjacent_tracked_ranges();
+            return true;
+        }
+
+        false
+    }
+
+    fn merge_adjacent_tracked_ranges(&mut self) {
+        if self.tracked_count < 2 {
+            return;
+        }
+
+        let mut write_index = 0;
+        for read_index in 1..self.tracked_count {
+            let current = self.tracked_ranges[write_index];
+            let next = self.tracked_ranges[read_index];
+            if current.state == next.state && region_end(current.region) == Some(next.region.start)
+            {
+                self.tracked_ranges[write_index].region.pages = self.tracked_ranges[write_index]
+                    .region
+                    .pages
+                    .saturating_add(next.region.pages);
+            } else {
+                write_index += 1;
+                self.tracked_ranges[write_index] = next;
+            }
+        }
+
+        self.tracked_count = write_index + 1;
+    }
 }
 
 fn normalize_region(start: u64, pages: u64) -> Option<Region> {
     let byte_count = pages.checked_mul(FRAME_SIZE)?;
     let end = start.checked_add(byte_count)?;
     let aligned_start = align_up(start.max(FRAME_SIZE), FRAME_SIZE)?;
+    if aligned_start >= end {
+        return None;
+    }
+
+    Some(Region {
+        start: aligned_start,
+        pages: (end - aligned_start) / FRAME_SIZE,
+    })
+}
+
+fn normalize_reserved_region(start: u64, pages: u64) -> Option<Region> {
+    let byte_count = pages.checked_mul(FRAME_SIZE)?;
+    let end = start.checked_add(byte_count)?;
+    let aligned_start = align_up(start, FRAME_SIZE)?;
     if aligned_start >= end {
         return None;
     }
@@ -175,4 +388,23 @@ pub fn verify_zero_address_skip_for_multi_frame_allocations() -> bool {
         .allocate_frames(2)
         .map(|range| range.start().as_u64())
         == Some(FRAME_SIZE)
+}
+
+/// Verify reserved, used, and free frame range tracking.
+#[allow(dead_code)]
+pub fn verify_reserved_used_and_free_range_tracking() -> bool {
+    let mut frame_allocator = BumpFrameAllocator::new();
+    frame_allocator.reserve_region(0, 1);
+    frame_allocator.add_region(FRAME_SIZE, 4);
+
+    if frame_allocator.allocate_frames(2).is_none() {
+        return false;
+    }
+
+    frame_allocator.statistics()
+        == FrameAllocatorStatistics {
+            reserved: 1,
+            free: 2,
+            used: 2,
+        }
 }
