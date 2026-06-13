@@ -28,14 +28,15 @@ static USER_TIMER_FRAME_REPORTED: AtomicBool = AtomicBool::new(false);
 
 /// Route one timer interrupt tick to the kernel scheduler.
 pub fn process_timer_tick(frame: &TimerInterruptFrame) {
-    if frame.is_user_mode() {
+    let interrupted_user_mode = frame.is_user_mode();
+    if interrupted_user_mode {
         crate::kernel::task::record_current_user_interrupt_trap_frame(
             timer_frame_to_user_trap_frame(frame),
             frame.frame_storage_address,
         );
         report_user_timer_frame_once(frame);
     }
-    crate::kernel::task::process_timer_tick();
+    crate::kernel::task::process_timer_tick(interrupted_user_mode);
 }
 
 /// Route one keyboard byte to the keyboard input queue.

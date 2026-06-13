@@ -5,6 +5,7 @@ use crate::kernel::memory::{
     frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
     paging,
 };
+use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::{
     registers::control::Cr3,
     structures::paging::{
@@ -24,10 +25,45 @@ const MAX_USER_ENTRY_ENVIRONMENT: usize = 8;
 pub const USER_PROGRAM_BASE: u64 = 0x0000_4000_0000_0000;
 const USER_DATA_BASE: u64 = USER_PROGRAM_BASE + PAGE_SIZE;
 const USER_BAD_POINTER_BASE: u64 = USER_DATA_BASE + PAGE_SIZE;
-const USER_STACK_BASE: u64 = 0x0000_7fff_f000_0000;
+const USER_STACK_REGION_BASE: u64 = 0x0000_7fff_f000_0000;
+// Each stack slot reserves 1 MiB so small smoke stacks have an unmapped gap
+// between writable stack ranges while per-process page tables are still absent.
+const USER_STACK_SLOT_BYTES: u64 = 0x0010_0000;
+static NEXT_USER_STACK_SLOT: AtomicU64 = AtomicU64::new(0);
 const _: () = assert!(USER_BAD_POINTER_BASE == 0x0000_4000_0000_2000);
 const _: () = assert!(UserVirtualAddress::new(USER_PROGRAM_BASE).is_some());
-const _: () = assert!(UserVirtualAddress::new(USER_STACK_BASE).is_some());
+const _: () = assert!(UserVirtualAddress::new(USER_STACK_REGION_BASE).is_some());
+
+/// Allocated user stack virtual range.
+#[derive(Debug, Clone, Copy)]
+pub struct AllocatedUserStack {
+    base: UserVirtualAddress,
+    top: UserVirtualAddress,
+    page_count: u64,
+}
+
+impl AllocatedUserStack {
+    /// Return the first writable byte in this user stack.
+    pub fn base(&self) -> UserVirtualAddress {
+        self.base
+    }
+
+    /// Return the user stack pointer one byte past the writable range.
+    pub fn top(&self) -> UserVirtualAddress {
+        self.top
+    }
+
+    /// Return the number of writable 4 KiB pages in this stack.
+    pub fn page_count(&self) -> u64 {
+        self.page_count
+    }
+
+    fn byte_len(self) -> u64 {
+        self.page_count
+            .checked_mul(PAGE_SIZE)
+            .expect("user stack byte length overflowed")
+    }
+}
 
 /// Prepared user stack metadata for first user-mode entry.
 #[derive(Debug, Clone, Copy)]
@@ -60,9 +96,9 @@ impl PreparedUserStack {
     }
 }
 
-/// Allocate and map a fixed-base user-space stack.
+/// Allocate and map one slot-based user-space stack.
 ///
-/// Returns the virtual address one byte past the mapped stack range.
+/// Returns the mapped stack range and top address.
 ///
 /// # Panics
 ///
@@ -70,7 +106,7 @@ impl PreparedUserStack {
 pub fn allocate_user_stack(
     frame_allocator: &mut BumpFrameAllocator,
     pages: u64,
-) -> UserVirtualAddress {
+) -> AllocatedUserStack {
     assert!(pages > 0, "user stack must contain at least one page");
     let physical_range = frame_allocator
         .allocate_frames_for(pages, FrameRangeOwner::UserStack)
@@ -78,13 +114,29 @@ pub fn allocate_user_stack(
     let stack_size = pages
         .checked_mul(PAGE_SIZE)
         .expect("user stack size overflowed");
+    assert!(
+        stack_size < USER_STACK_SLOT_BYTES - PAGE_SIZE,
+        "user stack must fit inside one virtual stack slot"
+    );
+    let stack_slot = NEXT_USER_STACK_SLOT.fetch_add(1, Ordering::AcqRel);
+    let stack_slot_offset = stack_slot
+        .checked_mul(USER_STACK_SLOT_BYTES)
+        .expect("user stack slot offset overflowed");
+    let stack_base = USER_STACK_REGION_BASE
+        .checked_add(stack_slot_offset)
+        .expect("user stack base address overflowed");
+    let stack_base =
+        UserVirtualAddress::new(stack_base).expect("user stack base must be a valid user address");
+    let stack_top = stack_base
+        .checked_add(stack_size)
+        .expect("user stack top address overflowed");
 
     // SAFETY: The active level-4 page table is identity mapped by early paging,
     // and the provided allocator supplies page-table frames for missing levels.
     unsafe {
         map_user_range(
             frame_allocator,
-            UserVirtualAddress::new(USER_STACK_BASE).expect("user stack base must be valid"),
+            stack_base,
             physical_range.start(),
             pages,
             PageTableFlags::PRESENT
@@ -94,11 +146,11 @@ pub fn allocate_user_stack(
         );
     }
 
-    let stack_base =
-        UserVirtualAddress::new(USER_STACK_BASE).expect("user stack base must be valid");
-    stack_base
-        .checked_add(stack_size)
-        .expect("user stack top address overflowed")
+    AllocatedUserStack {
+        base: stack_base,
+        top: stack_top,
+        page_count: pages,
+    }
 }
 
 /// Place `argv` and environment strings on the mapped user stack.
@@ -111,23 +163,21 @@ pub fn allocate_user_stack(
 /// Panics if the stack is invalid, the fixed argument limits are exceeded, or
 /// the argument block does not fit in the mapped stack range.
 pub fn prepare_initial_stack(
-    stack_top: UserVirtualAddress,
+    stack: AllocatedUserStack,
     arguments: &[&str],
     environment: &[&str],
 ) -> PreparedUserStack {
-    let stack_top_address = stack_top;
+    let stack_top_address = stack.top();
     let stack_top = stack_top_address.as_u64();
+    let stack_base = stack.base();
     assert!(
-        stack_top > USER_STACK_BASE,
-        "user stack top must be above the fixed user stack base"
+        stack_top > stack_base.as_u64(),
+        "user stack top must be above the allocated stack base"
     );
-    let stack_size = usize::try_from(stack_top - USER_STACK_BASE)
+    let stack_size = usize::try_from(stack.byte_len())
         .expect("user stack size must fit in usize before preparing arguments");
     assert!(
-        paging::is_user_range_mapped_writable(
-            usize::try_from(USER_STACK_BASE).expect("user stack base must fit in usize"),
-            stack_size,
-        ),
+        paging::is_user_range_mapped_writable(stack_base.as_usize(), stack_size,),
         "user entry arguments require a mapped writable user stack"
     );
     assert!(
@@ -139,8 +189,6 @@ pub fn prepare_initial_stack(
         "too many user entry environment entries"
     );
 
-    let stack_base =
-        UserVirtualAddress::new(USER_STACK_BASE).expect("user stack base must be valid");
     let mut stack_cursor = UserStackCursor::new(stack_top_address, stack_base);
     let mut argument_pointers = [None; MAX_USER_ENTRY_ARGUMENTS];
     let mut environment_pointers = [None; MAX_USER_ENTRY_ENVIRONMENT];
@@ -190,7 +238,7 @@ pub fn allocate_and_map_user_page(
         "user page virtual address must be 4KiB aligned"
     );
     assert!(
-        virtual_address < USER_STACK_BASE,
+        virtual_address < USER_STACK_REGION_BASE,
         "user page virtual address must stay below the user stack"
     );
     let physical_address = frame_allocator
@@ -214,31 +262,29 @@ pub fn allocate_and_map_user_page(
     physical_address
 }
 
-/// Return whether the fixed user stack is writable and its guard page is unmapped.
+/// Return whether the user stack is writable and its guard page is unmapped.
 ///
 /// # Panics
 ///
-/// Panics if `pages` is zero or the stack size overflows.
-pub fn verify_user_stack_mapping(pages: u64) -> bool {
+/// Panics if the stack has no pages or the stack size overflows.
+pub fn verify_user_stack_mapping(stack: AllocatedUserStack) -> bool {
     assert!(
-        pages > 0,
+        stack.page_count() > 0,
         "user stack verification requires at least one page"
     );
-    let stack_size = pages
-        .checked_mul(PAGE_SIZE)
-        .and_then(|bytes| usize::try_from(bytes).ok())
-        .expect("user stack verification size overflowed");
-    let guard_page = USER_STACK_BASE
+    let stack_size =
+        usize::try_from(stack.byte_len()).expect("user stack verification size overflowed");
+    let guard_page = stack
+        .base()
+        .as_u64()
         .checked_sub(PAGE_SIZE)
         .expect("user stack guard address underflowed");
 
-    paging::is_user_range_mapped_writable(
-        usize::try_from(USER_STACK_BASE).expect("user stack base must fit in usize"),
-        stack_size,
-    ) && !paging::is_user_range_mapped_readable(
-        usize::try_from(guard_page).expect("user stack guard must fit in usize"),
-        PAGE_SIZE_USIZE,
-    )
+    paging::is_user_range_mapped_writable(stack.base().as_usize(), stack_size)
+        && !paging::is_user_range_mapped_readable(
+            usize::try_from(guard_page).expect("user stack guard must fit in usize"),
+            PAGE_SIZE_USIZE,
+        )
 }
 
 struct UserStackCursor {

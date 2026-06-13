@@ -105,7 +105,8 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 ### User Memory
 
 - `kernel::memory::user_stack::allocate_user_stack(..., pages) ->
-  UserVirtualAddress` returns a typed user virtual stack top.
+  AllocatedUserStack` returns a typed user stack range with base, top, and
+  page count.
 - `PreparedUserStack` exposes typed user virtual `stack_pointer`,
   `argument_values_pointer`, and `environment_values_pointer`.
 - Initial user stack argument layout uses a local `UserVirtualAddress` cursor;

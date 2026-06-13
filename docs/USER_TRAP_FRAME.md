@@ -18,8 +18,8 @@ captures a runtime `UserTrapFrame`, and stores returning syscall frames on the
 current user task. The x86_64 timer interrupt entry also captures a complete
 general-purpose register snapshot for Ring 3 timer frames and records it on the
 current user task. The scheduler can now preempt a Ring 3 task from the timer
-path, run a kernel task, and resume the preempted user task through the saved
-timer interrupt context.
+path, run another schedulable task, and resume the preempted user task through
+the saved timer interrupt context.
 
 ## Full Trap Frame Layout
 
@@ -114,4 +114,5 @@ User task preemption stays disabled until all of the following are true:
 - The scheduler can transition a user task from `Running` to `Ready` only after
   its trap frame is saved. This is complete for timer-driven preemption.
 - `just storage-smoke` still proves the one-shot user path and now asserts that
-  a timer interrupt can preempt and resume user code.
+  timer interrupts can preempt and resume user code across two user task
+  records that own separate stack slots.

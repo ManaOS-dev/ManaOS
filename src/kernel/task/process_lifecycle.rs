@@ -4,15 +4,36 @@ use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 static USER_EXIT_RETURN_STACK: AtomicUsize = AtomicUsize::new(0);
 static LAST_USER_EXIT_CODE: AtomicU64 = AtomicU64::new(0);
+static LAST_USER_EXIT_TASK_ID: AtomicU64 = AtomicU64::new(0);
+
+/// Result reported by a user task that exited through `SYS_EXIT`.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct UserTaskExit {
+    task_id: u64,
+    exit_code: u64,
+}
+
+impl UserTaskExit {
+    /// Return the task identifier that exited.
+    pub fn task_id(&self) -> u64 {
+        self.task_id
+    }
+
+    /// Return the exit code reported by the task.
+    pub fn exit_code(&self) -> u64 {
+        self.exit_code
+    }
+}
 
 /// Run one user-space task until it exits through `SYS_EXIT`.
 ///
-/// Returns the exit code reported by the user task.
+/// Returns the task identifier and exit code reported by the user task that
+/// reached `SYS_EXIT`.
 ///
 /// # Panics
 ///
 /// Panics if the scheduler has not been initialized.
-pub fn run_user_task_once(task_id: u64) -> Option<u64> {
+pub fn run_user_task_once(task_id: u64) -> Option<UserTaskExit> {
     let user_task = {
         let mut scheduler = super::SCHEDULER.lock();
         scheduler
@@ -38,13 +59,24 @@ pub fn run_user_task_once(task_id: u64) -> Option<u64> {
         user_task.trap_frame.rdx
     );
 
+    LAST_USER_EXIT_TASK_ID.store(0, Ordering::Release);
+    super::set_preemption_enabled(true);
     // SAFETY: The trap frame was derived from mapped user code and stack
     // addresses, and this restore path returns only through SYS_EXIT.
     unsafe {
         super::architecture::enter_user_mode_once(user_task.trap_frame.as_pointer());
     }
+    super::set_preemption_enabled(false);
 
-    Some(LAST_USER_EXIT_CODE.load(Ordering::Acquire))
+    let task_id = LAST_USER_EXIT_TASK_ID.load(Ordering::Acquire);
+    if task_id == 0 {
+        return None;
+    }
+
+    Some(UserTaskExit {
+        task_id,
+        exit_code: LAST_USER_EXIT_CODE.load(Ordering::Acquire),
+    })
 }
 
 /// Mark the currently running user task as finished.
@@ -54,6 +86,7 @@ pub fn finish_current_task(exit_code: u64) -> Option<u64> {
         .as_mut()
         .and_then(super::Scheduler::finish_current_task)?;
     LAST_USER_EXIT_CODE.store(exit_code, Ordering::Release);
+    LAST_USER_EXIT_TASK_ID.store(task_id, Ordering::Release);
     Some(task_id)
 }
 
