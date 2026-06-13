@@ -106,7 +106,7 @@ $expectedPatterns = @(
     "Scheduler diagnostics verified: .*user_tasks=2 .*finished=2 .*active_user_tasks=0 .*active_user_address_spaces=0 .*pending_user_exits=0 .*preemption_state=enabled .*preemption_enabled=true .*user_sleep_blocks=2 .*user_sleep_wakes=2 .*user_return_preemption_window_closes=4 .*user_return_stack_sets=4 .*user_return_stack_takes=4 .*reclaimed_user_resource_records=2 .*reclaimed_user_kernel_stacks=2 .*reclaimed_kernel_stack_writable_pages=8 .*reclaimed_kernel_stack_virtual_pages=10 .*timer_preemptions=.* user_resumes=.* finished_tasks=2",
     "Scheduler task snapshots verified: rows=4 finished_user_tasks=2 bootstrap_child_user_tasks=2 fully_reclaimed_user_tasks=2 user_vm_snapshots=2 released_mmap_snapshots=2",
     "Frame allocator diagnostics snapshot: .*page_table=.* kernel_heap=.* kernel_stack=.* user_stack=0 user_elf=0 user_heap=0 user_mapping=0 dynamic_kernel_mapping=0 ahci_dma=.*",
-    "Tasks command smoke passed: command=`"tasks`" output_lines=12",
+    "Tasks command smoke passed: command=`"tasks`" output_lines=14",
     "Memory command smoke passed: command=`"memory`" output_lines=3",
     "Syscall trace: record=1 task=.* number=39 result=0x",
     "Syscall trace controls smoke passed: command=`"syscalls trace`" records=1",

@@ -185,7 +185,9 @@ The `tasks` console command exposes the static user virtual layout and one
 `task_vm` row for each retained user task. Those rows show the last scheduler
 runtime view of the `brk` heap and anonymous mapping table even after the
 address space has been reclaimed, which keeps process-memory state visible
-without keeping page tables alive.
+without keeping page tables alive. Each retained user task also reports a
+`task_mmap_lifecycle` row with total mapped pages, total released pages, active
+page and record high-water marks, and file-private mapping calls.
 
 `brk` is the first syscall-time user heap growth path. The ELF loader reports a
 page-aligned heap start after the highest `PT_LOAD` segment, the scheduler stores

@@ -4,6 +4,8 @@ use super::output::{CommandEffect, CommandError, CommandOutput};
 use alloc::format;
 use alloc::string::ToString;
 
+use crate::kernel::task::{SchedulerTaskSnapshot, UserVirtualMemorySnapshot};
+
 pub(super) fn run(
     arguments: &str,
     _input: &[alloc::string::String],
@@ -75,31 +77,52 @@ pub(super) fn run(
         return Ok(CommandEffect::Output(output));
     };
     for snapshot in snapshots {
-        output.push(format!(
-            "task: id={} parent={} kind={} state={} active={} address_space_owned={} kernel_stack_owned={}",
-            snapshot.task_id(),
-            snapshot
-                .parent_task_id()
-                .map_or_else(|| "-".to_string(), |task_id| task_id.to_string()),
-            snapshot.kind().as_str(),
-            snapshot.state().as_str(),
-            snapshot.active(),
-            snapshot.address_space_owned(),
-            snapshot.kernel_stack_owned()
-        ));
-        if let Some(user_virtual_memory) = snapshot.user_virtual_memory() {
-            output.push(format!(
-                "task_vm: id={} heap_base={:#x} heap_break={:#x} heap_pages={} mmap_next={:#x} mmap_pages={} mmap_records={} mmap_file_records={}",
-                snapshot.task_id(),
-                user_virtual_memory.heap_base(),
-                user_virtual_memory.heap_break(),
-                user_virtual_memory.heap_mapped_pages(),
-                user_virtual_memory.mapping_next_start(),
-                user_virtual_memory.mapping_active_pages(),
-                user_virtual_memory.mapping_active_records(),
-                user_virtual_memory.mapping_file_private_records()
-            ));
-        }
+        push_task_snapshot(&mut output, snapshot);
     }
     Ok(CommandEffect::Output(output))
+}
+
+fn push_task_snapshot(output: &mut CommandOutput, snapshot: SchedulerTaskSnapshot) {
+    output.push(format!(
+        "task: id={} parent={} kind={} state={} active={} address_space_owned={} kernel_stack_owned={}",
+        snapshot.task_id(),
+        snapshot
+            .parent_task_id()
+            .map_or_else(|| "-".to_string(), |task_id| task_id.to_string()),
+        snapshot.kind().as_str(),
+        snapshot.state().as_str(),
+        snapshot.active(),
+        snapshot.address_space_owned(),
+        snapshot.kernel_stack_owned()
+    ));
+    if let Some(user_virtual_memory) = snapshot.user_virtual_memory() {
+        push_user_virtual_memory(output, snapshot.task_id(), user_virtual_memory);
+    }
+}
+
+fn push_user_virtual_memory(
+    output: &mut CommandOutput,
+    task_id: u64,
+    user_virtual_memory: UserVirtualMemorySnapshot,
+) {
+    output.push(format!(
+        "task_vm: id={} heap_base={:#x} heap_break={:#x} heap_pages={} mmap_next={:#x} mmap_pages={} mmap_records={} mmap_file_records={}",
+        task_id,
+        user_virtual_memory.heap_base(),
+        user_virtual_memory.heap_break(),
+        user_virtual_memory.heap_mapped_pages(),
+        user_virtual_memory.mapping_next_start(),
+        user_virtual_memory.mapping_active_pages(),
+        user_virtual_memory.mapping_active_records(),
+        user_virtual_memory.mapping_file_private_records()
+    ));
+    output.push(format!(
+        "task_mmap_lifecycle: id={} total_mapped_pages={} total_released_pages={} peak_pages={} peak_records={} file_private_maps={}",
+        task_id,
+        user_virtual_memory.mapping_total_mapped_pages(),
+        user_virtual_memory.mapping_total_released_pages(),
+        user_virtual_memory.mapping_peak_active_pages(),
+        user_virtual_memory.mapping_peak_active_records(),
+        user_virtual_memory.mapping_file_private_map_count()
+    ));
 }

@@ -825,9 +825,13 @@ fn log_scheduler_task_diagnostics(
     );
 }
 
-fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
-    const SMOKE_PRIVATE_MAPPING_BYTES: u64 = 16_384;
+#[derive(Clone, Copy)]
+struct UserTaskSnapshotVerification {
+    released_mappings: bool,
+    fully_reclaimed: bool,
+}
 
+fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
     let snapshots = kernel::task::get_scheduler_task_snapshots()
         .expect("scheduler task snapshots must be available after user smoke tasks");
     let expected_total_tasks = usize::try_from(expected_user_tasks)
@@ -865,27 +869,13 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
         );
         bootstrap_child_user_tasks = bootstrap_child_user_tasks.saturating_add(1);
         finished_user_tasks = finished_user_tasks.saturating_add(1);
-        let user_virtual_memory = snapshot
-            .user_virtual_memory()
-            .expect("user task snapshots must include virtual memory bookkeeping");
-        assert_eq!(
-            user_virtual_memory.heap_mapped_pages(),
-            2,
-            "user smoke task snapshots must retain the final two-page brk state"
-        );
-        assert_eq!(
-            user_virtual_memory.mapping_next_start(),
-            kernel::memory::user_layout::USER_MAPPING_BASE + SMOKE_PRIVATE_MAPPING_BYTES,
-            "user smoke task snapshots must show one three-page anonymous mmap and one file mmap allocation"
-        );
+        let verification = verify_user_task_snapshot(snapshot);
         user_vm_snapshots = user_vm_snapshots.saturating_add(1);
-        if user_virtual_memory.mapping_active_pages() == 0
-            && user_virtual_memory.mapping_active_records() == 0
-        {
+        if verification.released_mappings {
             anonymous_mapping_release_snapshots =
                 anonymous_mapping_release_snapshots.saturating_add(1);
         }
-        if !snapshot.address_space_owned() && !snapshot.kernel_stack_owned() {
+        if verification.fully_reclaimed {
             fully_reclaimed_user_tasks = fully_reclaimed_user_tasks.saturating_add(1);
         }
     }
@@ -921,6 +911,60 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
     );
 }
 
+fn verify_user_task_snapshot(
+    snapshot: kernel::task::SchedulerTaskSnapshot,
+) -> UserTaskSnapshotVerification {
+    const SMOKE_PRIVATE_MAPPING_BYTES: u64 = 16_384;
+    const SMOKE_TOTAL_PRIVATE_MAPPING_PAGES: u64 = 6;
+    const SMOKE_PEAK_PRIVATE_MAPPING_PAGES: u64 = 3;
+    const SMOKE_PEAK_PRIVATE_MAPPING_RECORDS: u64 = 2;
+
+    let user_virtual_memory = snapshot
+        .user_virtual_memory()
+        .expect("user task snapshots must include virtual memory bookkeeping");
+    assert_eq!(
+        user_virtual_memory.heap_mapped_pages(),
+        2,
+        "user smoke task snapshots must retain the final two-page brk state"
+    );
+    assert_eq!(
+        user_virtual_memory.mapping_next_start(),
+        kernel::memory::user_layout::USER_MAPPING_BASE + SMOKE_PRIVATE_MAPPING_BYTES,
+        "user smoke task snapshots must show one three-page anonymous mmap and one file mmap allocation"
+    );
+    assert_eq!(
+        user_virtual_memory.mapping_total_mapped_pages(),
+        SMOKE_TOTAL_PRIVATE_MAPPING_PAGES,
+        "user smoke task snapshots must retain total private mmap page allocations"
+    );
+    assert_eq!(
+        user_virtual_memory.mapping_total_released_pages(),
+        SMOKE_TOTAL_PRIVATE_MAPPING_PAGES,
+        "user smoke task snapshots must retain total private mmap page releases"
+    );
+    assert_eq!(
+        user_virtual_memory.mapping_peak_active_pages(),
+        SMOKE_PEAK_PRIVATE_MAPPING_PAGES,
+        "user smoke task snapshots must retain mmap active-page high-water marks"
+    );
+    assert_eq!(
+        user_virtual_memory.mapping_peak_active_records(),
+        SMOKE_PEAK_PRIVATE_MAPPING_RECORDS,
+        "user smoke task snapshots must retain mmap record high-water marks"
+    );
+    assert_eq!(
+        user_virtual_memory.mapping_file_private_map_count(),
+        1,
+        "user smoke task snapshots must retain file-private mmap call counts"
+    );
+
+    UserTaskSnapshotVerification {
+        released_mappings: user_virtual_memory.mapping_active_pages() == 0
+            && user_virtual_memory.mapping_active_records() == 0,
+        fully_reclaimed: !snapshot.address_space_owned() && !snapshot.kernel_stack_owned(),
+    }
+}
+
 fn record_memory_diagnostics_snapshot(
     frame_allocator: &kernel::memory::frame_allocator::PhysicalFrameAllocator,
 ) {
@@ -947,9 +991,11 @@ fn record_memory_diagnostics_snapshot(
 }
 
 fn verify_scheduler_console_command() {
-    match kernel::console::verify_command_smoke_contains("tasks", &["user_vm_layout:", "task_vm:"])
-    {
-        Some(output_lines) if output_lines >= 12 => crate::log_info!(
+    match kernel::console::verify_command_smoke_contains(
+        "tasks",
+        &["user_vm_layout:", "task_vm:", "task_mmap_lifecycle:"],
+    ) {
+        Some(output_lines) if output_lines >= 14 => crate::log_info!(
             "console",
             "Tasks command smoke passed: command=\"tasks\" output_lines={}",
             output_lines
