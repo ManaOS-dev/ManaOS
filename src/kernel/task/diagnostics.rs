@@ -112,6 +112,68 @@ impl PreemptionStateDiagnostics {
     }
 }
 
+/// Snapshot of one user task's virtual memory bookkeeping.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserVirtualMemorySnapshot {
+    heap_base: u64,
+    heap_break: u64,
+    heap_mapped_pages: u64,
+    mapping_next_start: u64,
+    mapping_active_pages: u64,
+    mapping_active_records: u64,
+}
+
+impl UserVirtualMemorySnapshot {
+    /// Create a user virtual memory snapshot from scheduler-owned runtime state.
+    pub(super) const fn new(
+        heap_base: u64,
+        heap_break: u64,
+        heap_mapped_pages: u64,
+        mapping_next_start: u64,
+        mapping_active_pages: u64,
+        mapping_active_records: u64,
+    ) -> Self {
+        Self {
+            heap_base,
+            heap_break,
+            heap_mapped_pages,
+            mapping_next_start,
+            mapping_active_pages,
+            mapping_active_records,
+        }
+    }
+
+    /// Return the first virtual address managed by `brk`.
+    pub const fn heap_base(self) -> u64 {
+        self.heap_base
+    }
+
+    /// Return the current user heap break.
+    pub const fn heap_break(self) -> u64 {
+        self.heap_break
+    }
+
+    /// Return the number of heap pages currently tracked by the user runtime.
+    pub const fn heap_mapped_pages(self) -> u64 {
+        self.heap_mapped_pages
+    }
+
+    /// Return the next anonymous mapping address candidate.
+    pub const fn mapping_next_start(self) -> u64 {
+        self.mapping_next_start
+    }
+
+    /// Return the number of active anonymous mapping pages.
+    pub const fn mapping_active_pages(self) -> u64 {
+        self.mapping_active_pages
+    }
+
+    /// Return the number of active anonymous mapping records.
+    pub const fn mapping_active_records(self) -> u64 {
+        self.mapping_active_records
+    }
+}
+
 /// Snapshot of one scheduler task record.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SchedulerTaskSnapshot {
@@ -122,27 +184,49 @@ pub struct SchedulerTaskSnapshot {
     active: bool,
     address_space_owned: bool,
     kernel_stack_owned: bool,
+    user_virtual_memory: Option<UserVirtualMemorySnapshot>,
 }
 
 impl SchedulerTaskSnapshot {
-    /// Create a task snapshot from scheduler-owned task metadata.
-    pub(super) const fn new(
+    /// Create a kernel task snapshot from scheduler-owned task metadata.
+    pub(super) const fn new_kernel(
         task_id: u64,
         parent_task_id: Option<u64>,
-        kind: TaskKindDiagnostics,
         state: TaskState,
         active: bool,
-        address_space_owned: bool,
         kernel_stack_owned: bool,
     ) -> Self {
         Self {
             task_id,
             parent_task_id,
-            kind,
+            kind: TaskKindDiagnostics::Kernel,
+            state,
+            active,
+            address_space_owned: false,
+            kernel_stack_owned,
+            user_virtual_memory: None,
+        }
+    }
+
+    /// Create a user task snapshot from scheduler-owned task metadata.
+    pub(super) const fn new_user(
+        task_id: u64,
+        parent_task_id: Option<u64>,
+        state: TaskState,
+        active: bool,
+        address_space_owned: bool,
+        kernel_stack_owned: bool,
+        user_virtual_memory: UserVirtualMemorySnapshot,
+    ) -> Self {
+        Self {
+            task_id,
+            parent_task_id,
+            kind: TaskKindDiagnostics::User,
             state,
             active,
             address_space_owned,
             kernel_stack_owned,
+            user_virtual_memory: Some(user_virtual_memory),
         }
     }
 
@@ -179,6 +263,11 @@ impl SchedulerTaskSnapshot {
     /// Return whether this task still owns a scheduler-managed kernel stack.
     pub const fn kernel_stack_owned(self) -> bool {
         self.kernel_stack_owned
+    }
+
+    /// Return user virtual memory bookkeeping for user task records.
+    pub const fn user_virtual_memory(self) -> Option<UserVirtualMemorySnapshot> {
+        self.user_virtual_memory
     }
 }
 

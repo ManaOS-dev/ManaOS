@@ -813,6 +813,8 @@ fn log_scheduler_task_diagnostics(
 }
 
 fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
+    const SMOKE_ANONYMOUS_MAPPING_BYTES: u64 = 8192;
+
     let snapshots = kernel::task::get_scheduler_task_snapshots()
         .expect("scheduler task snapshots must be available after user smoke tasks");
     let expected_total_tasks = usize::try_from(expected_user_tasks)
@@ -827,6 +829,8 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
 
     let mut finished_user_tasks = 0_u64;
     let mut fully_reclaimed_user_tasks = 0_u64;
+    let mut user_vm_snapshots = 0_u64;
+    let mut anonymous_mapping_release_snapshots = 0_u64;
     for snapshot in snapshots {
         if snapshot.kind() != kernel::task::TaskKindDiagnostics::User {
             continue;
@@ -841,6 +845,26 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
             "user smoke task snapshots must be finished"
         );
         finished_user_tasks = finished_user_tasks.saturating_add(1);
+        let user_virtual_memory = snapshot
+            .user_virtual_memory()
+            .expect("user task snapshots must include virtual memory bookkeeping");
+        assert_eq!(
+            user_virtual_memory.heap_mapped_pages(),
+            2,
+            "user smoke task snapshots must retain the final two-page brk state"
+        );
+        assert_eq!(
+            user_virtual_memory.mapping_next_start(),
+            kernel::memory::user_layout::USER_MAPPING_BASE + SMOKE_ANONYMOUS_MAPPING_BYTES,
+            "user smoke task snapshots must show one two-page mmap allocation"
+        );
+        user_vm_snapshots = user_vm_snapshots.saturating_add(1);
+        if user_virtual_memory.mapping_active_pages() == 0
+            && user_virtual_memory.mapping_active_records() == 0
+        {
+            anonymous_mapping_release_snapshots =
+                anonymous_mapping_release_snapshots.saturating_add(1);
+        }
         if !snapshot.address_space_owned() && !snapshot.kernel_stack_owned() {
             fully_reclaimed_user_tasks = fully_reclaimed_user_tasks.saturating_add(1);
         }
@@ -853,12 +877,22 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
         fully_reclaimed_user_tasks, expected_user_tasks,
         "scheduler snapshots must show user task address spaces and kernel stacks reclaimed"
     );
+    assert_eq!(
+        user_vm_snapshots, expected_user_tasks,
+        "scheduler snapshots must include virtual memory bookkeeping for every user task"
+    );
+    assert_eq!(
+        anonymous_mapping_release_snapshots, expected_user_tasks,
+        "scheduler snapshots must show anonymous mmap records released"
+    );
     crate::log_info!(
         "task",
-        "Scheduler task snapshots verified: rows={} finished_user_tasks={} fully_reclaimed_user_tasks={}",
+        "Scheduler task snapshots verified: rows={} finished_user_tasks={} fully_reclaimed_user_tasks={} user_vm_snapshots={} released_mmap_snapshots={}",
         expected_total_tasks,
         finished_user_tasks,
-        fully_reclaimed_user_tasks
+        fully_reclaimed_user_tasks,
+        user_vm_snapshots,
+        anonymous_mapping_release_snapshots
     );
 }
 
@@ -888,8 +922,9 @@ fn record_memory_diagnostics_snapshot(
 }
 
 fn verify_scheduler_console_command() {
-    match kernel::console::verify_command_smoke("tasks") {
-        Some(output_lines) if output_lines >= 9 => crate::log_info!(
+    match kernel::console::verify_command_smoke_contains("tasks", &["user_vm_layout:", "task_vm:"])
+    {
+        Some(output_lines) if output_lines >= 12 => crate::log_info!(
             "console",
             "Tasks command smoke passed: command=\"tasks\" output_lines={}",
             output_lines

@@ -85,9 +85,9 @@ $expectedPatterns = @(
     "Active user lifecycle drained: exits=2",
     "Multi-user preemption smoke passed: tasks=2",
     "Scheduler diagnostics verified: .*user_tasks=2 .*finished=2 .*active_user_tasks=0 .*active_user_address_spaces=0 .*pending_user_exits=0 .*preemption_state=enabled .*preemption_enabled=true .*user_exit_preemption_window_closes=2 .*user_exit_return_stack_sets=2 .*user_exit_return_stack_takes=2 .*reclaimed_user_resource_records=2 .*reclaimed_user_kernel_stacks=2 .*reclaimed_kernel_stack_writable_pages=8 .*reclaimed_kernel_stack_virtual_pages=10 .*timer_preemptions=.* user_resumes=.* finished_tasks=2",
-    "Scheduler task snapshots verified: rows=4 finished_user_tasks=2 fully_reclaimed_user_tasks=2",
+    "Scheduler task snapshots verified: rows=4 finished_user_tasks=2 fully_reclaimed_user_tasks=2 user_vm_snapshots=2 released_mmap_snapshots=2",
     "Frame allocator diagnostics snapshot: .*page_table=.* kernel_heap=.* kernel_stack=.* user_stack=0 user_elf=0 user_heap=0 user_mapping=0 dynamic_kernel_mapping=0 ahci_dma=.*",
-    "Tasks command smoke passed: command=`"tasks`" output_lines=9",
+    "Tasks command smoke passed: command=`"tasks`" output_lines=12",
     "Memory command smoke passed: command=`"memory`" output_lines=3",
     "Console status strip smoke passed"
 )

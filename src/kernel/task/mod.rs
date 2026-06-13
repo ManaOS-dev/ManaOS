@@ -59,7 +59,7 @@ use context::{TaskContext, TaskEntry, UserTaskContext, UserTrapFrame};
 use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 pub use diagnostics::{
     PreemptionStateDiagnostics, SchedulerDiagnostics, SchedulerTaskSnapshot, TaskKindDiagnostics,
-    TaskStateDiagnostics,
+    TaskStateDiagnostics, UserVirtualMemorySnapshot,
 };
 pub use metadata::{TaskIdentifier, TaskMetadata};
 pub use process_lifecycle::UserTaskExit;
@@ -527,24 +527,39 @@ impl Scheduler {
             .iter()
             .map(|task| {
                 let task_id = task.get_id();
-                let (kind, address_space_owned) = match &task.kind {
-                    TaskKind::Kernel => (TaskKindDiagnostics::Kernel, false),
-                    TaskKind::User(user_runtime) => (
-                        TaskKindDiagnostics::User,
-                        user_runtime.address_space.is_some(),
+                let parent_task_id = task
+                    .metadata
+                    .get_parent_identifier()
+                    .map(TaskIdentifier::as_u64);
+                let active = self.is_user_task_active(task_id);
+                match &task.kind {
+                    TaskKind::Kernel => SchedulerTaskSnapshot::new_kernel(
+                        task_id,
+                        parent_task_id,
+                        task.state,
+                        active,
+                        task.kernel_stack.is_some(),
                     ),
-                };
-                SchedulerTaskSnapshot::new(
-                    task_id,
-                    task.metadata
-                        .get_parent_identifier()
-                        .map(TaskIdentifier::as_u64),
-                    kind,
-                    task.state,
-                    self.is_user_task_active(task_id),
-                    address_space_owned,
-                    task.kernel_stack.is_some(),
-                )
+                    TaskKind::User(user_runtime) => {
+                        let user_virtual_memory = UserVirtualMemorySnapshot::new(
+                            user_runtime.heap.base().as_u64(),
+                            user_runtime.heap.current_break().as_u64(),
+                            user_runtime.heap.mapped_pages(),
+                            user_runtime.mappings.next_start(),
+                            user_runtime.mappings.active_pages(),
+                            user_runtime.mappings.active_records(),
+                        );
+                        SchedulerTaskSnapshot::new_user(
+                            task_id,
+                            parent_task_id,
+                            task.state,
+                            active,
+                            user_runtime.address_space.is_some(),
+                            task.kernel_stack.is_some(),
+                            user_virtual_memory,
+                        )
+                    }
+                }
             })
             .collect()
     }

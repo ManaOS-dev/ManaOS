@@ -84,3 +84,27 @@ pub(super) fn verify_command_smoke(command: &str) -> Option<usize> {
         output::CommandEffect::Clear => None,
     }
 }
+
+pub(super) fn verify_command_smoke_contains(
+    command: &str,
+    required_needles: &[&str],
+) -> Option<usize> {
+    if command.contains('|') {
+        return None;
+    }
+
+    match pipeline::run_line(command).ok()? {
+        output::CommandEffect::Output(output) => {
+            let lines = output.lines();
+            if required_needles
+                .iter()
+                .all(|needle| lines.iter().any(|line| line.contains(needle)))
+            {
+                Some(lines.len())
+            } else {
+                None
+            }
+        }
+        output::CommandEffect::Clear => None,
+    }
+}
