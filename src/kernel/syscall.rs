@@ -399,12 +399,7 @@ fn write_user_directory_entry(
 
 fn sys_exit(exit_code: u64) -> u64 {
     if let Some(task_id) = crate::kernel::task::finish_current_task(exit_code) {
-        crate::kernel::task::set_preemption_enabled(false);
-        crate::log_info!(
-            "task",
-            "User exit preemption window closed: task={}",
-            task_id
-        );
+        crate::kernel::task::close_user_exit_preemption_window(task_id);
         crate::log_info!(
             "syscall",
             "User task exited: code={} task={}",

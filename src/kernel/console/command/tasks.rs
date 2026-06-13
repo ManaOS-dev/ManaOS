@@ -36,13 +36,15 @@ pub(super) fn run(
         states.finished()
     ));
     output.push(format!(
-        "preemption: switches={} timer_user_preemptions={} user_entries={} user_resumes={} finished={} pending_user_exits={}",
+        "preemption: enabled={} switches={} timer_user_preemptions={} user_entries={} user_resumes={} finished={} pending_user_exits={} exit_window_closes={}",
+        diagnostics.preemption_enabled(),
         diagnostics.context_switches(),
         diagnostics.timer_preemptions(),
         diagnostics.user_entries(),
         diagnostics.user_resumes(),
         diagnostics.finished_tasks(),
-        diagnostics.pending_user_exits()
+        diagnostics.pending_user_exits(),
+        diagnostics.user_exit_preemption_window_closes()
     ));
     output.push(format!(
         "resources: reclaimed_user_resource_records={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={}",
