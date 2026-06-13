@@ -17,6 +17,7 @@
 //! - [`run_next_user_task_once`] - Run the next active user task until one exits
 //! - [`run_active_user_tasks_until_empty`] - Drain active user tasks until none remain
 //! - [`UserTaskExit`] - User task exit result
+//! - [`UserMappingRequest`] - Syscall-time anonymous mapping request
 //! - [`process_current_user_break`] - Process a user heap break request
 //! - [`process_current_user_mapping`] - Process an anonymous user mapping request
 //! - [`process_current_user_unmapping`] - Process an anonymous user unmapping request
@@ -46,7 +47,7 @@ use crate::kernel::memory::address::UserVirtualAddress;
 use crate::kernel::memory::address_space::{self, UserAddressSpace, UserAddressSpaceReclaim};
 use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
 use crate::kernel::memory::user_heap::UserHeap;
-use crate::kernel::memory::user_mapping::UserMappings;
+use crate::kernel::memory::user_mapping::{UserMappingError, UserMappingPlacement, UserMappings};
 use crate::kernel::memory::virtual_allocator::{
     new_dynamic_mapping_allocator, KernelVirtualRangeAllocator,
 };
@@ -74,6 +75,68 @@ const USER_TASK_PREEMPTION_ENABLED: bool = true;
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
 static PREEMPTION_STATE: AtomicU8 = AtomicU8::new(PreemptionStateDiagnostics::Enabled.as_raw());
 static USER_EXIT_PREEMPTION_WINDOW_CLOSE_COUNT: AtomicU64 = AtomicU64::new(0);
+
+/// Syscall-time anonymous user mapping request.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserMappingRequest {
+    requested_address: u64,
+    placement: UserMappingPlacement,
+    length: u64,
+    writable: bool,
+    protection: u64,
+    flags: u64,
+}
+
+impl UserMappingRequest {
+    /// Create an anonymous user mapping request.
+    pub const fn new(
+        requested_address: u64,
+        placement: UserMappingPlacement,
+        length: u64,
+        writable: bool,
+        protection: u64,
+        flags: u64,
+    ) -> Self {
+        Self {
+            requested_address,
+            placement,
+            length,
+            writable,
+            protection,
+            flags,
+        }
+    }
+
+    /// Return the raw requested address syscall argument.
+    pub const fn requested_address(self) -> u64 {
+        self.requested_address
+    }
+
+    /// Return the placement policy for this mapping.
+    pub const fn placement(self) -> UserMappingPlacement {
+        self.placement
+    }
+
+    /// Return the requested mapping length in bytes.
+    pub const fn length(self) -> u64 {
+        self.length
+    }
+
+    /// Return whether the mapping should be writable.
+    pub const fn writable(self) -> bool {
+        self.writable
+    }
+
+    /// Return the raw protection syscall argument.
+    pub const fn protection(self) -> u64 {
+        self.protection
+    }
+
+    /// Return the raw mapping flags syscall argument.
+    pub const fn flags(self) -> u64 {
+        self.flags
+    }
+}
 
 fn current_preemption_state() -> PreemptionStateDiagnostics {
     PreemptionStateDiagnostics::from_raw(PREEMPTION_STATE.load(Ordering::Acquire))
@@ -718,37 +781,37 @@ impl Scheduler {
     fn process_current_user_mapping(
         &mut self,
         frame_allocator: &mut PhysicalFrameAllocator,
-        requested_address: u64,
-        length: u64,
-        writable: bool,
-        protection: u64,
-        flags: u64,
-    ) -> Option<u64> {
+        request: UserMappingRequest,
+    ) -> Result<u64, UserMappingError> {
         let current_task = &mut self.tasks[self.current_index];
         let task_id = current_task.get_id();
         let TaskKind::User(user_runtime) = &mut current_task.kind else {
-            return None;
+            return Err(UserMappingError::InvalidRequest);
         };
-        let address_space = user_runtime.address_space?;
+        let address_space = user_runtime
+            .address_space
+            .ok_or(UserMappingError::InvalidRequest)?;
         let allocation = user_runtime.mappings.map_anonymous(
             address_space,
             frame_allocator,
-            length,
-            writable,
+            request.placement(),
+            request.length(),
+            request.writable(),
         )?;
         crate::log_info!(
             "syscall",
-            "mmap -> task={} requested={:#x} start={:#x} length={} pages={} protection={:#x} flags={:#x} active_pages={}",
+            "mmap -> task={} requested={:#x} start={:#x} length={} pages={} protection={:#x} flags={:#x} placement={} active_pages={}",
             task_id,
-            requested_address,
+            request.requested_address(),
             allocation.start().as_u64(),
-            length,
+            request.length(),
             allocation.page_count(),
-            protection,
-            flags,
+            request.protection(),
+            request.flags(),
+            request.placement().as_str(),
             user_runtime.mappings.active_pages()
         );
-        Some(allocation.start().as_u64())
+        Ok(allocation.start().as_u64())
     }
 
     fn process_current_user_unmapping(
@@ -1187,23 +1250,12 @@ pub fn process_current_user_break(
 /// Process an anonymous `mmap` request for the currently running user task.
 pub fn process_current_user_mapping(
     frame_allocator: &mut PhysicalFrameAllocator,
-    requested_address: u64,
-    length: u64,
-    writable: bool,
-    protection: u64,
-    flags: u64,
-) -> Option<u64> {
+    request: UserMappingRequest,
+) -> Option<Result<u64, UserMappingError>> {
     let mut scheduler = SCHEDULER.lock();
-    scheduler.as_mut().and_then(|scheduler| {
-        scheduler.process_current_user_mapping(
-            frame_allocator,
-            requested_address,
-            length,
-            writable,
-            protection,
-            flags,
-        )
-    })
+    scheduler
+        .as_mut()
+        .map(|scheduler| scheduler.process_current_user_mapping(frame_allocator, request))
 }
 
 /// Process an anonymous `munmap` request for the currently running user task.

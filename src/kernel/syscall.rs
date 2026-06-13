@@ -30,6 +30,7 @@
 
 use crate::kernel::memory::{
     address::{UserCString, UserReadableRange, UserVirtualRange, UserWritableRange},
+    user_mapping::{UserMappingError, UserMappingPlacement},
     user_pointer,
 };
 use crate::kernel::task::context::UserTrapFrame;
@@ -47,6 +48,7 @@ const ERROR_NOT_FOUND: u64 = linux_error(2);
 const ERROR_BAD_FILE_DESCRIPTOR: u64 = linux_error(9);
 const ERROR_OUT_OF_MEMORY: u64 = linux_error(12);
 const ERROR_BAD_ADDRESS: u64 = linux_error(14);
+const ERROR_FILE_EXISTS: u64 = linux_error(17);
 const ERROR_NOT_DIRECTORY: u64 = linux_error(20);
 const ERROR_IS_DIRECTORY: u64 = linux_error(21);
 const ERROR_INVALID_ARGUMENT: u64 = linux_error(22);
@@ -347,7 +349,10 @@ fn sys_brk(requested_break: u64) -> u64 {
 }
 
 fn sys_mmap(requested_address: u64, length: u64, protection: u64, flags: u64) -> u64 {
-    if !is_supported_anonymous_mapping_request(requested_address, length, protection, flags) {
+    let Some(placement) = anonymous_mapping_placement(requested_address, flags) else {
+        return ERROR_INVALID_ARGUMENT;
+    };
+    if !is_supported_anonymous_mapping_request(length, protection, flags) {
         return ERROR_INVALID_ARGUMENT;
     }
 
@@ -356,18 +361,23 @@ fn sys_mmap(requested_address: u64, length: u64, protection: u64, flags: u64) ->
         |frame_allocator| {
             crate::kernel::task::process_current_user_mapping(
                 frame_allocator,
-                requested_address,
-                length,
-                writable,
-                protection,
-                flags,
+                crate::kernel::task::UserMappingRequest::new(
+                    requested_address,
+                    placement,
+                    length,
+                    writable,
+                    protection,
+                    flags,
+                ),
             )
         },
     ) else {
         return ERROR_NOT_IMPLEMENTED;
     };
 
-    result.unwrap_or(ERROR_OUT_OF_MEMORY)
+    result.map_or(ERROR_NOT_IMPLEMENTED, |result| {
+        result.unwrap_or_else(user_mapping_error_to_linux)
+    })
 }
 
 fn sys_munmap(start_address: u64, length: u64) -> u64 {
@@ -394,19 +404,40 @@ fn sys_munmap(start_address: u64, length: u64) -> u64 {
     }
 }
 
-fn is_supported_anonymous_mapping_request(
-    requested_address: u64,
-    length: u64,
-    protection: u64,
-    flags: u64,
-) -> bool {
+fn is_supported_anonymous_mapping_request(length: u64, protection: u64, flags: u64) -> bool {
     let supported_protection = contract::PROT_READ | contract::PROT_WRITE | contract::PROT_EXEC;
-    requested_address == 0
-        && length != 0
+    let supported_flags =
+        contract::MAP_PRIVATE | contract::MAP_ANONYMOUS | contract::MAP_FIXED_NOREPLACE;
+    length != 0
         && (protection & !supported_protection) == 0
         && (protection & contract::PROT_EXEC) == 0
         && (protection & (contract::PROT_READ | contract::PROT_WRITE)) != 0
-        && flags == (contract::MAP_PRIVATE | contract::MAP_ANONYMOUS)
+        && (flags & !supported_flags) == 0
+        && (flags & (contract::MAP_PRIVATE | contract::MAP_ANONYMOUS))
+            == (contract::MAP_PRIVATE | contract::MAP_ANONYMOUS)
+}
+
+fn anonymous_mapping_placement(requested_address: u64, flags: u64) -> Option<UserMappingPlacement> {
+    let fixed_no_replace = flags & contract::MAP_FIXED_NOREPLACE != 0;
+    if fixed_no_replace {
+        if requested_address == 0 || !requested_address.is_multiple_of(PAGE_SIZE) {
+            return None;
+        }
+        let address = crate::kernel::memory::address::UserVirtualAddress::new(requested_address)?;
+        Some(UserMappingPlacement::FixedNoReplace(address))
+    } else if requested_address == 0 {
+        Some(UserMappingPlacement::Any)
+    } else {
+        None
+    }
+}
+
+fn user_mapping_error_to_linux(error: UserMappingError) -> u64 {
+    match error {
+        UserMappingError::InvalidRequest => ERROR_INVALID_ARGUMENT,
+        UserMappingError::AddressInUse => ERROR_FILE_EXISTS,
+        UserMappingError::OutOfMemory => ERROR_OUT_OF_MEMORY,
+    }
 }
 
 fn copy_input_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static [u8]> {
