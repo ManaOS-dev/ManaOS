@@ -31,6 +31,7 @@
 //! - [`SYS_GETDENTS64`] - Linux-compatible get-directory-entries syscall number
 //! - [`SYS_EXIT_GROUP`] - Linux-compatible process exit syscall number
 //! - [`SYS_GETPID`] - Linux-compatible get-process-identifier syscall number
+//! - [`SYS_GETPPID`] - Linux-compatible get-parent-process-identifier syscall number
 //! - [`SYS_OPENAT`] - Linux-compatible open-at syscall number
 
 use crate::kernel::memory::{
@@ -46,8 +47,9 @@ use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 mod contract;
 
 pub use contract::{
-    SYS_BRK, SYS_CLOSE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64, SYS_GETPID, SYS_LSEEK,
-    SYS_MMAP, SYS_MUNMAP, SYS_NANOSLEEP, SYS_OPEN, SYS_OPENAT, SYS_READ, SYS_WRITE,
+    SYS_BRK, SYS_CLOSE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64, SYS_GETPID,
+    SYS_GETPPID, SYS_LSEEK, SYS_MMAP, SYS_MUNMAP, SYS_NANOSLEEP, SYS_OPEN, SYS_OPENAT, SYS_READ,
+    SYS_WRITE,
 };
 
 const ERROR_NOT_FOUND: u64 = linux_error(2);
@@ -203,6 +205,7 @@ fn dispatch_syscall(syscall_number: u64, arguments: [u64; 6]) -> u64 {
         SYS_READ => sys_read(first_argument, second_argument, third_argument),
         SYS_GETDENTS64 => sys_getdents64(first_argument, second_argument, third_argument),
         SYS_GETPID => sys_getpid(),
+        SYS_GETPPID => sys_getppid(),
         _ => ERROR_NOT_IMPLEMENTED,
     }
 }
@@ -907,6 +910,16 @@ fn sys_getpid() -> u64 {
         Some(task_id) => {
             crate::log_info!("syscall", "getpid -> task={}", task_id);
             task_id
+        }
+        None => ERROR_NOT_IMPLEMENTED,
+    }
+}
+
+fn sys_getppid() -> u64 {
+    match crate::kernel::task::get_current_parent_task_id() {
+        Some(parent_task_id) => {
+            crate::log_info!("syscall", "getppid -> parent={}", parent_task_id);
+            parent_task_id
         }
         None => ERROR_NOT_IMPLEMENTED,
     }

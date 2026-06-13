@@ -40,7 +40,7 @@ The implementation entry point is `kernel::memory::user_pointer`.
 | `munmap(addr, len)` | none | none | none | Private mapping range unmap only; `addr` must be page-aligned, the range must stay inside tracked private mapping records, and no user buffer is copied. |
 | `nanosleep(req, rem)` | `req`, optional `rem` | user to kernel, kernel to user | `copy_from_user`, `copy_to_user` | `req` is exactly `UserTimespec`; non-zero `rem` is exactly `UserTimespec` and is zero-filled because signal interruption is not implemented. |
 | `exit(code)` / `exit_group(code)` | none | none | none | No user pointer validation. |
-| `getpid()` | none | none | none | No user pointer validation. |
+| `getpid()` / `getppid()` | none | none | none | No user pointer validation. |
 
 ## Current Enforcement Gaps
 

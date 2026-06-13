@@ -11,7 +11,7 @@ pub(super) fn run(
     if arguments.is_empty() {
         let mut output = CommandOutput::new();
         output.push(
-            "syscalls: read write open close fstat lseek mmap munmap brk nanosleep getdents64 exit exit_group openat getpid"
+            "syscalls: read write open close fstat lseek mmap munmap brk nanosleep getdents64 exit exit_group openat getpid getppid"
                 .to_string(),
         );
         output.push(format_trace_status());

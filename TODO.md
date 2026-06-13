@@ -76,7 +76,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Pass `argc`, `argv`, and environment pointers to user entry points.
 - [x] Load user programs from the filesystem instead of `include_bytes!`.
 - [ ] Add `execve`.
-- [ ] Add process identifiers and parent-child relationships.
+- [x] Add process identifiers and parent-child relationships.
 - [ ] Add `wait` or `waitpid`.
 - [ ] Add a minimal user shell process.
 - [x] Add a userland test program that opens `/disk/hello.txt`.

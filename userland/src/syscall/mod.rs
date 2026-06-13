@@ -20,6 +20,8 @@
 //! - [`mmap`] - Map private user memory
 //! - [`mmap_anonymous`] - Map anonymous private user memory
 //! - [`munmap`] - Unmap private user memory
+//! - [`getpid`] - Return the current task identifier
+//! - [`getppid`] - Return the parent task identifier
 //! - [`exit`] - Terminate the current user task
 
 #[path = "../../../src/shared/syscall_contract.rs"]
@@ -54,6 +56,8 @@ pub const SYS_BRK: usize = contract::SYS_BRK as usize;
 pub const SYS_NANOSLEEP: usize = contract::SYS_NANOSLEEP as usize;
 /// Linux-compatible get-process-identifier syscall number.
 pub const SYS_GETPID: usize = contract::SYS_GETPID as usize;
+/// Linux-compatible get-parent-process-identifier syscall number.
+pub const SYS_GETPPID: usize = contract::SYS_GETPPID as usize;
 /// Linux-compatible exit syscall number.
 pub const SYS_EXIT: usize = contract::SYS_EXIT as usize;
 /// Linux-compatible get-directory-entries syscall number.
@@ -257,6 +261,12 @@ pub fn munmap(address: usize, length: usize) -> isize {
 #[inline(always)]
 pub fn getpid() -> isize {
     syscall1(SYS_GETPID, 0)
+}
+
+/// Return the parent ManaOS task identifier.
+#[inline(always)]
+pub fn getppid() -> isize {
+    syscall1(SYS_GETPPID, 0)
 }
 
 /// Terminate the current user task.

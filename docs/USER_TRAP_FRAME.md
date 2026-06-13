@@ -149,3 +149,6 @@ User task preemption stays disabled until all of the following are true:
   Optional syscall trace controls are exposed through `syscalls trace`, which
   lets the console enable, disable, reset, and inspect syscall trace records
   without changing the syscall ABI.
+  The same smoke path now verifies syscall-visible task identifiers and retained
+  parent-child task metadata through `getpid`, `getppid`, and scheduler
+  snapshots.
