@@ -1,15 +1,15 @@
 //! User address-space page-table ownership.
 
 use super::{
-    address::{PhysicalFrameStart, UserVirtualAddress, VirtAddr},
+    address::{PhysicalFrameRange, PhysicalFrameStart, UserVirtualAddress, VirtAddr},
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
 };
 use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::{
     registers::control::{Cr3, Cr3Flags},
     structures::paging::{
-        mapper::TranslateResult, FrameAllocator, Mapper, OffsetPageTable, Page, PageTable,
-        PageTableFlags, PhysFrame, Size4KiB, Translate,
+        mapper::TranslateResult, page_table::PageTableEntry, FrameAllocator, Mapper,
+        OffsetPageTable, Page, PageTable, PageTableFlags, PhysFrame, Size4KiB, Translate,
     },
     PhysAddr as X86PhysAddr, VirtAddr as X86VirtAddr,
 };
@@ -18,8 +18,28 @@ const PAGE_SIZE: u64 = 4096;
 const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 const PROCESS_USER_PML4_START: usize = 128;
 const PROCESS_USER_PML4_END_EXCLUSIVE: usize = 256;
+const USER_ADDRESS_SPACE_RECLAIM_PROBE: u64 = 0x0000_4000_0000_0000;
 
 static KERNEL_LEVEL_4_FRAME: AtomicU64 = AtomicU64::new(0);
+
+/// Page counts reclaimed while destroying one user address space.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct UserAddressSpaceReclaim {
+    user_pages: u64,
+    page_table_pages: u64,
+}
+
+impl UserAddressSpaceReclaim {
+    /// Return the number of user data pages returned to the frame allocator.
+    pub const fn user_pages(self) -> u64 {
+        self.user_pages
+    }
+
+    /// Return the number of page-table pages returned to the frame allocator.
+    pub const fn page_table_pages(self) -> u64 {
+        self.page_table_pages
+    }
+}
 
 /// Page-table root for one user address space.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -253,6 +273,28 @@ pub fn switch_to_kernel_address_space() {
     switch_to_level_4(level_4_frame);
 }
 
+/// Destroy a user address space and return its owned frames to the allocator.
+///
+/// # Panics
+///
+/// Panics if a user-window page table contains a huge-page mapping or if a
+/// mapped user data frame is not tracked as user stack or user ELF memory.
+pub fn destroy_user_address_space(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    address_space: UserAddressSpace,
+) -> UserAddressSpaceReclaim {
+    switch_to_kernel_address_space();
+
+    let mut reclaim = UserAddressSpaceReclaim::default();
+    let level_4_table = level_4_table_from_frame(address_space.level_4_frame);
+    for index in PROCESS_USER_PML4_START..PROCESS_USER_PML4_END_EXCLUSIVE {
+        reclaim_user_child_table(frame_allocator, &mut level_4_table[index], &mut reclaim);
+    }
+    level_4_table.zero();
+    free_page_table_frame(frame_allocator, address_space.level_4_frame, &mut reclaim);
+    reclaim
+}
+
 /// Verify that a fresh user address-space template isolates user mappings.
 pub fn verify_user_address_space_template(
     frame_allocator: &mut PhysicalFrameAllocator,
@@ -267,8 +309,35 @@ pub fn verify_user_address_space_template(
         });
     let process_user_window_empty = (PROCESS_USER_PML4_START..PROCESS_USER_PML4_END_EXCLUSIVE)
         .all(|index| level_4_table_from_frame(address_space.level_4_frame)[index].is_unused());
+    let reclaim = destroy_user_address_space(frame_allocator, address_space);
 
-    kernel_mapping_present && process_user_window_empty
+    kernel_mapping_present
+        && process_user_window_empty
+        && reclaim.user_pages() == 0
+        && reclaim.page_table_pages() == 1
+}
+
+/// Verify that destroying a user address space reclaims mapped user frames.
+pub fn verify_user_address_space_reclaim(
+    frame_allocator: &mut PhysicalFrameAllocator,
+) -> Option<UserAddressSpaceReclaim> {
+    let address_space = create_user_address_space(frame_allocator);
+    let physical_start = frame_allocator.allocate_frame_for(FrameRangeOwner::UserElf)?;
+    let virtual_address = UserVirtualAddress::new(USER_ADDRESS_SPACE_RECLAIM_PROBE)
+        .expect("user address-space reclaim probe must be a valid user address");
+    address_space.map_user_page(
+        frame_allocator,
+        virtual_address,
+        physical_start,
+        PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE | PageTableFlags::NO_EXECUTE,
+    );
+
+    let reclaim = destroy_user_address_space(frame_allocator, address_space);
+    if reclaim.user_pages() == 1 && reclaim.page_table_pages() == 4 {
+        Some(reclaim)
+    } else {
+        None
+    }
 }
 
 fn active_level_4_table() -> &'static mut PageTable {
@@ -293,6 +362,134 @@ fn switch_to_level_4(level_4_frame: PhysicalFrameStart) {
     unsafe {
         Cr3::write(frame, Cr3Flags::empty());
     }
+}
+
+fn reclaim_user_child_table(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    entry: &mut PageTableEntry,
+    reclaim: &mut UserAddressSpaceReclaim,
+) {
+    if entry.is_unused() {
+        return;
+    }
+    assert!(
+        !entry.flags().contains(PageTableFlags::HUGE_PAGE),
+        "user address-space PML4 entry must not be a huge page"
+    );
+
+    let child_frame = entry_frame_start(entry);
+    let child_table = level_4_table_from_frame(child_frame);
+    reclaim_level_3_table(frame_allocator, child_table, reclaim);
+    child_table.zero();
+    entry.set_unused();
+    free_page_table_frame(frame_allocator, child_frame, reclaim);
+}
+
+fn reclaim_level_3_table(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    table: &mut PageTable,
+    reclaim: &mut UserAddressSpaceReclaim,
+) {
+    for entry in table.iter_mut() {
+        if entry.is_unused() {
+            continue;
+        }
+        assert!(
+            !entry.flags().contains(PageTableFlags::HUGE_PAGE),
+            "user address-space PDP entry must not be a huge page"
+        );
+
+        let child_frame = entry_frame_start(entry);
+        let child_table = level_4_table_from_frame(child_frame);
+        reclaim_level_2_table(frame_allocator, child_table, reclaim);
+        child_table.zero();
+        entry.set_unused();
+        free_page_table_frame(frame_allocator, child_frame, reclaim);
+    }
+}
+
+fn reclaim_level_2_table(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    table: &mut PageTable,
+    reclaim: &mut UserAddressSpaceReclaim,
+) {
+    for entry in table.iter_mut() {
+        if entry.is_unused() {
+            continue;
+        }
+        assert!(
+            !entry.flags().contains(PageTableFlags::HUGE_PAGE),
+            "user address-space PD entry must not be a huge page"
+        );
+
+        let child_frame = entry_frame_start(entry);
+        let child_table = level_4_table_from_frame(child_frame);
+        reclaim_level_1_table(frame_allocator, child_table, reclaim);
+        child_table.zero();
+        entry.set_unused();
+        free_page_table_frame(frame_allocator, child_frame, reclaim);
+    }
+}
+
+fn reclaim_level_1_table(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    table: &mut PageTable,
+    reclaim: &mut UserAddressSpaceReclaim,
+) {
+    for entry in table.iter_mut() {
+        if entry.is_unused() {
+            continue;
+        }
+        assert!(
+            !entry.flags().contains(PageTableFlags::HUGE_PAGE),
+            "user address-space PT entry must not be a huge page"
+        );
+
+        let data_frame = entry_frame_start(entry);
+        entry.set_unused();
+        free_user_data_frame(frame_allocator, data_frame, reclaim);
+    }
+}
+
+fn entry_frame_start(entry: &PageTableEntry) -> PhysicalFrameStart {
+    let frame = entry
+        .frame()
+        .expect("present user address-space entry must reference a 4KiB frame");
+    PhysicalFrameStart::new(frame.start_address().as_u64())
+        .expect("page-table entry frame must be 4KiB aligned")
+}
+
+fn free_user_data_frame(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    frame: PhysicalFrameStart,
+    reclaim: &mut UserAddressSpaceReclaim,
+) {
+    let range = one_frame_range(frame);
+    if !frame_allocator.free_frames_for(range, FrameRangeOwner::UserElf)
+        && !frame_allocator.free_frames_for(range, FrameRangeOwner::UserStack)
+    {
+        panic!(
+            "user address-space data frame {:#x} was not tracked as user-owned memory",
+            frame.as_u64()
+        );
+    }
+    reclaim.user_pages = reclaim.user_pages.saturating_add(1);
+}
+
+fn free_page_table_frame(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    frame: PhysicalFrameStart,
+    reclaim: &mut UserAddressSpaceReclaim,
+) {
+    assert!(
+        frame_allocator.free_frames_for(one_frame_range(frame), FrameRangeOwner::PageTable),
+        "user address-space page-table frame was not tracked as a page table"
+    );
+    reclaim.page_table_pages = reclaim.page_table_pages.saturating_add(1);
+}
+
+fn one_frame_range(frame: PhysicalFrameStart) -> PhysicalFrameRange {
+    PhysicalFrameRange::new(frame, 1).expect("single-frame range must be non-empty")
 }
 
 struct AddressSpaceFrameAllocator<'a> {

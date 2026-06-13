@@ -33,7 +33,10 @@ impl UserTaskExit {
 /// # Panics
 ///
 /// Panics if the scheduler has not been initialized.
-pub fn run_user_task_once(task_id: u64) -> Option<UserTaskExit> {
+pub fn run_user_task_once(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    task_id: u64,
+) -> Option<UserTaskExit> {
     let user_task = {
         let mut scheduler = super::SCHEDULER.lock();
         scheduler
@@ -75,6 +78,22 @@ pub fn run_user_task_once(task_id: u64) -> Option<UserTaskExit> {
     let task_id = LAST_USER_EXIT_TASK_ID.load(Ordering::Acquire);
     if task_id == 0 {
         return None;
+    }
+    let reclaim = {
+        let mut scheduler = super::SCHEDULER.lock();
+        scheduler
+            .as_mut()
+            .expect("scheduler must be initialized before reclaiming user address spaces")
+            .reclaim_finished_user_address_space(frame_allocator, task_id)
+    };
+    if let Some(reclaim) = reclaim {
+        crate::log_info!(
+            "task",
+            "User address space reclaimed: task={} user_pages={} page_table_pages={}",
+            task_id,
+            reclaim.user_pages(),
+            reclaim.page_table_pages()
+        );
     }
 
     Some(UserTaskExit {

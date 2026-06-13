@@ -362,6 +362,19 @@ fn verify_user_address_space_template(
     );
 }
 
+fn verify_user_address_space_reclaim(
+    frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
+) {
+    let reclaim = kernel::memory::address_space::verify_user_address_space_reclaim(frame_allocator)
+        .expect("user address-space reclaim smoke must pass");
+    crate::log_info!(
+        "memory",
+        "User address-space reclaim self-check passed: user_pages={} page_table_pages={}",
+        reclaim.user_pages(),
+        reclaim.page_table_pages()
+    );
+}
+
 fn verify_elf_loader_rules() {
     assert!(
         kernel::elf::verify_invalid_elf_rejections(),
@@ -612,7 +625,7 @@ fn run_user_smoke_demo(
             .find_map(|(task_id, is_finished)| (!*is_finished).then_some(*task_id))
             .expect("at least one user smoke task must still be unfinished");
         crate::log_info!("task", "User demo started: task_id={}", next_task_id);
-        let exit = kernel::task::run_user_task_once(next_task_id)
+        let exit = kernel::task::run_user_task_once(frame_allocator, next_task_id)
             .expect("user smoke task must exit through SYS_EXIT");
         crate::log_info!(
             "task",
@@ -699,6 +712,7 @@ fn main() -> Status {
     );
     verify_dynamic_kernel_mapping_lifecycle(&mut frame_allocator);
     verify_user_address_space_template(&mut frame_allocator);
+    verify_user_address_space_reclaim(&mut frame_allocator);
     kernel::filesystem::initialize();
     crate::log_info!("fs", "Kernel filesystem initialized.");
     verify_kernel_filesystem();

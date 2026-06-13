@@ -31,7 +31,7 @@ mod state;
 pub mod user_mode;
 
 use crate::kernel::memory::address::UserVirtualAddress;
-use crate::kernel::memory::address_space::{self, UserAddressSpace};
+use crate::kernel::memory::address_space::{self, UserAddressSpace, UserAddressSpaceReclaim};
 use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
 use crate::kernel::memory::virtual_allocator::{
     new_dynamic_mapping_allocator, KernelVirtualRangeAllocator,
@@ -70,7 +70,7 @@ impl TaskKind {
 
 #[derive(Debug)]
 struct UserTaskRuntime {
-    address_space: UserAddressSpace,
+    address_space: Option<UserAddressSpace>,
     saved_frame: UserTrapFrame,
     syscall_frame_recorded: bool,
     interrupt_frame_recorded: bool,
@@ -79,7 +79,7 @@ struct UserTaskRuntime {
 impl UserTaskRuntime {
     fn new(address_space: UserAddressSpace, entry_context: UserTaskContext) -> Self {
         Self {
-            address_space,
+            address_space: Some(address_space),
             saved_frame: entry_context.to_trap_frame(),
             syscall_frame_recorded: false,
             interrupt_frame_recorded: false,
@@ -421,16 +421,14 @@ impl Scheduler {
 
     fn prepare_one_shot_user_task(&mut self, task_id: u64) -> Option<OneShotUserTask> {
         let task_index = self.get_task_index(task_id)?;
-        let (trap_frame, kernel_stack_top, address_space) = match &self.tasks[task_index].kind {
-            TaskKind::User(user_runtime) => (
-                user_runtime.saved_frame,
-                self.tasks[task_index]
-                    .kernel_stack_top()
-                    .expect("user tasks must own a kernel stack before entry"),
-                user_runtime.address_space,
-            ),
-            TaskKind::Kernel => return None,
+        let TaskKind::User(user_runtime) = &self.tasks[task_index].kind else {
+            return None;
         };
+        let address_space = user_runtime.address_space?;
+        let trap_frame = user_runtime.saved_frame;
+        let kernel_stack_top = self.tasks[task_index]
+            .kernel_stack_top()
+            .expect("user tasks must own a kernel stack before entry");
 
         if !self.tasks[task_index].state.is_ready() {
             return None;
@@ -467,6 +465,26 @@ impl Scheduler {
         self.active_user_task_identifier = None;
 
         Some(task_id)
+    }
+
+    fn reclaim_finished_user_address_space(
+        &mut self,
+        frame_allocator: &mut PhysicalFrameAllocator,
+        task_id: u64,
+    ) -> Option<UserAddressSpaceReclaim> {
+        let task_index = self.get_task_index(task_id)?;
+        if self.tasks[task_index].state != TaskState::Finished {
+            return None;
+        }
+
+        let TaskKind::User(user_runtime) = &mut self.tasks[task_index].kind else {
+            return None;
+        };
+        let address_space = user_runtime.address_space.take()?;
+        Some(address_space::destroy_user_address_space(
+            frame_allocator,
+            address_space,
+        ))
     }
 
     fn record_current_user_trap_frame(
@@ -559,7 +577,7 @@ impl Scheduler {
 
     fn user_address_space(&self, index: usize) -> Option<UserAddressSpace> {
         match &self.tasks[index].kind {
-            TaskKind::User(user_runtime) => Some(user_runtime.address_space),
+            TaskKind::User(user_runtime) => user_runtime.address_space,
             TaskKind::Kernel => None,
         }
     }
@@ -710,8 +728,11 @@ pub fn spawn_user_task(
 /// # Panics
 ///
 /// Panics if the scheduler has not been initialized.
-pub fn run_user_task_once(task_id: u64) -> Option<UserTaskExit> {
-    process_lifecycle::run_user_task_once(task_id)
+pub fn run_user_task_once(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    task_id: u64,
+) -> Option<UserTaskExit> {
+    process_lifecycle::run_user_task_once(frame_allocator, task_id)
 }
 
 /// Mark the currently running task as finished.
