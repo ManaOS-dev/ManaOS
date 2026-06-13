@@ -17,6 +17,7 @@
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
 //! - [`record_current_user_trap_frame`] - Save a captured user trap frame
+//! - [`record_current_user_interrupt_trap_frame`] - Save a timer interrupt user trap frame
 //! - [`get_kernel_stack_guard_fault`] - Classify a kernel stack guard fault
 //! - [`get_kernel_stack_guard_fault_diagnostic_sample`] - Probe guard-fault diagnostics
 
@@ -66,15 +67,39 @@ impl TaskKind {
 
 #[derive(Debug)]
 struct UserTaskRuntime {
-    trap_frame: UserTrapFrame,
-    has_runtime_trap_frame: bool,
+    saved_frame: UserTrapFrame,
+    syscall_frame_recorded: bool,
+    interrupt_frame_recorded: bool,
 }
 
 impl UserTaskRuntime {
     fn new(entry_context: UserTaskContext) -> Self {
         Self {
-            trap_frame: entry_context.to_trap_frame(),
-            has_runtime_trap_frame: false,
+            saved_frame: entry_context.to_trap_frame(),
+            syscall_frame_recorded: false,
+            interrupt_frame_recorded: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum UserTrapFrameSource {
+    Syscall,
+    TimerInterrupt,
+}
+
+impl UserTrapFrameSource {
+    fn should_log(self, user_runtime: &UserTaskRuntime) -> bool {
+        match self {
+            Self::Syscall => !user_runtime.syscall_frame_recorded,
+            Self::TimerInterrupt => !user_runtime.interrupt_frame_recorded,
+        }
+    }
+
+    fn mark_recorded(self, user_runtime: &mut UserTaskRuntime) {
+        match self {
+            Self::Syscall => user_runtime.syscall_frame_recorded = true,
+            Self::TimerInterrupt => user_runtime.interrupt_frame_recorded = true,
         }
     }
 }
@@ -378,7 +403,7 @@ impl Scheduler {
         let task_index = self.get_task_index(task_id)?;
         let (trap_frame, kernel_stack_top) = match &self.tasks[task_index].kind {
             TaskKind::User(user_runtime) => (
-                user_runtime.trap_frame,
+                user_runtime.saved_frame,
                 self.tasks[task_index]
                     .kernel_stack_top()
                     .expect("user tasks must own a kernel stack before entry"),
@@ -419,6 +444,7 @@ impl Scheduler {
         &mut self,
         trap_frame: UserTrapFrame,
         trap_frame_storage_address: u64,
+        source: UserTrapFrameSource,
     ) {
         let current_task = &mut self.tasks[self.current_index];
         let task_id = current_task.get_id();
@@ -430,25 +456,41 @@ impl Scheduler {
             return;
         };
 
-        let should_log = !user_runtime.has_runtime_trap_frame;
-        user_runtime.trap_frame = trap_frame;
-        user_runtime.has_runtime_trap_frame = true;
+        let should_log = source.should_log(user_runtime);
+        user_runtime.saved_frame = trap_frame;
+        source.mark_recorded(user_runtime);
 
-        if should_log {
-            crate::log_info!(
+        if !should_log {
+            return;
+        }
+
+        match source {
+            UserTrapFrameSource::Syscall => crate::log_info!(
                 "task",
                 "User syscall trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rdi={:#x} rsi={:#x} rdx={:#x} r10={:#x}",
                 task_id,
                 trap_frame_storage_address,
                 trap_frame_on_kernel_stack,
-                user_runtime.trap_frame.instruction_pointer,
-                user_runtime.trap_frame.stack_pointer,
-                user_runtime.trap_frame.rax,
-                user_runtime.trap_frame.rdi,
-                user_runtime.trap_frame.rsi,
-                user_runtime.trap_frame.rdx,
-                user_runtime.trap_frame.r10
-            );
+                user_runtime.saved_frame.instruction_pointer,
+                user_runtime.saved_frame.stack_pointer,
+                user_runtime.saved_frame.rax,
+                user_runtime.saved_frame.rdi,
+                user_runtime.saved_frame.rsi,
+                user_runtime.saved_frame.rdx,
+                user_runtime.saved_frame.r10
+            ),
+            UserTrapFrameSource::TimerInterrupt => crate::log_info!(
+                "task",
+                "User timer trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rcx={:#x} r11={:#x}",
+                task_id,
+                trap_frame_storage_address,
+                trap_frame_on_kernel_stack,
+                user_runtime.saved_frame.instruction_pointer,
+                user_runtime.saved_frame.stack_pointer,
+                user_runtime.saved_frame.rax,
+                user_runtime.saved_frame.rcx,
+                user_runtime.saved_frame.r11
+            ),
         }
     }
 
@@ -477,7 +519,7 @@ impl Scheduler {
         if let TaskKind::User(user_runtime) = &self.tasks[next_index].kind {
             if self.tasks[next_index].context.is_empty() {
                 return Some(SwitchAction::EnterUser {
-                    trap_frame: user_runtime.trap_frame,
+                    trap_frame: user_runtime.saved_frame,
                     kernel_stack_top: self.tasks[next_index]
                         .kernel_stack_top()
                         .expect("user tasks must own a kernel stack before entry"),
@@ -580,7 +622,26 @@ pub fn finish_current_task(exit_code: u64) -> Option<u64> {
 pub fn record_current_user_trap_frame(trap_frame: UserTrapFrame, trap_frame_storage_address: u64) {
     let mut scheduler = SCHEDULER.lock();
     if let Some(scheduler) = scheduler.as_mut() {
-        scheduler.record_current_user_trap_frame(trap_frame, trap_frame_storage_address);
+        scheduler.record_current_user_trap_frame(
+            trap_frame,
+            trap_frame_storage_address,
+            UserTrapFrameSource::Syscall,
+        );
+    }
+}
+
+/// Save a timer-interrupt user trap frame for the currently running user task.
+pub fn record_current_user_interrupt_trap_frame(
+    trap_frame: UserTrapFrame,
+    trap_frame_storage_address: u64,
+) {
+    let mut scheduler = SCHEDULER.lock();
+    if let Some(scheduler) = scheduler.as_mut() {
+        scheduler.record_current_user_trap_frame(
+            trap_frame,
+            trap_frame_storage_address,
+            UserTrapFrameSource::TimerInterrupt,
+        );
     }
 }
 

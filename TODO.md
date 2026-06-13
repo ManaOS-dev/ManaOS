@@ -135,13 +135,13 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Replace legacy PIC routing after IOAPIC is stable.
 - [ ] Calibrate and use the Local APIC timer.
 - [ ] Replace PIT scheduling ticks after Local APIC timer validation.
-- [ ] Save and restore a full user trap frame on interrupt and syscall paths; one-shot user entry restores an initial full trap frame, SYSCALL entry captures runtime user frames on the task kernel stack, and timer interrupts now classify user hardware frames. Full interrupt register capture remains.
+- [ ] Save and restore a full user trap frame on interrupt and syscall paths; one-shot user entry restores an initial full trap frame, SYSCALL entry captures runtime user frames on the task kernel stack, and the x86_64 PIT timer entry now captures and records full Ring 3 general-purpose interrupt frames. Cross-task user resume remains.
 - [x] Design the full user trap frame register layout.
 - [x] Document the interrupt and syscall register sets that must be saved.
 - [ ] Make preemptive scheduling safe for user tasks.
 - [x] Checklist the prerequisites for enabling user task preemption.
 - [ ] Add scheduler accounting and task state diagnostics.
-- [ ] Add kernel stack switching per task where needed; user task stacks are installed before entry, Ring 3 interrupts use the installed TSS stack, and SYSCALL switches onto the task kernel stack. Bootstrap/IST stacks remain.
+- [ ] Add kernel stack switching per task where needed; user task stacks are installed before entry, Ring 3 timer interrupts use the installed TSS stack and save their raw frame there, and SYSCALL switches onto the task kernel stack. Bootstrap/IST stacks remain.
 - [x] Design the per-task kernel stack switching policy.
 
 ### Context Switch And Task Refactoring

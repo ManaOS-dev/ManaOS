@@ -1,10 +1,34 @@
 use crate::serial_println;
+use crate::shared::TimerInterruptFrame;
+use core::mem;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use spin::LazyLock;
 use x86_64::instructions::port::Port;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
+use x86_64::VirtAddr;
 
 const INTERRUPT_CONTROLLER_1_OFFSET: u8 = 32;
+const RAW_TIMER_INTERRUPT_FRAME_INSTRUCTION_POINTER_OFFSET: usize = 0;
+const RAW_TIMER_INTERRUPT_FRAME_CODE_SEGMENT_OFFSET: usize = 8;
+const RAW_TIMER_INTERRUPT_FRAME_CPU_FLAGS_OFFSET: usize = 16;
+const RAW_TIMER_INTERRUPT_FRAME_STACK_POINTER_OFFSET: usize = 24;
+const RAW_TIMER_INTERRUPT_FRAME_STACK_SEGMENT_OFFSET: usize = 32;
+const RAW_TIMER_INTERRUPT_FRAME_RAX_OFFSET: usize = 40;
+const RAW_TIMER_INTERRUPT_FRAME_RBX_OFFSET: usize = 48;
+const RAW_TIMER_INTERRUPT_FRAME_RCX_OFFSET: usize = 56;
+const RAW_TIMER_INTERRUPT_FRAME_RDX_OFFSET: usize = 64;
+const RAW_TIMER_INTERRUPT_FRAME_RSI_OFFSET: usize = 72;
+const RAW_TIMER_INTERRUPT_FRAME_RDI_OFFSET: usize = 80;
+const RAW_TIMER_INTERRUPT_FRAME_RBP_OFFSET: usize = 88;
+const RAW_TIMER_INTERRUPT_FRAME_R8_OFFSET: usize = 96;
+const RAW_TIMER_INTERRUPT_FRAME_R9_OFFSET: usize = 104;
+const RAW_TIMER_INTERRUPT_FRAME_R10_OFFSET: usize = 112;
+const RAW_TIMER_INTERRUPT_FRAME_R11_OFFSET: usize = 120;
+const RAW_TIMER_INTERRUPT_FRAME_R12_OFFSET: usize = 128;
+const RAW_TIMER_INTERRUPT_FRAME_R13_OFFSET: usize = 136;
+const RAW_TIMER_INTERRUPT_FRAME_R14_OFFSET: usize = 144;
+const RAW_TIMER_INTERRUPT_FRAME_R15_OFFSET: usize = 152;
+const RAW_TIMER_INTERRUPT_FRAME_BYTES: usize = 160;
 
 static TICKS: AtomicU64 = AtomicU64::new(0);
 static TIMER_TICK_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
@@ -12,11 +36,14 @@ static KEYBOARD_BYTE_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
 static MOUSE_BYTE_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
 static PAGE_FAULT_REPORTER: AtomicUsize = AtomicUsize::new(0);
 
+/// Kernel callback invoked after each timer interrupt is acknowledged.
+pub type TimerTickProcessor = fn(&TimerInterruptFrame);
+
 /// Kernel callbacks invoked by architecture interrupt handlers.
 #[derive(Clone, Copy)]
 pub struct InterruptProcessors {
     /// Called after each timer interrupt is acknowledged.
-    pub timer_tick: fn(u64, u64, u64, u64, u64),
+    pub timer_tick: TimerTickProcessor,
     /// Called with each keyboard byte received from hardware.
     pub keyboard_byte: fn(u8),
     /// Called with each mouse byte received from hardware.
@@ -57,6 +84,73 @@ impl InterruptIndex {
     }
 }
 
+#[repr(C)]
+struct RawTimerInterruptFrame {
+    instruction_pointer: u64,
+    code_segment: u64,
+    cpu_flags: u64,
+    stack_pointer: u64,
+    stack_segment: u64,
+    rax: u64,
+    rbx: u64,
+    rcx: u64,
+    rdx: u64,
+    rsi: u64,
+    rdi: u64,
+    rbp: u64,
+    r8: u64,
+    r9: u64,
+    r10: u64,
+    r11: u64,
+    r12: u64,
+    r13: u64,
+    r14: u64,
+    r15: u64,
+}
+
+const _: () = {
+    assert!(mem::size_of::<RawTimerInterruptFrame>() == RAW_TIMER_INTERRUPT_FRAME_BYTES);
+    assert!(
+        mem::offset_of!(RawTimerInterruptFrame, instruction_pointer)
+            == RAW_TIMER_INTERRUPT_FRAME_INSTRUCTION_POINTER_OFFSET
+    );
+    assert!(
+        mem::offset_of!(RawTimerInterruptFrame, code_segment)
+            == RAW_TIMER_INTERRUPT_FRAME_CODE_SEGMENT_OFFSET
+    );
+    assert!(
+        mem::offset_of!(RawTimerInterruptFrame, cpu_flags)
+            == RAW_TIMER_INTERRUPT_FRAME_CPU_FLAGS_OFFSET
+    );
+    assert!(
+        mem::offset_of!(RawTimerInterruptFrame, stack_pointer)
+            == RAW_TIMER_INTERRUPT_FRAME_STACK_POINTER_OFFSET
+    );
+    assert!(
+        mem::offset_of!(RawTimerInterruptFrame, stack_segment)
+            == RAW_TIMER_INTERRUPT_FRAME_STACK_SEGMENT_OFFSET
+    );
+    assert!(mem::offset_of!(RawTimerInterruptFrame, rax) == RAW_TIMER_INTERRUPT_FRAME_RAX_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, rbx) == RAW_TIMER_INTERRUPT_FRAME_RBX_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, rcx) == RAW_TIMER_INTERRUPT_FRAME_RCX_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, rdx) == RAW_TIMER_INTERRUPT_FRAME_RDX_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, rsi) == RAW_TIMER_INTERRUPT_FRAME_RSI_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, rdi) == RAW_TIMER_INTERRUPT_FRAME_RDI_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, rbp) == RAW_TIMER_INTERRUPT_FRAME_RBP_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, r8) == RAW_TIMER_INTERRUPT_FRAME_R8_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, r9) == RAW_TIMER_INTERRUPT_FRAME_R9_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, r10) == RAW_TIMER_INTERRUPT_FRAME_R10_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, r11) == RAW_TIMER_INTERRUPT_FRAME_R11_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, r12) == RAW_TIMER_INTERRUPT_FRAME_R12_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, r13) == RAW_TIMER_INTERRUPT_FRAME_R13_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, r14) == RAW_TIMER_INTERRUPT_FRAME_R14_OFFSET);
+    assert!(mem::offset_of!(RawTimerInterruptFrame, r15) == RAW_TIMER_INTERRUPT_FRAME_R15_OFFSET);
+};
+
+extern "C" {
+    fn timer_interrupt_handler_entry();
+}
+
 static INTERRUPT_DESCRIPTOR_TABLE: LazyLock<InterruptDescriptorTable> = LazyLock::new(|| {
     let mut table = InterruptDescriptorTable::new();
     table.breakpoint.set_handler_fn(breakpoint_handler);
@@ -73,7 +167,13 @@ static INTERRUPT_DESCRIPTOR_TABLE: LazyLock<InterruptDescriptorTable> = LazyLock
         .general_protection_fault
         .set_handler_fn(general_protection_fault_handler);
 
-    table[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
+    // SAFETY: `timer_interrupt_handler_entry` is an interrupt entry stub that
+    // preserves registers, calls the Rust timer hook, and returns with `iretq`.
+    unsafe {
+        table[InterruptIndex::Timer.as_u8()].set_handler_addr(VirtAddr::new(
+            timer_interrupt_handler_entry as *const () as u64,
+        ));
+    }
     table[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
     table[InterruptIndex::Mouse.as_u8()].set_handler_fn(mouse_interrupt_handler);
     table
@@ -113,7 +213,28 @@ extern "x86-interrupt" fn double_fault_handler(
     panic!("[EXCEPT] DOUBLE FAULT\n{stack_frame:#?}");
 }
 
-extern "x86-interrupt" fn timer_interrupt_handler(stack_frame: InterruptStackFrame) {
+/// Push a raw timer interrupt frame from the assembly interrupt entry stub.
+///
+/// # Panics
+///
+/// Panics if `frame` is null or cannot be represented as a `u64` address.
+///
+/// # Safety
+///
+/// `frame` must point to a stack-resident `RawTimerInterruptFrame` populated by
+/// `timer_interrupt_handler_entry`.
+#[no_mangle]
+pub unsafe extern "C" fn push_timer_interrupt_frame(frame: *const u64) {
+    assert!(
+        !frame.is_null(),
+        "timer interrupt frame pointer must be non-null"
+    );
+    let frame_storage_address =
+        u64::try_from(frame.addr()).expect("timer interrupt frame pointer must fit in u64");
+    let raw_frame = frame.cast::<RawTimerInterruptFrame>();
+    // SAFETY: The assembly timer entry passes a non-null pointer to the raw
+    // frame it populated on the current kernel stack.
+    let raw_frame = unsafe { &*raw_frame };
     TICKS.fetch_add(1, Ordering::Relaxed);
     // SAFETY: Notify EOI to the PIC to allow future interrupts.
     unsafe {
@@ -121,13 +242,30 @@ extern "x86-interrupt" fn timer_interrupt_handler(stack_frame: InterruptStackFra
             InterruptIndex::Timer.as_u8(),
         );
     }
-    call_timer_tick_processor(
-        stack_frame.instruction_pointer.as_u64(),
-        u64::from(stack_frame.code_segment.0),
-        stack_frame.cpu_flags.bits(),
-        stack_frame.stack_pointer.as_u64(),
-        u64::from(stack_frame.stack_segment.0),
-    );
+    let frame = TimerInterruptFrame {
+        frame_storage_address,
+        instruction_pointer: raw_frame.instruction_pointer,
+        code_segment: raw_frame.code_segment,
+        cpu_flags: raw_frame.cpu_flags,
+        stack_pointer: raw_frame.stack_pointer,
+        stack_segment: raw_frame.stack_segment,
+        rax: raw_frame.rax,
+        rbx: raw_frame.rbx,
+        rcx: raw_frame.rcx,
+        rdx: raw_frame.rdx,
+        rsi: raw_frame.rsi,
+        rdi: raw_frame.rdi,
+        rbp: raw_frame.rbp,
+        r8: raw_frame.r8,
+        r9: raw_frame.r9,
+        r10: raw_frame.r10,
+        r11: raw_frame.r11,
+        r12: raw_frame.r12,
+        r13: raw_frame.r13,
+        r14: raw_frame.r14,
+        r15: raw_frame.r15,
+    };
+    call_timer_tick_processor(&frame);
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
@@ -165,27 +303,15 @@ fn status_read() -> u8 {
     unsafe { Port::<u8>::new(0x64).read() }
 }
 
-fn call_timer_tick_processor(
-    instruction_pointer: u64,
-    code_segment: u64,
-    cpu_flags: u64,
-    stack_pointer: u64,
-    stack_segment: u64,
-) {
+fn call_timer_tick_processor(frame: &TimerInterruptFrame) {
     let processor = TIMER_TICK_PROCESSOR.load(Ordering::Acquire);
     if processor == 0 {
         return;
     }
 
     // SAFETY: register_processors stores only valid timer tick processor pointers.
-    let processor: fn(u64, u64, u64, u64, u64) = unsafe { core::mem::transmute(processor) };
-    processor(
-        instruction_pointer,
-        code_segment,
-        cpu_flags,
-        stack_pointer,
-        stack_segment,
-    );
+    let processor: TimerTickProcessor = unsafe { core::mem::transmute(processor) };
+    processor(frame);
 }
 
 fn call_keyboard_byte_processor(byte: u8) {

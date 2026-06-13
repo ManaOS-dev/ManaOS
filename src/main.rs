@@ -12,6 +12,7 @@ extern crate alloc;
 
 mod arch;
 mod kernel;
+mod shared;
 
 use alloc::vec::Vec;
 use uefi::prelude::*;

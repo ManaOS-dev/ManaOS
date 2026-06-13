@@ -15,8 +15,10 @@ restores user registers with:
 The initial context is sufficient to create the first user trap frame. The
 SYSCALL entry path switches onto the current task's guarded kernel stack,
 captures a runtime `UserTrapFrame`, and stores returning syscall frames on the
-current user task. Interrupt capture still needs to save real runtime register
-state before user preemption can be enabled.
+current user task. The x86_64 timer interrupt entry also captures a complete
+general-purpose register snapshot for Ring 3 timer frames and records it on the
+current user task. User task preemption remains disabled until the scheduler can
+resume saved user trap frames after selecting a different runnable task.
 
 ## Full Trap Frame Layout
 
@@ -61,10 +63,11 @@ For interrupts taken from user mode, the architecture entry path must save:
 
 The timer interrupt must not schedule away from a user task until all of these
 fields are captured in the owning task's `UserTrapFrame`.
-The timer path now passes the hardware interrupt frame summary to
-`kernel::interrupt`, which can distinguish Ring 3 timer frames from kernel
-frames. It still does not save the general-purpose register set required for
-user preemption.
+The timer path now enters through an assembly stub that saves this full
+general-purpose register set before calling the Rust architecture hook. The
+architecture hook acknowledges the PIC and passes a shared timer frame to
+`kernel::interrupt`, which records Ring 3 timer frames in task metadata without
+making `arch/` depend on `kernel/`.
 
 ## Syscall Save Set
 
@@ -90,7 +93,8 @@ User task preemption stays disabled until all of the following are true:
 
 - User-mode interrupt and syscall entries save a complete `UserTrapFrame`.
 - User task metadata owns the saved trap frame and exposes it only through task
-  lifecycle helpers.
+  lifecycle helpers. This is complete for returning syscalls and the current
+  PIT timer interrupt path.
 - Per-task kernel stacks exist and are installed before entering or resuming a
   user task.
 - Timer interrupt routing can distinguish user-mode frames from kernel-mode

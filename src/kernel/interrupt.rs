@@ -17,29 +17,24 @@
 //! - [`set_syscall_kernel_stack_top`] - Install the next SYSCALL kernel stack
 //! - [`syscall_entry`] - Ring 3 syscall entry
 
+use crate::kernel::task::context::UserTrapFrame;
+use crate::shared::TimerInterruptFrame;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 static SYSCALL_KERNEL_STACK_TOP: AtomicU64 = AtomicU64::new(0);
 static SYSCALL_ENTRY_USER_STACK_POINTER: AtomicU64 = AtomicU64::new(0);
 static SYSCALL_ENTRY_SYSCALL_NUMBER: AtomicU64 = AtomicU64::new(0);
 static USER_TIMER_FRAME_REPORTED: AtomicBool = AtomicBool::new(false);
-const USER_PRIVILEGE_LEVEL_BITS: u64 = 0b11;
 
 /// Route one timer interrupt tick to the kernel scheduler.
-pub fn process_timer_tick(
-    instruction_pointer: u64,
-    code_segment: u64,
-    cpu_flags: u64,
-    stack_pointer: u64,
-    stack_segment: u64,
-) {
-    report_user_timer_frame_once(
-        instruction_pointer,
-        code_segment,
-        cpu_flags,
-        stack_pointer,
-        stack_segment,
-    );
+pub fn process_timer_tick(frame: &TimerInterruptFrame) {
+    if frame.is_user_mode() {
+        crate::kernel::task::record_current_user_interrupt_trap_frame(
+            timer_frame_to_user_trap_frame(frame),
+            frame.frame_storage_address,
+        );
+        report_user_timer_frame_once(frame);
+    }
     crate::kernel::task::process_timer_tick();
 }
 
@@ -107,37 +102,7 @@ impl core::fmt::Display for TaskIdentifierDisplay {
     }
 }
 
-#[derive(Clone, Copy)]
-enum InterruptFrameMode {
-    Kernel,
-    User,
-}
-
-impl InterruptFrameMode {
-    fn from_code_segment(code_segment: u64) -> Self {
-        if code_segment & USER_PRIVILEGE_LEVEL_BITS == USER_PRIVILEGE_LEVEL_BITS {
-            Self::User
-        } else {
-            Self::Kernel
-        }
-    }
-
-    fn is_user(self) -> bool {
-        matches!(self, Self::User)
-    }
-}
-
-fn report_user_timer_frame_once(
-    instruction_pointer: u64,
-    code_segment: u64,
-    cpu_flags: u64,
-    stack_pointer: u64,
-    stack_segment: u64,
-) {
-    if !InterruptFrameMode::from_code_segment(code_segment).is_user() {
-        return;
-    }
-
+fn report_user_timer_frame_once(frame: &TimerInterruptFrame) {
     if USER_TIMER_FRAME_REPORTED.swap(true, Ordering::AcqRel) {
         return;
     }
@@ -146,12 +111,37 @@ fn report_user_timer_frame_once(
         "task",
         "User timer interrupt frame observed: task={} rip={:#x} rsp={:#x} cs={:#x} ss={:#x} rflags={:#x}",
         TaskIdentifierDisplay(crate::kernel::task::get_current_task_id()),
-        instruction_pointer,
-        stack_pointer,
-        code_segment,
-        stack_segment,
-        cpu_flags
+        frame.instruction_pointer,
+        frame.stack_pointer,
+        frame.code_segment,
+        frame.stack_segment,
+        frame.cpu_flags
     );
+}
+
+fn timer_frame_to_user_trap_frame(frame: &TimerInterruptFrame) -> UserTrapFrame {
+    UserTrapFrame {
+        instruction_pointer: frame.instruction_pointer,
+        code_segment: frame.code_segment,
+        cpu_flags: frame.cpu_flags,
+        stack_pointer: frame.stack_pointer,
+        stack_segment: frame.stack_segment,
+        rax: frame.rax,
+        rbx: frame.rbx,
+        rcx: frame.rcx,
+        rdx: frame.rdx,
+        rsi: frame.rsi,
+        rdi: frame.rdi,
+        rbp: frame.rbp,
+        r8: frame.r8,
+        r9: frame.r9,
+        r10: frame.r10,
+        r11: frame.r11,
+        r12: frame.r12,
+        r13: frame.r13,
+        r14: frame.r14,
+        r15: frame.r15,
+    }
 }
 
 #[derive(Clone, Copy)]
