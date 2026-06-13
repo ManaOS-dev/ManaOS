@@ -19,7 +19,9 @@ current user task. The x86_64 timer interrupt entry also captures a complete
 general-purpose register snapshot for Ring 3 timer frames and records it on the
 current user task. The scheduler can now preempt a Ring 3 task from the timer
 path, run another schedulable task, and resume the preempted user task through
-the saved timer interrupt context.
+the saved timer interrupt context. User tasks also carry a `UserAddressSpace`
+root; the lifecycle path switches CR3 before Ring 3 entry and restores the
+kernel address space after `SYS_EXIT`.
 
 ## Full Trap Frame Layout
 
@@ -75,7 +77,9 @@ The switch stores the interrupted task's kernel-side timer context in its
 `TaskContext`, so scheduling that task again returns to the timer handler and
 then `iretq` resumes user code. Initial user entries use a separate
 `switch_to_user_mode` architecture provider that saves the current task context
-before consuming a `UserTrapFrame`.
+before consuming a `UserTrapFrame`. When the scheduler resumes a saved user
+timer context, it switches to the saved task's user address space before
+restoring that context.
 
 ## Syscall Save Set
 
@@ -106,6 +110,8 @@ User task preemption stays disabled until all of the following are true:
 - Per-task kernel stacks exist and are installed before entering or resuming a
   user task. This is complete for first entry, syscall entry, and timer-context
   resume on the current scheduler path.
+- User tasks own separate page-table roots for ELF and stack mappings. This is
+  complete for the current one-shot smoke path.
 - Timer interrupt routing can distinguish user-mode frames from kernel-mode
   frames without depending on `kernel::task` from `arch/`. This is complete for
   the current PIT timer path.
@@ -115,4 +121,4 @@ User task preemption stays disabled until all of the following are true:
   its trap frame is saved. This is complete for timer-driven preemption.
 - `just storage-smoke` still proves the one-shot user path and now asserts that
   timer interrupts can preempt and resume user code across two user task
-  records that own separate stack slots.
+  records that own separate stack slots and separate address spaces.

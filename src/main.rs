@@ -346,6 +346,22 @@ fn verify_dynamic_kernel_mapping_lifecycle(
     );
 }
 
+fn verify_user_address_space_template(
+    frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
+) {
+    assert!(
+        kernel::memory::address_space::verify_user_address_space_template(
+            frame_allocator,
+            verify_kernel_filesystem as *const () as usize,
+        ),
+        "user address-space template smoke must pass"
+    );
+    crate::log_info!(
+        "memory",
+        "User address-space template self-check passed: kernel_shared=true user_window_empty=true"
+    );
+}
+
 fn verify_elf_loader_rules() {
     assert!(
         kernel::elf::verify_invalid_elf_rejections(),
@@ -457,13 +473,30 @@ fn read_kernel_file(path: &str) -> Option<Vec<u8>> {
 fn spawn_user_smoke_task(
     frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
     user_elf_path: &str,
-    user_entry_point: kernel::memory::address::UserVirtualAddress,
+    user_elf_bytes: &[u8],
     user_stack_pages: u64,
 ) -> u64 {
-    let user_stack =
-        kernel::memory::user_stack::allocate_user_stack(frame_allocator, user_stack_pages);
+    let user_address_space =
+        kernel::memory::address_space::create_user_address_space(frame_allocator);
+    crate::log_info!(
+        "memory",
+        "User address space prepared: pml4={:#x}",
+        user_address_space.level_4_frame().as_u64()
+    );
+    let user_elf: kernel::elf::LoadedElf = kernel::elf::load_user_program(
+        user_address_space,
+        frame_allocator,
+        user_elf_bytes,
+        user_elf_path,
+    );
+    let user_entry_point = user_elf.entry_point();
+    let user_stack = kernel::memory::user_stack::allocate_user_stack(
+        user_address_space,
+        frame_allocator,
+        user_stack_pages,
+    );
     assert!(
-        kernel::memory::user_stack::verify_user_stack_mapping(user_stack),
+        kernel::memory::user_stack::verify_user_stack_mapping(user_address_space, user_stack),
         "user stack mapping and guard page smoke must pass"
     );
     crate::log_info!(
@@ -479,7 +512,7 @@ fn spawn_user_smoke_task(
         .checked_sub(1)
         .expect("user stack top must be above the mapped stack");
     assert!(
-        kernel::memory::paging::verify_kernel_user_mapping_permissions(
+        user_address_space.verify_kernel_user_mapping_permissions(
             verify_kernel_filesystem as *const () as usize,
             user_stack_probe.as_usize(),
             user_entry_point.as_usize(),
@@ -488,10 +521,11 @@ fn spawn_user_smoke_task(
     );
     crate::log_info!(
         "memory",
-        "Kernel/user mapping permission self-check passed."
+        "Kernel/user mapping permission self-check passed: pml4={:#x}",
+        user_address_space.level_4_frame().as_u64()
     );
     assert!(
-        kernel::memory::paging::verify_syscall_user_data_permissions(
+        user_address_space.verify_syscall_user_data_permissions(
             user_stack_probe.as_usize(),
             user_entry_point.as_usize(),
         ),
@@ -501,6 +535,7 @@ fn spawn_user_smoke_task(
     let user_entry_arguments = [user_elf_path, "--storage-smoke"];
     let user_entry_environment = ["MANAOS_BOOT=storage-smoke"];
     let prepared_user_stack = kernel::memory::user_stack::prepare_initial_stack(
+        user_address_space,
         user_stack,
         &user_entry_arguments,
         &user_entry_environment,
@@ -515,6 +550,7 @@ fn spawn_user_smoke_task(
 
     let user_task_id = kernel::task::spawn_user_task(
         frame_allocator,
+        user_address_space,
         user_entry_point,
         prepared_user_stack.stack_pointer(),
         kernel::task::UserEntryArguments::new(
@@ -523,7 +559,12 @@ fn spawn_user_smoke_task(
             prepared_user_stack.environment_values_pointer(),
         ),
     );
-    crate::log_info!("task", "User task spawned. task_id={}", user_task_id);
+    crate::log_info!(
+        "task",
+        "User task spawned. task_id={} address_space={:#x}",
+        user_task_id,
+        user_address_space.level_4_frame().as_u64()
+    );
     user_task_id
 }
 
@@ -542,21 +583,17 @@ fn run_user_smoke_demo(
         user_elf_path,
         user_elf_bytes.len()
     );
-    let user_elf: kernel::elf::LoadedElf =
-        kernel::elf::load_user_program(frame_allocator, &user_elf_bytes, user_elf_path);
-    let user_entry_point = user_elf.entry_point();
-
     let user_task_ids = [
         spawn_user_smoke_task(
             frame_allocator,
             user_elf_path,
-            user_entry_point,
+            &user_elf_bytes,
             user_stack_pages,
         ),
         spawn_user_smoke_task(
             frame_allocator,
             user_elf_path,
-            user_entry_point,
+            &user_elf_bytes,
             user_stack_pages,
         ),
     ];
@@ -661,6 +698,7 @@ fn main() -> Status {
         backbuffer_address,
     );
     verify_dynamic_kernel_mapping_lifecycle(&mut frame_allocator);
+    verify_user_address_space_template(&mut frame_allocator);
     kernel::filesystem::initialize();
     crate::log_info!("fs", "Kernel filesystem initialized.");
     verify_kernel_filesystem();

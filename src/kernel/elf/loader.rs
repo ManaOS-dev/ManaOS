@@ -1,6 +1,7 @@
 use crate::kernel::elf::parser::{ElfError, ElfFile, ProgramHeader};
 use crate::kernel::memory::{
     address::{PhysicalFrameStart, UserVirtualAddress, UserVirtualRange},
+    address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     user_stack,
 };
@@ -31,11 +32,12 @@ impl LoadedElf {
 ///
 /// Panics if the ELF image is invalid, unsupported, or cannot be mapped.
 pub fn load_user_program(
+    address_space: UserAddressSpace,
     frame_allocator: &mut PhysicalFrameAllocator,
     image: &[u8],
     source_path: &str,
 ) -> LoadedElf {
-    let loaded = load_user_elf(frame_allocator, image)
+    let loaded = load_user_elf(address_space, frame_allocator, image)
         .unwrap_or_else(|error| panic!("failed to load user ELF: {}", error.message()));
     crate::log_info!(
         "elf",
@@ -180,6 +182,7 @@ impl LoadError {
 }
 
 fn load_user_elf(
+    address_space: UserAddressSpace,
     frame_allocator: &mut PhysicalFrameAllocator,
     image: &[u8],
 ) -> Result<LoadedElf, LoadError> {
@@ -204,7 +207,7 @@ fn load_user_elf(
             entry_segment_found = true;
         }
         load_segments = load_segments.saturating_add(1);
-        map_load_segment(frame_allocator, image, program_header)?;
+        map_load_segment(address_space, frame_allocator, image, program_header)?;
         crate::log_info!(
             "elf",
             "ELF segment mapped: vaddr={:#x} memsz={} filesz={} flags={:#x} perms={}",
@@ -237,6 +240,7 @@ fn validate_entry_point(entry_point: u64) -> Result<(), LoadError> {
 }
 
 fn map_load_segment(
+    address_space: UserAddressSpace,
     frame_allocator: &mut PhysicalFrameAllocator,
     image: &[u8],
     program_header: ProgramHeader,
@@ -260,6 +264,7 @@ fn map_load_segment(
     let mut page_start = segment_range.first_page;
     loop {
         let physical_address = user_stack::allocate_and_map_user_page(
+            address_space,
             frame_allocator,
             page_start,
             page_flags,
