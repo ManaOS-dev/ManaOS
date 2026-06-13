@@ -16,6 +16,7 @@
 //! - [`run_user_task_once`] - Run one user task until `SYS_EXIT`
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
+//! - [`record_current_user_trap_frame`] - Save a captured user trap frame
 //! - [`get_kernel_stack_guard_fault`] - Classify a kernel stack guard fault
 //! - [`get_kernel_stack_guard_fault_diagnostic_sample`] - Probe guard-fault diagnostics
 
@@ -66,12 +67,14 @@ impl TaskKind {
 #[derive(Debug)]
 struct UserTaskRuntime {
     trap_frame: UserTrapFrame,
+    has_runtime_trap_frame: bool,
 }
 
 impl UserTaskRuntime {
     fn new(entry_context: UserTaskContext) -> Self {
         Self {
             trap_frame: entry_context.to_trap_frame(),
+            has_runtime_trap_frame: false,
         }
     }
 }
@@ -406,6 +409,33 @@ impl Scheduler {
         Some(task_id)
     }
 
+    fn record_current_user_trap_frame(&mut self, trap_frame: UserTrapFrame) {
+        let current_task = &mut self.tasks[self.current_index];
+        let task_id = current_task.get_id();
+        let TaskKind::User(user_runtime) = &mut current_task.kind else {
+            return;
+        };
+
+        let should_log = !user_runtime.has_runtime_trap_frame;
+        user_runtime.trap_frame = trap_frame;
+        user_runtime.has_runtime_trap_frame = true;
+
+        if should_log {
+            crate::log_info!(
+                "task",
+                "User syscall trap frame saved: task={} rip={:#x} rsp={:#x} rax={:#x} rdi={:#x} rsi={:#x} rdx={:#x} r10={:#x}",
+                task_id,
+                user_runtime.trap_frame.instruction_pointer,
+                user_runtime.trap_frame.stack_pointer,
+                user_runtime.trap_frame.rax,
+                user_runtime.trap_frame.rdi,
+                user_runtime.trap_frame.rsi,
+                user_runtime.trap_frame.rdx,
+                user_runtime.trap_frame.r10
+            );
+        }
+    }
+
     fn prepare_next_switch(&mut self) -> Option<SwitchAction> {
         if matches!(self.tasks[self.current_index].kind, TaskKind::User(_)) {
             // TODO(phase6): switch away from user tasks after saving a full
@@ -528,6 +558,14 @@ pub fn run_user_task_once(task_id: u64) -> Option<u64> {
 /// Mark the currently running task as finished.
 pub fn finish_current_task(exit_code: u64) -> Option<u64> {
     process_lifecycle::finish_current_task(exit_code)
+}
+
+/// Save a captured user trap frame for the currently running user task.
+pub fn record_current_user_trap_frame(trap_frame: UserTrapFrame) {
+    let mut scheduler = SCHEDULER.lock();
+    if let Some(scheduler) = scheduler.as_mut() {
+        scheduler.record_current_user_trap_frame(trap_frame);
+    }
 }
 
 /// Enable or disable timer-driven task switching.

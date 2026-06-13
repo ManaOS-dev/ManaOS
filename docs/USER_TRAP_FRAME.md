@@ -12,11 +12,10 @@ restores user registers with:
 - `rip`, `cs`, `rflags`, `rsp`, and `ss` for the `iretq` frame.
 - `argc`, `argv`, and `envp` loaded into `rdi`, `rsi`, and `rdx`.
 
-The initial context is sufficient to create the first user trap frame, but it
-is not enough to resume a user task after a timer interrupt, page fault, or
-syscall that can return to the same instruction stream with all registers
-preserved. Interrupt and syscall capture still need to save real runtime
-register state before user preemption can be enabled.
+The initial context is sufficient to create the first user trap frame. The
+SYSCALL entry path also captures a runtime `UserTrapFrame` and stores returning
+syscall frames on the current user task. Interrupt capture still needs to save
+real runtime register state before user preemption can be enabled.
 
 ## Full Trap Frame Layout
 
@@ -73,6 +72,12 @@ The syscall path must preserve enough state to return through the syscall ABI:
 
 ManaOS should store the same `UserTrapFrame` shape for syscalls and interrupts
 so the scheduler does not need separate resume formats.
+
+`kernel::interrupt::syscall_entry` now builds this frame before calling the
+Rust syscall dispatcher. The dispatcher writes the syscall result back to
+`rax`, fills the user selectors, and records returning syscall frames in the
+current user task metadata. The entry code still runs on the user stack until a
+dedicated SYSCALL kernel-stack switch is added.
 
 ## Preemption Enablement Checklist
 
