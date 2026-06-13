@@ -957,6 +957,52 @@ fn verify_memory_console_command() {
     }
 }
 
+fn verify_syscall_trace_console_command() {
+    crate::kernel::syscall::set_trace_enabled(false);
+    crate::kernel::syscall::reset_trace();
+    let reset_ok = kernel::console::verify_command_smoke_contains(
+        "syscalls trace reset",
+        &["trace: enabled=false", "records=0", "last_number=-"],
+    )
+    .is_some();
+    let enabled_ok = kernel::console::verify_command_smoke_contains(
+        "syscalls trace on",
+        &["trace: enabled=true", "records=0"],
+    )
+    .is_some();
+    let _traced_result = crate::kernel::syscall::syscall_dispatch(
+        crate::kernel::syscall::SYS_GETPID,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    );
+    let disabled_ok = kernel::console::verify_command_smoke_contains(
+        "syscalls trace off",
+        &[
+            "trace: enabled=false",
+            "records=1",
+            "last_number=39",
+            "last_result=0x",
+        ],
+    )
+    .is_some();
+
+    if reset_ok && enabled_ok && disabled_ok {
+        crate::log_info!(
+            "console",
+            "Syscall trace controls smoke passed: command=\"syscalls trace\" records=1"
+        );
+    } else {
+        crate::log_warn!(
+            "console",
+            "Syscall trace controls smoke failed: command=\"syscalls trace\""
+        );
+    }
+}
+
 fn verify_console_status_strip() {
     if kernel::console::verify_status_strip_smoke() {
         crate::log_info!("console", "Console status strip smoke passed.");
@@ -1054,6 +1100,7 @@ fn main() -> Status {
     record_memory_diagnostics_snapshot(&frame_allocator);
     verify_scheduler_console_command();
     verify_memory_console_command();
+    verify_syscall_trace_console_command();
     verify_console_status_strip();
 
     // Main Loop

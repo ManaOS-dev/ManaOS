@@ -146,3 +146,6 @@ User task preemption stays disabled until all of the following are true:
   selecting task identifiers in the composition root, so active-set ownership
   stays inside `kernel::task`. The active user lifecycle can now be drained
   through one scheduler-owned API that returns the completed exit records.
+  Optional syscall trace controls are exposed through `syscalls trace`, which
+  lets the console enable, disable, reset, and inspect syscall trace records
+  without changing the syscall ABI.

@@ -4,6 +4,7 @@
 //! - Kernel syscall number definitions
 //! - Syscall argument dispatch
 //! - Mapping kernel filesystem errors to Linux-like syscall results
+//! - Optional syscall tracing diagnostics
 //!
 //! ## Does NOT own
 //! - Architecture-specific `SYSCALL`/`SYSRET` register entry
@@ -13,6 +14,9 @@
 //! ## Public API
 //! - [`syscall_dispatch`] - Dispatch one syscall from architecture entry code
 //! - [`syscall_dispatch_from_trap_frame`] - Dispatch one syscall from a saved user frame
+//! - [`set_trace_enabled`] - Enable or disable syscall trace logging
+//! - [`reset_trace`] - Clear syscall trace accounting
+//! - [`get_trace_diagnostics`] - Read syscall trace diagnostics
 //! - [`SYS_READ`] - Linux-compatible read syscall number
 //! - [`SYS_WRITE`] - Linux-compatible write syscall number
 //! - [`SYS_OPEN`] - Linux-compatible open syscall number
@@ -35,6 +39,7 @@ use crate::kernel::memory::{
     user_pointer,
 };
 use crate::kernel::task::context::UserTrapFrame;
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 #[allow(dead_code)]
 #[path = "../shared/syscall_contract.rs"]
@@ -69,6 +74,67 @@ pub const USER_EXIT_SENTINEL: u64 = u64::MAX;
 /// Internal sentinel telling the syscall entry code to block and return to the kernel.
 pub const USER_BLOCK_SENTINEL: u64 = u64::MAX - 1;
 
+static TRACE_ENABLED: AtomicBool = AtomicBool::new(false);
+static TRACE_RECORD_COUNT: AtomicU64 = AtomicU64::new(0);
+static TRACE_LAST_VALID: AtomicBool = AtomicBool::new(false);
+static TRACE_LAST_TASK_ID: AtomicU64 = AtomicU64::new(0);
+static TRACE_LAST_SYSCALL_NUMBER: AtomicU64 = AtomicU64::new(0);
+static TRACE_LAST_RESULT: AtomicU64 = AtomicU64::new(0);
+
+/// Snapshot of syscall trace state and recent trace accounting.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SyscallTraceDiagnostics {
+    enabled: bool,
+    record_count: u64,
+    last_task_id: Option<u64>,
+    last_syscall_number: Option<u64>,
+    last_result: Option<u64>,
+}
+
+impl SyscallTraceDiagnostics {
+    /// Create syscall trace diagnostics from raw accounting state.
+    const fn new(
+        enabled: bool,
+        record_count: u64,
+        last_task_id: Option<u64>,
+        last_syscall_number: Option<u64>,
+        last_result: Option<u64>,
+    ) -> Self {
+        Self {
+            enabled,
+            record_count,
+            last_task_id,
+            last_syscall_number,
+            last_result,
+        }
+    }
+
+    /// Return whether syscall trace logging is enabled.
+    pub const fn enabled(self) -> bool {
+        self.enabled
+    }
+
+    /// Return the number of syscall trace records emitted since the last reset.
+    pub const fn record_count(self) -> u64 {
+        self.record_count
+    }
+
+    /// Return the last traced task identifier, if any syscall has been traced.
+    pub const fn last_task_id(self) -> Option<u64> {
+        self.last_task_id
+    }
+
+    /// Return the last traced syscall number, if any syscall has been traced.
+    pub const fn last_syscall_number(self) -> Option<u64> {
+        self.last_syscall_number
+    }
+
+    /// Return the last traced syscall result, if any syscall has been traced.
+    pub const fn last_result(self) -> Option<u64> {
+        self.last_result
+    }
+}
+
 const fn linux_error(errno: u64) -> u64 {
     0_u64.wrapping_sub(errno)
 }
@@ -93,6 +159,23 @@ pub extern "C" fn syscall_dispatch(
     fifth_argument: u64,
     sixth_argument: u64,
 ) -> u64 {
+    let task_id = crate::kernel::task::get_current_task_id();
+    let arguments = [
+        first_argument,
+        second_argument,
+        third_argument,
+        fourth_argument,
+        fifth_argument,
+        sixth_argument,
+    ];
+    let result = dispatch_syscall(syscall_number, arguments);
+    record_syscall_trace(task_id, syscall_number, arguments, result);
+    result
+}
+
+fn dispatch_syscall(syscall_number: u64, arguments: [u64; 6]) -> u64 {
+    let [first_argument, second_argument, third_argument, fourth_argument, fifth_argument, sixth_argument] =
+        arguments;
     match syscall_number {
         SYS_WRITE => sys_write(first_argument, second_argument, third_argument),
         SYS_EXIT | SYS_EXIT_GROUP => sys_exit(first_argument),
@@ -122,6 +205,72 @@ pub extern "C" fn syscall_dispatch(
         SYS_GETPID => sys_getpid(),
         _ => ERROR_NOT_IMPLEMENTED,
     }
+}
+
+/// Enable or disable syscall trace logging.
+pub fn set_trace_enabled(enabled: bool) {
+    TRACE_ENABLED.store(enabled, Ordering::Release);
+}
+
+/// Clear syscall trace accounting while preserving the enabled state.
+pub fn reset_trace() {
+    TRACE_RECORD_COUNT.store(0, Ordering::Release);
+    TRACE_LAST_TASK_ID.store(0, Ordering::Release);
+    TRACE_LAST_SYSCALL_NUMBER.store(0, Ordering::Release);
+    TRACE_LAST_RESULT.store(0, Ordering::Release);
+    TRACE_LAST_VALID.store(false, Ordering::Release);
+}
+
+/// Return syscall trace diagnostics.
+pub fn get_trace_diagnostics() -> SyscallTraceDiagnostics {
+    let enabled = TRACE_ENABLED.load(Ordering::Acquire);
+    let record_count = TRACE_RECORD_COUNT.load(Ordering::Acquire);
+    let last_valid = TRACE_LAST_VALID.load(Ordering::Acquire);
+    if !last_valid {
+        return SyscallTraceDiagnostics::new(enabled, record_count, None, None, None);
+    }
+
+    SyscallTraceDiagnostics::new(
+        enabled,
+        record_count,
+        Some(TRACE_LAST_TASK_ID.load(Ordering::Acquire)),
+        Some(TRACE_LAST_SYSCALL_NUMBER.load(Ordering::Acquire)),
+        Some(TRACE_LAST_RESULT.load(Ordering::Acquire)),
+    )
+}
+
+fn record_syscall_trace(
+    task_id: Option<u64>,
+    syscall_number: u64,
+    arguments: [u64; 6],
+    result: u64,
+) {
+    if !TRACE_ENABLED.load(Ordering::Acquire) {
+        return;
+    }
+
+    let task_id = task_id.unwrap_or(0);
+    TRACE_LAST_TASK_ID.store(task_id, Ordering::Release);
+    TRACE_LAST_SYSCALL_NUMBER.store(syscall_number, Ordering::Release);
+    TRACE_LAST_RESULT.store(result, Ordering::Release);
+    TRACE_LAST_VALID.store(true, Ordering::Release);
+    let record_index = TRACE_RECORD_COUNT
+        .fetch_add(1, Ordering::AcqRel)
+        .saturating_add(1);
+    crate::log_info!(
+        "syscall",
+        "Syscall trace: record={} task={} number={} result={:#x} arg0={:#x} arg1={:#x} arg2={:#x} arg3={:#x} arg4={:#x} arg5={:#x}",
+        record_index,
+        task_id,
+        syscall_number,
+        result,
+        arguments[0],
+        arguments[1],
+        arguments[2],
+        arguments[3],
+        arguments[4],
+        arguments[5]
+    );
 }
 
 /// Dispatch one syscall from a captured user trap frame.

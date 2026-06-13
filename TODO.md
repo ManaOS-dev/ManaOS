@@ -95,7 +95,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Add replacement `MAP_FIXED` for private user mappings.
 - [x] Add `nanosleep` or a minimal sleep syscall.
 - [ ] Add `fork` or document why the first process model uses `spawn`/`exec` instead.
-- [ ] Add syscall tracing controls.
+- [x] Add syscall tracing controls.
 
 ### Userland Runtime
 
