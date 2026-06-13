@@ -123,6 +123,8 @@ User task preemption stays disabled until all of the following are true:
   and preemption accounting so the boot smoke can assert lifecycle progress.
 - The `tasks` console command shows the same scheduler and preemption counters
   on the interactive console overlay.
+- The console overlay status strip now keeps the scheduler and preemption
+  counters visible even before a command is submitted.
 - `just storage-smoke` still proves the one-shot user path and now asserts that
   timer interrupts can enter another active user task, preempt and resume user
   code across two user task records, and finish tasks that own separate stack
