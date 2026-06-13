@@ -15,6 +15,7 @@
 //! - [`initialize`] - Initialize the kernel filesystem namespace
 //! - [`open`] - Open a path and return a file descriptor
 //! - [`read`] - Read from an open file descriptor
+//! - [`read_at`] - Read from an open file descriptor without changing its offset
 //! - [`write`] - Write to an open file descriptor
 //! - [`close`] - Close an open file descriptor
 
@@ -120,6 +121,15 @@ pub fn close(descriptor: FileDescriptor) -> FileSystemResult<()> {
 /// Read bytes from an open file descriptor.
 pub fn read(descriptor: FileDescriptor, buffer: &mut [u8]) -> FileSystemResult<usize> {
     FILE_DESCRIPTORS.lock().read(descriptor, buffer)
+}
+
+/// Read bytes from an open file descriptor without changing its current offset.
+pub fn read_at(
+    descriptor: FileDescriptor,
+    offset: usize,
+    buffer: &mut [u8],
+) -> FileSystemResult<usize> {
+    FILE_DESCRIPTORS.lock().read_at(descriptor, offset, buffer)
 }
 
 /// Write bytes to an open file descriptor.

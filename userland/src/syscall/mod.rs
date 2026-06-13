@@ -16,8 +16,9 @@
 //! - [`fstat`] - Read metadata for an open file descriptor
 //! - [`lseek`] - Seek an open file descriptor
 //! - [`brk`] - Move or query the user heap break
-//! - [`mmap`] - Map anonymous user memory
-//! - [`munmap`] - Unmap anonymous user memory
+//! - [`mmap`] - Map private user memory
+//! - [`mmap_anonymous`] - Map anonymous private user memory
+//! - [`munmap`] - Unmap private user memory
 //! - [`exit`] - Terminate the current user task
 
 #[path = "../../../src/shared/syscall_contract.rs"]
@@ -25,7 +26,7 @@ mod contract;
 mod raw;
 
 pub use contract::{UserDirectoryEntry, UserFileStat as FileStat, DIRECTORY_ENTRY_NAME_BYTES};
-pub use raw::{syscall1, syscall2, syscall3, syscall4};
+pub use raw::{syscall1, syscall2, syscall3, syscall4, syscall5, syscall6};
 
 /// Linux-compatible read syscall number.
 pub const SYS_READ: usize = contract::SYS_READ as usize;
@@ -39,7 +40,7 @@ pub const SYS_CLOSE: usize = contract::SYS_CLOSE as usize;
 pub const SYS_FSTAT: usize = contract::SYS_FSTAT as usize;
 /// Linux-compatible seek syscall number.
 pub const SYS_LSEEK: usize = contract::SYS_LSEEK as usize;
-/// Linux-compatible anonymous memory-map syscall number.
+/// Linux-compatible memory-map syscall number.
 pub const SYS_MMAP: usize = contract::SYS_MMAP as usize;
 /// Linux-compatible memory-unmap syscall number.
 pub const SYS_MUNMAP: usize = contract::SYS_MUNMAP as usize;
@@ -92,6 +93,8 @@ pub const ERROR_BAD_FILE_DESCRIPTOR: isize = contract::ERROR_BAD_FILE_DESCRIPTOR
 pub const ERROR_BAD_ADDRESS: isize = contract::ERROR_BAD_ADDRESS;
 /// Linux-compatible file exists error as a signed syscall result.
 pub const ERROR_FILE_EXISTS: isize = contract::ERROR_FILE_EXISTS;
+/// Linux-compatible invalid argument error as a signed syscall result.
+pub const ERROR_INVALID_ARGUMENT: isize = contract::ERROR_INVALID_ARGUMENT;
 /// Linux-compatible not implemented error as a signed syscall result.
 pub const ERROR_NOT_IMPLEMENTED: isize = contract::ERROR_NOT_IMPLEMENTED;
 
@@ -176,16 +179,61 @@ pub fn brk(requested_break: usize) -> isize {
     syscall1(SYS_BRK, requested_break)
 }
 
-/// Map anonymous private memory in the current ManaOS task.
-///
-/// The current ManaOS subset uses four syscall arguments. File-backed mappings
-/// are not represented yet.
+/// Map private memory in the current ManaOS task.
 #[inline(always)]
-pub fn mmap(address: usize, length: usize, protection: usize, flags: usize) -> isize {
-    syscall4(SYS_MMAP, address, length, protection, flags)
+pub fn mmap(
+    address: usize,
+    length: usize,
+    protection: usize,
+    flags: usize,
+    file_descriptor: usize,
+    offset: usize,
+) -> isize {
+    syscall6(
+        SYS_MMAP,
+        address,
+        length,
+        protection,
+        flags,
+        file_descriptor,
+        offset,
+    )
 }
 
-/// Unmap an anonymous mapping previously returned by [`mmap`].
+/// Map anonymous private memory in the current ManaOS task.
+#[inline(always)]
+pub fn mmap_anonymous(address: usize, length: usize, protection: usize, flags: usize) -> isize {
+    mmap(
+        address,
+        length,
+        protection,
+        flags | MAP_ANONYMOUS,
+        usize::MAX,
+        0,
+    )
+}
+
+/// Map a private copy of file bytes in the current ManaOS task.
+#[inline(always)]
+pub fn mmap_file_private(
+    address: usize,
+    length: usize,
+    protection: usize,
+    flags: usize,
+    file_descriptor: usize,
+    offset: usize,
+) -> isize {
+    mmap(
+        address,
+        length,
+        protection,
+        flags & !MAP_ANONYMOUS,
+        file_descriptor,
+        offset,
+    )
+}
+
+/// Unmap a private mapping previously returned by [`mmap`].
 #[inline(always)]
 pub fn munmap(address: usize, length: usize) -> isize {
     syscall2(SYS_MUNMAP, address, length)

@@ -1,7 +1,7 @@
-//! Anonymous user mapping tracking and page mapping.
+//! User private mapping tracking and page mapping.
 
 use super::{
-    address::UserVirtualAddress,
+    address::{PhysicalFrameRange, UserVirtualAddress},
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     user_layout::{USER_MAPPING_BASE, USER_MAPPING_END},
@@ -12,7 +12,7 @@ const PAGE_SIZE: u64 = 4096;
 const PAGE_SIZE_USIZE: usize = 4096;
 const MAX_USER_MAPPINGS: usize = 32;
 
-/// Result of one anonymous user mapping allocation.
+/// Result of one private user mapping allocation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserMappingAllocation {
     start: UserVirtualAddress,
@@ -35,6 +35,7 @@ impl UserMappingAllocation {
 struct UserMapping {
     start: UserVirtualAddress,
     page_count: u64,
+    source: UserMappingSource,
 }
 
 impl UserMapping {
@@ -45,10 +46,75 @@ impl UserMapping {
     }
 }
 
-/// Placement policy for an anonymous user mapping request.
+/// Source used to initialize a private user mapping.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UserMappingSource {
+    /// Mapping pages start as zero-filled anonymous memory.
+    Anonymous,
+    /// Mapping pages start as a private copy of file bytes.
+    FilePrivate,
+}
+
+impl UserMappingSource {
+    /// Return a stable diagnostic label for this mapping source.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Anonymous => "anonymous",
+            Self::FilePrivate => "file_private",
+        }
+    }
+}
+
+/// Mapping parameters shared by anonymous and file-private mappings.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserMappingPlan {
+    placement: UserMappingPlacement,
+    length: u64,
+    writable: bool,
+    source: UserMappingSource,
+}
+
+impl UserMappingPlan {
+    /// Create mapping parameters for one private user mapping.
+    pub const fn new(
+        placement: UserMappingPlacement,
+        length: u64,
+        writable: bool,
+        source: UserMappingSource,
+    ) -> Self {
+        Self {
+            placement,
+            length,
+            writable,
+            source,
+        }
+    }
+
+    /// Return the placement policy for the mapping.
+    pub const fn placement(self) -> UserMappingPlacement {
+        self.placement
+    }
+
+    /// Return the requested mapping length in bytes.
+    pub const fn length(self) -> u64 {
+        self.length
+    }
+
+    /// Return whether user code may write the mapped pages.
+    pub const fn writable(self) -> bool {
+        self.writable
+    }
+
+    /// Return the data source used to initialize the mapping.
+    pub const fn source(self) -> UserMappingSource {
+        self.source
+    }
+}
+
+/// Placement policy for a private user mapping request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UserMappingPlacement {
-    /// Choose the next available address in the anonymous mapping region.
+    /// Choose the next available address in the user mapping region.
     Any,
     /// Use the requested address only when the range is currently unmapped.
     FixedNoReplace(UserVirtualAddress),
@@ -64,18 +130,20 @@ impl UserMappingPlacement {
     }
 }
 
-/// Reason an anonymous mapping request was rejected.
+/// Reason a private mapping request was rejected.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UserMappingError {
-    /// The request could not fit the anonymous user mapping region.
+    /// The request could not fit the user mapping region.
     InvalidRequest,
     /// The requested fixed range overlaps an active mapping.
     AddressInUse,
     /// The request ran out of physical frames or mapping records.
     OutOfMemory,
+    /// Page initialization failed after the virtual range was reserved.
+    InitializationFailed,
 }
 
-/// Anonymous user mappings owned by one user task.
+/// Private user mappings owned by one user task.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserMappings {
     next_start: u64,
@@ -83,7 +151,7 @@ pub struct UserMappings {
 }
 
 impl UserMappings {
-    /// Create an empty anonymous mapping table.
+    /// Create an empty private mapping table.
     pub const fn new() -> Self {
         Self {
             next_start: USER_MAPPING_BASE,
@@ -91,18 +159,19 @@ impl UserMappings {
         }
     }
 
-    /// Map one anonymous private user range.
+    /// Map one private user range.
     ///
-    /// Returns `None` when the request is outside the anonymous mapping region,
-    /// the fixed record table is full, or a backing frame cannot be allocated.
-    pub fn map_anonymous(
+    /// Returns an error when the request is outside the user mapping region,
+    /// the fixed record table is full, a backing frame cannot be allocated, or
+    /// the page initializer rejects a page.
+    pub fn map_private(
         &mut self,
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
-        placement: UserMappingPlacement,
-        length: u64,
-        writable: bool,
+        plan: UserMappingPlan,
+        mut initialize_page: impl FnMut(u64, &mut [u8]) -> Result<(), UserMappingError>,
     ) -> Result<UserMappingAllocation, UserMappingError> {
+        let length = plan.length();
         let page_count = page_count_for_length(length).ok_or(UserMappingError::InvalidRequest)?;
         let record_index = self
             .next_empty_record_index()
@@ -110,7 +179,7 @@ impl UserMappings {
         let byte_len = page_count
             .checked_mul(PAGE_SIZE)
             .ok_or(UserMappingError::InvalidRequest)?;
-        let start_address = self.start_address_for_placement(placement, byte_len)?;
+        let start_address = self.start_address_for_placement(plan.placement(), byte_len)?;
         let end_address = start_address
             .checked_add(byte_len)
             .ok_or(UserMappingError::InvalidRequest)?;
@@ -120,18 +189,28 @@ impl UserMappings {
 
         let start =
             UserVirtualAddress::new(start_address).ok_or(UserMappingError::InvalidRequest)?;
-        if !Self::map_pages(address_space, frame_allocator, start, page_count, writable) {
-            return Err(UserMappingError::OutOfMemory);
-        }
+        Self::map_pages(
+            address_space,
+            frame_allocator,
+            start,
+            length,
+            page_count,
+            plan.writable(),
+            &mut initialize_page,
+        )?;
 
-        self.records[record_index] = Some(UserMapping { start, page_count });
-        if matches!(placement, UserMappingPlacement::Any) {
+        self.records[record_index] = Some(UserMapping {
+            start,
+            page_count,
+            source: plan.source(),
+        });
+        if matches!(plan.placement(), UserMappingPlacement::Any) {
             self.next_start = end_address;
         }
         Ok(UserMappingAllocation { start, page_count })
     }
 
-    /// Unmap a page-aligned anonymous mapping range and return removed pages.
+    /// Unmap a page-aligned private mapping range and return removed pages.
     ///
     /// The range must be fully contained in one existing mapping record. When
     /// the removed range is in the middle of a record, the record is split so
@@ -163,6 +242,7 @@ impl UserMappings {
             None
         };
 
+        let source = record.source;
         Self::unmap_pages(address_space, frame_allocator, start, page_count);
         self.apply_record_unmap(
             record_index,
@@ -174,7 +254,8 @@ impl UserMappings {
         );
         crate::log_info!(
             "memory",
-            "User anonymous mapping unmapped: start={:#x} pages={} records={} active_pages={}",
+            "User {} mapping unmapped: start={:#x} pages={} records={} active_pages={}",
+            source.as_str(),
             start.as_u64(),
             page_count,
             self.active_records(),
@@ -183,7 +264,7 @@ impl UserMappings {
         Some(page_count)
     }
 
-    /// Return currently mapped anonymous user pages.
+    /// Return currently mapped private user pages.
     pub fn active_pages(&self) -> u64 {
         self.records
             .iter()
@@ -191,7 +272,7 @@ impl UserMappings {
             .fold(0_u64, u64::saturating_add)
     }
 
-    /// Return the number of active anonymous mapping records.
+    /// Return the number of active private mapping records.
     pub fn active_records(&self) -> u64 {
         self.records
             .iter()
@@ -201,7 +282,21 @@ impl UserMappings {
             .expect("active mapping record count must fit in u64")
     }
 
-    /// Return the next anonymous mapping search start.
+    /// Return the number of active file-private mapping records.
+    pub fn active_file_private_records(&self) -> u64 {
+        self.records
+            .iter()
+            .filter(|record| {
+                record
+                    .as_ref()
+                    .is_some_and(|mapping| mapping.source == UserMappingSource::FilePrivate)
+            })
+            .count()
+            .try_into()
+            .expect("active file mapping record count must fit in u64")
+    }
+
+    /// Return the next mapping search start.
     pub const fn next_start(&self) -> u64 {
         self.next_start
     }
@@ -210,33 +305,49 @@ impl UserMappings {
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
         start: UserVirtualAddress,
+        length: u64,
         page_count: u64,
         writable: bool,
-    ) -> bool {
+        initialize_page: &mut impl FnMut(u64, &mut [u8]) -> Result<(), UserMappingError>,
+    ) -> Result<(), UserMappingError> {
         let flags = user_page_flags(writable);
         let mut mapped_pages = 0_u64;
         while mapped_pages < page_count {
             let Some(page_start) = user_page_start(start, mapped_pages) else {
                 Self::unmap_prefix(address_space, frame_allocator, start, mapped_pages);
-                return false;
+                return Err(UserMappingError::InvalidRequest);
             };
             let Some(physical_address) =
                 frame_allocator.allocate_frame_for(FrameRangeOwner::UserMapping)
             else {
                 Self::unmap_prefix(address_space, frame_allocator, start, mapped_pages);
-                return false;
+                return Err(UserMappingError::OutOfMemory);
             };
 
             let page_pointer = physical_address.as_usize() as *mut u8;
             // SAFETY: `physical_address` is a freshly allocated identity-mapped
-            // anonymous user mapping frame.
+            // private user mapping frame.
             unsafe {
                 core::ptr::write_bytes(page_pointer, 0, PAGE_SIZE_USIZE);
+            }
+            let page_length = page_initialize_length(length, mapped_pages)
+                .ok_or(UserMappingError::InvalidRequest)?;
+            if page_length > 0 {
+                // SAFETY: `physical_address` is a freshly allocated
+                // identity-mapped frame, zeroed above, and not visible to user
+                // mode until after `initialize_page` returns.
+                let page_buffer =
+                    unsafe { core::slice::from_raw_parts_mut(page_pointer, PAGE_SIZE_USIZE) };
+                if let Err(error) = initialize_page(mapped_pages, &mut page_buffer[..page_length]) {
+                    Self::free_unmapped_page(frame_allocator, physical_address);
+                    Self::unmap_prefix(address_space, frame_allocator, start, mapped_pages);
+                    return Err(error);
+                }
             }
             address_space.map_user_page(frame_allocator, page_start, physical_address, flags);
             mapped_pages = mapped_pages.saturating_add(1);
         }
-        true
+        Ok(())
     }
 
     fn unmap_pages(
@@ -254,7 +365,7 @@ impl UserMappings {
                     page_start,
                     FrameRangeOwner::UserMapping,
                 ),
-                "tracked anonymous user mapping page must be mapped"
+                "tracked private user mapping page must be mapped"
             );
         }
     }
@@ -274,9 +385,21 @@ impl UserMappings {
                     page_start,
                     FrameRangeOwner::UserMapping,
                 ),
-                "mapped anonymous prefix page must be mapped"
+                "mapped private prefix page must be mapped"
             );
         }
+    }
+
+    fn free_unmapped_page(
+        frame_allocator: &mut PhysicalFrameAllocator,
+        physical_address: super::address::PhysicalFrameStart,
+    ) {
+        let physical_range = PhysicalFrameRange::new(physical_address, 1)
+            .expect("single user mapping frame range must be valid");
+        assert!(
+            frame_allocator.free_frames_for(physical_range, FrameRangeOwner::UserMapping),
+            "unmapped private user mapping page must be owned by user mappings"
+        );
     }
 
     fn next_empty_record_index(self) -> Option<usize> {
@@ -371,6 +494,7 @@ impl UserMappings {
                 self.records[record_index] = Some(UserMapping {
                     start: record.start,
                     page_count: left_pages,
+                    source: record.source,
                 });
             }
             (0, _) => {
@@ -379,6 +503,7 @@ impl UserMappings {
                 self.records[record_index] = Some(UserMapping {
                     start: right_start,
                     page_count: right_pages,
+                    source: record.source,
                 });
             }
             (_, _) => {
@@ -389,10 +514,12 @@ impl UserMappings {
                 self.records[record_index] = Some(UserMapping {
                     start: record.start,
                     page_count: left_pages,
+                    source: record.source,
                 });
                 self.records[split_record_index] = Some(UserMapping {
                     start: right_start,
                     page_count: right_pages,
+                    source: record.source,
                 });
             }
         }
@@ -414,6 +541,12 @@ fn page_count_for_length(length: u64) -> Option<u64> {
     }
     let rounded_length = length.checked_add(PAGE_SIZE - 1)? & !(PAGE_SIZE - 1);
     Some(rounded_length / PAGE_SIZE)
+}
+
+fn page_initialize_length(length: u64, page_index: u64) -> Option<usize> {
+    let page_start_offset = page_index.checked_mul(PAGE_SIZE)?;
+    let remaining = length.saturating_sub(page_start_offset);
+    usize::try_from(remaining.min(PAGE_SIZE)).ok()
 }
 
 fn align_up_to_page(address: u64) -> Option<u64> {

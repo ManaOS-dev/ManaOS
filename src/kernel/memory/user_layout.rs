@@ -8,9 +8,9 @@ const PAGE_SIZE: u64 = 4096;
 pub const USER_PROGRAM_BASE: u64 = 0x0000_4000_0000_0000;
 /// Exclusive upper bound for the first `brk`-managed user heap model.
 pub const USER_HEAP_END: u64 = 0x0000_6000_0000_0000;
-/// Inclusive start of the anonymous user mapping region.
+/// Inclusive start of the private user mapping region.
 pub const USER_MAPPING_BASE: u64 = USER_HEAP_END;
-/// Exclusive end of the anonymous user mapping region.
+/// Exclusive end of the private user mapping region.
 pub const USER_MAPPING_END: u64 = 0x0000_7000_0000_0000;
 /// Inclusive start of the fixed user stack slot region.
 pub const USER_STACK_REGION_BASE: u64 = 0x0000_7fff_f000_0000;

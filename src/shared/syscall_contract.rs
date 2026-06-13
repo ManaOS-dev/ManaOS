@@ -12,7 +12,7 @@ pub const SYS_CLOSE: u64 = 3;
 pub const SYS_FSTAT: u64 = 5;
 /// Linux-compatible seek syscall number.
 pub const SYS_LSEEK: u64 = 8;
-/// Linux-compatible anonymous memory-map syscall number.
+/// Linux-compatible memory-map syscall number.
 pub const SYS_MMAP: u64 = 9;
 /// Linux-compatible memory-unmap syscall number.
 pub const SYS_MUNMAP: u64 = 11;
@@ -70,6 +70,8 @@ pub const ERROR_BAD_FILE_DESCRIPTOR: isize = -9;
 pub const ERROR_BAD_ADDRESS: isize = -14;
 /// Linux-compatible file exists error as a signed syscall result.
 pub const ERROR_FILE_EXISTS: isize = -17;
+/// Linux-compatible invalid argument error as a signed syscall result.
+pub const ERROR_INVALID_ARGUMENT: isize = -22;
 /// Linux-compatible not implemented error as a signed syscall result.
 pub const ERROR_NOT_IMPLEMENTED: isize = -38;
 

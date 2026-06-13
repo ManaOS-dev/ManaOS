@@ -121,6 +121,7 @@ pub struct UserVirtualMemorySnapshot {
     mapping_next_start: u64,
     mapping_active_pages: u64,
     mapping_active_records: u64,
+    mapping_file_private_records: u64,
 }
 
 impl UserVirtualMemorySnapshot {
@@ -132,6 +133,7 @@ impl UserVirtualMemorySnapshot {
         mapping_next_start: u64,
         mapping_active_pages: u64,
         mapping_active_records: u64,
+        mapping_file_private_records: u64,
     ) -> Self {
         Self {
             heap_base,
@@ -140,6 +142,7 @@ impl UserVirtualMemorySnapshot {
             mapping_next_start,
             mapping_active_pages,
             mapping_active_records,
+            mapping_file_private_records,
         }
     }
 
@@ -158,19 +161,24 @@ impl UserVirtualMemorySnapshot {
         self.heap_mapped_pages
     }
 
-    /// Return the next anonymous mapping address candidate.
+    /// Return the next private mapping address candidate.
     pub const fn mapping_next_start(self) -> u64 {
         self.mapping_next_start
     }
 
-    /// Return the number of active anonymous mapping pages.
+    /// Return the number of active private mapping pages.
     pub const fn mapping_active_pages(self) -> u64 {
         self.mapping_active_pages
     }
 
-    /// Return the number of active anonymous mapping records.
+    /// Return the number of active private mapping records.
     pub const fn mapping_active_records(self) -> u64 {
         self.mapping_active_records
+    }
+
+    /// Return the number of active file-private mapping records.
+    pub const fn mapping_file_private_records(self) -> u64 {
+        self.mapping_file_private_records
     }
 }
 

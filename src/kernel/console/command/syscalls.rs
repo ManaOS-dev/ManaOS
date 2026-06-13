@@ -12,7 +12,7 @@ pub(super) fn run(
     }
 
     Ok(CommandEffect::Output(CommandOutput::single(
-        "syscalls: read write open close fstat lseek getdents64 exit exit_group openat getpid"
+        "syscalls: read write open close fstat lseek mmap munmap brk getdents64 exit exit_group openat getpid"
             .to_string(),
     )))
 }

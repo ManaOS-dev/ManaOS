@@ -87,14 +87,15 @@ pub(super) fn run(
         ));
         if let Some(user_virtual_memory) = snapshot.user_virtual_memory() {
             output.push(format!(
-                "task_vm: id={} heap_base={:#x} heap_break={:#x} heap_pages={} mmap_next={:#x} mmap_pages={} mmap_records={}",
+                "task_vm: id={} heap_base={:#x} heap_break={:#x} heap_pages={} mmap_next={:#x} mmap_pages={} mmap_records={} mmap_file_records={}",
                 snapshot.task_id(),
                 user_virtual_memory.heap_base(),
                 user_virtual_memory.heap_break(),
                 user_virtual_memory.heap_mapped_pages(),
                 user_virtual_memory.mapping_next_start(),
                 user_virtual_memory.mapping_active_pages(),
-                user_virtual_memory.mapping_active_records()
+                user_virtual_memory.mapping_active_records(),
+                user_virtual_memory.mapping_file_private_records()
             ));
         }
     }
