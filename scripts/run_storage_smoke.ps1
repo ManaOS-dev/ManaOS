@@ -75,6 +75,8 @@ $expectedPatterns = @(
     "User anonymous mapping unmapped: .*pages=1 records=0 active_pages=0",
     "munmap -> task=.* pages=1 unmapped=true active_pages=0 active_records=0",
     "mmap -> task=.* requested=0x600000008000 start=0x600000008000 length=4096 pages=1 .*flags=0x100022 placement=fixed_noreplace .*active_pages=1",
+    "User mapping fixed replacement prepared: start=0x600000008000 pages=1 records=0 active_pages=0",
+    "mmap -> task=.* requested=0x600000008000 start=0x600000008000 length=4096 pages=1 .*flags=0x32 placement=fixed_replace .*active_pages=1",
     "munmap -> task=.* start=0x600000008000 length=4096 pages=1 unmapped=true active_pages=0 active_records=0",
     "mmap -> task=.* length=4096 pages=1 protection=0x1 flags=0x2 placement=any source=file_private active_pages=1 file_private_records=1",
     "mmap file preload -> fd=.* offset=0 start=.* length=4096 bytes=.*",

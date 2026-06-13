@@ -477,8 +477,10 @@ fn sys_munmap(start_address: u64, length: u64) -> u64 {
 
 fn is_supported_mapping_request(length: u64, protection: u64, flags: u64) -> bool {
     let supported_protection = contract::PROT_READ | contract::PROT_WRITE | contract::PROT_EXEC;
-    let supported_flags =
-        contract::MAP_PRIVATE | contract::MAP_ANONYMOUS | contract::MAP_FIXED_NOREPLACE;
+    let supported_flags = contract::MAP_PRIVATE
+        | contract::MAP_FIXED
+        | contract::MAP_ANONYMOUS
+        | contract::MAP_FIXED_NOREPLACE;
     length != 0
         && (protection & !supported_protection) == 0
         && (protection & contract::PROT_EXEC) == 0
@@ -489,12 +491,19 @@ fn is_supported_mapping_request(length: u64, protection: u64, flags: u64) -> boo
 
 fn mapping_placement(requested_address: u64, flags: u64) -> Option<UserMappingPlacement> {
     let fixed_no_replace = flags & contract::MAP_FIXED_NOREPLACE != 0;
+    let fixed_replace = flags & contract::MAP_FIXED != 0;
     if fixed_no_replace {
         if requested_address == 0 || !requested_address.is_multiple_of(PAGE_SIZE) {
             return None;
         }
         let address = crate::kernel::memory::address::UserVirtualAddress::new(requested_address)?;
         Some(UserMappingPlacement::FixedNoReplace(address))
+    } else if fixed_replace {
+        if requested_address == 0 || !requested_address.is_multiple_of(PAGE_SIZE) {
+            return None;
+        }
+        let address = crate::kernel::memory::address::UserVirtualAddress::new(requested_address)?;
+        Some(UserMappingPlacement::FixedReplace(address))
     } else if requested_address == 0 {
         Some(UserMappingPlacement::Any)
     } else {

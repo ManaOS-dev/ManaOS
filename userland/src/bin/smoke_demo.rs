@@ -210,8 +210,29 @@ fn verify_user_anonymous_mapping() {
         syscall::exit(45);
     }
 
-    if syscall::munmap(fixed_address, MAPPING_PAGE_BYTES) != 0 {
+    let replacement_mapping = syscall::mmap_anonymous(
+        fixed_address,
+        MAPPING_PAGE_BYTES,
+        syscall::PROT_READ | syscall::PROT_WRITE,
+        syscall::MAP_PRIVATE | syscall::MAP_FIXED,
+    );
+    if replacement_mapping != fixed_address as isize {
         syscall::exit(46);
+    }
+    // SAFETY: `MAP_FIXED` replaced the previous page at `fixed_address` with a
+    // freshly zeroed anonymous page.
+    unsafe {
+        if fixed_byte.read() != 0 {
+            syscall::exit(53);
+        }
+        fixed_byte.write(0x52);
+        if fixed_byte.read() != 0x52 {
+            syscall::exit(54);
+        }
+    }
+
+    if syscall::munmap(fixed_address, MAPPING_PAGE_BYTES) != 0 {
+        syscall::exit(55);
     }
 
     let _ = syscall::write(STDOUT, MMAP_MESSAGE);
