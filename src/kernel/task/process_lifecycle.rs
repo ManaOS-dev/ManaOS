@@ -31,11 +31,21 @@ pub fn run_user_task_once(task_id: u64) -> Option<u64> {
         task_id,
         user_task.kernel_stack_top
     );
+    crate::log_info!(
+        "task",
+        "User trap frame entry prepared: task={} rip={:#x} rsp={:#x} rdi={} rsi={:#x} rdx={:#x}",
+        task_id,
+        user_task.trap_frame.instruction_pointer,
+        user_task.trap_frame.stack_pointer,
+        user_task.trap_frame.rdi,
+        user_task.trap_frame.rsi,
+        user_task.trap_frame.rdx
+    );
 
-    // SAFETY: The user task context was created from mapped user code and stack
-    // addresses, and this path returns only through SYS_EXIT.
+    // SAFETY: The trap frame was derived from mapped user code and stack
+    // addresses, and this restore path returns only through SYS_EXIT.
     unsafe {
-        architecture::enter_user_mode_once(user_task.entry_context.as_pointer());
+        architecture::enter_user_mode_once(user_task.trap_frame.as_pointer());
     }
 
     Some(LAST_USER_EXIT_CODE.load(Ordering::Acquire))

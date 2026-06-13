@@ -5,9 +5,9 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 /// Architecture function that switches between two saved kernel contexts.
 pub type ContextSwitchFunction = unsafe fn(*mut u64, *const u64);
 
-/// Architecture function that enters user mode from a prepared context.
+/// Architecture function that restores a user trap frame without returning.
 pub type UserModeEntryFunction = unsafe extern "C" fn(*const u64) -> !;
-/// Architecture function that enters user mode and returns after `SYS_EXIT`.
+/// Architecture function that restores a user trap frame and returns after `SYS_EXIT`.
 pub type ReturnableUserModeEntryFunction = unsafe fn(*const u64);
 /// Architecture function that installs the Ring 0 stack for user-mode traps.
 pub type KernelStackInstallFunction = fn(u64);
@@ -22,12 +22,12 @@ pub fn register_context_switch(function: ContextSwitchFunction) {
     CONTEXT_SWITCH_FUNCTION.store(function as usize, Ordering::Release);
 }
 
-/// Register the architecture user-mode entry point.
+/// Register the architecture non-returning user trap-frame entry point.
 pub fn register_user_mode_entry(function: UserModeEntryFunction) {
     USER_MODE_ENTRY_FUNCTION.store(function as usize, Ordering::Release);
 }
 
-/// Register the architecture returnable user-mode entry point.
+/// Register the architecture returnable user trap-frame entry point.
 pub fn register_returnable_user_mode_entry(function: ReturnableUserModeEntryFunction) {
     RETURNABLE_USER_MODE_ENTRY_FUNCTION.store(function as usize, Ordering::Release);
 }
@@ -64,11 +64,11 @@ pub unsafe fn switch_context(current_context: *mut u64, next_context: *const u64
     }
 }
 
-/// Enter user mode using a prepared user task context.
+/// Restore a user trap frame without returning to the caller.
 ///
 /// # Safety
 ///
-/// `context` must point to a valid user-mode transition frame whose code and
+/// `context` must point to a valid user trap frame whose code and
 /// stack addresses are mapped as user-accessible pages.
 ///
 /// # Panics
@@ -85,15 +85,15 @@ pub unsafe fn enter_user_mode(context: *const u64) -> ! {
     // SAFETY: The stored value came from register_user_mode_entry and zero was
     // handled above as the unregistered state.
     let function: UserModeEntryFunction = unsafe { core::mem::transmute(function) };
-    // SAFETY: The caller upholds the user context pointer validity contract.
+    // SAFETY: The caller upholds the user trap-frame pointer validity contract.
     unsafe { function(context) }
 }
 
-/// Enter user mode and return after the user task exits through `SYS_EXIT`.
+/// Restore a user trap frame and return after the task exits through `SYS_EXIT`.
 ///
 /// # Safety
 ///
-/// `context` must point to a valid user-mode transition frame whose code and
+/// `context` must point to a valid user trap frame whose code and
 /// stack addresses are mapped as user-accessible pages.
 ///
 /// # Panics
@@ -110,7 +110,7 @@ pub unsafe fn enter_user_mode_once(context: *const u64) {
     // SAFETY: The stored value came from register_returnable_user_mode_entry and
     // zero was handled above as the unregistered state.
     let function: ReturnableUserModeEntryFunction = unsafe { core::mem::transmute(function) };
-    // SAFETY: The caller upholds the user context pointer validity contract.
+    // SAFETY: The caller upholds the user trap-frame pointer validity contract.
     unsafe {
         function(context);
     }

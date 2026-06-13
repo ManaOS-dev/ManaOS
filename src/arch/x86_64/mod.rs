@@ -129,9 +129,9 @@ core::arch::global_asm!(include_str!("context_switch.s"));
 extern "C" {
     /// Switch from one saved task context to another.
     pub fn context_switch(current_context: *mut u64, next_context: *const u64);
-    /// Enter Ring 3 by building an `iretq` frame from a user task context.
+    /// Restore a user trap frame without returning to the caller.
     pub fn enter_user_mode(context: *const u64) -> !;
-    /// Enter Ring 3 and return when the user task exits through `SYS_EXIT`.
+    /// Restore a user trap frame and return when the user task exits through `SYS_EXIT`.
     pub fn enter_user_mode_returnable(context: *const u64);
 }
 
@@ -147,11 +147,11 @@ pub unsafe fn switch_context(current_context: *mut u64, next_context: *const u64
     context_switch(current_context, next_context);
 }
 
-/// Enter Ring 3 and return when the user task exits through `SYS_EXIT`.
+/// Restore a user trap frame and return when the user task exits through `SYS_EXIT`.
 ///
 /// # Safety
 ///
-/// `context` must point to a valid user-mode transition frame whose code and
+/// `context` must point to a valid user trap frame whose code and
 /// stack addresses are mapped as user-accessible pages.
 #[cfg(target_os = "uefi")]
 pub unsafe fn enter_user_mode_once(context: *const u64) {
@@ -166,7 +166,7 @@ pub unsafe fn enter_user_mode_once(context: *const u64) {
 #[cfg(not(target_os = "uefi"))]
 pub unsafe fn switch_context(_current_context: *mut u64, _next_context: *const u64) {}
 
-/// Enter Ring 3 and return when the user task exits through `SYS_EXIT`.
+/// Restore a user trap frame and return when the user task exits through `SYS_EXIT`.
 ///
 /// # Safety
 ///

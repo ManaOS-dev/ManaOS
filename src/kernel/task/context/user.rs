@@ -4,6 +4,8 @@ use core::mem;
 
 use crate::kernel::memory::address::UserVirtualAddress;
 
+use super::UserTrapFrame;
+
 const USER_CONTEXT_INSTRUCTION_POINTER_OFFSET: usize = 0;
 const USER_CONTEXT_CODE_SEGMENT_OFFSET: usize = 8;
 const USER_CONTEXT_CPU_FLAGS_OFFSET: usize = 16;
@@ -52,18 +54,12 @@ impl UserEntryArguments {
     }
 }
 
-/// User-mode transition frame and first-entry argument registers.
+/// User-mode first-entry state and argument registers.
 ///
-/// The field order is part of the `enter_user_mode*` assembly contract in
-/// `arch/x86_64/context_switch.s`:
-/// - offset 0: instruction pointer pushed into the `iretq` frame
-/// - offset 8: code segment pushed into the `iretq` frame
-/// - offset 16: CPU flags pushed into the `iretq` frame
-/// - offset 24: stack pointer pushed into the `iretq` frame
-/// - offset 32: stack segment pushed into the `iretq` frame
-/// - offset 40: `argc` loaded into `rdi`
-/// - offset 48: `argv` loaded into `rsi`
-/// - offset 56: `envp` loaded into `rdx`
+/// The field order remains compile-time checked because older entry code and
+/// diagnostics may still inspect this initial context. Runtime user entry now
+/// converts this value into [`UserTrapFrame`] before crossing the architecture
+/// boundary.
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct UserTaskContext {
@@ -108,9 +104,30 @@ impl UserTaskContext {
         }
     }
 
-    /// Return an immutable pointer suitable for the `enter_user_mode` stub.
-    pub fn as_pointer(&self) -> *const u64 {
-        core::ptr::addr_of!(self.instruction_pointer)
+    /// Build the full user trap frame used by resume-capable entry paths.
+    pub const fn to_trap_frame(self) -> UserTrapFrame {
+        UserTrapFrame {
+            instruction_pointer: self.instruction_pointer,
+            code_segment: self.code_segment,
+            cpu_flags: self.cpu_flags,
+            stack_pointer: self.stack_pointer,
+            stack_segment: self.stack_segment,
+            rax: 0,
+            rbx: 0,
+            rcx: 0,
+            rdx: self.environment_values_pointer,
+            rsi: self.argument_values_pointer,
+            rdi: self.argument_count,
+            rbp: 0,
+            r8: 0,
+            r9: 0,
+            r10: 0,
+            r11: 0,
+            r12: 0,
+            r13: 0,
+            r14: 0,
+            r15: 0,
+        }
     }
 }
 

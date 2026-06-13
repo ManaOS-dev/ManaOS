@@ -13,8 +13,8 @@
 //! - [`TaskContext`] - Saved kernel task context
 //! - [`TaskEntry`] - Kernel task entry point type
 //! - [`UserEntryArguments`] - User first-entry argument registers
-//! - [`UserTaskContext`] - User first-entry transition frame
-//! - [`UserTrapFrame`] - Future full user resume frame
+//! - [`UserTaskContext`] - User first-entry state
+//! - [`UserTrapFrame`] - Full user resume frame
 
 mod kernel;
 mod trap_frame;

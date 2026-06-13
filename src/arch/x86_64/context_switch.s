@@ -42,29 +42,54 @@ context_switch:
 .endef
 .globl enter_user_mode
 
-# UserTaskContext layout, kept in sync with kernel::task::context:
-#   +0  user rip
-#   +8  user cs
-#   +16 user rflags
-#   +24 user rsp
-#   +32 user ss
-#   +40 argc -> rdi
-#   +48 argv -> rsi
-#   +56 envp -> rdx
+# UserTrapFrame layout, kept in sync with kernel::task::context:
+#   +0   user rip
+#   +8   user cs
+#   +16  user rflags
+#   +24  user rsp
+#   +32  user ss
+#   +40  rax
+#   +48  rbx
+#   +56  rcx
+#   +64  rdx
+#   +72  rsi
+#   +80  rdi
+#   +88  rbp
+#   +96  r8
+#   +104 r9
+#   +112 r10
+#   +120 r11
+#   +128 r12
+#   +136 r13
+#   +144 r14
+#   +152 r15
 enter_user_mode:
-    mov rax, qword ptr [rcx + 32]
+    mov rbx, rcx
+    mov rax, qword ptr [rbx + 32]
     push rax
-    mov rax, qword ptr [rcx + 24]
+    mov rax, qword ptr [rbx + 24]
     push rax
-    mov rax, qword ptr [rcx + 16]
+    mov rax, qword ptr [rbx + 16]
     push rax
-    mov rax, qword ptr [rcx + 8]
+    mov rax, qword ptr [rbx + 8]
     push rax
-    mov rax, qword ptr [rcx + 0]
+    mov rax, qword ptr [rbx + 0]
     push rax
-    mov rdi, qword ptr [rcx + 40]
-    mov rsi, qword ptr [rcx + 48]
-    mov rdx, qword ptr [rcx + 56]
+    mov rax, qword ptr [rbx + 40]
+    mov rcx, qword ptr [rbx + 56]
+    mov rdx, qword ptr [rbx + 64]
+    mov rsi, qword ptr [rbx + 72]
+    mov rdi, qword ptr [rbx + 80]
+    mov rbp, qword ptr [rbx + 88]
+    mov r8, qword ptr [rbx + 96]
+    mov r9, qword ptr [rbx + 104]
+    mov r10, qword ptr [rbx + 112]
+    mov r11, qword ptr [rbx + 120]
+    mov r12, qword ptr [rbx + 128]
+    mov r13, qword ptr [rbx + 136]
+    mov r14, qword ptr [rbx + 144]
+    mov r15, qword ptr [rbx + 152]
+    mov rbx, qword ptr [rbx + 48]
     iretq
 
 .def enter_user_mode_returnable
@@ -73,7 +98,27 @@ enter_user_mode:
 .endef
 .globl enter_user_mode_returnable
 
-# Returnable entry consumes the same UserTaskContext layout as enter_user_mode.
+# UserTrapFrame layout, kept in sync with kernel::task::context:
+#   +0   user rip
+#   +8   user cs
+#   +16  user rflags
+#   +24  user rsp
+#   +32  user ss
+#   +40  rax
+#   +48  rbx
+#   +56  rcx
+#   +64  rdx
+#   +72  rsi
+#   +80  rdi
+#   +88  rbp
+#   +96  r8
+#   +104 r9
+#   +112 r10
+#   +120 r11
+#   +128 r12
+#   +136 r13
+#   +144 r14
+#   +152 r15
 enter_user_mode_returnable:
     push r15
     push r14
@@ -90,21 +135,32 @@ enter_user_mode_returnable:
     sub rsp, 32
     call set_user_exit_return_stack
     add rsp, 32
-    mov rcx, rbx
 
-    mov rax, qword ptr [rcx + 32]
+    mov rax, qword ptr [rbx + 32]
     push rax
-    mov rax, qword ptr [rcx + 24]
+    mov rax, qword ptr [rbx + 24]
     push rax
-    mov rax, qword ptr [rcx + 16]
+    mov rax, qword ptr [rbx + 16]
     push rax
-    mov rax, qword ptr [rcx + 8]
+    mov rax, qword ptr [rbx + 8]
     push rax
-    mov rax, qword ptr [rcx + 0]
+    mov rax, qword ptr [rbx + 0]
     push rax
-    mov rdi, qword ptr [rcx + 40]
-    mov rsi, qword ptr [rcx + 48]
-    mov rdx, qword ptr [rcx + 56]
+    mov rax, qword ptr [rbx + 40]
+    mov rcx, qword ptr [rbx + 56]
+    mov rdx, qword ptr [rbx + 64]
+    mov rsi, qword ptr [rbx + 72]
+    mov rdi, qword ptr [rbx + 80]
+    mov rbp, qword ptr [rbx + 88]
+    mov r8, qword ptr [rbx + 96]
+    mov r9, qword ptr [rbx + 104]
+    mov r10, qword ptr [rbx + 112]
+    mov r11, qword ptr [rbx + 120]
+    mov r12, qword ptr [rbx + 128]
+    mov r13, qword ptr [rbx + 136]
+    mov r14, qword ptr [rbx + 144]
+    mov r15, qword ptr [rbx + 152]
+    mov rbx, qword ptr [rbx + 48]
     iretq
 
 enter_user_mode_returnable_exit:

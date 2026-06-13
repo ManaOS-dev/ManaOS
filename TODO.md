@@ -135,7 +135,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Replace legacy PIC routing after IOAPIC is stable.
 - [ ] Calibrate and use the Local APIC timer.
 - [ ] Replace PIT scheduling ticks after Local APIC timer validation.
-- [ ] Save and restore a full user trap frame on interrupt and syscall paths.
+- [ ] Save and restore a full user trap frame on interrupt and syscall paths; one-shot user entry now restores an initial full trap frame, runtime capture remains.
 - [x] Design the full user trap frame register layout.
 - [x] Document the interrupt and syscall register sets that must be saved.
 - [ ] Make preemptive scheduling safe for user tasks.
@@ -148,7 +148,7 @@ items have been removed so the file stays useful for deciding the next task.
 
 - [x] Separate kernel task context and user task context responsibilities.
 - [x] Document the context switch ABI.
-- [x] Verify the `UserTaskContext` register layout against `context_switch.s` offsets.
+- [x] Verify the `UserTrapFrame` register layout against `context_switch.s` offsets.
 - [x] Move user task exit and run-once lifecycle handling into a process lifecycle module.
 - [x] Normalize user task scheduler state transitions.
 - [x] Define the task metadata model needed before process identifiers and parent-child relationships.
