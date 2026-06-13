@@ -14,6 +14,7 @@
 //! - [`spawn`] - Add a runnable kernel task
 //! - [`spawn_user_task`] - Add a runnable user task
 //! - [`run_user_task_once`] - Run one user task until `SYS_EXIT`
+//! - [`UserTaskExit`] - User task exit result
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
 //! - [`record_current_user_trap_frame`] - Save a captured user trap frame
@@ -41,6 +42,7 @@ pub use context::UserEntryArguments;
 use context::{TaskContext, TaskEntry, UserTaskContext, UserTrapFrame};
 use core::sync::atomic::{AtomicBool, Ordering};
 pub use metadata::{TaskIdentifier, TaskMetadata};
+pub use process_lifecycle::UserTaskExit;
 use spin::Mutex;
 use stack::KernelStack;
 pub use stack::{KernelStackFaultOwner, KernelStackGuardFault};
@@ -262,6 +264,7 @@ struct Scheduler {
     current_index: usize,
     next_task_identifier: TaskIdentifier,
     kernel_stack_range_allocator: KernelVirtualRangeAllocator,
+    active_user_task_identifier: Option<u64>,
     preemption_switch_logged: bool,
     user_resume_logged: bool,
 }
@@ -273,6 +276,7 @@ impl Scheduler {
             current_index: 0,
             next_task_identifier: TaskIdentifier::first_dynamic(),
             kernel_stack_range_allocator: new_dynamic_mapping_allocator(),
+            active_user_task_identifier: None,
             preemption_switch_logged: false,
             user_resume_logged: false,
         }
@@ -429,6 +433,7 @@ impl Scheduler {
             return None;
         }
         self.current_index = task_index;
+        self.active_user_task_identifier = Some(task_id);
         Some(OneShotUserTask {
             trap_frame,
             kernel_stack_top,
@@ -447,6 +452,7 @@ impl Scheduler {
             }
             self.current_index = 0;
         }
+        self.active_user_task_identifier = None;
 
         Some(task_id)
     }
@@ -505,10 +511,12 @@ impl Scheduler {
         }
     }
 
-    fn can_switch_current_task_away(&self) -> bool {
+    fn can_switch_current_task_away(&self, interrupted_user_mode: bool) -> bool {
         match &self.tasks[self.current_index].kind {
             TaskKind::Kernel => true,
-            TaskKind::User(user_runtime) => user_runtime.interrupt_frame_recorded,
+            TaskKind::User(user_runtime) => {
+                interrupted_user_mode && user_runtime.interrupt_frame_recorded
+            }
         }
     }
 
@@ -519,7 +527,10 @@ impl Scheduler {
 
         match &self.tasks[index].kind {
             TaskKind::Kernel => !self.tasks[index].context.is_empty(),
-            TaskKind::User(_) => USER_TASK_PREEMPTION_ENABLED,
+            TaskKind::User(_) => {
+                USER_TASK_PREEMPTION_ENABLED
+                    && self.active_user_task_identifier == Some(self.tasks[index].get_id())
+            }
         }
     }
 
@@ -534,8 +545,8 @@ impl Scheduler {
         }
     }
 
-    fn prepare_next_switch(&mut self) -> Option<SwitchAction> {
-        if !self.can_switch_current_task_away() {
+    fn prepare_next_switch(&mut self, interrupted_user_mode: bool) -> Option<SwitchAction> {
+        if !self.can_switch_current_task_away(interrupted_user_mode) {
             return None;
         }
 
@@ -674,7 +685,7 @@ pub fn spawn_user_task(
 /// # Panics
 ///
 /// Panics if the scheduler has not been initialized.
-pub fn run_user_task_once(task_id: u64) -> Option<u64> {
+pub fn run_user_task_once(task_id: u64) -> Option<UserTaskExit> {
     process_lifecycle::run_user_task_once(task_id)
 }
 
@@ -716,7 +727,7 @@ pub fn set_preemption_enabled(enabled: bool) {
 }
 
 /// Process one timer tick and switch to the next runnable task when possible.
-pub fn process_timer_tick() {
+pub fn process_timer_tick(interrupted_user_mode: bool) {
     if !PREEMPTION_ENABLED.load(Ordering::Acquire) {
         return;
     }
@@ -730,7 +741,7 @@ pub fn process_timer_tick() {
             return;
         };
 
-        scheduler.prepare_next_switch()
+        scheduler.prepare_next_switch(interrupted_user_mode)
     };
 
     let Some(switch_action) = switch_action else {

@@ -11,6 +11,7 @@ const ENTRY_ARGUMENT_MESSAGE: &[u8] = b"user entry arguments ok\n";
 const BSS_MESSAGE: &[u8] = b"user bss ok\n";
 const SHELL_MESSAGE: &[u8] = b"user shell ok\n";
 const PASS_MESSAGE: &[u8] = b"user smoke ok\n";
+const BSS_SMOKE_MARKER: u64 = 0x4d414e414f535f36;
 static BSS_SMOKE_VALUE: AtomicU64 = AtomicU64::new(0);
 
 #[no_mangle]
@@ -61,11 +62,13 @@ fn verify_entry_arguments(
 }
 
 fn verify_bss_zero_initialization() {
-    if BSS_SMOKE_VALUE.load(Ordering::Relaxed) != 0 {
-        syscall::exit(19);
+    match BSS_SMOKE_VALUE.compare_exchange(0, BSS_SMOKE_MARKER, Ordering::AcqRel, Ordering::Acquire)
+    {
+        Ok(_) => {}
+        Err(value) if value == BSS_SMOKE_MARKER => {}
+        Err(_) => syscall::exit(19),
     }
-    BSS_SMOKE_VALUE.store(0x4d414e414f535f36, Ordering::Relaxed);
-    if BSS_SMOKE_VALUE.load(Ordering::Relaxed) != 0x4d414e414f535f36 {
+    if BSS_SMOKE_VALUE.load(Ordering::Acquire) != BSS_SMOKE_MARKER {
         syscall::exit(20);
     }
     let _ = syscall::write(STDOUT, BSS_MESSAGE);

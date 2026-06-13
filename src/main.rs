@@ -436,33 +436,28 @@ fn read_kernel_file(path: &str) -> Option<Vec<u8>> {
     Some(contents)
 }
 
-fn run_user_smoke_demo(frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator) {
-    let user_stack_pages = 4;
-    let user_stack_top =
+fn spawn_user_smoke_task(
+    frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator,
+    user_elf_path: &str,
+    user_entry_point: kernel::memory::address::UserVirtualAddress,
+    user_stack_pages: u64,
+) -> u64 {
+    let user_stack =
         kernel::memory::user_stack::allocate_user_stack(frame_allocator, user_stack_pages);
     assert!(
-        kernel::memory::user_stack::verify_user_stack_mapping(user_stack_pages),
+        kernel::memory::user_stack::verify_user_stack_mapping(user_stack),
         "user stack mapping and guard page smoke must pass"
     );
     crate::log_info!(
         "memory",
-        "User stack mapping verified: pages={} guard_unmapped=true",
-        user_stack_pages
+        "User stack mapping verified: pages={} base={:#x} top={:#x} guard_unmapped=true",
+        user_stack.page_count(),
+        user_stack.base().as_u64(),
+        user_stack.top().as_u64()
     );
 
-    let user_elf_path = "/disk/bin/smoke_demo";
-    let user_elf_bytes =
-        read_kernel_file(user_elf_path).expect("user smoke ELF must be readable from /disk/bin");
-    crate::log_info!(
-        "elf",
-        "Loading user ELF from filesystem: path={} bytes={}",
-        user_elf_path,
-        user_elf_bytes.len()
-    );
-    let user_elf: kernel::elf::LoadedElf =
-        kernel::elf::load_user_program(frame_allocator, &user_elf_bytes, user_elf_path);
-    let user_entry_point = user_elf.entry_point();
-    let user_stack_probe = user_stack_top
+    let user_stack_probe = user_stack
+        .top()
         .checked_sub(1)
         .expect("user stack top must be above the mapped stack");
     assert!(
@@ -488,7 +483,7 @@ fn run_user_smoke_demo(frame_allocator: &mut kernel::memory::frame_allocator::Bu
     let user_entry_arguments = [user_elf_path, "--storage-smoke"];
     let user_entry_environment = ["MANAOS_BOOT=storage-smoke"];
     let prepared_user_stack = kernel::memory::user_stack::prepare_initial_stack(
-        user_stack_top,
+        user_stack,
         &user_entry_arguments,
         &user_entry_environment,
     );
@@ -511,10 +506,84 @@ fn run_user_smoke_demo(frame_allocator: &mut kernel::memory::frame_allocator::Bu
         ),
     );
     crate::log_info!("task", "User task spawned. task_id={}", user_task_id);
-    crate::log_info!("task", "User demo started.");
-    if let Some(exit_code) = kernel::task::run_user_task_once(user_task_id) {
-        crate::log_info!("task", "UI resumed after user exit: code={}", exit_code);
+    user_task_id
+}
+
+fn run_user_smoke_demo(frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator) {
+    kernel::task::set_preemption_enabled(false);
+
+    let user_stack_pages = 4;
+    let user_elf_path = "/disk/bin/smoke_demo";
+    let user_elf_bytes =
+        read_kernel_file(user_elf_path).expect("user smoke ELF must be readable from /disk/bin");
+    crate::log_info!(
+        "elf",
+        "Loading user ELF from filesystem: path={} bytes={}",
+        user_elf_path,
+        user_elf_bytes.len()
+    );
+    let user_elf: kernel::elf::LoadedElf =
+        kernel::elf::load_user_program(frame_allocator, &user_elf_bytes, user_elf_path);
+    let user_entry_point = user_elf.entry_point();
+
+    let user_task_ids = [
+        spawn_user_smoke_task(
+            frame_allocator,
+            user_elf_path,
+            user_entry_point,
+            user_stack_pages,
+        ),
+        spawn_user_smoke_task(
+            frame_allocator,
+            user_elf_path,
+            user_entry_point,
+            user_stack_pages,
+        ),
+    ];
+    crate::log_info!(
+        "task",
+        "Multi-user smoke tasks spawned: first={} second={}",
+        user_task_ids[0],
+        user_task_ids[1]
+    );
+
+    let mut finished = [false; 2];
+    for _ in 0..user_task_ids.len() {
+        let next_task_id = user_task_ids
+            .iter()
+            .zip(finished.iter())
+            .find_map(|(task_id, is_finished)| (!*is_finished).then_some(*task_id))
+            .expect("at least one user smoke task must still be unfinished");
+        crate::log_info!("task", "User demo started: task_id={}", next_task_id);
+        let exit = kernel::task::run_user_task_once(next_task_id)
+            .expect("user smoke task must exit through SYS_EXIT");
+        crate::log_info!(
+            "task",
+            "UI resumed after user exit: task={} code={}",
+            exit.task_id(),
+            exit.exit_code()
+        );
+        let finished_index = user_task_ids
+            .iter()
+            .position(|task_id| *task_id == exit.task_id())
+            .expect("exited task must belong to the multi-user smoke set");
+        assert!(
+            !finished[finished_index],
+            "user smoke task must not exit twice"
+        );
+        finished[finished_index] = true;
     }
+
+    assert!(
+        finished.iter().all(|is_finished| *is_finished),
+        "all user smoke tasks must exit"
+    );
+    crate::log_info!(
+        "task",
+        "Multi-user preemption smoke passed: tasks={}",
+        user_task_ids.len()
+    );
+    kernel::task::set_preemption_enabled(true);
 }
 
 #[entry]

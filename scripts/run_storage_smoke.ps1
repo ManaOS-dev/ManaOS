@@ -46,8 +46,9 @@ $expectedPatterns = @(
     "ELF segment mapped: .*perms=R-X",
     "ELF segment mapped: .*perms=R--",
     "ELF segment mapped: .*perms=RW-",
-    "User stack mapping verified: pages=4 guard_unmapped=true",
+    "User stack mapping verified: pages=4 .*guard_unmapped=true",
     "User entry arguments prepared: argc=2",
+    "Multi-user smoke tasks spawned",
     "User timer trap frame saved",
     "User task preempted by timer",
     "User task resumed from timer context",
@@ -57,7 +58,8 @@ $expectedPatterns = @(
     "user shell ok",
     "user bss ok",
     "user smoke ok",
-    "User task exited: code=0"
+    "User task exited: code=0",
+    "Multi-user preemption smoke passed: tasks=2"
 )
 
 try {
