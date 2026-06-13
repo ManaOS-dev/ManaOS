@@ -709,14 +709,38 @@ fn verify_scheduler_reclaim_diagnostics(
     diagnostics: kernel::task::SchedulerDiagnostics,
     expected_user_tasks: u64,
 ) {
+    // The current smoke ELF reclaims five ELF pages, four user stack pages,
+    // and the final two-page heap. Private mmap pages are unmapped earlier.
+    const SMOKE_RECLAIMED_USER_PAGES_PER_TASK: u64 = 11;
+    // The current smoke process touches the program, heap/mmap, and stack
+    // windows, leaving ten page-table frames to reclaim with the PML4.
+    const SMOKE_RECLAIMED_PAGE_TABLE_PAGES_PER_TASK: u64 = 10;
     // User smoke tasks use the current default guarded kernel stack: four
     // writable pages plus one reserved guard page.
     let expected_reclaimed_user_kernel_stack_writable_pages = expected_user_tasks * 4;
     let expected_reclaimed_user_kernel_stack_virtual_pages = expected_user_tasks * 5;
+    let expected_reclaimed_user_pages = expected_user_tasks * SMOKE_RECLAIMED_USER_PAGES_PER_TASK;
+    let expected_reclaimed_user_page_table_pages =
+        expected_user_tasks * SMOKE_RECLAIMED_PAGE_TABLE_PAGES_PER_TASK;
     assert_eq!(
         diagnostics.reclaimed_user_resource_records(),
         expected_user_tasks,
         "finished user tasks must emit one aggregate resource reclaim record"
+    );
+    assert_eq!(
+        diagnostics.reclaimed_user_address_spaces(),
+        expected_user_tasks,
+        "finished user tasks must reclaim their address spaces"
+    );
+    assert_eq!(
+        diagnostics.reclaimed_user_pages(),
+        expected_reclaimed_user_pages,
+        "finished user tasks must return user-owned mapped pages"
+    );
+    assert_eq!(
+        diagnostics.reclaimed_user_page_table_pages(),
+        expected_reclaimed_user_page_table_pages,
+        "finished user tasks must return user page-table pages"
     );
     assert_eq!(
         diagnostics.reclaimed_user_kernel_stacks(),
@@ -743,6 +767,21 @@ fn verify_scheduler_user_return_diagnostics(
     assert!(
         diagnostics.timer_preemptions() > 0,
         "user smoke must record timer preemption accounting"
+    );
+    assert!(
+        diagnostics.one_shot_user_entries() >= expected_user_tasks,
+        "user smoke must enter user tasks through the lifecycle path"
+    );
+    assert!(
+        diagnostics.timer_user_entries() > 0,
+        "user smoke must enter at least one user task from timer scheduling"
+    );
+    assert_eq!(
+        diagnostics.user_entries(),
+        diagnostics
+            .one_shot_user_entries()
+            .saturating_add(diagnostics.timer_user_entries()),
+        "aggregate user entries must match lifecycle and timer entry counts"
     );
     assert!(
         diagnostics.user_resumes() > 0,
@@ -795,7 +834,7 @@ fn log_scheduler_task_diagnostics(
 ) {
     crate::log_info!(
         "task",
-        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_tasks={} active_user_address_spaces={} pending_user_exits={} preemption_state={} preemption_enabled={} user_sleep_blocks={} user_sleep_wakes={} user_return_preemption_window_closes={} user_return_stack_sets={} user_return_stack_takes={} reclaimed_user_resource_records={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
+        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_tasks={} active_user_address_spaces={} pending_user_exits={} preemption_state={} preemption_enabled={} user_sleep_blocks={} user_sleep_wakes={} user_return_preemption_window_closes={} user_return_stack_sets={} user_return_stack_takes={} reclaimed_user_resource_records={} reclaimed_user_address_spaces={} reclaimed_user_pages={} reclaimed_user_page_table_pages={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} one_shot_user_entries={} timer_user_entries={} user_resumes={} finished_tasks={}",
         diagnostics.total_tasks(),
         diagnostics.kernel_tasks(),
         diagnostics.user_tasks(),
@@ -814,12 +853,17 @@ fn log_scheduler_task_diagnostics(
         diagnostics.user_return_stack_sets(),
         diagnostics.user_return_stack_takes(),
         diagnostics.reclaimed_user_resource_records(),
+        diagnostics.reclaimed_user_address_spaces(),
+        diagnostics.reclaimed_user_pages(),
+        diagnostics.reclaimed_user_page_table_pages(),
         diagnostics.reclaimed_user_kernel_stacks(),
         diagnostics.reclaimed_user_kernel_stack_writable_pages(),
         diagnostics.reclaimed_user_kernel_stack_virtual_pages(),
         diagnostics.context_switches(),
         diagnostics.timer_preemptions(),
         diagnostics.user_entries(),
+        diagnostics.one_shot_user_entries(),
+        diagnostics.timer_user_entries(),
         diagnostics.user_resumes(),
         diagnostics.finished_tasks()
     );
@@ -993,7 +1037,14 @@ fn record_memory_diagnostics_snapshot(
 fn verify_scheduler_console_command() {
     match kernel::console::verify_command_smoke_contains(
         "tasks",
-        &["user_vm_layout:", "task_vm:", "task_mmap_lifecycle:"],
+        &[
+            "reclaimed_user_address_spaces=",
+            "one_shot_user_entries=",
+            "timer_user_entries=",
+            "user_vm_layout:",
+            "task_vm:",
+            "task_mmap_lifecycle:",
+        ],
     ) {
         Some(output_lines) if output_lines >= 14 => crate::log_info!(
             "console",

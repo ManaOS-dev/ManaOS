@@ -38,12 +38,14 @@ pub(super) fn run(
         states.finished()
     ));
     output.push(format!(
-        "preemption: state={} enabled={} switches={} timer_user_preemptions={} user_entries={} user_resumes={} user_sleep_blocks={} user_sleep_wakes={} finished={} pending_user_exits={} return_window_closes={}",
+        "preemption: state={} enabled={} switches={} timer_user_preemptions={} user_entries={} one_shot_user_entries={} timer_user_entries={} user_resumes={} user_sleep_blocks={} user_sleep_wakes={} finished={} pending_user_exits={} return_window_closes={}",
         diagnostics.preemption_state().as_str(),
         diagnostics.preemption_enabled(),
         diagnostics.context_switches(),
         diagnostics.timer_preemptions(),
         diagnostics.user_entries(),
+        diagnostics.one_shot_user_entries(),
+        diagnostics.timer_user_entries(),
         diagnostics.user_resumes(),
         diagnostics.user_sleep_blocks(),
         diagnostics.user_sleep_wakes(),
@@ -52,8 +54,11 @@ pub(super) fn run(
         diagnostics.user_return_preemption_window_closes()
     ));
     output.push(format!(
-        "resources: reclaimed_user_resource_records={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={}",
+        "resources: reclaimed_user_resource_records={} reclaimed_user_address_spaces={} reclaimed_user_pages={} reclaimed_user_page_table_pages={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={}",
         diagnostics.reclaimed_user_resource_records(),
+        diagnostics.reclaimed_user_address_spaces(),
+        diagnostics.reclaimed_user_pages(),
+        diagnostics.reclaimed_user_page_table_pages(),
         diagnostics.reclaimed_user_kernel_stacks(),
         diagnostics.reclaimed_user_kernel_stack_writable_pages(),
         diagnostics.reclaimed_user_kernel_stack_virtual_pages()

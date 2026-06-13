@@ -378,6 +378,8 @@ pub struct SchedulerDiagnostics {
     pub(super) context_switches: u64,
     pub(super) timer_preemptions: u64,
     pub(super) user_entries: u64,
+    pub(super) one_shot_user_entries: u64,
+    pub(super) timer_user_entries: u64,
     pub(super) user_resumes: u64,
     pub(super) user_sleep_blocks: u64,
     pub(super) user_sleep_wakes: u64,
@@ -388,6 +390,9 @@ pub struct SchedulerDiagnostics {
     pub(super) user_return_stack_sets: u64,
     pub(super) user_return_stack_takes: u64,
     pub(super) reclaimed_user_resource_records: u64,
+    pub(super) reclaimed_user_address_spaces: u64,
+    pub(super) reclaimed_user_pages: u64,
+    pub(super) reclaimed_user_page_table_pages: u64,
     pub(super) reclaimed_user_kernel_stacks: u64,
     pub(super) reclaimed_user_kernel_stack_writable_pages: u64,
     pub(super) reclaimed_user_kernel_stack_virtual_pages: u64,
@@ -437,6 +442,16 @@ impl SchedulerDiagnostics {
     /// Return the number of entries into a user task.
     pub const fn user_entries(self) -> u64 {
         self.user_entries
+    }
+
+    /// Return the number of returnable lifecycle entries into a user task.
+    pub const fn one_shot_user_entries(self) -> u64 {
+        self.one_shot_user_entries
+    }
+
+    /// Return the number of first user entries started by timer scheduling.
+    pub const fn timer_user_entries(self) -> u64 {
+        self.timer_user_entries
     }
 
     /// Return the number of resumes into an already-started user task.
@@ -492,6 +507,21 @@ impl SchedulerDiagnostics {
     /// Return the number of finished user task resource reclaim records.
     pub const fn reclaimed_user_resource_records(self) -> u64 {
         self.reclaimed_user_resource_records
+    }
+
+    /// Return the number of finished user address spaces reclaimed.
+    pub const fn reclaimed_user_address_spaces(self) -> u64 {
+        self.reclaimed_user_address_spaces
+    }
+
+    /// Return the number of user data pages reclaimed from finished address spaces.
+    pub const fn reclaimed_user_pages(self) -> u64 {
+        self.reclaimed_user_pages
+    }
+
+    /// Return the number of page-table pages reclaimed from finished address spaces.
+    pub const fn reclaimed_user_page_table_pages(self) -> u64 {
+        self.reclaimed_user_page_table_pages
     }
 
     /// Return the number of finished user task kernel stacks reclaimed.
