@@ -46,5 +46,10 @@ pub(super) fn run(
         diagnostics.reclaimed_user_kernel_stack_writable_pages(),
         diagnostics.reclaimed_user_kernel_stack_virtual_pages()
     ));
+    output.push(format!(
+        "user_exit_return: stack_sets={} stack_takes={}",
+        diagnostics.user_exit_return_stack_sets(),
+        diagnostics.user_exit_return_stack_takes()
+    ));
     Ok(CommandEffect::Output(output))
 }

@@ -131,4 +131,6 @@ User task preemption stays disabled until all of the following are true:
   slots, separate address spaces, and lifecycle diagnostics. Finished user
   exits are now reported through a scheduler-owned exit queue instead of a
   global single-result latch, so lifecycle cleanup can drain task-specific exit
-  records before reclaiming address spaces and kernel stacks.
+  records before reclaiming address spaces and kernel stacks. The one-shot
+  `SYS_EXIT` return stack is guarded by an explicit return window that must be
+  set and consumed exactly once.
