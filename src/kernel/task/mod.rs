@@ -26,6 +26,9 @@ mod state;
 pub mod user_mode;
 
 use crate::kernel::memory::address::UserVirtualAddress;
+use crate::kernel::memory::virtual_allocator::{
+    new_dynamic_mapping_allocator, KernelVirtualRangeAllocator,
+};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -103,11 +106,16 @@ impl Task {
         identifier: TaskIdentifier,
         parent_identifier: TaskIdentifier,
         entry: TaskEntry,
+        kernel_stack_range_allocator: &mut KernelVirtualRangeAllocator,
     ) -> Self {
-        let kernel_stack = KernelStack::new_default();
+        let kernel_stack = KernelStack::new_default(kernel_stack_range_allocator);
         let stack_top = kernel_stack.top();
         debug_assert!(kernel_stack.base() < stack_top);
         debug_assert!(kernel_stack.byte_len() >= 16);
+        debug_assert_eq!(
+            kernel_stack.reserved_page_count(),
+            kernel_stack.writable_page_count() + 1
+        );
         // SAFETY: The stack is heap allocated, writable, and retained in the
         // task object for as long as the context can be scheduled.
         let context = unsafe { TaskContext::from_stack(stack_top, entry) };
@@ -125,10 +133,15 @@ impl Task {
         identifier: TaskIdentifier,
         parent_identifier: TaskIdentifier,
         user_context: UserTaskContext,
+        kernel_stack_range_allocator: &mut KernelVirtualRangeAllocator,
     ) -> Self {
-        let kernel_stack = KernelStack::new_default();
+        let kernel_stack = KernelStack::new_default(kernel_stack_range_allocator);
         debug_assert!(kernel_stack.base() < kernel_stack.top());
         debug_assert!(kernel_stack.byte_len() >= 16);
+        debug_assert_eq!(
+            kernel_stack.reserved_page_count(),
+            kernel_stack.writable_page_count() + 1
+        );
         Self {
             metadata: TaskMetadata::child(identifier, parent_identifier),
             state: TaskState::Ready,
@@ -150,12 +163,41 @@ impl Task {
     fn kernel_stack_top(&self) -> Option<usize> {
         self.kernel_stack.as_ref().map(KernelStack::top)
     }
+
+    fn kernel_stack_guard_page_virtual_start(&self) -> Option<u64> {
+        self.kernel_stack
+            .as_ref()
+            .map(KernelStack::guard_page_virtual_start)
+    }
+
+    fn kernel_stack_writable_virtual_start(&self) -> Option<u64> {
+        self.kernel_stack
+            .as_ref()
+            .map(KernelStack::writable_virtual_start)
+    }
+
+    fn kernel_stack_virtual_top(&self) -> Option<u64> {
+        self.kernel_stack.as_ref().map(KernelStack::virtual_top)
+    }
+
+    fn kernel_stack_reserved_page_count(&self) -> Option<u64> {
+        self.kernel_stack
+            .as_ref()
+            .map(KernelStack::reserved_page_count)
+    }
+
+    fn kernel_stack_writable_page_count(&self) -> Option<u64> {
+        self.kernel_stack
+            .as_ref()
+            .map(KernelStack::writable_page_count)
+    }
 }
 
 struct Scheduler {
     tasks: Vec<Task>,
     current_index: usize,
     next_task_identifier: TaskIdentifier,
+    kernel_stack_range_allocator: KernelVirtualRangeAllocator,
 }
 
 impl Scheduler {
@@ -164,13 +206,19 @@ impl Scheduler {
             tasks: vec![Task::bootstrap()],
             current_index: 0,
             next_task_identifier: TaskIdentifier::first_dynamic(),
+            kernel_stack_range_allocator: new_dynamic_mapping_allocator(),
         }
     }
 
     fn spawn(&mut self, entry: TaskEntry) -> u64 {
         let task_identifier = self.next_task_identifier.allocate();
         let parent_identifier = self.tasks[self.current_index].metadata.get_identifier();
-        let task = Task::kernel(task_identifier, parent_identifier, entry);
+        let task = Task::kernel(
+            task_identifier,
+            parent_identifier,
+            entry,
+            &mut self.kernel_stack_range_allocator,
+        );
         debug_assert_eq!(
             task.metadata.get_parent_identifier(),
             Some(parent_identifier)
@@ -190,10 +238,30 @@ impl Scheduler {
         // SAFETY: The caller provides a mapped user entry point and user stack.
         let user_context =
             unsafe { UserTaskContext::new(entry_point, user_stack_top, entry_arguments) };
-        let task = Task::user(task_identifier, parent_identifier, user_context);
+        let task = Task::user(
+            task_identifier,
+            parent_identifier,
+            user_context,
+            &mut self.kernel_stack_range_allocator,
+        );
         let kernel_stack_bytes = task
             .kernel_stack_byte_len()
             .expect("user tasks must own a kernel stack record");
+        let kernel_stack_guard_page_virtual_start = task
+            .kernel_stack_guard_page_virtual_start()
+            .expect("user tasks must own a kernel stack guard reservation");
+        let kernel_stack_writable_virtual_start = task
+            .kernel_stack_writable_virtual_start()
+            .expect("user tasks must own a writable kernel stack reservation");
+        let kernel_stack_virtual_top = task
+            .kernel_stack_virtual_top()
+            .expect("user tasks must own a kernel stack virtual top reservation");
+        let kernel_stack_reserved_pages = task
+            .kernel_stack_reserved_page_count()
+            .expect("user tasks must own kernel stack reservation pages");
+        let kernel_stack_writable_pages = task
+            .kernel_stack_writable_page_count()
+            .expect("user tasks must own kernel stack writable pages");
         debug_assert_eq!(
             task.metadata.get_parent_identifier(),
             Some(parent_identifier)
@@ -201,9 +269,14 @@ impl Scheduler {
         self.tasks.push(task);
         crate::log_info!(
             "task",
-            "User task kernel stack prepared: task={} bytes={}",
+            "User task kernel stack prepared: task={} bytes={} guard_virtual={:#x} writable_virtual={:#x} virtual_top={:#x} reserved_pages={} writable_pages={}",
             task_identifier.as_u64(),
-            kernel_stack_bytes
+            kernel_stack_bytes,
+            kernel_stack_guard_page_virtual_start,
+            kernel_stack_writable_virtual_start,
+            kernel_stack_virtual_top,
+            kernel_stack_reserved_pages,
+            kernel_stack_writable_pages
         );
         task_identifier.as_u64()
     }

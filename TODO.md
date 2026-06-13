@@ -113,7 +113,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Track reserved, used, and free physical frame ranges.
 - [x] Design ownership rules for free, used, and reserved physical frame ranges.
 - [ ] Add a kernel virtual memory allocator for dynamic mappings; range reservation now exists, page-table mapping integration remains.
-- [ ] Add guard pages for kernel stacks.
+- [ ] Add guard pages for kernel stacks; virtual reservation metadata now exists, actual unmapped guard-page mappings remain.
 - [x] Design kernel stack guard page placement and fault diagnostics.
 - [ ] Add per-process page tables.
 - [x] Document the page ownership model required before per-process page tables.
