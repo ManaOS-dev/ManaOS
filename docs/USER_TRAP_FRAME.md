@@ -133,4 +133,6 @@ User task preemption stays disabled until all of the following are true:
   global single-result latch, so lifecycle cleanup can drain task-specific exit
   records before reclaiming address spaces and kernel stacks. The one-shot
   `SYS_EXIT` return stack is guarded by an explicit return window that must be
-  set and consumed exactly once.
+  set and consumed exactly once. The smoke lifecycle asks the scheduler for the
+  next active user task instead of selecting task identifiers in the composition
+  root, so active-set ownership stays inside `kernel::task`.

@@ -21,10 +21,11 @@ pub(super) fn run(
 
     let mut output = CommandOutput::new();
     output.push(format!(
-        "tasks: total={} kernel={} user={} active_user_address_spaces={}",
+        "tasks: total={} kernel={} user={} active_user_tasks={} active_user_address_spaces={}",
         diagnostics.total_tasks(),
         diagnostics.kernel_tasks(),
         diagnostics.user_tasks(),
+        diagnostics.active_user_tasks(),
         diagnostics.active_user_address_spaces()
     ));
     output.push(format!(

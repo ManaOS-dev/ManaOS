@@ -629,14 +629,13 @@ fn run_user_smoke_demo(
     );
 
     let mut finished = [false; 2];
-    for _ in 0..user_task_ids.len() {
-        let next_task_id = user_task_ids
-            .iter()
-            .zip(finished.iter())
-            .find_map(|(task_id, is_finished)| (!*is_finished).then_some(*task_id))
-            .expect("at least one user smoke task must still be unfinished");
-        crate::log_info!("task", "User demo started: task_id={}", next_task_id);
-        let exit = kernel::task::run_user_task_once(frame_allocator, next_task_id)
+    for pass_index in 0..user_task_ids.len() {
+        crate::log_info!(
+            "task",
+            "User demo scheduler pass started: pass={}",
+            pass_index
+        );
+        let exit = kernel::task::run_next_user_task_once(frame_allocator)
             .expect("user smoke task must exit through SYS_EXIT");
         crate::log_info!(
             "task",
@@ -686,6 +685,11 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
         "finished user tasks must not retain address spaces"
     );
     assert_eq!(
+        diagnostics.active_user_tasks(),
+        0,
+        "finished user tasks must not remain in the active scheduling set"
+    );
+    assert_eq!(
         states.finished(),
         expected_user_tasks,
         "all user smoke tasks must be finished"
@@ -730,7 +734,7 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
     );
     crate::log_info!(
         "task",
-        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_address_spaces={} pending_user_exits={} user_exit_return_stack_sets={} user_exit_return_stack_takes={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
+        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_tasks={} active_user_address_spaces={} pending_user_exits={} user_exit_return_stack_sets={} user_exit_return_stack_takes={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
         diagnostics.total_tasks(),
         diagnostics.kernel_tasks(),
         diagnostics.user_tasks(),
@@ -738,6 +742,7 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
         states.running(),
         states.blocked(),
         states.finished(),
+        diagnostics.active_user_tasks(),
         diagnostics.active_user_address_spaces(),
         diagnostics.pending_user_exits(),
         diagnostics.user_exit_return_stack_sets(),

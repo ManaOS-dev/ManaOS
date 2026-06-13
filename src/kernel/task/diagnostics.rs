@@ -47,6 +47,7 @@ pub struct SchedulerDiagnostics {
     pub(super) total_tasks: u64,
     pub(super) kernel_tasks: u64,
     pub(super) user_tasks: u64,
+    pub(super) active_user_tasks: u64,
     pub(super) active_user_address_spaces: u64,
     pub(super) states: TaskStateDiagnostics,
     pub(super) context_switches: u64,
@@ -76,6 +77,11 @@ impl SchedulerDiagnostics {
     /// Return the number of user task records.
     pub const fn user_tasks(self) -> u64 {
         self.user_tasks
+    }
+
+    /// Return the number of user tasks in the active scheduling set.
+    pub const fn active_user_tasks(self) -> u64 {
+        self.active_user_tasks
     }
 
     /// Return the number of user tasks that still own an address space.

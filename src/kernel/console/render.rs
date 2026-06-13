@@ -131,6 +131,7 @@ pub(super) fn verify_status_strip_smoke() -> bool {
     let memory_line = memory_reclaim_status_line();
     scheduler_line.contains("tasks total=")
         && scheduler_line.contains("user=")
+        && scheduler_line.contains("active_users=")
         && scheduler_line.contains("active_spaces=")
         && scheduler_line.contains("pending_exits=")
         && scheduler_line.contains("preempt=")
@@ -155,9 +156,10 @@ fn scheduler_status_line() -> String {
     };
     let states = diagnostics.states();
     format!(
-        "tasks total={} user={} active_spaces={} pending_exits={} states R{} Run{} B{} F{} preempt={} resume={}",
+        "tasks total={} user={} active_users={} active_spaces={} pending_exits={} states R{} Run{} B{} F{} preempt={} resume={}",
         diagnostics.total_tasks(),
         diagnostics.user_tasks(),
+        diagnostics.active_user_tasks(),
         diagnostics.active_user_address_spaces(),
         diagnostics.pending_user_exits(),
         states.ready(),
