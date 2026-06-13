@@ -17,6 +17,7 @@
 //! - [`UserTaskExit`] - User task exit result
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
+//! - [`get_scheduler_diagnostics`] - Read scheduler accounting diagnostics
 //! - [`record_current_user_trap_frame`] - Save a captured user trap frame
 //! - [`record_current_user_interrupt_trap_frame`] - Save a timer interrupt user trap frame
 //! - [`get_kernel_stack_guard_fault`] - Classify a kernel stack guard fault
@@ -24,6 +25,7 @@
 
 pub mod architecture;
 pub mod context;
+mod diagnostics;
 mod metadata;
 pub mod process_lifecycle;
 mod stack;
@@ -42,6 +44,7 @@ use alloc::vec::Vec;
 pub use context::UserEntryArguments;
 use context::{TaskContext, TaskEntry, UserTaskContext, UserTrapFrame};
 use core::sync::atomic::{AtomicBool, Ordering};
+pub use diagnostics::{SchedulerDiagnostics, TaskStateDiagnostics};
 pub use metadata::{TaskIdentifier, TaskMetadata};
 pub use process_lifecycle::UserTaskExit;
 use spin::Mutex;
@@ -274,6 +277,11 @@ struct Scheduler {
     active_user_task_identifier: Option<u64>,
     preemption_switch_logged: bool,
     user_resume_logged: bool,
+    context_switch_count: u64,
+    timer_preemption_count: u64,
+    user_entry_count: u64,
+    user_resume_count: u64,
+    finished_task_count: u64,
 }
 
 impl Scheduler {
@@ -286,6 +294,11 @@ impl Scheduler {
             active_user_task_identifier: None,
             preemption_switch_logged: false,
             user_resume_logged: false,
+            context_switch_count: 0,
+            timer_preemption_count: 0,
+            user_entry_count: 0,
+            user_resume_count: 0,
+            finished_task_count: 0,
         }
     }
 
@@ -399,6 +412,52 @@ impl Scheduler {
         self.tasks[self.current_index].get_id()
     }
 
+    fn get_diagnostics(&self) -> SchedulerDiagnostics {
+        let mut ready_tasks = 0_u64;
+        let mut running_tasks = 0_u64;
+        let mut blocked_tasks = 0_u64;
+        let mut finished_tasks = 0_u64;
+        let mut kernel_tasks = 0_u64;
+        let mut user_tasks = 0_u64;
+        let mut active_user_address_spaces = 0_u64;
+
+        for task in &self.tasks {
+            match task.state {
+                TaskState::Ready => ready_tasks = ready_tasks.saturating_add(1),
+                TaskState::Running => running_tasks = running_tasks.saturating_add(1),
+                TaskState::Blocked => blocked_tasks = blocked_tasks.saturating_add(1),
+                TaskState::Finished => finished_tasks = finished_tasks.saturating_add(1),
+            }
+            match &task.kind {
+                TaskKind::Kernel => kernel_tasks = kernel_tasks.saturating_add(1),
+                TaskKind::User(user_runtime) => {
+                    user_tasks = user_tasks.saturating_add(1);
+                    if user_runtime.address_space.is_some() {
+                        active_user_address_spaces = active_user_address_spaces.saturating_add(1);
+                    }
+                }
+            }
+        }
+
+        SchedulerDiagnostics {
+            total_tasks: u64::try_from(self.tasks.len()).expect("task count must fit in u64"),
+            kernel_tasks,
+            user_tasks,
+            active_user_address_spaces,
+            states: TaskStateDiagnostics::new(
+                ready_tasks,
+                running_tasks,
+                blocked_tasks,
+                finished_tasks,
+            ),
+            context_switches: self.context_switch_count,
+            timer_preemptions: self.timer_preemption_count,
+            user_entries: self.user_entry_count,
+            user_resumes: self.user_resume_count,
+            finished_tasks: self.finished_task_count,
+        }
+    }
+
     fn get_kernel_stack_guard_fault(&self, fault_address: u64) -> Option<KernelStackGuardFault> {
         self.tasks
             .iter()
@@ -443,6 +502,7 @@ impl Scheduler {
         }
         self.current_index = task_index;
         self.active_user_task_identifier = Some(task_id);
+        self.user_entry_count = self.user_entry_count.saturating_add(1);
         Some(OneShotUserTask {
             trap_frame,
             kernel_stack_top,
@@ -463,6 +523,7 @@ impl Scheduler {
             self.current_index = 0;
         }
         self.active_user_task_identifier = None;
+        self.finished_task_count = self.finished_task_count.saturating_add(1);
 
         Some(task_id)
     }
@@ -600,19 +661,21 @@ impl Scheduler {
             return None;
         }
         self.current_index = next_index;
+        self.context_switch_count = self.context_switch_count.saturating_add(1);
 
         let current_task_id = self.tasks[current_index].get_id();
         let next_task_id = self.tasks[next_index].get_id();
-        if matches!(self.tasks[current_index].kind, TaskKind::User(_))
-            && !self.preemption_switch_logged
-        {
-            crate::log_info!(
-                "task",
-                "User task preempted by timer: current={} next={} context_saved=true",
-                current_task_id,
-                next_task_id
-            );
-            self.preemption_switch_logged = true;
+        if matches!(self.tasks[current_index].kind, TaskKind::User(_)) {
+            self.timer_preemption_count = self.timer_preemption_count.saturating_add(1);
+            if !self.preemption_switch_logged {
+                crate::log_info!(
+                    "task",
+                    "User task preempted by timer: current={} next={} context_saved=true",
+                    current_task_id,
+                    next_task_id
+                );
+                self.preemption_switch_logged = true;
+            }
         }
 
         let current_context = self.tasks[current_index].context.as_mut_pointer();
@@ -620,6 +683,7 @@ impl Scheduler {
         let next_user_address_space = self.user_address_space(next_index);
         if let TaskKind::User(user_runtime) = &self.tasks[next_index].kind {
             if self.tasks[next_index].context.is_empty() {
+                self.user_entry_count = self.user_entry_count.saturating_add(1);
                 return Some(SwitchAction::EnterUser {
                     current_context,
                     trap_frame: user_runtime.saved_frame,
@@ -639,6 +703,7 @@ impl Scheduler {
                 );
                 self.user_resume_logged = true;
             }
+            self.user_resume_count = self.user_resume_count.saturating_add(1);
         }
 
         let next_context = self.tasks[next_index].context.as_pointer();
@@ -839,6 +904,13 @@ pub fn get_current_task_id() -> Option<u64> {
     SCHEDULER
         .try_lock()
         .and_then(|scheduler| scheduler.as_ref().map(Scheduler::get_current_task_id))
+}
+
+/// Return scheduler task counts and lifecycle accounting diagnostics.
+pub fn get_scheduler_diagnostics() -> Option<SchedulerDiagnostics> {
+    SCHEDULER
+        .try_lock()
+        .and_then(|scheduler| scheduler.as_ref().map(Scheduler::get_diagnostics))
 }
 
 /// Return guard-fault diagnostics when `fault_address` is inside a known kernel

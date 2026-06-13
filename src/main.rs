@@ -656,6 +656,52 @@ fn run_user_smoke_demo(
     kernel::task::set_preemption_enabled(true);
 }
 
+fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
+    let diagnostics = kernel::task::get_scheduler_diagnostics()
+        .expect("scheduler diagnostics must be available after user smoke tasks");
+    let states = diagnostics.states();
+    assert_eq!(
+        diagnostics.user_tasks(),
+        expected_user_tasks,
+        "scheduler diagnostics must count spawned user tasks"
+    );
+    assert_eq!(
+        diagnostics.active_user_address_spaces(),
+        0,
+        "finished user tasks must not retain address spaces"
+    );
+    assert_eq!(
+        states.finished(),
+        expected_user_tasks,
+        "all user smoke tasks must be finished"
+    );
+    assert!(
+        diagnostics.timer_preemptions() > 0,
+        "user smoke must record timer preemption accounting"
+    );
+    assert!(
+        diagnostics.user_resumes() > 0,
+        "user smoke must record user resume accounting"
+    );
+    crate::log_info!(
+        "task",
+        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_address_spaces={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
+        diagnostics.total_tasks(),
+        diagnostics.kernel_tasks(),
+        diagnostics.user_tasks(),
+        states.ready(),
+        states.running(),
+        states.blocked(),
+        states.finished(),
+        diagnostics.active_user_address_spaces(),
+        diagnostics.context_switches(),
+        diagnostics.timer_preemptions(),
+        diagnostics.user_entries(),
+        diagnostics.user_resumes(),
+        diagnostics.finished_tasks()
+    );
+}
+
 #[entry]
 fn main() -> Status {
     // ────────────────────────────────────────────────
@@ -740,6 +786,7 @@ fn main() -> Status {
     kernel::runtime::initialize();
 
     run_user_smoke_demo(&mut frame_allocator);
+    verify_scheduler_task_diagnostics(2);
 
     // Main Loop
     loop {
