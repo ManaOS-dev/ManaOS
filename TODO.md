@@ -143,6 +143,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Add separate user stack slots so multiple user task records can coexist in the shared address space.
 - [x] Prove timer preemption and resume across two user task records in storage smoke.
 - [ ] Extend preemptive user scheduling across full process lifecycle paths now that user tasks own separate address spaces.
+- [x] Allow multiple active user tasks to be scheduled by timer preemption in the current smoke lifecycle.
 - [x] Checklist the prerequisites for enabling user task preemption.
 - [x] Add scheduler accounting and task state diagnostics.
 - [ ] Add kernel stack switching per task where needed; user task stacks are installed before entry and timer-context resume, Ring 3 timer interrupts use the installed TSS stack and save their raw frame there, and SYSCALL switches onto the task kernel stack. Bootstrap/IST stacks remain.

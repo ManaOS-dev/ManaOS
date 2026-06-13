@@ -122,6 +122,6 @@ User task preemption stays disabled until all of the following are true:
 - Scheduler diagnostics expose task state counts, user address-space ownership,
   and preemption accounting so the boot smoke can assert lifecycle progress.
 - `just storage-smoke` still proves the one-shot user path and now asserts that
-  timer interrupts can preempt and resume user code across two user task
-  records that own separate stack slots, separate address spaces, and finished
-  lifecycle diagnostics.
+  timer interrupts can enter another active user task, preempt and resume user
+  code across two user task records, and finish tasks that own separate stack
+  slots, separate address spaces, and lifecycle diagnostics.

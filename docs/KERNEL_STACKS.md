@@ -103,7 +103,8 @@ Policy:
 - Timer interrupts must not preempt a user task into a shared bootstrap stack
   once user preemption is enabled. The one-shot user path blocks the bootstrap
   task while its SYS_EXIT return stack is live, so timer preemption chooses a
-  schedulable kernel task context instead of a stale bootstrap context.
+  schedulable kernel task context or another active user task context instead
+  of a stale bootstrap context.
 
 ## Fault Diagnostics
 
