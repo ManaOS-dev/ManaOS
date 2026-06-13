@@ -22,6 +22,7 @@
 //! - [`SYS_MMAP`] - Linux-compatible memory-map syscall number
 //! - [`SYS_MUNMAP`] - Linux-compatible memory-unmap syscall number
 //! - [`SYS_BRK`] - Linux-compatible heap break syscall number
+//! - [`SYS_NANOSLEEP`] - Linux-compatible high-resolution sleep syscall number
 //! - [`SYS_EXIT`] - Linux-compatible exit syscall number
 //! - [`SYS_GETDENTS64`] - Linux-compatible get-directory-entries syscall number
 //! - [`SYS_EXIT_GROUP`] - Linux-compatible process exit syscall number
@@ -41,7 +42,7 @@ mod contract;
 
 pub use contract::{
     SYS_BRK, SYS_CLOSE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64, SYS_GETPID, SYS_LSEEK,
-    SYS_MMAP, SYS_MUNMAP, SYS_OPEN, SYS_OPENAT, SYS_READ, SYS_WRITE,
+    SYS_MMAP, SYS_MUNMAP, SYS_NANOSLEEP, SYS_OPEN, SYS_OPENAT, SYS_READ, SYS_WRITE,
 };
 
 const ERROR_NOT_FOUND: u64 = linux_error(2);
@@ -57,10 +58,16 @@ const ERROR_NOT_IMPLEMENTED: u64 = linux_error(38);
 const ERROR_NOT_SUPPORTED: u64 = linux_error(95);
 const USER_FILE_STAT_BYTES: usize = core::mem::size_of::<contract::UserFileStat>();
 const USER_DIRECTORY_ENTRY_BYTES: usize = core::mem::size_of::<contract::UserDirectoryEntry>();
+const USER_TIMESPEC_BYTES: usize = core::mem::size_of::<contract::UserTimespec>();
 const MAX_USER_STRING_LENGTH: usize = 256;
 const PAGE_SIZE: u64 = 4096;
+const NANOSECONDS_PER_SECOND: u64 = 1_000_000_000;
+const NANOSECONDS_PER_TIMER_TICK: u64 =
+    NANOSECONDS_PER_SECOND / crate::shared::TIMER_TICKS_PER_SECOND;
 /// Internal sentinel telling the syscall entry code to return to the kernel.
 pub const USER_EXIT_SENTINEL: u64 = u64::MAX;
+/// Internal sentinel telling the syscall entry code to block and return to the kernel.
+pub const USER_BLOCK_SENTINEL: u64 = u64::MAX - 1;
 
 const fn linux_error(errno: u64) -> u64 {
     0_u64.wrapping_sub(errno)
@@ -109,6 +116,7 @@ pub extern "C" fn syscall_dispatch(
         ),
         SYS_MUNMAP => sys_munmap(first_argument, second_argument),
         SYS_BRK => sys_brk(first_argument),
+        SYS_NANOSLEEP => sys_nanosleep(first_argument, second_argument),
         SYS_READ => sys_read(first_argument, second_argument, third_argument),
         SYS_GETDENTS64 => sys_getdents64(first_argument, second_argument, third_argument),
         SYS_GETPID => sys_getpid(),
@@ -154,6 +162,18 @@ pub unsafe extern "C" fn syscall_dispatch_from_trap_frame(trap_frame: *mut UserT
         trap_frame.r8,
         trap_frame.r9,
     );
+    if result == USER_BLOCK_SENTINEL {
+        trap_frame.rax = 0;
+        crate::kernel::task::record_current_user_trap_frame(
+            *trap_frame,
+            trap_frame_storage_address,
+        );
+        let task_id = crate::kernel::task::block_current_user_after_syscall()
+            .expect("prepared user sleep must block after saving the syscall frame");
+        crate::kernel::task::close_user_return_preemption_window(task_id);
+        return USER_BLOCK_SENTINEL;
+    }
+
     trap_frame.rax = result;
     if result != USER_EXIT_SENTINEL {
         crate::kernel::task::record_current_user_trap_frame(
@@ -354,6 +374,64 @@ fn sys_brk(requested_break: u64) -> u64 {
     })
     .flatten()
     .unwrap_or(ERROR_NOT_IMPLEMENTED)
+}
+
+fn sys_nanosleep(request_pointer: u64, remaining_pointer: u64) -> u64 {
+    let Some(request_buffer) = copy_input_buffer(
+        request_pointer,
+        u64::try_from(USER_TIMESPEC_BYTES).expect("user timespec size must fit in u64"),
+    ) else {
+        return ERROR_BAD_ADDRESS;
+    };
+    let request = read_user_timespec(request_buffer);
+    let remaining_buffer = if remaining_pointer == 0 {
+        None
+    } else {
+        let Some(buffer) = copy_output_buffer(
+            remaining_pointer,
+            u64::try_from(USER_TIMESPEC_BYTES).expect("user timespec size must fit in u64"),
+        ) else {
+            return ERROR_BAD_ADDRESS;
+        };
+        Some(buffer)
+    };
+    let Some(duration_ticks) = nanosleep_duration_ticks(request) else {
+        return ERROR_INVALID_ARGUMENT;
+    };
+    if let Some(buffer) = remaining_buffer {
+        buffer.fill(0);
+    }
+    if duration_ticks == 0 {
+        return 0;
+    }
+
+    let Some(wake_tick) = crate::kernel::time::get_timer_ticks().checked_add(duration_ticks) else {
+        return ERROR_INVALID_ARGUMENT;
+    };
+    if crate::kernel::task::prepare_current_user_sleep(wake_tick).is_none() {
+        return ERROR_NOT_IMPLEMENTED;
+    }
+
+    USER_BLOCK_SENTINEL
+}
+
+fn read_user_timespec(buffer: &[u8]) -> contract::UserTimespec {
+    contract::UserTimespec {
+        seconds: read_user_u64(buffer, 0),
+        nanoseconds: read_user_u64(buffer, 8),
+    }
+}
+
+fn nanosleep_duration_ticks(request: contract::UserTimespec) -> Option<u64> {
+    if request.nanoseconds >= NANOSECONDS_PER_SECOND {
+        return None;
+    }
+
+    let second_ticks = request
+        .seconds
+        .checked_mul(crate::shared::TIMER_TICKS_PER_SECOND)?;
+    let nanosecond_ticks = request.nanoseconds.div_ceil(NANOSECONDS_PER_TIMER_TICK);
+    second_ticks.checked_add(nanosecond_ticks)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -626,6 +704,12 @@ fn write_user_u64(buffer: &mut [u8], offset: usize, value: u64) {
     buffer[offset..offset + core::mem::size_of::<u64>()].copy_from_slice(&value.to_ne_bytes());
 }
 
+fn read_user_u64(buffer: &[u8], offset: usize) -> u64 {
+    let mut value = [0_u8; core::mem::size_of::<u64>()];
+    value.copy_from_slice(&buffer[offset..offset + core::mem::size_of::<u64>()]);
+    u64::from_ne_bytes(value)
+}
+
 fn write_user_directory_entry(
     buffer: &mut [u8],
     entry: &crate::kernel::filesystem::DirectoryEntry,
@@ -655,7 +739,7 @@ fn write_user_directory_entry(
 
 fn sys_exit(exit_code: u64) -> u64 {
     if let Some(task_id) = crate::kernel::task::finish_current_task(exit_code) {
-        crate::kernel::task::close_user_exit_preemption_window(task_id);
+        crate::kernel::task::close_user_return_preemption_window(task_id);
         crate::log_info!(
             "syscall",
             "User task exited: code={} task={}",

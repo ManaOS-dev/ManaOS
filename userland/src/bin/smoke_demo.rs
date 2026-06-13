@@ -8,6 +8,7 @@ const STDOUT: usize = 1;
 const BUFFER_LENGTH: usize = 64;
 const DIRECTORY_BUFFER_BYTES: usize = core::mem::size_of::<syscall::UserDirectoryEntry>();
 const ENTRY_ARGUMENT_MESSAGE: &[u8] = b"user entry arguments ok\n";
+const SLEEP_MESSAGE: &[u8] = b"user sleep ok\n";
 const BSS_MESSAGE: &[u8] = b"user bss ok\n";
 const HEAP_MESSAGE: &[u8] = b"user heap ok\n";
 const MMAP_MESSAGE: &[u8] = b"user mmap ok\n";
@@ -28,6 +29,7 @@ extern "C" fn _start(
     }
 
     verify_entry_arguments(argument_count, argument_values, environment_values);
+    verify_user_sleep();
     verify_disk_file();
     verify_root_directory();
     verify_user_shell();
@@ -38,6 +40,18 @@ extern "C" fn _start(
 
     let _ = syscall::write(STDOUT, PASS_MESSAGE);
     syscall::exit(0);
+}
+
+fn verify_user_sleep() {
+    let duration = syscall::Timespec {
+        seconds: 0,
+        nanoseconds: 2_000_000,
+    };
+    if syscall::nanosleep(&duration) != 0 {
+        syscall::exit(56);
+    }
+
+    let _ = syscall::write(STDOUT, SLEEP_MESSAGE);
 }
 
 fn verify_entry_arguments(

@@ -21,13 +21,15 @@
 //! - [`process_current_user_break`] - Process a user heap break request
 //! - [`process_current_user_mapping`] - Process a private user mapping request
 //! - [`process_current_user_unmapping`] - Process a private user unmapping request
+//! - [`prepare_current_user_sleep`] - Prepare the current user task to sleep
+//! - [`block_current_user_after_syscall`] - Block the current user task after saving its syscall frame
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
 //! - [`get_scheduler_diagnostics`] - Read scheduler accounting diagnostics
 //! - [`get_scheduler_task_snapshots`] - Read retained task rows for diagnostics
 //! - [`activate_user_task`] - Add a user task to the active scheduling set
 //! - [`set_preemption_enabled`] - Enable or disable timer-driven task switching
-//! - [`close_user_exit_preemption_window`] - Disable preemption after `SYS_EXIT`
+//! - [`close_user_return_preemption_window`] - Disable preemption after a user stop syscall
 //! - [`record_current_user_trap_frame`] - Save a captured user trap frame
 //! - [`record_current_user_interrupt_trap_frame`] - Save a timer interrupt user trap frame
 //! - [`get_kernel_stack_guard_fault`] - Classify a kernel stack guard fault
@@ -76,7 +78,7 @@ const USER_TASK_PREEMPTION_ENABLED: bool = true;
 
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
 static PREEMPTION_STATE: AtomicU8 = AtomicU8::new(PreemptionStateDiagnostics::Enabled.as_raw());
-static USER_EXIT_PREEMPTION_WINDOW_CLOSE_COUNT: AtomicU64 = AtomicU64::new(0);
+static USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT: AtomicU64 = AtomicU64::new(0);
 
 /// Syscall-time private user mapping request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -172,6 +174,7 @@ struct UserTaskRuntime {
     saved_frame: UserTrapFrame,
     heap: UserHeap,
     mappings: UserMappings,
+    sleep_wake_tick: Option<u64>,
     syscall_frame_recorded: bool,
     interrupt_frame_recorded: bool,
 }
@@ -187,6 +190,7 @@ impl UserTaskRuntime {
             saved_frame: entry_context.to_trap_frame(),
             heap: UserHeap::new(heap_start),
             mappings: UserMappings::new(),
+            sleep_wake_tick: None,
             syscall_frame_recorded: false,
             interrupt_frame_recorded: false,
         }
@@ -391,6 +395,8 @@ struct Scheduler {
     timer_preemption_count: u64,
     user_entry_count: u64,
     user_resume_count: u64,
+    user_sleep_block_count: u64,
+    user_sleep_wake_count: u64,
     finished_task_count: u64,
     reclaimed_user_resource_record_count: u64,
     reclaimed_user_kernel_stack_count: u64,
@@ -413,6 +419,8 @@ impl Scheduler {
             timer_preemption_count: 0,
             user_entry_count: 0,
             user_resume_count: 0,
+            user_sleep_block_count: 0,
+            user_sleep_wake_count: 0,
             finished_task_count: 0,
             reclaimed_user_resource_record_count: 0,
             reclaimed_user_kernel_stack_count: 0,
@@ -578,14 +586,16 @@ impl Scheduler {
             timer_preemptions: self.timer_preemption_count,
             user_entries: self.user_entry_count,
             user_resumes: self.user_resume_count,
+            user_sleep_blocks: self.user_sleep_block_count,
+            user_sleep_wakes: self.user_sleep_wake_count,
             finished_tasks: self.finished_task_count,
             pending_user_exits: u64::try_from(self.finished_user_exits.len())
                 .expect("pending user exit count must fit in u64"),
             preemption_state: current_preemption_state(),
-            user_exit_preemption_window_closes: USER_EXIT_PREEMPTION_WINDOW_CLOSE_COUNT
+            user_return_preemption_window_closes: USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT
                 .load(Ordering::Acquire),
-            user_exit_return_stack_sets: process_lifecycle::user_exit_return_stack_set_count(),
-            user_exit_return_stack_takes: process_lifecycle::user_exit_return_stack_take_count(),
+            user_return_stack_sets: process_lifecycle::user_return_stack_set_count(),
+            user_return_stack_takes: process_lifecycle::user_return_stack_take_count(),
             reclaimed_user_resource_records: self.reclaimed_user_resource_record_count,
             reclaimed_user_kernel_stacks: self.reclaimed_user_kernel_stack_count,
             reclaimed_user_kernel_stack_writable_pages: self
@@ -695,6 +705,10 @@ impl Scheduler {
             })
     }
 
+    fn has_active_user_tasks(&self) -> bool {
+        !self.active_user_task_identifiers.is_empty()
+    }
+
     fn deactivate_user_task(&mut self, task_id: u64) {
         self.active_user_task_identifiers
             .retain(|active_task_id| *active_task_id != task_id);
@@ -722,6 +736,7 @@ impl Scheduler {
             self.tasks[self.current_index].state.resume_blocked();
             return None;
         }
+        self.tasks[task_index].context.clear();
         self.current_index = task_index;
         self.activate_user_task(task_id);
         self.user_entry_count = self.user_entry_count.saturating_add(1);
@@ -861,6 +876,78 @@ impl Scheduler {
             user_runtime.mappings.active_records()
         );
         Some(unmapped_pages)
+    }
+
+    fn prepare_current_user_sleep(&mut self, wake_tick: u64) -> Option<u64> {
+        let current_task = &mut self.tasks[self.current_index];
+        let task_id = current_task.get_id();
+        let TaskKind::User(user_runtime) = &mut current_task.kind else {
+            return None;
+        };
+        if user_runtime.address_space.is_none() || current_task.state != TaskState::Running {
+            return None;
+        }
+
+        user_runtime.sleep_wake_tick = Some(wake_tick);
+        crate::log_info!(
+            "task",
+            "User task sleep requested: task={} wake_tick={}",
+            task_id,
+            wake_tick
+        );
+        Some(task_id)
+    }
+
+    fn block_current_user_after_syscall(&mut self) -> Option<u64> {
+        let task_id = self.tasks[self.current_index].get_id();
+        let TaskKind::User(user_runtime) = &self.tasks[self.current_index].kind else {
+            return None;
+        };
+        let wake_tick = user_runtime.sleep_wake_tick?;
+        if !self.tasks[self.current_index].state.prepare_to_block() {
+            return None;
+        }
+        self.tasks[self.current_index].context.clear();
+        if let Some(bootstrap_task) = self.tasks.first_mut() {
+            if !bootstrap_task.state.resume_blocked() {
+                bootstrap_task.state.prepare_to_run();
+            }
+            self.current_index = 0;
+        }
+        self.user_sleep_block_count = self.user_sleep_block_count.saturating_add(1);
+        crate::log_info!(
+            "task",
+            "User task blocked for sleep: task={} wake_tick={}",
+            task_id,
+            wake_tick
+        );
+        Some(task_id)
+    }
+
+    fn wake_sleeping_user_tasks(&mut self, current_tick: u64) {
+        for task in &mut self.tasks {
+            let task_id = task.get_id();
+            let TaskKind::User(user_runtime) = &mut task.kind else {
+                continue;
+            };
+            let Some(wake_tick) = user_runtime.sleep_wake_tick else {
+                continue;
+            };
+            if current_tick < wake_tick {
+                continue;
+            }
+            user_runtime.sleep_wake_tick = None;
+            if task.state.wake_blocked() {
+                self.user_sleep_wake_count = self.user_sleep_wake_count.saturating_add(1);
+                crate::log_info!(
+                    "task",
+                    "User task sleep woke: task={} wake_tick={} current_tick={}",
+                    task_id,
+                    wake_tick,
+                    current_tick
+                );
+            }
+        }
     }
 
     fn reclaim_finished_user_resources(
@@ -1291,6 +1378,22 @@ pub fn process_current_user_unmapping(
     })
 }
 
+/// Prepare the current user task to block until `wake_tick`.
+pub fn prepare_current_user_sleep(wake_tick: u64) -> Option<u64> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .and_then(|scheduler| scheduler.prepare_current_user_sleep(wake_tick))
+}
+
+/// Block the current user task after its syscall frame has been saved.
+pub fn block_current_user_after_syscall() -> Option<u64> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .and_then(Scheduler::block_current_user_after_syscall)
+}
+
 /// Save a captured user trap frame for the currently running user task.
 pub fn record_current_user_trap_frame(trap_frame: UserTrapFrame, trap_frame_storage_address: u64) {
     let mut scheduler = SCHEDULER.lock();
@@ -1328,26 +1431,22 @@ pub fn set_preemption_enabled(enabled: bool) {
     PREEMPTION_STATE.store(state.as_raw(), Ordering::Release);
 }
 
-/// Disable timer-driven task switching after a user task exits through `SYS_EXIT`.
-pub fn close_user_exit_preemption_window(task_id: u64) {
+/// Disable timer-driven task switching while returning to user lifecycle code.
+pub fn close_user_return_preemption_window(task_id: u64) {
     PREEMPTION_STATE.store(
-        PreemptionStateDiagnostics::UserExitReturn.as_raw(),
+        PreemptionStateDiagnostics::UserReturn.as_raw(),
         Ordering::Release,
     );
-    USER_EXIT_PREEMPTION_WINDOW_CLOSE_COUNT.fetch_add(1, Ordering::AcqRel);
+    USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT.fetch_add(1, Ordering::AcqRel);
     crate::log_info!(
         "task",
-        "User exit preemption window closed: task={}",
+        "User return preemption window closed: task={}",
         task_id
     );
 }
 
 /// Process one timer tick and switch to the next runnable task when possible.
 pub fn process_timer_tick(interrupted_user_mode: bool) {
-    if !current_preemption_state().is_enabled() {
-        return;
-    }
-
     let switch_action = {
         let Some(mut scheduler) = SCHEDULER.try_lock() else {
             return;
@@ -1356,6 +1455,11 @@ pub fn process_timer_tick(interrupted_user_mode: bool) {
         let Some(scheduler) = scheduler.as_mut() else {
             return;
         };
+
+        scheduler.wake_sleeping_user_tasks(crate::kernel::time::get_timer_ticks());
+        if !current_preemption_state().is_enabled() {
+            return;
+        }
 
         scheduler.prepare_next_switch(interrupted_user_mode)
     };

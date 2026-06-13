@@ -18,6 +18,8 @@ pub const SYS_MMAP: u64 = 9;
 pub const SYS_MUNMAP: u64 = 11;
 /// Linux-compatible heap break syscall number.
 pub const SYS_BRK: u64 = 12;
+/// Linux-compatible high-resolution sleep syscall number.
+pub const SYS_NANOSLEEP: u64 = 35;
 /// Linux-compatible get-process-identifier syscall number.
 pub const SYS_GETPID: u64 = 39;
 /// Linux-compatible exit syscall number.
@@ -96,6 +98,26 @@ impl UserFileStat {
             file_type: 0,
             size: 0,
             writable: 0,
+        }
+    }
+}
+
+/// Duration passed to the `ManaOS` `nanosleep` syscall.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct UserTimespec {
+    /// Whole seconds in the requested duration.
+    pub seconds: u64,
+    /// Additional nanoseconds in the requested duration.
+    pub nanoseconds: u64,
+}
+
+impl UserTimespec {
+    /// Create a zero duration for use as an output or placeholder buffer.
+    pub const fn empty() -> Self {
+        Self {
+            seconds: 0,
+            nanoseconds: 0,
         }
     }
 }

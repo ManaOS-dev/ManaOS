@@ -263,6 +263,8 @@ pub unsafe extern "C" fn syscall_entry() {
         "call {dispatcher}",
         "cmp rax, {exit_sentinel}",
         "je 2f",
+        "cmp rax, {block_sentinel}",
+        "je 2f",
         "mov rbx, qword ptr [rsp + 80]",
         "mov rdx, qword ptr [rsp + 96]",
         "mov rsi, qword ptr [rsp + 104]",
@@ -285,10 +287,11 @@ pub unsafe extern "C" fn syscall_entry() {
         "mov rsp, rax",
         "ret",
         dispatcher = sym crate::kernel::syscall::syscall_dispatch_from_trap_frame,
-        get_return_stack = sym crate::kernel::task::process_lifecycle::get_user_exit_return_stack,
+        get_return_stack = sym crate::kernel::task::process_lifecycle::get_user_return_stack,
         syscall_kernel_stack_top = sym SYSCALL_KERNEL_STACK_TOP,
         entry_user_stack_pointer = sym SYSCALL_ENTRY_USER_STACK_POINTER,
         entry_syscall_number = sym SYSCALL_ENTRY_SYSCALL_NUMBER,
         exit_sentinel = const crate::kernel::syscall::USER_EXIT_SENTINEL,
+        block_sentinel = const crate::kernel::syscall::USER_BLOCK_SENTINEL,
     );
 }

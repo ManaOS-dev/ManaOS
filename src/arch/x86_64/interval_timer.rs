@@ -19,10 +19,15 @@ pub fn get_preferred_kind() -> IntervalTimerKind {
 }
 
 /// Initialize the legacy programmable interval timer.
-pub fn initialize_programmable_interval_timer(target_hz: u32) {
+///
+/// # Panics
+///
+/// Panics if `target_hertz` is zero.
+pub fn initialize_programmable_interval_timer(target_hertz: u64) {
     use x86_64::instructions::port::Port;
 
-    let divider = 1_193_182 / target_hz;
+    assert!(target_hertz != 0, "PIT target frequency must be non-zero");
+    let divider = 1_193_182_u64 / target_hertz;
     let mut command_port = Port::<u8>::new(0x43);
     let mut data_port = Port::<u8>::new(0x40);
 

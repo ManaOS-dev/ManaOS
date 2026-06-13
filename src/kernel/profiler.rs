@@ -7,7 +7,6 @@ type TimestampCounterProvider = fn() -> u64;
 const CALIBRATION_TICKS: u64 = 100;
 const MAX_TIMER_WAIT_SPINS: u64 = 50_000_000;
 const MAX_CALIBRATION_ATTEMPTS: usize = 5;
-const TIMER_TICKS_PER_SECOND: u64 = 1000;
 const HERTZ_PER_MEGAHERTZ: u64 = 1_000_000;
 const MIN_REASONABLE_TSC_FREQUENCY: u64 = 100 * HERTZ_PER_MEGAHERTZ;
 const MAX_REASONABLE_TSC_FREQUENCY: u64 = 10_000 * HERTZ_PER_MEGAHERTZ;
@@ -64,7 +63,7 @@ fn measure_tsc_frequency() -> Option<u64> {
 
     let target_ticks = measure_start_ticks.saturating_add(CALIBRATION_TICKS);
 
-    // Wait for 100ms (100 ticks at 1000Hz)
+    // Wait for 100ms at the shared scheduler timer frequency.
     let (measure_end_ticks, tsc_end) = wait_until_tick_at_least_and_read_tsc(target_ticks)?;
 
     let actual_ticks = measure_end_ticks.saturating_sub(measure_start_ticks);
@@ -73,9 +72,9 @@ fn measure_tsc_frequency() -> Option<u64> {
     }
 
     // Calculate frequency (cycles per second)
-    // (tsc_end - tsc_start) / (actual_ticks / 1000)
+    // (tsc_end - tsc_start) / (actual_ticks / TIMER_TICKS_PER_SECOND)
     let elapsed_cycles = tsc_end.checked_sub(tsc_start)?;
-    let scaled_cycles = elapsed_cycles.checked_mul(TIMER_TICKS_PER_SECOND)?;
+    let scaled_cycles = elapsed_cycles.checked_mul(crate::shared::TIMER_TICKS_PER_SECOND)?;
     Some(scaled_cycles / actual_ticks)
 }
 

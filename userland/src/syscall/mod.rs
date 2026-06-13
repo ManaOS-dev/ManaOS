@@ -16,6 +16,7 @@
 //! - [`fstat`] - Read metadata for an open file descriptor
 //! - [`lseek`] - Seek an open file descriptor
 //! - [`brk`] - Move or query the user heap break
+//! - [`nanosleep`] - Sleep until the requested duration elapses
 //! - [`mmap`] - Map private user memory
 //! - [`mmap_anonymous`] - Map anonymous private user memory
 //! - [`munmap`] - Unmap private user memory
@@ -25,7 +26,10 @@
 mod contract;
 mod raw;
 
-pub use contract::{UserDirectoryEntry, UserFileStat as FileStat, DIRECTORY_ENTRY_NAME_BYTES};
+pub use contract::{
+    UserDirectoryEntry, UserFileStat as FileStat, UserTimespec as Timespec,
+    DIRECTORY_ENTRY_NAME_BYTES,
+};
 pub use raw::{syscall1, syscall2, syscall3, syscall4, syscall5, syscall6};
 
 /// Linux-compatible read syscall number.
@@ -46,6 +50,8 @@ pub const SYS_MMAP: usize = contract::SYS_MMAP as usize;
 pub const SYS_MUNMAP: usize = contract::SYS_MUNMAP as usize;
 /// Linux-compatible heap break syscall number.
 pub const SYS_BRK: usize = contract::SYS_BRK as usize;
+/// Linux-compatible high-resolution sleep syscall number.
+pub const SYS_NANOSLEEP: usize = contract::SYS_NANOSLEEP as usize;
 /// Linux-compatible get-process-identifier syscall number.
 pub const SYS_GETPID: usize = contract::SYS_GETPID as usize;
 /// Linux-compatible exit syscall number.
@@ -179,6 +185,12 @@ pub fn lseek(file_descriptor: usize, offset: isize, whence: usize) -> isize {
 #[inline(always)]
 pub fn brk(requested_break: usize) -> isize {
     syscall1(SYS_BRK, requested_break)
+}
+
+/// Sleep until `duration` elapses.
+#[inline(always)]
+pub fn nanosleep(duration: &Timespec) -> isize {
+    syscall2(SYS_NANOSLEEP, duration as *const Timespec as usize, 0)
 }
 
 /// Map private memory in the current ManaOS task.

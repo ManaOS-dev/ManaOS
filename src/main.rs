@@ -674,7 +674,7 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
     let states = diagnostics.states();
     verify_scheduler_task_counts(diagnostics, states, expected_user_tasks);
     verify_scheduler_reclaim_diagnostics(diagnostics, expected_user_tasks);
-    verify_scheduler_exit_diagnostics(diagnostics, expected_user_tasks);
+    verify_scheduler_user_return_diagnostics(diagnostics, expected_user_tasks);
     log_scheduler_task_diagnostics(diagnostics, states);
 }
 
@@ -735,10 +735,11 @@ fn verify_scheduler_reclaim_diagnostics(
     );
 }
 
-fn verify_scheduler_exit_diagnostics(
+fn verify_scheduler_user_return_diagnostics(
     diagnostics: kernel::task::SchedulerDiagnostics,
     expected_user_tasks: u64,
 ) {
+    let expected_user_stops = expected_user_tasks * 2;
     assert!(
         diagnostics.timer_preemptions() > 0,
         "user smoke must record timer preemption accounting"
@@ -762,19 +763,29 @@ fn verify_scheduler_exit_diagnostics(
         "preemption state must be enabled after active user lifecycle drain"
     );
     assert_eq!(
-        diagnostics.user_exit_preemption_window_closes(),
+        diagnostics.user_sleep_blocks(),
         expected_user_tasks,
-        "every user smoke exit must close the preemption return window"
+        "every user smoke task must block once in nanosleep"
     );
     assert_eq!(
-        diagnostics.user_exit_return_stack_sets(),
+        diagnostics.user_sleep_wakes(),
         expected_user_tasks,
-        "one-shot user exit return stacks must be stored once per smoke run"
+        "every sleeping user smoke task must wake once"
     );
     assert_eq!(
-        diagnostics.user_exit_return_stack_takes(),
-        expected_user_tasks,
-        "one-shot user exit return stacks must be consumed once per smoke run"
+        diagnostics.user_return_preemption_window_closes(),
+        expected_user_stops,
+        "every user smoke sleep and exit must close the preemption return window"
+    );
+    assert_eq!(
+        diagnostics.user_return_stack_sets(),
+        expected_user_stops,
+        "returnable user stacks must be stored once per user stop"
+    );
+    assert_eq!(
+        diagnostics.user_return_stack_takes(),
+        expected_user_stops,
+        "returnable user stacks must be consumed once per user stop"
     );
 }
 
@@ -784,7 +795,7 @@ fn log_scheduler_task_diagnostics(
 ) {
     crate::log_info!(
         "task",
-        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_tasks={} active_user_address_spaces={} pending_user_exits={} preemption_state={} preemption_enabled={} user_exit_preemption_window_closes={} user_exit_return_stack_sets={} user_exit_return_stack_takes={} reclaimed_user_resource_records={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
+        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_tasks={} active_user_address_spaces={} pending_user_exits={} preemption_state={} preemption_enabled={} user_sleep_blocks={} user_sleep_wakes={} user_return_preemption_window_closes={} user_return_stack_sets={} user_return_stack_takes={} reclaimed_user_resource_records={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
         diagnostics.total_tasks(),
         diagnostics.kernel_tasks(),
         diagnostics.user_tasks(),
@@ -797,9 +808,11 @@ fn log_scheduler_task_diagnostics(
         diagnostics.pending_user_exits(),
         diagnostics.preemption_state().as_str(),
         diagnostics.preemption_enabled(),
-        diagnostics.user_exit_preemption_window_closes(),
-        diagnostics.user_exit_return_stack_sets(),
-        diagnostics.user_exit_return_stack_takes(),
+        diagnostics.user_sleep_blocks(),
+        diagnostics.user_sleep_wakes(),
+        diagnostics.user_return_preemption_window_closes(),
+        diagnostics.user_return_stack_sets(),
+        diagnostics.user_return_stack_takes(),
         diagnostics.reclaimed_user_resource_records(),
         diagnostics.reclaimed_user_kernel_stacks(),
         diagnostics.reclaimed_user_kernel_stack_writable_pages(),

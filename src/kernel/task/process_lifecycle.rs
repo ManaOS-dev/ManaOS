@@ -2,10 +2,10 @@
 
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
-static USER_EXIT_RETURN_STACK: AtomicUsize = AtomicUsize::new(0);
-static USER_EXIT_RETURN_WINDOW_TASK_ID: AtomicU64 = AtomicU64::new(0);
-static USER_EXIT_RETURN_STACK_SET_COUNT: AtomicU64 = AtomicU64::new(0);
-static USER_EXIT_RETURN_STACK_TAKE_COUNT: AtomicU64 = AtomicU64::new(0);
+static USER_RETURN_STACK: AtomicUsize = AtomicUsize::new(0);
+static USER_RETURN_WINDOW_TASK_ID: AtomicU64 = AtomicU64::new(0);
+static USER_RETURN_STACK_SET_COUNT: AtomicU64 = AtomicU64::new(0);
+static USER_RETURN_STACK_TAKE_COUNT: AtomicU64 = AtomicU64::new(0);
 
 /// Result reported by a user task that exited through `SYS_EXIT`.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -43,6 +43,21 @@ pub fn run_user_task_once(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
     task_id: u64,
 ) -> Option<UserTaskExit> {
+    let mut next_task_id = task_id;
+    loop {
+        run_user_task_until_kernel_return(frame_allocator, next_task_id)?;
+        if let Some(exit) = reclaim_one_finished_user_task(frame_allocator) {
+            return Some(exit);
+        }
+
+        next_task_id = wait_for_next_active_user_task()?;
+    }
+}
+
+fn run_user_task_until_kernel_return(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    task_id: u64,
+) -> Option<()> {
     let user_task = {
         let mut scheduler = super::SCHEDULER.lock();
         scheduler
@@ -70,22 +85,29 @@ pub fn run_user_task_once(
         user_task.trap_frame.rdx
     );
 
-    begin_user_exit_return_window(task_id);
+    begin_user_return_window(task_id);
     crate::kernel::memory::runtime_allocator::register_user_runtime_frame_allocator(
         frame_allocator,
     );
     super::set_preemption_enabled(true);
     // SAFETY: The trap frame was derived from mapped user code and stack
-    // addresses, and this restore path returns only through SYS_EXIT.
+    // addresses, and this restore path returns only through user stop syscalls
+    // that consume the registered return stack.
     unsafe {
         super::architecture::enter_user_mode_once(user_task.trap_frame.as_pointer());
     }
     super::set_preemption_enabled(false);
     crate::kernel::memory::runtime_allocator::clear_user_runtime_frame_allocator();
     crate::kernel::memory::address_space::switch_to_kernel_address_space();
-    assert_user_exit_return_window_consumed();
-    crate::log_info!("task", "Restored kernel address space after user exit.");
+    assert_user_return_window_consumed();
+    crate::log_info!("task", "Restored kernel address space after user stop.");
 
+    Some(())
+}
+
+fn reclaim_one_finished_user_task(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+) -> Option<UserTaskExit> {
     let (exit, resource_reclaim) = {
         let mut scheduler = super::SCHEDULER.lock();
         let scheduler = scheduler
@@ -128,6 +150,25 @@ pub fn run_user_task_once(
     Some(exit)
 }
 
+fn wait_for_next_active_user_task() -> Option<u64> {
+    loop {
+        {
+            let scheduler = super::SCHEDULER.lock();
+            let scheduler = scheduler
+                .as_ref()
+                .expect("scheduler must be initialized before waiting for active user tasks");
+            if let Some(task_id) = scheduler.next_active_user_task_id() {
+                return Some(task_id);
+            }
+            if !scheduler.has_active_user_tasks() {
+                return None;
+            }
+        }
+
+        core::hint::spin_loop();
+    }
+}
+
 /// Mark the currently running user task as finished.
 pub fn finish_current_task(exit_code: u64) -> Option<u64> {
     let exit = super::SCHEDULER
@@ -137,77 +178,74 @@ pub fn finish_current_task(exit_code: u64) -> Option<u64> {
     Some(exit.task_id())
 }
 
-fn begin_user_exit_return_window(task_id: u64) {
-    assert_ne!(
-        task_id, 0,
-        "user exit return window task id must be non-zero"
-    );
+fn begin_user_return_window(task_id: u64) {
+    assert_ne!(task_id, 0, "user return window task id must be non-zero");
     assert_eq!(
-        USER_EXIT_RETURN_STACK.load(Ordering::Acquire),
+        USER_RETURN_STACK.load(Ordering::Acquire),
         0,
-        "user exit return stack must be clear before entering user mode"
+        "user return stack must be clear before entering user mode"
     );
-    USER_EXIT_RETURN_WINDOW_TASK_ID
+    USER_RETURN_WINDOW_TASK_ID
         .compare_exchange(0, task_id, Ordering::AcqRel, Ordering::Acquire)
-        .expect("user exit return window must not already be active");
+        .expect("user return window must not already be active");
 }
 
-fn assert_user_exit_return_window_consumed() {
+fn assert_user_return_window_consumed() {
     assert_eq!(
-        USER_EXIT_RETURN_STACK.load(Ordering::Acquire),
+        USER_RETURN_STACK.load(Ordering::Acquire),
         0,
-        "user exit return stack must be consumed before returning to lifecycle code"
+        "user return stack must be consumed before returning to lifecycle code"
     );
     assert_eq!(
-        USER_EXIT_RETURN_WINDOW_TASK_ID.load(Ordering::Acquire),
+        USER_RETURN_WINDOW_TASK_ID.load(Ordering::Acquire),
         0,
-        "user exit return window task id must be consumed before lifecycle cleanup"
+        "user return window task id must be consumed before lifecycle cleanup"
     );
 }
 
-/// Save the kernel return stack used by one-shot user tasks.
+/// Save the kernel return stack used by returnable user task entries.
 #[no_mangle]
-pub extern "C" fn set_user_exit_return_stack(stack_pointer: usize) {
+pub extern "C" fn set_user_return_stack(stack_pointer: usize) {
     assert_ne!(
         stack_pointer, 0,
-        "user exit return stack pointer must be non-zero"
+        "user return stack pointer must be non-zero"
     );
     assert_ne!(
-        USER_EXIT_RETURN_WINDOW_TASK_ID.load(Ordering::Acquire),
+        USER_RETURN_WINDOW_TASK_ID.load(Ordering::Acquire),
         0,
-        "user exit return window must be active before storing its stack"
+        "user return window must be active before storing its stack"
     );
     assert_eq!(
-        USER_EXIT_RETURN_STACK.swap(stack_pointer, Ordering::AcqRel),
+        USER_RETURN_STACK.swap(stack_pointer, Ordering::AcqRel),
         0,
-        "user exit return stack must be stored exactly once per entry"
+        "user return stack must be stored exactly once per entry"
     );
-    USER_EXIT_RETURN_STACK_SET_COUNT.fetch_add(1, Ordering::AcqRel);
+    USER_RETURN_STACK_SET_COUNT.fetch_add(1, Ordering::AcqRel);
 }
 
-/// Return the kernel stack pointer restored by `SYS_EXIT`.
+/// Return the kernel stack pointer restored after a user stop syscall.
 #[no_mangle]
-pub extern "C" fn get_user_exit_return_stack() -> usize {
-    let stack_pointer = USER_EXIT_RETURN_STACK.swap(0, Ordering::AcqRel);
+pub extern "C" fn get_user_return_stack() -> usize {
+    let stack_pointer = USER_RETURN_STACK.swap(0, Ordering::AcqRel);
     assert_ne!(
         stack_pointer, 0,
-        "user exit return stack must be available before SYS_EXIT return"
+        "user return stack must be available before returning to lifecycle code"
     );
     assert_ne!(
-        USER_EXIT_RETURN_WINDOW_TASK_ID.swap(0, Ordering::AcqRel),
+        USER_RETURN_WINDOW_TASK_ID.swap(0, Ordering::AcqRel),
         0,
-        "user exit return window must be active before SYS_EXIT return"
+        "user return window must be active before returning to lifecycle code"
     );
-    USER_EXIT_RETURN_STACK_TAKE_COUNT.fetch_add(1, Ordering::AcqRel);
+    USER_RETURN_STACK_TAKE_COUNT.fetch_add(1, Ordering::AcqRel);
     stack_pointer
 }
 
-/// Return the number of one-shot user exit return stacks stored by the entry path.
-pub(super) fn user_exit_return_stack_set_count() -> u64 {
-    USER_EXIT_RETURN_STACK_SET_COUNT.load(Ordering::Acquire)
+/// Return the number of returnable user stacks stored by the entry path.
+pub(super) fn user_return_stack_set_count() -> u64 {
+    USER_RETURN_STACK_SET_COUNT.load(Ordering::Acquire)
 }
 
-/// Return the number of one-shot user exit return stacks consumed by `SYS_EXIT`.
-pub(super) fn user_exit_return_stack_take_count() -> u64 {
-    USER_EXIT_RETURN_STACK_TAKE_COUNT.load(Ordering::Acquire)
+/// Return the number of returnable user stacks consumed after user stop syscalls.
+pub(super) fn user_return_stack_take_count() -> u64 {
+    USER_RETURN_STACK_TAKE_COUNT.load(Ordering::Acquire)
 }

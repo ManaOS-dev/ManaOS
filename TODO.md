@@ -93,7 +93,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Support non-overlapping fixed-address anonymous mappings.
 - [x] Add file-backed private `mmap` for current VFS file descriptors.
 - [x] Add replacement `MAP_FIXED` for private user mappings.
-- [ ] Add `nanosleep` or a minimal sleep syscall.
+- [x] Add `nanosleep` or a minimal sleep syscall.
 - [ ] Add `fork` or document why the first process model uses `spawn`/`exec` instead.
 - [ ] Add syscall tracing controls.
 

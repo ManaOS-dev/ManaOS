@@ -42,7 +42,7 @@ pub fn tick() {
     if elapsed_ticks >= 500 {
         let frame_count = FRAME_COUNT.swap(0, Ordering::Relaxed);
         let fps = frame_count
-            .saturating_mul(1000)
+            .saturating_mul(crate::shared::TIMER_TICKS_PER_SECOND)
             .checked_div(elapsed_ticks)
             .unwrap_or(0);
         FPS.store(fps, Ordering::Relaxed);

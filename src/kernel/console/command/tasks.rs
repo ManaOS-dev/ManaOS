@@ -36,16 +36,18 @@ pub(super) fn run(
         states.finished()
     ));
     output.push(format!(
-        "preemption: state={} enabled={} switches={} timer_user_preemptions={} user_entries={} user_resumes={} finished={} pending_user_exits={} exit_window_closes={}",
+        "preemption: state={} enabled={} switches={} timer_user_preemptions={} user_entries={} user_resumes={} user_sleep_blocks={} user_sleep_wakes={} finished={} pending_user_exits={} return_window_closes={}",
         diagnostics.preemption_state().as_str(),
         diagnostics.preemption_enabled(),
         diagnostics.context_switches(),
         diagnostics.timer_preemptions(),
         diagnostics.user_entries(),
         diagnostics.user_resumes(),
+        diagnostics.user_sleep_blocks(),
+        diagnostics.user_sleep_wakes(),
         diagnostics.finished_tasks(),
         diagnostics.pending_user_exits(),
-        diagnostics.user_exit_preemption_window_closes()
+        diagnostics.user_return_preemption_window_closes()
     ));
     output.push(format!(
         "resources: reclaimed_user_resource_records={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={}",
@@ -55,9 +57,9 @@ pub(super) fn run(
         diagnostics.reclaimed_user_kernel_stack_virtual_pages()
     ));
     output.push(format!(
-        "user_exit_return: stack_sets={} stack_takes={}",
-        diagnostics.user_exit_return_stack_sets(),
-        diagnostics.user_exit_return_stack_takes()
+        "user_return: stack_sets={} stack_takes={}",
+        diagnostics.user_return_stack_sets(),
+        diagnostics.user_return_stack_takes()
     ));
     output.push(format!(
         "user_vm_layout: program_base={:#x} heap_end={:#x} mmap_start={:#x} mmap_end={:#x} stack_start={:#x} stack_slot_bytes={}",
