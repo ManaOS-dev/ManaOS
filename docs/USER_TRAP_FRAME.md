@@ -61,6 +61,10 @@ For interrupts taken from user mode, the architecture entry path must save:
 
 The timer interrupt must not schedule away from a user task until all of these
 fields are captured in the owning task's `UserTrapFrame`.
+The timer path now passes the hardware interrupt frame summary to
+`kernel::interrupt`, which can distinguish Ring 3 timer frames from kernel
+frames. It still does not save the general-purpose register set required for
+user preemption.
 
 ## Syscall Save Set
 
@@ -90,7 +94,8 @@ User task preemption stays disabled until all of the following are true:
 - Per-task kernel stacks exist and are installed before entering or resuming a
   user task.
 - Timer interrupt routing can distinguish user-mode frames from kernel-mode
-  frames without depending on `kernel::task` from `arch/`.
+  frames without depending on `kernel::task` from `arch/`. This is complete for
+  the current PIT timer path.
 - Page-fault diagnostics can report whether a fault happened in user or kernel
   mode.
 - The scheduler can transition a user task from `Running` to `Ready` only after

@@ -17,14 +17,29 @@
 //! - [`set_syscall_kernel_stack_top`] - Install the next SYSCALL kernel stack
 //! - [`syscall_entry`] - Ring 3 syscall entry
 
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 static SYSCALL_KERNEL_STACK_TOP: AtomicU64 = AtomicU64::new(0);
 static SYSCALL_ENTRY_USER_STACK_POINTER: AtomicU64 = AtomicU64::new(0);
 static SYSCALL_ENTRY_SYSCALL_NUMBER: AtomicU64 = AtomicU64::new(0);
+static USER_TIMER_FRAME_REPORTED: AtomicBool = AtomicBool::new(false);
+const USER_PRIVILEGE_LEVEL_BITS: u64 = 0b11;
 
 /// Route one timer interrupt tick to the kernel scheduler.
-pub fn process_timer_tick() {
+pub fn process_timer_tick(
+    instruction_pointer: u64,
+    code_segment: u64,
+    cpu_flags: u64,
+    stack_pointer: u64,
+    stack_segment: u64,
+) {
+    report_user_timer_frame_once(
+        instruction_pointer,
+        code_segment,
+        cpu_flags,
+        stack_pointer,
+        stack_segment,
+    );
     crate::kernel::task::process_timer_tick();
 }
 
@@ -90,6 +105,53 @@ impl core::fmt::Display for TaskIdentifierDisplay {
             None => formatter.write_str("unknown"),
         }
     }
+}
+
+#[derive(Clone, Copy)]
+enum InterruptFrameMode {
+    Kernel,
+    User,
+}
+
+impl InterruptFrameMode {
+    fn from_code_segment(code_segment: u64) -> Self {
+        if code_segment & USER_PRIVILEGE_LEVEL_BITS == USER_PRIVILEGE_LEVEL_BITS {
+            Self::User
+        } else {
+            Self::Kernel
+        }
+    }
+
+    fn is_user(self) -> bool {
+        matches!(self, Self::User)
+    }
+}
+
+fn report_user_timer_frame_once(
+    instruction_pointer: u64,
+    code_segment: u64,
+    cpu_flags: u64,
+    stack_pointer: u64,
+    stack_segment: u64,
+) {
+    if !InterruptFrameMode::from_code_segment(code_segment).is_user() {
+        return;
+    }
+
+    if USER_TIMER_FRAME_REPORTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+
+    crate::log_info!(
+        "task",
+        "User timer interrupt frame observed: task={} rip={:#x} rsp={:#x} cs={:#x} ss={:#x} rflags={:#x}",
+        TaskIdentifierDisplay(crate::kernel::task::get_current_task_id()),
+        instruction_pointer,
+        stack_pointer,
+        code_segment,
+        stack_segment,
+        cpu_flags
+    );
 }
 
 #[derive(Clone, Copy)]
