@@ -755,6 +755,11 @@ fn verify_scheduler_exit_diagnostics(
         "preemption must be re-enabled after active user lifecycle drain"
     );
     assert_eq!(
+        diagnostics.preemption_state(),
+        kernel::task::PreemptionStateDiagnostics::Enabled,
+        "preemption state must be enabled after active user lifecycle drain"
+    );
+    assert_eq!(
         diagnostics.user_exit_preemption_window_closes(),
         expected_user_tasks,
         "every user smoke exit must close the preemption return window"
@@ -777,7 +782,7 @@ fn log_scheduler_task_diagnostics(
 ) {
     crate::log_info!(
         "task",
-        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_tasks={} active_user_address_spaces={} pending_user_exits={} preemption_enabled={} user_exit_preemption_window_closes={} user_exit_return_stack_sets={} user_exit_return_stack_takes={} reclaimed_user_resource_records={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
+        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_tasks={} active_user_address_spaces={} pending_user_exits={} preemption_state={} preemption_enabled={} user_exit_preemption_window_closes={} user_exit_return_stack_sets={} user_exit_return_stack_takes={} reclaimed_user_resource_records={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
         diagnostics.total_tasks(),
         diagnostics.kernel_tasks(),
         diagnostics.user_tasks(),
@@ -788,6 +793,7 @@ fn log_scheduler_task_diagnostics(
         diagnostics.active_user_tasks(),
         diagnostics.active_user_address_spaces(),
         diagnostics.pending_user_exits(),
+        diagnostics.preemption_state().as_str(),
         diagnostics.preemption_enabled(),
         diagnostics.user_exit_preemption_window_closes(),
         diagnostics.user_exit_return_stack_sets(),

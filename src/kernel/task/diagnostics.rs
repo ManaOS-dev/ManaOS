@@ -62,6 +62,56 @@ impl TaskKindDiagnostics {
     }
 }
 
+/// Timer-driven scheduler preemption state.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PreemptionStateDiagnostics {
+    /// Timer-driven task switching is enabled.
+    #[default]
+    Enabled,
+    /// Timer-driven task switching is disabled for a generic kernel reason.
+    Disabled,
+    /// Timer-driven task switching is disabled while returning from `SYS_EXIT`.
+    UserExitReturn,
+}
+
+impl PreemptionStateDiagnostics {
+    const ENABLED_RAW: u8 = 0;
+    const DISABLED_RAW: u8 = 1;
+    const USER_EXIT_RETURN_RAW: u8 = 2;
+
+    /// Return a stable label for console diagnostics.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Enabled => "enabled",
+            Self::Disabled => "disabled",
+            Self::UserExitReturn => "user_exit_return",
+        }
+    }
+
+    /// Return whether timer-driven task switching may run.
+    pub const fn is_enabled(self) -> bool {
+        matches!(self, Self::Enabled)
+    }
+
+    pub(super) const fn as_raw(self) -> u8 {
+        match self {
+            Self::Enabled => Self::ENABLED_RAW,
+            Self::Disabled => Self::DISABLED_RAW,
+            Self::UserExitReturn => Self::USER_EXIT_RETURN_RAW,
+        }
+    }
+
+    pub(super) const fn from_raw(raw: u8) -> Self {
+        if raw == Self::ENABLED_RAW {
+            Self::Enabled
+        } else if raw == Self::USER_EXIT_RETURN_RAW {
+            Self::UserExitReturn
+        } else {
+            Self::Disabled
+        }
+    }
+}
+
 /// Snapshot of one scheduler task record.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SchedulerTaskSnapshot {
@@ -147,7 +197,7 @@ pub struct SchedulerDiagnostics {
     pub(super) user_resumes: u64,
     pub(super) finished_tasks: u64,
     pub(super) pending_user_exits: u64,
-    pub(super) preemption_enabled: bool,
+    pub(super) preemption_state: PreemptionStateDiagnostics,
     pub(super) user_exit_preemption_window_closes: u64,
     pub(super) user_exit_return_stack_sets: u64,
     pub(super) user_exit_return_stack_takes: u64,
@@ -220,7 +270,12 @@ impl SchedulerDiagnostics {
 
     /// Return whether timer-driven task switching is currently enabled.
     pub const fn preemption_enabled(self) -> bool {
-        self.preemption_enabled
+        self.preemption_state.is_enabled()
+    }
+
+    /// Return the current timer-driven scheduler preemption state.
+    pub const fn preemption_state(self) -> PreemptionStateDiagnostics {
+        self.preemption_state
     }
 
     /// Return the number of user exits that closed the scheduler preemption window.

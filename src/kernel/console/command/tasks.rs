@@ -36,7 +36,8 @@ pub(super) fn run(
         states.finished()
     ));
     output.push(format!(
-        "preemption: enabled={} switches={} timer_user_preemptions={} user_entries={} user_resumes={} finished={} pending_user_exits={} exit_window_closes={}",
+        "preemption: state={} enabled={} switches={} timer_user_preemptions={} user_entries={} user_resumes={} finished={} pending_user_exits={} exit_window_closes={}",
+        diagnostics.preemption_state().as_str(),
         diagnostics.preemption_enabled(),
         diagnostics.context_switches(),
         diagnostics.timer_preemptions(),
