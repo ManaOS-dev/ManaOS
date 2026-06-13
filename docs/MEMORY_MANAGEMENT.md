@@ -181,10 +181,13 @@ mutable allocator with console code.
 `brk` is the first syscall-time user heap growth path. The ELF loader reports a
 page-aligned heap start after the highest `PT_LOAD` segment, the scheduler stores
 the current heap break in each user task runtime, and `kernel::memory::user_heap`
-maps writable non-executable user heap pages as the break grows. The one-shot
-user runtime registers the boot-owned frame allocator only while user code can
-issue syscalls, so syscall dispatch can allocate heap frames without making the
-console or architecture layers own the allocator.
+maps writable non-executable user heap pages as the break grows. Shrinking the
+break unmaps no-longer-covered heap pages and returns their physical frames to
+the `UserHeap` owner pool, while page-table frames remain owned by the address
+space until process cleanup. The one-shot user runtime registers the boot-owned
+frame allocator only while user code can issue syscalls, so syscall dispatch can
+allocate and free heap frames without making the console or architecture layers
+own the allocator.
 
 ## User Address Spaces
 
@@ -242,6 +245,8 @@ reused across lifecycle runs.
       prove template isolation with a boot self-check.
 - [x] Add `brk` heap-growth mapping for user tasks and prove writable heap
       pages through storage smoke.
+- [x] Add `brk` shrink unmapping that returns no-longer-covered user heap
+      frames to the allocator.
 - [x] Reclaim finished user address spaces by walking only the private user
       PML4 window and returning user/page-table frames to the allocator.
 - [ ] Continue proving the boot path with `just storage-smoke` after every

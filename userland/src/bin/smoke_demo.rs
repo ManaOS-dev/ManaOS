@@ -83,20 +83,43 @@ fn verify_user_heap_growth() {
     }
 
     let initial_break = initial_break as usize;
-    let requested_break = initial_break + 8192;
-    if syscall::brk(requested_break) != requested_break as isize {
+    let expanded_break = initial_break + 8192;
+    if syscall::brk(expanded_break) != expanded_break as isize {
         syscall::exit(31);
     }
 
     let first_byte = initial_break as *mut u8;
-    let last_byte = (requested_break - 1) as *mut u8;
+    let last_byte = (expanded_break - 1) as *mut u8;
     // SAFETY: A successful `brk` call mapped the heap range from the previous
-    // break through `requested_break`.
+    // break through `expanded_break`.
     unsafe {
         first_byte.write(0x4d);
         last_byte.write(0x53);
         if first_byte.read() != 0x4d || last_byte.read() != 0x53 {
             syscall::exit(32);
+        }
+    }
+
+    let shrunk_break = initial_break + 4096;
+    if syscall::brk(shrunk_break) != shrunk_break as isize {
+        syscall::exit(33);
+    }
+    // SAFETY: Shrinking to one heap page keeps the first mapped page valid.
+    unsafe {
+        first_byte.write(0x48);
+        if first_byte.read() != 0x48 {
+            syscall::exit(34);
+        }
+    }
+
+    if syscall::brk(expanded_break) != expanded_break as isize {
+        syscall::exit(35);
+    }
+    // SAFETY: Regrowing to `expanded_break` remaps the second heap page.
+    unsafe {
+        last_byte.write(0x47);
+        if last_byte.read() != 0x47 {
+            syscall::exit(36);
         }
     }
 
