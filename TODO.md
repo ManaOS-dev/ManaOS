@@ -146,6 +146,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Extend preemptive user scheduling across full process lifecycle paths now that user tasks own separate address spaces.
 - [x] Allow multiple active user tasks to be scheduled by timer preemption in the current smoke lifecycle.
 - [x] Move next active user task selection into the scheduler-owned lifecycle path.
+- [x] Add a scheduler-owned active user lifecycle drain API for current smoke tasks.
 - [x] Checklist the prerequisites for enabling user task preemption.
 - [x] Add scheduler accounting and task state diagnostics.
 - [x] Add a visible `tasks` console command for scheduler and user-preemption diagnostics.

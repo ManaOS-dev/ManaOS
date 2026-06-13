@@ -72,6 +72,7 @@ $expectedPatterns = @(
     "Restored kernel address space after user exit",
     "User address space reclaimed: task=.* user_pages=.* page_table_pages=.*",
     "User kernel stack reclaimed: task=.* writable_pages=4 virtual_pages=5",
+    "Active user lifecycle drained: exits=2",
     "Multi-user preemption smoke passed: tasks=2",
     "Scheduler diagnostics verified: .*user_tasks=2 .*finished=2 .*active_user_tasks=0 .*active_user_address_spaces=0 .*pending_user_exits=0 .*user_exit_return_stack_sets=2 .*user_exit_return_stack_takes=2 .*reclaimed_user_kernel_stacks=2 .*reclaimed_kernel_stack_writable_pages=8 .*reclaimed_kernel_stack_virtual_pages=10 .*timer_preemptions=.* user_resumes=.* finished_tasks=2",
     "Tasks command smoke passed: command=`"tasks`" output_lines=4",

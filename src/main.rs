@@ -628,15 +628,15 @@ fn run_user_smoke_demo(
         user_task_ids.len()
     );
 
+    let exits = kernel::task::run_active_user_tasks_until_empty(frame_allocator);
+    assert_eq!(
+        exits.len(),
+        user_task_ids.len(),
+        "active user lifecycle drain must return every smoke task exit"
+    );
+
     let mut finished = [false; 2];
-    for pass_index in 0..user_task_ids.len() {
-        crate::log_info!(
-            "task",
-            "User demo scheduler pass started: pass={}",
-            pass_index
-        );
-        let exit = kernel::task::run_next_user_task_once(frame_allocator)
-            .expect("user smoke task must exit through SYS_EXIT");
+    for exit in exits {
         crate::log_info!(
             "task",
             "UI resumed after user exit: task={} code={}",
