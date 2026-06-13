@@ -409,11 +409,16 @@ struct Scheduler {
     context_switch_count: u64,
     timer_preemption_count: u64,
     user_entry_count: u64,
+    one_shot_user_entry_count: u64,
+    timer_user_entry_count: u64,
     user_resume_count: u64,
     user_sleep_block_count: u64,
     user_sleep_wake_count: u64,
     finished_task_count: u64,
     reclaimed_user_resource_record_count: u64,
+    reclaimed_user_address_space_count: u64,
+    reclaimed_user_page_count: u64,
+    reclaimed_user_page_table_page_count: u64,
     reclaimed_user_kernel_stack_count: u64,
     reclaimed_user_kernel_stack_writable_pages: u64,
     reclaimed_user_kernel_stack_virtual_pages: u64,
@@ -433,11 +438,16 @@ impl Scheduler {
             context_switch_count: 0,
             timer_preemption_count: 0,
             user_entry_count: 0,
+            one_shot_user_entry_count: 0,
+            timer_user_entry_count: 0,
             user_resume_count: 0,
             user_sleep_block_count: 0,
             user_sleep_wake_count: 0,
             finished_task_count: 0,
             reclaimed_user_resource_record_count: 0,
+            reclaimed_user_address_space_count: 0,
+            reclaimed_user_page_count: 0,
+            reclaimed_user_page_table_page_count: 0,
             reclaimed_user_kernel_stack_count: 0,
             reclaimed_user_kernel_stack_writable_pages: 0,
             reclaimed_user_kernel_stack_virtual_pages: 0,
@@ -607,6 +617,8 @@ impl Scheduler {
             context_switches: self.context_switch_count,
             timer_preemptions: self.timer_preemption_count,
             user_entries: self.user_entry_count,
+            one_shot_user_entries: self.one_shot_user_entry_count,
+            timer_user_entries: self.timer_user_entry_count,
             user_resumes: self.user_resume_count,
             user_sleep_blocks: self.user_sleep_block_count,
             user_sleep_wakes: self.user_sleep_wake_count,
@@ -619,6 +631,9 @@ impl Scheduler {
             user_return_stack_sets: process_lifecycle::user_return_stack_set_count(),
             user_return_stack_takes: process_lifecycle::user_return_stack_take_count(),
             reclaimed_user_resource_records: self.reclaimed_user_resource_record_count,
+            reclaimed_user_address_spaces: self.reclaimed_user_address_space_count,
+            reclaimed_user_pages: self.reclaimed_user_page_count,
+            reclaimed_user_page_table_pages: self.reclaimed_user_page_table_page_count,
             reclaimed_user_kernel_stacks: self.reclaimed_user_kernel_stack_count,
             reclaimed_user_kernel_stack_writable_pages: self
                 .reclaimed_user_kernel_stack_writable_pages,
@@ -773,6 +788,7 @@ impl Scheduler {
         self.current_index = task_index;
         self.activate_user_task(task_id);
         self.user_entry_count = self.user_entry_count.saturating_add(1);
+        self.one_shot_user_entry_count = self.one_shot_user_entry_count.saturating_add(1);
         Some(OneShotUserTask {
             trap_frame,
             kernel_stack_top,
@@ -1026,6 +1042,16 @@ impl Scheduler {
             self.reclaim_finished_user_address_space_at_index(frame_allocator, task_index);
         let kernel_stack_reclaim =
             self.reclaim_finished_user_kernel_stack_at_index(frame_allocator, task_index);
+        if let Some(reclaim) = address_space_reclaim {
+            self.reclaimed_user_address_space_count =
+                self.reclaimed_user_address_space_count.saturating_add(1);
+            self.reclaimed_user_page_count = self
+                .reclaimed_user_page_count
+                .saturating_add(reclaim.user_pages());
+            self.reclaimed_user_page_table_page_count = self
+                .reclaimed_user_page_table_page_count
+                .saturating_add(reclaim.page_table_pages());
+        }
         let reclaim = FinishedUserTaskReclaim::new(address_space_reclaim, kernel_stack_reclaim);
         if reclaim.reclaimed_anything() {
             self.reclaimed_user_resource_record_count =
@@ -1218,6 +1244,7 @@ impl Scheduler {
         if let TaskKind::User(user_runtime) = &self.tasks[next_index].kind {
             if self.tasks[next_index].context.is_empty() {
                 self.user_entry_count = self.user_entry_count.saturating_add(1);
+                self.timer_user_entry_count = self.timer_user_entry_count.saturating_add(1);
                 return Some(SwitchAction::EnterUser {
                     current_context,
                     task_id: next_task_id,

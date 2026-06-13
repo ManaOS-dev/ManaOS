@@ -172,8 +172,9 @@ kernel task, and architecture-owned stacks still live for the lifetime of their
 owning runtime metadata. Scheduler cleanup emits one finished user resource
 reclaim record that aggregates address-space and kernel stack reclamation. The
 scheduler diagnostics snapshot records aggregate reclaim records, reclaimed user
-kernel stack count, writable pages, and guard-inclusive virtual pages so boot
-smoke tests and the console overlay can verify lifecycle cleanup.
+address spaces, user data pages, page-table pages, reclaimed user kernel stack
+count, writable pages, and guard-inclusive virtual pages so boot smoke tests
+and the `tasks` console command can verify lifecycle cleanup.
 
 The boot composition root now records a read-only frame allocator diagnostics
 snapshot after the user smoke lifecycle drains. The `memory` console command and
