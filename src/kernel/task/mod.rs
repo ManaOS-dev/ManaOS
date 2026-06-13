@@ -17,6 +17,7 @@
 //! - [`run_next_user_task_once`] - Run the next active user task until one exits
 //! - [`run_active_user_tasks_until_empty`] - Drain active user tasks until none remain
 //! - [`UserTaskExit`] - User task exit result
+//! - [`process_current_user_break`] - Process a user heap break request
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
 //! - [`get_scheduler_diagnostics`] - Read scheduler accounting diagnostics
@@ -42,6 +43,7 @@ pub mod user_mode;
 use crate::kernel::memory::address::UserVirtualAddress;
 use crate::kernel::memory::address_space::{self, UserAddressSpace, UserAddressSpaceReclaim};
 use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
+use crate::kernel::memory::user_heap::UserHeap;
 use crate::kernel::memory::virtual_allocator::{
     new_dynamic_mapping_allocator, KernelVirtualRangeAllocator,
 };
@@ -92,15 +94,21 @@ impl TaskKind {
 struct UserTaskRuntime {
     address_space: Option<UserAddressSpace>,
     saved_frame: UserTrapFrame,
+    heap: UserHeap,
     syscall_frame_recorded: bool,
     interrupt_frame_recorded: bool,
 }
 
 impl UserTaskRuntime {
-    fn new(address_space: UserAddressSpace, entry_context: UserTaskContext) -> Self {
+    fn new(
+        address_space: UserAddressSpace,
+        entry_context: UserTaskContext,
+        heap_start: UserVirtualAddress,
+    ) -> Self {
         Self {
             address_space: Some(address_space),
             saved_frame: entry_context.to_trap_frame(),
+            heap: UserHeap::new(heap_start),
             syscall_frame_recorded: false,
             interrupt_frame_recorded: false,
         }
@@ -205,6 +213,7 @@ impl Task {
         parent_identifier: TaskIdentifier,
         address_space: UserAddressSpace,
         user_context: UserTaskContext,
+        heap_start: UserVirtualAddress,
         frame_allocator: &mut PhysicalFrameAllocator,
         kernel_stack_range_allocator: &mut KernelVirtualRangeAllocator,
     ) -> Self {
@@ -218,7 +227,11 @@ impl Task {
         Self {
             metadata: TaskMetadata::child(identifier, parent_identifier),
             state: TaskState::Ready,
-            kind: TaskKind::User(Box::new(UserTaskRuntime::new(address_space, user_context))),
+            kind: TaskKind::User(Box::new(UserTaskRuntime::new(
+                address_space,
+                user_context,
+                heap_start,
+            ))),
             context: TaskContext::new(),
             kernel_stack: Some(kernel_stack),
         }
@@ -383,6 +396,7 @@ impl Scheduler {
         address_space: UserAddressSpace,
         entry_point: UserVirtualAddress,
         user_stack_top: UserVirtualAddress,
+        heap_start: UserVirtualAddress,
         entry_arguments: UserEntryArguments,
     ) -> u64 {
         let task_identifier = self.next_task_identifier.allocate();
@@ -395,6 +409,7 @@ impl Scheduler {
             parent_identifier,
             address_space,
             user_context,
+            heap_start,
             frame_allocator,
             &mut self.kernel_stack_range_allocator,
         );
@@ -423,9 +438,10 @@ impl Scheduler {
         self.tasks.push(task);
         crate::log_info!(
             "task",
-            "User task kernel stack prepared: task={} address_space={:#x} bytes={} guard_virtual={:#x} writable_virtual={:#x} virtual_top={:#x} reserved_pages={} writable_pages={} guard_unmapped=true writable_mapped=true",
+            "User task kernel stack prepared: task={} address_space={:#x} heap_start={:#x} bytes={} guard_virtual={:#x} writable_virtual={:#x} virtual_top={:#x} reserved_pages={} writable_pages={} guard_unmapped=true writable_mapped=true",
             task_identifier.as_u64(),
             address_space.level_4_frame().as_u64(),
+            heap_start.as_u64(),
             kernel_stack_bytes,
             kernel_stack_guard_page_virtual_start,
             kernel_stack_writable_virtual_start,
@@ -647,6 +663,36 @@ impl Scheduler {
 
     fn take_finished_user_exit(&mut self) -> Option<UserTaskExit> {
         self.finished_user_exits.pop_front()
+    }
+
+    fn process_current_user_break(
+        &mut self,
+        frame_allocator: &mut PhysicalFrameAllocator,
+        requested_break: u64,
+    ) -> Option<u64> {
+        let current_task = &mut self.tasks[self.current_index];
+        let task_id = current_task.get_id();
+        let TaskKind::User(user_runtime) = &mut current_task.kind else {
+            return None;
+        };
+        let address_space = user_runtime.address_space?;
+        let previous_break = user_runtime.heap.current_break();
+        let next_break =
+            user_runtime
+                .heap
+                .process_break(address_space, frame_allocator, requested_break);
+        crate::log_info!(
+            "syscall",
+            "brk -> task={} requested={:#x} heap_base={:#x} previous={:#x} next={:#x} mapped_end={:#x} mapped_pages={}",
+            task_id,
+            requested_break,
+            user_runtime.heap.base().as_u64(),
+            previous_break.as_u64(),
+            next_break.as_u64(),
+            user_runtime.heap.mapped_end().as_u64(),
+            user_runtime.heap.mapped_pages()
+        );
+        Some(next_break.as_u64())
     }
 
     fn reclaim_finished_user_resources(
@@ -955,6 +1001,7 @@ pub fn spawn_user_task(
     address_space: UserAddressSpace,
     entry_point: UserVirtualAddress,
     user_stack_top: UserVirtualAddress,
+    heap_start: UserVirtualAddress,
     entry_arguments: UserEntryArguments,
 ) -> u64 {
     let mut scheduler = SCHEDULER.lock();
@@ -966,6 +1013,7 @@ pub fn spawn_user_task(
             address_space,
             entry_point,
             user_stack_top,
+            heap_start,
             entry_arguments,
         )
 }
@@ -1036,6 +1084,17 @@ pub fn run_active_user_tasks_until_empty(
 /// Mark the currently running task as finished.
 pub fn finish_current_task(exit_code: u64) -> Option<u64> {
     process_lifecycle::finish_current_task(exit_code)
+}
+
+/// Process a `brk` request for the currently running user task.
+pub fn process_current_user_break(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    requested_break: u64,
+) -> Option<u64> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler.as_mut().and_then(|scheduler| {
+        scheduler.process_current_user_break(frame_allocator, requested_break)
+    })
 }
 
 /// Save a captured user trap frame for the currently running user task.

@@ -467,6 +467,7 @@ fn free_user_data_frame(
     let range = one_frame_range(frame);
     if !frame_allocator.free_frames_for(range, FrameRangeOwner::UserElf)
         && !frame_allocator.free_frames_for(range, FrameRangeOwner::UserStack)
+        && !frame_allocator.free_frames_for(range, FrameRangeOwner::UserHeap)
     {
         panic!(
             "user address-space data frame {:#x} was not tracked as user-owned memory",

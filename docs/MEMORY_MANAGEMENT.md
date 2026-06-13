@@ -93,6 +93,8 @@ User tasks now own separate address-space roots:
   user address space.
 - User stack frames are user-task-owned and mapped only into the owning user
   address space; the guard page remains unmapped.
+- User heap frames are user-task-owned, mapped by `brk` through the active user
+  address space, and returned when the address space is destroyed.
 - Kernel stack frames are task-owned and mapped through higher-half kernel
   virtual ranges. The adjacent lower virtual guard page remains unmapped and
   does not consume a physical frame.
@@ -176,6 +178,14 @@ console status strip expose the latest tracked free, used, reserved, page-table,
 kernel stack, user, dynamic mapping, and AHCI DMA page counts without sharing the
 mutable allocator with console code.
 
+`brk` is the first syscall-time user heap growth path. The ELF loader reports a
+page-aligned heap start after the highest `PT_LOAD` segment, the scheduler stores
+the current heap break in each user task runtime, and `kernel::memory::user_heap`
+maps writable non-executable user heap pages as the break grows. The one-shot
+user runtime registers the boot-owned frame allocator only while user code can
+issue syscalls, so syscall dispatch can allocate heap frames without making the
+console or architecture layers own the allocator.
+
 ## User Address Spaces
 
 `kernel::memory::address_space::UserAddressSpace` owns the physical frame
@@ -191,7 +201,7 @@ arrays are written through the stack backing frames, so setup does not require
 temporarily activating the user address space. The one-shot user lifecycle
 switches to the task address space before Ring 3 entry and restores the kernel
 address space after `SYS_EXIT`. Finished user tasks then destroy their private
-user-window page tables and return tracked user stack, user ELF, and
+user-window page tables and return tracked user stack, user ELF, user heap, and
 page-table frames to the reusable frame allocator. User exit reporting is owned
 by the scheduler, so lifecycle cleanup drains a task-specific exit record before
 asking the scheduler for one aggregate resource-reclaim pass over the matching
@@ -204,10 +214,10 @@ reused across lifecycle runs.
 - [x] Add frame-range state storage before adding `free`.
 - [x] Import the boot memory map as `Reserved` and `Free` ranges explicitly.
 - [x] Track explicit owners for page-table, heap, framebuffer backbuffer, DMA,
-      kernel stack, user stack, and user ELF allocations.
+      kernel stack, user stack, user ELF, and user heap allocations.
 - [x] Add owner classes and boot self-check coverage for kernel image, page
       tables, heap, kernel stack, framebuffer, MMIO, DMA, user stack, user ELF,
-      and guard pages.
+      user heap, and guard pages.
 - [x] Mark runtime `LOADER_CODE` and UEFI MMIO reservations with precise
       kernel-image and MMIO owners during boot memory-map import.
 - [ ] Mark future guard-page reservations with precise owners instead of
@@ -230,6 +240,8 @@ reused across lifecycle runs.
       reuse, and physical reuse.
 - [x] Add user address-space roots for user task ELF and stack mappings, and
       prove template isolation with a boot self-check.
+- [x] Add `brk` heap-growth mapping for user tasks and prove writable heap
+      pages through storage smoke.
 - [x] Reclaim finished user address spaces by walking only the private user
       PML4 window and returning user/page-table frames to the allocator.
 - [ ] Continue proving the boot path with `just storage-smoke` after every

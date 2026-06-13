@@ -503,6 +503,7 @@ fn spawn_user_smoke_task(
         user_elf_path,
     );
     let user_entry_point = user_elf.entry_point();
+    let user_heap_start = user_elf.heap_start();
     let user_stack = kernel::memory::user_stack::allocate_user_stack(
         user_address_space,
         frame_allocator,
@@ -566,6 +567,7 @@ fn spawn_user_smoke_task(
         user_address_space,
         user_entry_point,
         prepared_user_stack.stack_pointer(),
+        user_heap_start,
         kernel::task::UserEntryArguments::new(
             prepared_user_stack.argument_count(),
             prepared_user_stack.argument_values_pointer(),
@@ -869,7 +871,7 @@ fn record_memory_diagnostics_snapshot(
     let owners = diagnostics.owners();
     crate::log_info!(
         "memory",
-        "Frame allocator diagnostics snapshot: free={} used={} reserved={} page_table={} kernel_heap={} kernel_stack={} user_stack={} user_elf={} dynamic_kernel_mapping={} ahci_dma={}",
+        "Frame allocator diagnostics snapshot: free={} used={} reserved={} page_table={} kernel_heap={} kernel_stack={} user_stack={} user_elf={} user_heap={} dynamic_kernel_mapping={} ahci_dma={}",
         diagnostics.free(),
         diagnostics.used(),
         diagnostics.reserved(),
@@ -878,6 +880,7 @@ fn record_memory_diagnostics_snapshot(
         owners.kernel_stack(),
         owners.user_stack(),
         owners.user_elf(),
+        owners.user_heap(),
         owners.dynamic_kernel_mapping(),
         owners.ahci_dma()
     );

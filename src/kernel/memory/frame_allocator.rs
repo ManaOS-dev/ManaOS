@@ -61,6 +61,8 @@ pub enum FrameRangeOwner {
     UserStack,
     /// Frames back loaded user ELF segments.
     UserElf,
+    /// Frames back user heap growth.
+    UserHeap,
 }
 
 /// Page totals for tracked physical frame ranges.
@@ -105,6 +107,8 @@ pub struct FrameAllocatorOwnerStatistics {
     pub user_stack: u64,
     /// Number of user ELF frames.
     pub user_elf: u64,
+    /// Number of user heap frames.
+    pub user_heap: u64,
 }
 
 /// A reusable allocator for 4 KiB physical frames registered from UEFI memory map
@@ -295,6 +299,9 @@ impl PhysicalFrameAllocator {
                 }
                 FrameRangeOwner::UserElf => {
                     statistics.user_elf = statistics.user_elf.saturating_add(pages);
+                }
+                FrameRangeOwner::UserHeap => {
+                    statistics.user_heap = statistics.user_heap.saturating_add(pages);
                 }
             }
         }
@@ -871,7 +878,7 @@ pub fn verify_explicit_owner_coverage() -> bool {
         1,
         FrameRangeOwner::GuardPage,
     );
-    frame_allocator.add_region(PhysAddr::new(3 * FRAME_SIZE), 17);
+    frame_allocator.add_region(PhysAddr::new(3 * FRAME_SIZE), 18);
 
     let allocation_plan = [
         (FrameRangeOwner::PageTable, 1),
@@ -882,6 +889,7 @@ pub fn verify_explicit_owner_coverage() -> bool {
         (FrameRangeOwner::DynamicKernelMapping, 1),
         (FrameRangeOwner::UserStack, 2),
         (FrameRangeOwner::UserElf, 4),
+        (FrameRangeOwner::UserHeap, 1),
     ];
 
     for (owner, pages) in allocation_plan {
@@ -906,5 +914,6 @@ pub fn verify_explicit_owner_coverage() -> bool {
             dynamic_kernel_mapping: 1,
             user_stack: 2,
             user_elf: 4,
+            user_heap: 1,
         }
 }
