@@ -63,7 +63,7 @@ pub enum FrameRangeOwner {
     UserElf,
     /// Frames back user heap growth.
     UserHeap,
-    /// Frames back anonymous user memory mappings.
+    /// Frames back private user memory mappings.
     UserMapping,
 }
 
@@ -111,7 +111,7 @@ pub struct FrameAllocatorOwnerStatistics {
     pub user_elf: u64,
     /// Number of user heap frames.
     pub user_heap: u64,
-    /// Number of anonymous user mapping frames.
+    /// Number of private user mapping frames.
     pub user_mapping: u64,
 }
 

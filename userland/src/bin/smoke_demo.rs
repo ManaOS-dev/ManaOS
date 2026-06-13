@@ -11,6 +11,7 @@ const ENTRY_ARGUMENT_MESSAGE: &[u8] = b"user entry arguments ok\n";
 const BSS_MESSAGE: &[u8] = b"user bss ok\n";
 const HEAP_MESSAGE: &[u8] = b"user heap ok\n";
 const MMAP_MESSAGE: &[u8] = b"user mmap ok\n";
+const FILE_MMAP_MESSAGE: &[u8] = b"user file mmap ok\n";
 const SHELL_MESSAGE: &[u8] = b"user shell ok\n";
 const PASS_MESSAGE: &[u8] = b"user smoke ok\n";
 const BSS_SMOKE_MARKER: u64 = 0x4d414e414f535f36;
@@ -33,6 +34,7 @@ extern "C" fn _start(
     verify_bss_zero_initialization();
     verify_user_heap_growth();
     verify_user_anonymous_mapping();
+    verify_user_file_mapping();
 
     let _ = syscall::write(STDOUT, PASS_MESSAGE);
     syscall::exit(0);
@@ -132,11 +134,11 @@ fn verify_user_anonymous_mapping() {
     const MAPPING_PAGE_BYTES: usize = 4096;
     const MAPPING_BYTES: usize = MAPPING_PAGE_BYTES * 3;
 
-    let mapping = syscall::mmap(
+    let mapping = syscall::mmap_anonymous(
         0,
         MAPPING_BYTES,
         syscall::PROT_READ | syscall::PROT_WRITE,
-        syscall::MAP_PRIVATE | syscall::MAP_ANONYMOUS,
+        syscall::MAP_PRIVATE,
     );
     if mapping < 0 {
         syscall::exit(37);
@@ -178,11 +180,11 @@ fn verify_user_anonymous_mapping() {
     }
 
     let fixed_address = mapping + (MAPPING_PAGE_BYTES * 8);
-    let fixed_mapping = syscall::mmap(
+    let fixed_mapping = syscall::mmap_anonymous(
         fixed_address,
         MAPPING_PAGE_BYTES,
         syscall::PROT_READ | syscall::PROT_WRITE,
-        syscall::MAP_PRIVATE | syscall::MAP_ANONYMOUS | syscall::MAP_FIXED_NOREPLACE,
+        syscall::MAP_PRIVATE | syscall::MAP_FIXED_NOREPLACE,
     );
     if fixed_mapping != fixed_address as isize {
         syscall::exit(43);
@@ -198,11 +200,11 @@ fn verify_user_anonymous_mapping() {
         }
     }
 
-    let duplicate_mapping = syscall::mmap(
+    let duplicate_mapping = syscall::mmap_anonymous(
         fixed_address,
         MAPPING_PAGE_BYTES,
         syscall::PROT_READ | syscall::PROT_WRITE,
-        syscall::MAP_PRIVATE | syscall::MAP_ANONYMOUS | syscall::MAP_FIXED_NOREPLACE,
+        syscall::MAP_PRIVATE | syscall::MAP_FIXED_NOREPLACE,
     );
     if duplicate_mapping != syscall::ERROR_FILE_EXISTS {
         syscall::exit(45);
@@ -213,6 +215,58 @@ fn verify_user_anonymous_mapping() {
     }
 
     let _ = syscall::write(STDOUT, MMAP_MESSAGE);
+}
+
+fn verify_user_file_mapping() {
+    const MAPPING_PAGE_BYTES: usize = 4096;
+
+    let path = b"/disk/hello.txt\0";
+    let file_descriptor = syscall::open_with_options(path, syscall::OPEN_READ_ONLY, 0);
+    if file_descriptor < 0 {
+        syscall::exit(47);
+    }
+    let file_descriptor = file_descriptor as usize;
+
+    let mapping = syscall::mmap_file_private(
+        0,
+        MAPPING_PAGE_BYTES,
+        syscall::PROT_READ,
+        syscall::MAP_PRIVATE,
+        file_descriptor,
+        0,
+    );
+    if mapping < 0 {
+        let _ = syscall::close(file_descriptor);
+        syscall::exit(48);
+    }
+    let mapping = mapping as usize;
+
+    // SAFETY: A successful read-only file-private `mmap` returned one mapped
+    // user page initialized from `/disk/hello.txt`.
+    let mapped_bytes = unsafe { core::slice::from_raw_parts(mapping as *const u8, BUFFER_LENGTH) };
+    if !contains(mapped_bytes, b"FAT32") {
+        let _ = syscall::munmap(mapping, MAPPING_PAGE_BYTES);
+        let _ = syscall::close(file_descriptor);
+        syscall::exit(49);
+    }
+
+    let mut buffer = [0_u8; BUFFER_LENGTH];
+    let bytes_read = syscall::read(file_descriptor, &mut buffer);
+    if bytes_read <= 0 || !contains(&buffer[..bytes_read as usize], b"FAT32") {
+        let _ = syscall::munmap(mapping, MAPPING_PAGE_BYTES);
+        let _ = syscall::close(file_descriptor);
+        syscall::exit(50);
+    }
+
+    if syscall::munmap(mapping, MAPPING_PAGE_BYTES) != 0 {
+        let _ = syscall::close(file_descriptor);
+        syscall::exit(51);
+    }
+    if syscall::close(file_descriptor) != 0 {
+        syscall::exit(52);
+    }
+
+    let _ = syscall::write(STDOUT, FILE_MMAP_MESSAGE);
 }
 
 fn verify_disk_file() {

@@ -117,3 +117,72 @@ pub fn syscall4(
 
     result as isize
 }
+
+/// Invoke a ManaOS syscall with five arguments.
+#[inline(always)]
+pub fn syscall5(
+    syscall_number: usize,
+    first_argument: usize,
+    second_argument: usize,
+    third_argument: usize,
+    fourth_argument: usize,
+    fifth_argument: usize,
+) -> isize {
+    let result: usize;
+
+    // SAFETY: The register assignments match the ManaOS syscall ABI:
+    // rax=syscall number, rdi/rsi/rdx/r10/r8=arguments. `syscall` clobbers
+    // rcx/r11.
+    unsafe {
+        asm!(
+            "syscall",
+            inlateout("rax") syscall_number => result,
+            inlateout("rdi") first_argument => _,
+            inlateout("rsi") second_argument => _,
+            inlateout("rdx") third_argument => _,
+            inlateout("r10") fourth_argument => _,
+            inlateout("r8") fifth_argument => _,
+            lateout("rcx") _,
+            lateout("r9") _,
+            lateout("r11") _,
+            options(nostack)
+        );
+    }
+
+    result as isize
+}
+
+/// Invoke a ManaOS syscall with six arguments.
+#[inline(always)]
+pub fn syscall6(
+    syscall_number: usize,
+    first_argument: usize,
+    second_argument: usize,
+    third_argument: usize,
+    fourth_argument: usize,
+    fifth_argument: usize,
+    sixth_argument: usize,
+) -> isize {
+    let result: usize;
+
+    // SAFETY: The register assignments match the ManaOS syscall ABI:
+    // rax=syscall number, rdi/rsi/rdx/r10/r8/r9=arguments. `syscall`
+    // clobbers rcx/r11.
+    unsafe {
+        asm!(
+            "syscall",
+            inlateout("rax") syscall_number => result,
+            inlateout("rdi") first_argument => _,
+            inlateout("rsi") second_argument => _,
+            inlateout("rdx") third_argument => _,
+            inlateout("r10") fourth_argument => _,
+            inlateout("r8") fifth_argument => _,
+            inlateout("r9") sixth_argument => _,
+            lateout("rcx") _,
+            lateout("r11") _,
+            options(nostack)
+        );
+    }
+
+    result as isize
+}

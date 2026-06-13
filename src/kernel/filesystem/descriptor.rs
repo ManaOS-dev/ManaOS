@@ -114,6 +114,17 @@ impl FileDescriptorTable {
         Ok(count)
     }
 
+    /// Read from an open file descriptor at an absolute offset.
+    pub fn read_at(
+        &self,
+        descriptor: FileDescriptor,
+        offset: usize,
+        buffer: &mut [u8],
+    ) -> FileSystemResult<usize> {
+        let open_file = self.get_open_file(descriptor)?;
+        open_file.node.read_at(offset, buffer)
+    }
+
     /// Write to an open file descriptor at its current offset.
     pub fn write(&mut self, descriptor: FileDescriptor, buffer: &[u8]) -> FileSystemResult<usize> {
         let open_file = self.get_open_file_mut(descriptor)?;
@@ -172,6 +183,13 @@ impl FileDescriptorTable {
         self.entries
             .get_mut(descriptor)
             .and_then(Option::as_mut)
+            .ok_or(FileSystemError::InvalidFileDescriptor)
+    }
+
+    fn get_open_file(&self, descriptor: FileDescriptor) -> FileSystemResult<&OpenFile> {
+        self.entries
+            .get(descriptor)
+            .and_then(Option::as_ref)
             .ok_or(FileSystemError::InvalidFileDescriptor)
     }
 }

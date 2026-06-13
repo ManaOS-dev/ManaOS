@@ -813,7 +813,7 @@ fn log_scheduler_task_diagnostics(
 }
 
 fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
-    const SMOKE_ANONYMOUS_MAPPING_BYTES: u64 = 12_288;
+    const SMOKE_PRIVATE_MAPPING_BYTES: u64 = 16_384;
 
     let snapshots = kernel::task::get_scheduler_task_snapshots()
         .expect("scheduler task snapshots must be available after user smoke tasks");
@@ -855,8 +855,8 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
         );
         assert_eq!(
             user_virtual_memory.mapping_next_start(),
-            kernel::memory::user_layout::USER_MAPPING_BASE + SMOKE_ANONYMOUS_MAPPING_BYTES,
-            "user smoke task snapshots must show one three-page mmap allocation"
+            kernel::memory::user_layout::USER_MAPPING_BASE + SMOKE_PRIVATE_MAPPING_BYTES,
+            "user smoke task snapshots must show one three-page anonymous mmap and one file mmap allocation"
         );
         user_vm_snapshots = user_vm_snapshots.saturating_add(1);
         if user_virtual_memory.mapping_active_pages() == 0

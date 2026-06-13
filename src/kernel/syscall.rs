@@ -19,7 +19,7 @@
 //! - [`SYS_CLOSE`] - Linux-compatible close syscall number
 //! - [`SYS_FSTAT`] - Linux-compatible file status syscall number
 //! - [`SYS_LSEEK`] - Linux-compatible seek syscall number
-//! - [`SYS_MMAP`] - Linux-compatible anonymous memory-map syscall number
+//! - [`SYS_MMAP`] - Linux-compatible memory-map syscall number
 //! - [`SYS_MUNMAP`] - Linux-compatible memory-unmap syscall number
 //! - [`SYS_BRK`] - Linux-compatible heap break syscall number
 //! - [`SYS_EXIT`] - Linux-compatible exit syscall number
@@ -30,7 +30,7 @@
 
 use crate::kernel::memory::{
     address::{UserCString, UserReadableRange, UserVirtualRange, UserWritableRange},
-    user_mapping::{UserMappingError, UserMappingPlacement},
+    user_mapping::{UserMappingError, UserMappingPlacement, UserMappingSource},
     user_pointer,
 };
 use crate::kernel::task::context::UserTrapFrame;
@@ -74,6 +74,8 @@ const fn linux_error(errno: u64) -> u64 {
 /// - `rsi`: second argument
 /// - `rdx`: third argument
 /// - `r10`: fourth argument
+/// - `r8`: fifth argument
+/// - `r9`: sixth argument
 #[no_mangle]
 pub extern "C" fn syscall_dispatch(
     syscall_number: u64,
@@ -81,6 +83,8 @@ pub extern "C" fn syscall_dispatch(
     second_argument: u64,
     third_argument: u64,
     fourth_argument: u64,
+    fifth_argument: u64,
+    sixth_argument: u64,
 ) -> u64 {
     match syscall_number {
         SYS_WRITE => sys_write(first_argument, second_argument, third_argument),
@@ -100,6 +104,8 @@ pub extern "C" fn syscall_dispatch(
             second_argument,
             third_argument,
             fourth_argument,
+            fifth_argument,
+            sixth_argument,
         ),
         SYS_MUNMAP => sys_munmap(first_argument, second_argument),
         SYS_BRK => sys_brk(first_argument),
@@ -145,6 +151,8 @@ pub unsafe extern "C" fn syscall_dispatch_from_trap_frame(trap_frame: *mut UserT
         trap_frame.rsi,
         trap_frame.rdx,
         trap_frame.r10,
+        trap_frame.r8,
+        trap_frame.r9,
     );
     trap_frame.rax = result;
     if result != USER_EXIT_SENTINEL {
@@ -348,35 +356,98 @@ fn sys_brk(requested_break: u64) -> u64 {
     .unwrap_or(ERROR_NOT_IMPLEMENTED)
 }
 
-fn sys_mmap(requested_address: u64, length: u64, protection: u64, flags: u64) -> u64 {
-    let Some(placement) = anonymous_mapping_placement(requested_address, flags) else {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SyscallMappingSource {
+    Anonymous,
+    FilePrivate {
+        file_descriptor: usize,
+        offset: usize,
+    },
+}
+
+impl SyscallMappingSource {
+    const fn user_mapping_source(self) -> UserMappingSource {
+        match self {
+            Self::Anonymous => UserMappingSource::Anonymous,
+            Self::FilePrivate { .. } => UserMappingSource::FilePrivate,
+        }
+    }
+}
+
+fn sys_mmap(
+    requested_address: u64,
+    length: u64,
+    protection: u64,
+    flags: u64,
+    file_descriptor: u64,
+    offset: u64,
+) -> u64 {
+    let Some(placement) = mapping_placement(requested_address, flags) else {
         return ERROR_INVALID_ARGUMENT;
     };
-    if !is_supported_anonymous_mapping_request(length, protection, flags) {
+    if !is_supported_mapping_request(length, protection, flags) {
         return ERROR_INVALID_ARGUMENT;
     }
+    let mapping_source = match mapping_source_from_arguments(file_descriptor, offset, flags) {
+        Ok(mapping_source) => mapping_source,
+        Err(error) => return error,
+    };
 
     let writable = protection & contract::PROT_WRITE != 0;
+    let request = crate::kernel::task::UserMappingRequest::new(
+        requested_address,
+        placement,
+        mapping_source.user_mapping_source(),
+        length,
+        writable,
+        protection,
+        flags,
+    );
+    let mut file_read_error = None;
+    let mut file_bytes_read = 0_usize;
     let Some(result) = crate::kernel::memory::runtime_allocator::with_user_runtime_frame_allocator(
         |frame_allocator| {
             crate::kernel::task::process_current_user_mapping(
                 frame_allocator,
-                crate::kernel::task::UserMappingRequest::new(
-                    requested_address,
-                    placement,
-                    length,
-                    writable,
-                    protection,
-                    flags,
-                ),
+                request,
+                |page_index, page_buffer| {
+                    initialize_mapping_page(
+                        mapping_source,
+                        page_index,
+                        page_buffer,
+                        &mut file_read_error,
+                        &mut file_bytes_read,
+                    )
+                },
             )
         },
     ) else {
         return ERROR_NOT_IMPLEMENTED;
     };
 
-    result.map_or(ERROR_NOT_IMPLEMENTED, |result| {
-        result.unwrap_or_else(user_mapping_error_to_linux)
+    result.map_or(ERROR_NOT_IMPLEMENTED, |result| match result {
+        Ok(start_address) => {
+            if let SyscallMappingSource::FilePrivate {
+                file_descriptor,
+                offset,
+            } = mapping_source
+            {
+                crate::log_info!(
+                    "syscall",
+                    "mmap file preload -> fd={} offset={} start={:#x} length={} bytes={}",
+                    file_descriptor,
+                    offset,
+                    start_address,
+                    length,
+                    file_bytes_read
+                );
+            }
+            start_address
+        }
+        Err(UserMappingError::InitializationFailed) => {
+            file_read_error.map_or(ERROR_NOT_SUPPORTED, filesystem_error_to_linux)
+        }
+        Err(error) => user_mapping_error_to_linux(error),
     })
 }
 
@@ -404,7 +475,7 @@ fn sys_munmap(start_address: u64, length: u64) -> u64 {
     }
 }
 
-fn is_supported_anonymous_mapping_request(length: u64, protection: u64, flags: u64) -> bool {
+fn is_supported_mapping_request(length: u64, protection: u64, flags: u64) -> bool {
     let supported_protection = contract::PROT_READ | contract::PROT_WRITE | contract::PROT_EXEC;
     let supported_flags =
         contract::MAP_PRIVATE | contract::MAP_ANONYMOUS | contract::MAP_FIXED_NOREPLACE;
@@ -413,11 +484,10 @@ fn is_supported_anonymous_mapping_request(length: u64, protection: u64, flags: u
         && (protection & contract::PROT_EXEC) == 0
         && (protection & (contract::PROT_READ | contract::PROT_WRITE)) != 0
         && (flags & !supported_flags) == 0
-        && (flags & (contract::MAP_PRIVATE | contract::MAP_ANONYMOUS))
-            == (contract::MAP_PRIVATE | contract::MAP_ANONYMOUS)
+        && (flags & contract::MAP_PRIVATE) == contract::MAP_PRIVATE
 }
 
-fn anonymous_mapping_placement(requested_address: u64, flags: u64) -> Option<UserMappingPlacement> {
+fn mapping_placement(requested_address: u64, flags: u64) -> Option<UserMappingPlacement> {
     let fixed_no_replace = flags & contract::MAP_FIXED_NOREPLACE != 0;
     if fixed_no_replace {
         if requested_address == 0 || !requested_address.is_multiple_of(PAGE_SIZE) {
@@ -432,11 +502,73 @@ fn anonymous_mapping_placement(requested_address: u64, flags: u64) -> Option<Use
     }
 }
 
+fn mapping_source_from_arguments(
+    file_descriptor: u64,
+    offset: u64,
+    flags: u64,
+) -> Result<SyscallMappingSource, u64> {
+    if flags & contract::MAP_ANONYMOUS != 0 {
+        return Ok(SyscallMappingSource::Anonymous);
+    }
+
+    if !offset.is_multiple_of(PAGE_SIZE) {
+        return Err(ERROR_INVALID_ARGUMENT);
+    }
+    let file_descriptor =
+        usize::try_from(file_descriptor).map_err(|_| ERROR_BAD_FILE_DESCRIPTOR)?;
+    let offset = usize::try_from(offset).map_err(|_| ERROR_INVALID_ARGUMENT)?;
+    let metadata = crate::kernel::filesystem::descriptor_metadata(file_descriptor)
+        .map_err(filesystem_error_to_linux)?;
+    match metadata.file_type {
+        crate::kernel::filesystem::FileType::Regular => Ok(SyscallMappingSource::FilePrivate {
+            file_descriptor,
+            offset,
+        }),
+        crate::kernel::filesystem::FileType::Directory => Err(ERROR_IS_DIRECTORY),
+        crate::kernel::filesystem::FileType::Device => Err(ERROR_NOT_SUPPORTED),
+    }
+}
+
+fn initialize_mapping_page(
+    mapping_source: SyscallMappingSource,
+    page_index: u64,
+    page_buffer: &mut [u8],
+    file_read_error: &mut Option<crate::kernel::filesystem::FileSystemError>,
+    file_bytes_read: &mut usize,
+) -> Result<(), UserMappingError> {
+    let SyscallMappingSource::FilePrivate {
+        file_descriptor,
+        offset,
+    } = mapping_source
+    else {
+        return Ok(());
+    };
+
+    let page_offset = page_index
+        .checked_mul(PAGE_SIZE)
+        .and_then(|offset| usize::try_from(offset).ok())
+        .ok_or(UserMappingError::InvalidRequest)?;
+    let read_offset = offset
+        .checked_add(page_offset)
+        .ok_or(UserMappingError::InvalidRequest)?;
+    match crate::kernel::filesystem::read_at(file_descriptor, read_offset, page_buffer) {
+        Ok(bytes_read) => {
+            *file_bytes_read = file_bytes_read.saturating_add(bytes_read);
+            Ok(())
+        }
+        Err(error) => {
+            *file_read_error = Some(error);
+            Err(UserMappingError::InitializationFailed)
+        }
+    }
+}
+
 fn user_mapping_error_to_linux(error: UserMappingError) -> u64 {
     match error {
         UserMappingError::InvalidRequest => ERROR_INVALID_ARGUMENT,
         UserMappingError::AddressInUse => ERROR_FILE_EXISTS,
         UserMappingError::OutOfMemory => ERROR_OUT_OF_MEMORY,
+        UserMappingError::InitializationFailed => ERROR_NOT_SUPPORTED,
     }
 }
 

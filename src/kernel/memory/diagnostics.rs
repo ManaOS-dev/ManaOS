@@ -122,7 +122,7 @@ impl FrameAllocatorOwnerDiagnostics {
         self.user_heap
     }
 
-    /// Return anonymous user mapping pages.
+    /// Return private user mapping pages.
     pub const fn user_mapping(self) -> u64 {
         self.user_mapping
     }
