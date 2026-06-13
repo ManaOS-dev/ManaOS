@@ -616,6 +616,17 @@ fn run_user_smoke_demo(
         user_task_ids[0],
         user_task_ids[1]
     );
+    for user_task_id in &user_task_ids {
+        assert!(
+            kernel::task::activate_user_task(*user_task_id),
+            "spawned user smoke task must be activatable"
+        );
+    }
+    crate::log_info!(
+        "task",
+        "Multi-user active set prepared: tasks={}",
+        user_task_ids.len()
+    );
 
     let mut finished = [false; 2];
     for _ in 0..user_task_ids.len() {

@@ -25,10 +25,10 @@ impl UserTaskExit {
     }
 }
 
-/// Run one user-space task until it exits through `SYS_EXIT`.
+/// Run active user-space tasks until one exits through `SYS_EXIT`.
 ///
-/// Returns the task identifier and exit code reported by the user task that
-/// reached `SYS_EXIT`.
+/// Starts with `task_id` and returns the task identifier and exit code reported
+/// by the active user task that reached `SYS_EXIT`.
 ///
 /// # Panics
 ///

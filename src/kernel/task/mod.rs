@@ -18,6 +18,7 @@
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
 //! - [`get_scheduler_diagnostics`] - Read scheduler accounting diagnostics
+//! - [`activate_user_task`] - Add a user task to the active scheduling set
 //! - [`record_current_user_trap_frame`] - Save a captured user trap frame
 //! - [`record_current_user_interrupt_trap_frame`] - Save a timer interrupt user trap frame
 //! - [`get_kernel_stack_guard_fault`] - Classify a kernel stack guard fault
@@ -121,6 +122,7 @@ enum SwitchAction {
     },
     EnterUser {
         current_context: *mut u64,
+        task_id: u64,
         trap_frame: UserTrapFrame,
         kernel_stack_top: usize,
         address_space: UserAddressSpace,
@@ -274,7 +276,7 @@ struct Scheduler {
     current_index: usize,
     next_task_identifier: TaskIdentifier,
     kernel_stack_range_allocator: KernelVirtualRangeAllocator,
-    active_user_task_identifier: Option<u64>,
+    active_user_task_identifiers: Vec<u64>,
     preemption_switch_logged: bool,
     user_resume_logged: bool,
     context_switch_count: u64,
@@ -291,7 +293,7 @@ impl Scheduler {
             current_index: 0,
             next_task_identifier: TaskIdentifier::first_dynamic(),
             kernel_stack_range_allocator: new_dynamic_mapping_allocator(),
-            active_user_task_identifier: None,
+            active_user_task_identifiers: Vec::new(),
             preemption_switch_logged: false,
             user_resume_logged: false,
             context_switch_count: 0,
@@ -478,6 +480,33 @@ impl Scheduler {
             .position(|task| task.metadata.get_identifier().as_u64() == task_id)
     }
 
+    fn is_user_task_active(&self, task_id: u64) -> bool {
+        self.active_user_task_identifiers.contains(&task_id)
+    }
+
+    fn activate_user_task(&mut self, task_id: u64) -> bool {
+        let Some(task_index) = self.get_task_index(task_id) else {
+            return false;
+        };
+        let TaskKind::User(user_runtime) = &self.tasks[task_index].kind else {
+            return false;
+        };
+        if user_runtime.address_space.is_none()
+            || self.tasks[task_index].state == TaskState::Finished
+        {
+            return false;
+        }
+        if !self.is_user_task_active(task_id) {
+            self.active_user_task_identifiers.push(task_id);
+        }
+        true
+    }
+
+    fn deactivate_user_task(&mut self, task_id: u64) {
+        self.active_user_task_identifiers
+            .retain(|active_task_id| *active_task_id != task_id);
+    }
+
     fn prepare_one_shot_user_task(&mut self, task_id: u64) -> Option<OneShotUserTask> {
         let task_index = self.get_task_index(task_id)?;
         let TaskKind::User(user_runtime) = &self.tasks[task_index].kind else {
@@ -501,7 +530,7 @@ impl Scheduler {
             return None;
         }
         self.current_index = task_index;
-        self.active_user_task_identifier = Some(task_id);
+        self.activate_user_task(task_id);
         self.user_entry_count = self.user_entry_count.saturating_add(1);
         Some(OneShotUserTask {
             trap_frame,
@@ -522,7 +551,7 @@ impl Scheduler {
             }
             self.current_index = 0;
         }
-        self.active_user_task_identifier = None;
+        self.deactivate_user_task(task_id);
         self.finished_task_count = self.finished_task_count.saturating_add(1);
 
         Some(task_id)
@@ -611,16 +640,23 @@ impl Scheduler {
         }
     }
 
-    fn can_schedule_task(&self, index: usize) -> bool {
-        if !self.tasks[index].state.is_ready() {
+    fn can_schedule_task(&self, current_index: usize, candidate_index: usize) -> bool {
+        if !self.tasks[candidate_index].state.is_ready() {
             return false;
         }
 
-        match &self.tasks[index].kind {
-            TaskKind::Kernel => !self.tasks[index].context.is_empty(),
+        match &self.tasks[candidate_index].kind {
+            TaskKind::Kernel => !self.tasks[candidate_index].context.is_empty(),
             TaskKind::User(_) => {
-                USER_TASK_PREEMPTION_ENABLED
-                    && self.active_user_task_identifier == Some(self.tasks[index].get_id())
+                if !USER_TASK_PREEMPTION_ENABLED
+                    || !self.is_user_task_active(self.tasks[candidate_index].get_id())
+                {
+                    return false;
+                }
+
+                let current_is_user = matches!(self.tasks[current_index].kind, TaskKind::User(_));
+                let candidate_needs_first_entry = self.tasks[candidate_index].context.is_empty();
+                !(current_is_user && candidate_needs_first_entry)
             }
         }
     }
@@ -643,12 +679,18 @@ impl Scheduler {
         }
     }
 
+    fn is_first_entry_user_candidate(&self, index: usize) -> bool {
+        matches!(self.tasks[index].kind, TaskKind::User(_))
+            && self.tasks[index].context.is_empty()
+            && self.is_user_task_active(self.tasks[index].get_id())
+    }
+
     fn prepare_next_switch(&mut self, interrupted_user_mode: bool) -> Option<SwitchAction> {
         if !self.can_switch_current_task_away(interrupted_user_mode) {
             return None;
         }
 
-        let next_index = self.get_next_ready_index()?;
+        let next_index = self.get_next_ready_index(self.current_index)?;
         if next_index == self.current_index {
             return None;
         }
@@ -684,8 +726,11 @@ impl Scheduler {
         if let TaskKind::User(user_runtime) = &self.tasks[next_index].kind {
             if self.tasks[next_index].context.is_empty() {
                 self.user_entry_count = self.user_entry_count.saturating_add(1);
+                self.active_user_task_identifiers.clear();
+                self.active_user_task_identifiers.push(next_task_id);
                 return Some(SwitchAction::EnterUser {
                     current_context,
+                    task_id: next_task_id,
                     trap_frame: user_runtime.saved_frame,
                     kernel_stack_top: next_user_kernel_stack_top
                         .expect("user tasks must own a kernel stack before entry"),
@@ -715,14 +760,25 @@ impl Scheduler {
         })
     }
 
-    fn get_next_ready_index(&self) -> Option<usize> {
+    fn get_next_ready_index(&self, current_index: usize) -> Option<usize> {
         if self.tasks.len() < 2 {
             return None;
         }
 
+        if matches!(self.tasks[current_index].kind, TaskKind::Kernel) {
+            for offset in 1..=self.tasks.len() {
+                let index = (current_index + offset) % self.tasks.len();
+                if self.can_schedule_task(current_index, index)
+                    && self.is_first_entry_user_candidate(index)
+                {
+                    return Some(index);
+                }
+            }
+        }
+
         for offset in 1..=self.tasks.len() {
-            let index = (self.current_index + offset) % self.tasks.len();
-            if self.can_schedule_task(index) {
+            let index = (current_index + offset) % self.tasks.len();
+            if self.can_schedule_task(current_index, index) {
                 return Some(index);
             }
         }
@@ -786,9 +842,18 @@ pub fn spawn_user_task(
         )
 }
 
-/// Run one user-space task until it exits through `SYS_EXIT`.
+/// Add a user task to the active scheduling set.
+pub fn activate_user_task(task_id: u64) -> bool {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .is_some_and(|scheduler| scheduler.activate_user_task(task_id))
+}
+
+/// Run active user-space tasks until one exits through `SYS_EXIT`.
 ///
-/// Returns the exit code reported by the user task.
+/// Starts with `task_id` and returns the exit reported by the active user task
+/// that reached `SYS_EXIT`.
 ///
 /// # Panics
 ///
@@ -883,12 +948,20 @@ pub fn process_timer_tick(interrupted_user_mode: bool) {
         }
         SwitchAction::EnterUser {
             current_context,
+            task_id,
             trap_frame,
             kernel_stack_top,
             address_space,
         } => {
             address_space::switch_to_user_address_space(address_space);
             install_user_task_kernel_stack(kernel_stack_top);
+            crate::log_info!(
+                "task",
+                "User task entered from timer context: task={} address_space={:#x} kernel_stack_top={:#x}",
+                task_id,
+                address_space.level_4_frame().as_u64(),
+                kernel_stack_top
+            );
             // SAFETY: The current context pointer and user trap frame come
             // from tasks stored in the scheduler. The assembly entry saves the
             // current context before consuming the user frame.

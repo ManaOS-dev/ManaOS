@@ -6,7 +6,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 pub type ContextSwitchFunction = unsafe fn(*mut u64, *const u64);
 
 /// Architecture function that saves a task context and restores a user frame.
-pub type UserModeSwitchFunction = unsafe fn(*mut u64, *const u64) -> !;
+pub type UserModeSwitchFunction = unsafe fn(*mut u64, *const u64);
 /// Architecture function that restores a user trap frame and returns after `SYS_EXIT`.
 pub type ReturnableUserModeEntryFunction = unsafe fn(*const u64);
 /// Architecture function that installs the Ring 0 stack for user-mode traps.
@@ -70,13 +70,14 @@ pub unsafe fn switch_context(current_context: *mut u64, next_context: *const u64
 ///
 /// `current_context` must point to valid architecture task context storage.
 /// `context` must point to a valid user trap frame whose code and stack
-/// addresses are mapped as user-accessible pages.
+/// addresses are mapped as user-accessible pages. This call may return after
+/// the saved `current_context` is later scheduled again.
 ///
 /// # Panics
 ///
 /// Panics if the architecture user-mode switch entry point has not been
 /// registered by the composition root.
-pub unsafe fn switch_to_user_mode(current_context: *mut u64, context: *const u64) -> ! {
+pub unsafe fn switch_to_user_mode(current_context: *mut u64, context: *const u64) {
     let function = USER_MODE_SWITCH_FUNCTION.load(Ordering::Acquire);
     assert!(
         function != 0,
@@ -88,7 +89,9 @@ pub unsafe fn switch_to_user_mode(current_context: *mut u64, context: *const u64
     let function: UserModeSwitchFunction = unsafe { core::mem::transmute(function) };
     // SAFETY: The caller upholds the context pointer and user trap-frame
     // pointer validity contracts.
-    unsafe { function(current_context, context) }
+    unsafe {
+        function(current_context, context);
+    }
 }
 
 /// Restore a user trap frame and return after the task exits through `SYS_EXIT`.
