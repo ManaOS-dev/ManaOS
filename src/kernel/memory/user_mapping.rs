@@ -45,6 +45,36 @@ impl UserMapping {
     }
 }
 
+/// Placement policy for an anonymous user mapping request.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UserMappingPlacement {
+    /// Choose the next available address in the anonymous mapping region.
+    Any,
+    /// Use the requested address only when the range is currently unmapped.
+    FixedNoReplace(UserVirtualAddress),
+}
+
+impl UserMappingPlacement {
+    /// Return a stable diagnostic label for this placement policy.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Any => "any",
+            Self::FixedNoReplace(_) => "fixed_noreplace",
+        }
+    }
+}
+
+/// Reason an anonymous mapping request was rejected.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UserMappingError {
+    /// The request could not fit the anonymous user mapping region.
+    InvalidRequest,
+    /// The requested fixed range overlaps an active mapping.
+    AddressInUse,
+    /// The request ran out of physical frames or mapping records.
+    OutOfMemory,
+}
+
 /// Anonymous user mappings owned by one user task.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserMappings {
@@ -69,26 +99,36 @@ impl UserMappings {
         &mut self,
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
+        placement: UserMappingPlacement,
         length: u64,
         writable: bool,
-    ) -> Option<UserMappingAllocation> {
-        let page_count = page_count_for_length(length)?;
-        let record_index = self.next_empty_record_index()?;
-        let byte_len = page_count.checked_mul(PAGE_SIZE)?;
-        let start_address = self.next_start;
-        let end_address = start_address.checked_add(byte_len)?;
+    ) -> Result<UserMappingAllocation, UserMappingError> {
+        let page_count = page_count_for_length(length).ok_or(UserMappingError::InvalidRequest)?;
+        let record_index = self
+            .next_empty_record_index()
+            .ok_or(UserMappingError::OutOfMemory)?;
+        let byte_len = page_count
+            .checked_mul(PAGE_SIZE)
+            .ok_or(UserMappingError::InvalidRequest)?;
+        let start_address = self.start_address_for_placement(placement, byte_len)?;
+        let end_address = start_address
+            .checked_add(byte_len)
+            .ok_or(UserMappingError::InvalidRequest)?;
         if start_address < USER_MAPPING_BASE || end_address > USER_MAPPING_END {
-            return None;
+            return Err(UserMappingError::InvalidRequest);
         }
 
-        let start = UserVirtualAddress::new(start_address)?;
+        let start =
+            UserVirtualAddress::new(start_address).ok_or(UserMappingError::InvalidRequest)?;
         if !Self::map_pages(address_space, frame_allocator, start, page_count, writable) {
-            return None;
+            return Err(UserMappingError::OutOfMemory);
         }
 
         self.records[record_index] = Some(UserMapping { start, page_count });
-        self.next_start = end_address;
-        Some(UserMappingAllocation { start, page_count })
+        if matches!(placement, UserMappingPlacement::Any) {
+            self.next_start = end_address;
+        }
+        Ok(UserMappingAllocation { start, page_count })
     }
 
     /// Unmap a page-aligned anonymous mapping range and return removed pages.
@@ -243,6 +283,67 @@ impl UserMappings {
         self.records.iter().position(Option::is_none)
     }
 
+    fn start_address_for_placement(
+        self,
+        placement: UserMappingPlacement,
+        byte_len: u64,
+    ) -> Result<u64, UserMappingError> {
+        match placement {
+            UserMappingPlacement::Any => self
+                .next_available_start(self.next_start, byte_len)
+                .ok_or(UserMappingError::OutOfMemory),
+            UserMappingPlacement::FixedNoReplace(start) => {
+                let start_address = start.as_u64();
+                let end_address = start_address
+                    .checked_add(byte_len)
+                    .ok_or(UserMappingError::InvalidRequest)?;
+                if !start_address.is_multiple_of(PAGE_SIZE)
+                    || start_address < USER_MAPPING_BASE
+                    || end_address > USER_MAPPING_END
+                {
+                    return Err(UserMappingError::InvalidRequest);
+                }
+                if self
+                    .overlapping_record_end(start_address, end_address)
+                    .is_some()
+                {
+                    return Err(UserMappingError::AddressInUse);
+                }
+                Ok(start_address)
+            }
+        }
+    }
+
+    fn next_available_start(self, preferred_start: u64, byte_len: u64) -> Option<u64> {
+        let mut candidate = preferred_start;
+        loop {
+            let end_address = candidate.checked_add(byte_len)?;
+            if end_address > USER_MAPPING_END {
+                return None;
+            }
+            let Some(overlap_end) = self.overlapping_record_end(candidate, end_address) else {
+                return Some(candidate);
+            };
+            candidate = align_up_to_page(overlap_end)?;
+        }
+    }
+
+    fn overlapping_record_end(self, start_address: u64, end_address: u64) -> Option<u64> {
+        self.records
+            .iter()
+            .filter_map(|record| {
+                let mapping = record.as_ref()?;
+                let mapping_start = mapping.start.as_u64();
+                let mapping_end = mapping.end_exclusive()?;
+                if start_address < mapping_end && mapping_start < end_address {
+                    Some(mapping_end)
+                } else {
+                    None
+                }
+            })
+            .max()
+    }
+
     fn find_containing_record_index(self, start_address: u64, end_address: u64) -> Option<usize> {
         self.records.iter().position(|record| {
             let Some(mapping) = record else {
@@ -313,6 +414,12 @@ fn page_count_for_length(length: u64) -> Option<u64> {
     }
     let rounded_length = length.checked_add(PAGE_SIZE - 1)? & !(PAGE_SIZE - 1);
     Some(rounded_length / PAGE_SIZE)
+}
+
+fn align_up_to_page(address: u64) -> Option<u64> {
+    address
+        .checked_add(PAGE_SIZE - 1)
+        .map(|address| address & !(PAGE_SIZE - 1))
 }
 
 fn user_page_start(start: UserVirtualAddress, page_index: u64) -> Option<UserVirtualAddress> {

@@ -196,8 +196,9 @@ the `UserHeap` owner pool, while page-table frames remain owned by the address
 space until process cleanup.
 
 Anonymous `mmap` is the second syscall-time user memory path. The current ABI
-supports `mmap(addr, len, prot, flags)` only for `addr = 0` and
-`MAP_PRIVATE | MAP_ANONYMOUS`; executable, file-backed, and fixed-address
+supports `mmap(addr, len, prot, flags)` for automatic anonymous mappings with
+`addr = 0` and for non-overlapping fixed anonymous mappings with
+`MAP_FIXED_NOREPLACE`. Executable, file-backed, and replacement `MAP_FIXED`
 mappings are intentionally rejected until the process model grows those
 ownership rules. The static user layout keeps the `brk` heap below
 `0x0000_6000_0000_0000`, anonymous mappings in
@@ -274,6 +275,8 @@ reused across lifecycle runs.
       through storage smoke.
 - [x] Add partial anonymous `munmap` and prove split-record tracking through
       storage smoke.
+- [x] Add `MAP_FIXED_NOREPLACE` anonymous mappings and prove overlap rejection
+      through storage smoke.
 - [x] Expose per-user-task virtual memory snapshots through the `tasks` console
       command.
 - [x] Reclaim finished user address spaces by walking only the private user

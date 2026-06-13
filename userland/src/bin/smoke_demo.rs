@@ -177,6 +177,41 @@ fn verify_user_anonymous_mapping() {
         syscall::exit(42);
     }
 
+    let fixed_address = mapping + (MAPPING_PAGE_BYTES * 8);
+    let fixed_mapping = syscall::mmap(
+        fixed_address,
+        MAPPING_PAGE_BYTES,
+        syscall::PROT_READ | syscall::PROT_WRITE,
+        syscall::MAP_PRIVATE | syscall::MAP_ANONYMOUS | syscall::MAP_FIXED_NOREPLACE,
+    );
+    if fixed_mapping != fixed_address as isize {
+        syscall::exit(43);
+    }
+
+    let fixed_byte = fixed_address as *mut u8;
+    // SAFETY: `MAP_FIXED_NOREPLACE` succeeded at `fixed_address`, mapping one
+    // writable user page.
+    unsafe {
+        fixed_byte.write(0x46);
+        if fixed_byte.read() != 0x46 {
+            syscall::exit(44);
+        }
+    }
+
+    let duplicate_mapping = syscall::mmap(
+        fixed_address,
+        MAPPING_PAGE_BYTES,
+        syscall::PROT_READ | syscall::PROT_WRITE,
+        syscall::MAP_PRIVATE | syscall::MAP_ANONYMOUS | syscall::MAP_FIXED_NOREPLACE,
+    );
+    if duplicate_mapping != syscall::ERROR_FILE_EXISTS {
+        syscall::exit(45);
+    }
+
+    if syscall::munmap(fixed_address, MAPPING_PAGE_BYTES) != 0 {
+        syscall::exit(46);
+    }
+
     let _ = syscall::write(STDOUT, MMAP_MESSAGE);
 }
 

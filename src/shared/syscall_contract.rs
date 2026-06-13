@@ -50,6 +50,8 @@ pub const PROT_EXEC: u64 = 0x4;
 pub const MAP_PRIVATE: u64 = 0x02;
 /// Mapping is anonymous and not backed by a file descriptor.
 pub const MAP_ANONYMOUS: u64 = 0x20;
+/// Fixed mapping must fail when the requested range is already mapped.
+pub const MAP_FIXED_NOREPLACE: u64 = 0x0010_0000;
 
 /// File status type for a regular file.
 pub const FILE_TYPE_REGULAR: u64 = 1;
@@ -66,6 +68,8 @@ pub const ERROR_NOT_FOUND: isize = -2;
 pub const ERROR_BAD_FILE_DESCRIPTOR: isize = -9;
 /// Bad address error return value as a signed syscall result.
 pub const ERROR_BAD_ADDRESS: isize = -14;
+/// Linux-compatible file exists error as a signed syscall result.
+pub const ERROR_FILE_EXISTS: isize = -17;
 /// Linux-compatible not implemented error as a signed syscall result.
 pub const ERROR_NOT_IMPLEMENTED: isize = -38;
 

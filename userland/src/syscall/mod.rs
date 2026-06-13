@@ -76,6 +76,8 @@ pub const PROT_EXEC: usize = contract::PROT_EXEC as usize;
 pub const MAP_PRIVATE: usize = contract::MAP_PRIVATE as usize;
 /// Mapping is anonymous and not backed by a file descriptor.
 pub const MAP_ANONYMOUS: usize = contract::MAP_ANONYMOUS as usize;
+/// Fixed mapping must fail when the requested range is already mapped.
+pub const MAP_FIXED_NOREPLACE: usize = contract::MAP_FIXED_NOREPLACE as usize;
 /// File status type for a regular file.
 pub const FILE_TYPE_REGULAR: u64 = contract::FILE_TYPE_REGULAR;
 /// File status type for a directory.
@@ -88,6 +90,8 @@ pub const ERROR_NOT_FOUND: isize = contract::ERROR_NOT_FOUND;
 pub const ERROR_BAD_FILE_DESCRIPTOR: isize = contract::ERROR_BAD_FILE_DESCRIPTOR;
 /// Bad address error return value as a signed syscall result.
 pub const ERROR_BAD_ADDRESS: isize = contract::ERROR_BAD_ADDRESS;
+/// Linux-compatible file exists error as a signed syscall result.
+pub const ERROR_FILE_EXISTS: isize = contract::ERROR_FILE_EXISTS;
 /// Linux-compatible not implemented error as a signed syscall result.
 pub const ERROR_NOT_IMPLEMENTED: isize = contract::ERROR_NOT_IMPLEMENTED;
 
@@ -174,8 +178,8 @@ pub fn brk(requested_break: usize) -> isize {
 
 /// Map anonymous private memory in the current ManaOS task.
 ///
-/// The current ManaOS subset uses four syscall arguments, so `address` must be
-/// zero and file-backed mappings are not represented yet.
+/// The current ManaOS subset uses four syscall arguments. File-backed mappings
+/// are not represented yet.
 #[inline(always)]
 pub fn mmap(address: usize, length: usize, protection: usize, flags: usize) -> isize {
     syscall4(SYS_MMAP, address, length, protection, flags)
