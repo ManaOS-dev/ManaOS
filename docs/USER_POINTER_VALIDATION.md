@@ -42,6 +42,13 @@ The implementation entry point is `kernel::memory::user_pointer`.
 | `exit(code)` / `exit_group(code)` | none | none | none | No user pointer validation. |
 | `getpid()` / `getppid()` | none | none | none | No user pointer validation. |
 
+## Smoke Coverage
+
+The storage smoke user program verifies representative syscall errno paths:
+missing paths, bad file descriptors, unsupported `openat`, invalid
+`getdents64`, invalid `mmap`/`munmap`, invalid `nanosleep`, and unmapped
+`nanosleep` pointers.
+
 ## Current Enforcement Gaps
 
 - Kernel/user mapping permission self-checks should prove that kernel-only pages

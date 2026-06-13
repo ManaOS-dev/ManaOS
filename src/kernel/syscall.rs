@@ -71,10 +71,11 @@ const PAGE_SIZE: u64 = 4096;
 const NANOSECONDS_PER_SECOND: u64 = 1_000_000_000;
 const NANOSECONDS_PER_TIMER_TICK: u64 =
     NANOSECONDS_PER_SECOND / crate::shared::TIMER_TICKS_PER_SECOND;
+const LINUX_ERRNO_MAX: u64 = 4095;
 /// Internal sentinel telling the syscall entry code to return to the kernel.
-pub const USER_EXIT_SENTINEL: u64 = u64::MAX;
+pub const USER_EXIT_SENTINEL: u64 = u64::MAX - LINUX_ERRNO_MAX;
 /// Internal sentinel telling the syscall entry code to block and return to the kernel.
-pub const USER_BLOCK_SENTINEL: u64 = u64::MAX - 1;
+pub const USER_BLOCK_SENTINEL: u64 = u64::MAX - LINUX_ERRNO_MAX - 1;
 
 static TRACE_ENABLED: AtomicBool = AtomicBool::new(false);
 static TRACE_RECORD_COUNT: AtomicU64 = AtomicU64::new(0);
