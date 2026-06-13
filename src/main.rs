@@ -157,6 +157,20 @@ fn initialize_scheduler(frame_allocator: &mut kernel::memory::frame_allocator::B
     crate::log_info!("task", "Scheduler initialized. current_task={}", task_id);
 }
 
+fn verify_kernel_stack_guard_fault_diagnostics() {
+    let diagnostic = kernel::task::get_kernel_stack_guard_fault_diagnostic_sample()
+        .expect("kernel stack guard diagnostics must classify a scheduler-owned stack");
+    crate::log_info!(
+        "fault",
+        "Kernel stack guard diagnostics verified: owner={} task={} guard={:#x} writable_start={:#x} stack_top={:#x}",
+        diagnostic.owner().as_str(),
+        diagnostic.task_identifier(),
+        diagnostic.guard_page_start(),
+        diagnostic.writable_start(),
+        diagnostic.stack_top()
+    );
+}
+
 fn initialize_architecture_and_drivers() {
     arch::init(kernel::interrupt::syscall_entry as *const () as u64);
     arch::x86_64::interrupt_descriptor_table::register_page_fault_reporter(
@@ -570,6 +584,7 @@ fn main() -> Status {
         verify_kernel_console_pipeline();
     }
     initialize_scheduler(&mut frame_allocator);
+    verify_kernel_stack_guard_fault_diagnostics();
     initialize_architecture_and_drivers();
 
     crate::log_info!("kernel", "ManaOS Kernel is alive.");
