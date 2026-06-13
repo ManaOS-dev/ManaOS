@@ -58,6 +58,7 @@ pub struct SchedulerDiagnostics {
     pub(super) pending_user_exits: u64,
     pub(super) user_exit_return_stack_sets: u64,
     pub(super) user_exit_return_stack_takes: u64,
+    pub(super) reclaimed_user_resource_records: u64,
     pub(super) reclaimed_user_kernel_stacks: u64,
     pub(super) reclaimed_user_kernel_stack_writable_pages: u64,
     pub(super) reclaimed_user_kernel_stack_virtual_pages: u64,
@@ -132,6 +133,11 @@ impl SchedulerDiagnostics {
     /// Return the number of one-shot user exit return stacks consumed by `SYS_EXIT`.
     pub const fn user_exit_return_stack_takes(self) -> u64 {
         self.user_exit_return_stack_takes
+    }
+
+    /// Return the number of finished user task resource reclaim records.
+    pub const fn reclaimed_user_resource_records(self) -> u64 {
+        self.reclaimed_user_resource_records
     }
 
     /// Return the number of finished user task kernel stacks reclaimed.

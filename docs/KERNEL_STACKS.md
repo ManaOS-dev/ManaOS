@@ -61,8 +61,9 @@ allocate physical frames for writable pages, and map those pages
 Finished user tasks reclaim those scheduler-owned stack resources after
 `SYS_EXIT`, once execution has returned to the kernel address space and the
 scheduler has marked the task `Finished`. Scheduler diagnostics keep reclaim
-accounting for finished user stacks, and the console overlay renders those
-counts alongside the task status strip.
+accounting for finished user stacks as part of aggregate finished-user resource
+records, and the console overlay renders those counts alongside the task status
+strip.
 
 The bootstrap stack and architecture-owned TSS/IST stacks are still separate
 static stack categories and do not yet use this allocation path.

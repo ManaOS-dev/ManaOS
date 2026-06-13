@@ -152,6 +152,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Add a visible `tasks` console command for scheduler and user-preemption diagnostics.
 - [x] Add a scheduler/preemption status strip to the console overlay.
 - [x] Add user kernel stack reclaim accounting to scheduler diagnostics and the console overlay.
+- [x] Aggregate finished user task resource reclaim inside the scheduler lifecycle path.
 - [ ] Add kernel stack switching per task where needed; user task stacks are installed before entry and timer-context resume, Ring 3 timer interrupts use the installed TSS stack and save their raw frame there, and SYSCALL switches onto the task kernel stack. Bootstrap/IST stacks remain.
 - [x] Design the per-task kernel stack switching policy.
 

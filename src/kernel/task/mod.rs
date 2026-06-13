@@ -31,6 +31,7 @@ pub mod context;
 mod diagnostics;
 mod metadata;
 pub mod process_lifecycle;
+mod reclaim;
 mod stack;
 mod state;
 pub mod user_mode;
@@ -51,6 +52,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 pub use diagnostics::{SchedulerDiagnostics, TaskStateDiagnostics};
 pub use metadata::{TaskIdentifier, TaskMetadata};
 pub use process_lifecycle::UserTaskExit;
+use reclaim::FinishedUserTaskReclaim;
 use spin::Mutex;
 use stack::{KernelStack, KernelStackReclaim};
 pub use stack::{KernelStackFaultOwner, KernelStackGuardFault};
@@ -288,6 +290,7 @@ struct Scheduler {
     user_entry_count: u64,
     user_resume_count: u64,
     finished_task_count: u64,
+    reclaimed_user_resource_record_count: u64,
     reclaimed_user_kernel_stack_count: u64,
     reclaimed_user_kernel_stack_writable_pages: u64,
     reclaimed_user_kernel_stack_virtual_pages: u64,
@@ -309,6 +312,7 @@ impl Scheduler {
             user_entry_count: 0,
             user_resume_count: 0,
             finished_task_count: 0,
+            reclaimed_user_resource_record_count: 0,
             reclaimed_user_kernel_stack_count: 0,
             reclaimed_user_kernel_stack_writable_pages: 0,
             reclaimed_user_kernel_stack_virtual_pages: 0,
@@ -474,6 +478,7 @@ impl Scheduler {
                 .expect("pending user exit count must fit in u64"),
             user_exit_return_stack_sets: process_lifecycle::user_exit_return_stack_set_count(),
             user_exit_return_stack_takes: process_lifecycle::user_exit_return_stack_take_count(),
+            reclaimed_user_resource_records: self.reclaimed_user_resource_record_count,
             reclaimed_user_kernel_stacks: self.reclaimed_user_kernel_stack_count,
             reclaimed_user_kernel_stack_writable_pages: self
                 .reclaimed_user_kernel_stack_writable_pages,
@@ -603,16 +608,36 @@ impl Scheduler {
         self.finished_user_exits.pop_front()
     }
 
-    fn reclaim_finished_user_address_space(
+    fn reclaim_finished_user_resources(
         &mut self,
         frame_allocator: &mut PhysicalFrameAllocator,
         task_id: u64,
-    ) -> Option<UserAddressSpaceReclaim> {
+    ) -> Option<FinishedUserTaskReclaim> {
         let task_index = self.get_task_index(task_id)?;
         if self.tasks[task_index].state != TaskState::Finished {
             return None;
         }
+        if !matches!(&self.tasks[task_index].kind, TaskKind::User(_)) {
+            return None;
+        }
 
+        let address_space_reclaim =
+            self.reclaim_finished_user_address_space_at_index(frame_allocator, task_index);
+        let kernel_stack_reclaim =
+            self.reclaim_finished_user_kernel_stack_at_index(frame_allocator, task_index);
+        let reclaim = FinishedUserTaskReclaim::new(address_space_reclaim, kernel_stack_reclaim);
+        if reclaim.reclaimed_anything() {
+            self.reclaimed_user_resource_record_count =
+                self.reclaimed_user_resource_record_count.saturating_add(1);
+        }
+        Some(reclaim)
+    }
+
+    fn reclaim_finished_user_address_space_at_index(
+        &mut self,
+        frame_allocator: &mut PhysicalFrameAllocator,
+        task_index: usize,
+    ) -> Option<UserAddressSpaceReclaim> {
         let TaskKind::User(user_runtime) = &mut self.tasks[task_index].kind else {
             return None;
         };
@@ -623,19 +648,11 @@ impl Scheduler {
         ))
     }
 
-    fn reclaim_finished_user_kernel_stack(
+    fn reclaim_finished_user_kernel_stack_at_index(
         &mut self,
         frame_allocator: &mut PhysicalFrameAllocator,
-        task_id: u64,
+        task_index: usize,
     ) -> Option<KernelStackReclaim> {
-        let task_index = self.get_task_index(task_id)?;
-        if self.tasks[task_index].state != TaskState::Finished {
-            return None;
-        }
-        if !matches!(&self.tasks[task_index].kind, TaskKind::User(_)) {
-            return None;
-        }
-
         let kernel_stack = self.tasks[task_index].kernel_stack.take()?;
         let reclaim = kernel_stack.destroy(frame_allocator, &mut self.kernel_stack_range_allocator);
         self.reclaimed_user_kernel_stack_count =
