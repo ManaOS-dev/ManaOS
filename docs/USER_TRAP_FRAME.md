@@ -134,14 +134,15 @@ User task preemption stays disabled until all of the following are true:
   exits are now reported through a scheduler-owned exit queue instead of a
   global single-result latch, so lifecycle cleanup can drain task-specific exit
   records before asking the scheduler for one aggregate resource-reclaim pass
-  across address spaces and kernel stacks. The one-shot `SYS_EXIT` return stack
-  is guarded by an explicit return window that must be set and consumed exactly
-  once. `SYS_EXIT` closes scheduler preemption before returning through that
-  one-shot stack, so another active user task cannot consume the same return
-  window while lifecycle cleanup is still pending. Scheduler diagnostics now
-  expose both the explicit preemption state (`enabled`, `disabled`, or
-  `user_exit_return`) and the number of user exits that closed this window. The
-  smoke lifecycle asks the scheduler for the next active user task instead of
+  across address spaces and kernel stacks. The returnable user entry stack is
+  guarded by an explicit return window that must be set and consumed exactly
+  once. User stop syscalls such as `SYS_EXIT` and `nanosleep` close scheduler
+  preemption before returning through that stack, so another active user task
+  cannot consume the same return window while lifecycle cleanup is still
+  pending. Scheduler diagnostics now expose both the explicit preemption state
+  (`enabled`, `disabled`, or `user_return`) and the number of user stops that
+  closed this window. The smoke lifecycle asks the scheduler for the next active
+  user task instead of
   selecting task identifiers in the composition root, so active-set ownership
   stays inside `kernel::task`. The active user lifecycle can now be drained
   through one scheduler-owned API that returns the completed exit records.

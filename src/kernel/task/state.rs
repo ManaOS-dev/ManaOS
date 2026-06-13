@@ -65,6 +65,15 @@ impl TaskState {
         true
     }
 
+    pub(super) fn wake_blocked(&mut self) -> bool {
+        if *self != Self::Blocked {
+            return false;
+        }
+
+        *self = Self::Ready;
+        true
+    }
+
     pub(super) fn finish_running(&mut self) -> bool {
         if *self != Self::Running {
             return false;

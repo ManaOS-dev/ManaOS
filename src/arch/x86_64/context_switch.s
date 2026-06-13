@@ -124,7 +124,7 @@ enter_user_mode_returnable:
     push rax
     mov rcx, rsp
     sub rsp, 32
-    call set_user_exit_return_stack
+    call set_user_return_stack
     add rsp, 32
 
     mov rax, qword ptr [rbx + 32]

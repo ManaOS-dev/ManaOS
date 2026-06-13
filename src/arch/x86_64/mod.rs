@@ -58,14 +58,13 @@ pub fn init(system_call_handler: u64) {
         interrupt_controller::initialize_legacy();
     }
 
-    // Initialize PIT (Programmable Interval Timer)
     crate::log_info!(
         "arch",
         "Initializing PIT... preferred timer: {:?}, local APIC timer: {}",
         interval_timer::get_preferred_kind(),
         interval_timer::has_local_apic_timer()
     );
-    interval_timer::initialize_programmable_interval_timer(1000);
+    interval_timer::initialize_programmable_interval_timer(crate::shared::TIMER_TICKS_PER_SECOND);
 }
 
 /// Initialize the `x86_64` `SYSCALL`/`SYSRET` model-specific registers.

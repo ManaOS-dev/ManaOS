@@ -70,21 +70,21 @@ pub enum PreemptionStateDiagnostics {
     Enabled,
     /// Timer-driven task switching is disabled for a generic kernel reason.
     Disabled,
-    /// Timer-driven task switching is disabled while returning from `SYS_EXIT`.
-    UserExitReturn,
+    /// Timer-driven task switching is disabled while returning to lifecycle code.
+    UserReturn,
 }
 
 impl PreemptionStateDiagnostics {
     const ENABLED_RAW: u8 = 0;
     const DISABLED_RAW: u8 = 1;
-    const USER_EXIT_RETURN_RAW: u8 = 2;
+    const USER_RETURN_RAW: u8 = 2;
 
     /// Return a stable label for console diagnostics.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Enabled => "enabled",
             Self::Disabled => "disabled",
-            Self::UserExitReturn => "user_exit_return",
+            Self::UserReturn => "user_return",
         }
     }
 
@@ -97,15 +97,15 @@ impl PreemptionStateDiagnostics {
         match self {
             Self::Enabled => Self::ENABLED_RAW,
             Self::Disabled => Self::DISABLED_RAW,
-            Self::UserExitReturn => Self::USER_EXIT_RETURN_RAW,
+            Self::UserReturn => Self::USER_RETURN_RAW,
         }
     }
 
     pub(super) const fn from_raw(raw: u8) -> Self {
         if raw == Self::ENABLED_RAW {
             Self::Enabled
-        } else if raw == Self::USER_EXIT_RETURN_RAW {
-            Self::UserExitReturn
+        } else if raw == Self::USER_RETURN_RAW {
+            Self::UserReturn
         } else {
             Self::Disabled
         }
@@ -292,12 +292,14 @@ pub struct SchedulerDiagnostics {
     pub(super) timer_preemptions: u64,
     pub(super) user_entries: u64,
     pub(super) user_resumes: u64,
+    pub(super) user_sleep_blocks: u64,
+    pub(super) user_sleep_wakes: u64,
     pub(super) finished_tasks: u64,
     pub(super) pending_user_exits: u64,
     pub(super) preemption_state: PreemptionStateDiagnostics,
-    pub(super) user_exit_preemption_window_closes: u64,
-    pub(super) user_exit_return_stack_sets: u64,
-    pub(super) user_exit_return_stack_takes: u64,
+    pub(super) user_return_preemption_window_closes: u64,
+    pub(super) user_return_stack_sets: u64,
+    pub(super) user_return_stack_takes: u64,
     pub(super) reclaimed_user_resource_records: u64,
     pub(super) reclaimed_user_kernel_stacks: u64,
     pub(super) reclaimed_user_kernel_stack_writable_pages: u64,
@@ -355,6 +357,16 @@ impl SchedulerDiagnostics {
         self.user_resumes
     }
 
+    /// Return the number of user tasks blocked by sleep syscalls.
+    pub const fn user_sleep_blocks(self) -> u64 {
+        self.user_sleep_blocks
+    }
+
+    /// Return the number of user tasks woken after sleep deadlines.
+    pub const fn user_sleep_wakes(self) -> u64 {
+        self.user_sleep_wakes
+    }
+
     /// Return the number of tasks marked finished through the scheduler.
     pub const fn finished_tasks(self) -> u64 {
         self.finished_tasks
@@ -375,19 +387,19 @@ impl SchedulerDiagnostics {
         self.preemption_state
     }
 
-    /// Return the number of user exits that closed the scheduler preemption window.
-    pub const fn user_exit_preemption_window_closes(self) -> u64 {
-        self.user_exit_preemption_window_closes
+    /// Return the number of user stop syscalls that closed the preemption window.
+    pub const fn user_return_preemption_window_closes(self) -> u64 {
+        self.user_return_preemption_window_closes
     }
 
-    /// Return the number of one-shot user exit return stacks stored before Ring 3 entry.
-    pub const fn user_exit_return_stack_sets(self) -> u64 {
-        self.user_exit_return_stack_sets
+    /// Return the number of returnable user stacks stored before Ring 3 entry.
+    pub const fn user_return_stack_sets(self) -> u64 {
+        self.user_return_stack_sets
     }
 
-    /// Return the number of one-shot user exit return stacks consumed by `SYS_EXIT`.
-    pub const fn user_exit_return_stack_takes(self) -> u64 {
-        self.user_exit_return_stack_takes
+    /// Return the number of returnable user stacks consumed by user stop syscalls.
+    pub const fn user_return_stack_takes(self) -> u64 {
+        self.user_return_stack_takes
     }
 
     /// Return the number of finished user task resource reclaim records.

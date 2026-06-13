@@ -92,6 +92,11 @@ impl TaskContext {
     pub fn is_empty(&self) -> bool {
         self.stack_pointer == 0
     }
+
+    /// Clear any saved kernel context from this task record.
+    pub fn clear(&mut self) {
+        *self = Self::new();
+    }
 }
 
 impl Default for TaskContext {

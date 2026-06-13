@@ -107,8 +107,8 @@ Policy:
 - `arch/` must not call `kernel::task` directly. `main.rs` remains the
   composition root for registering stack-switch providers.
 - Timer interrupts must not preempt a user task into a shared bootstrap stack
-  once user preemption is enabled. The one-shot user path blocks the bootstrap
-  task while its `SYS_EXIT` return window is live, so timer preemption chooses
+  once user preemption is enabled. The returnable user path blocks the bootstrap
+  task while its user return window is live, so timer preemption chooses
   a schedulable kernel task context or another active user task context instead
   of a stale bootstrap context. The return window stores and consumes its return
   stack exactly once before lifecycle cleanup.

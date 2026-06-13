@@ -145,7 +145,8 @@ pub(super) fn verify_status_strip_smoke() -> bool {
         && scheduler_line.contains("pending_exits=")
         && scheduler_line.contains("preemption_state=")
         && scheduler_line.contains("preemption_enabled=")
-        && scheduler_line.contains("exit_closes=")
+        && scheduler_line.contains("return_closes=")
+        && scheduler_line.contains("sleep=")
         && scheduler_line.contains("preempt=")
         && scheduler_line.contains("resume=")
         && frame_allocator_line.contains("frames free=")
@@ -177,7 +178,7 @@ fn scheduler_status_line() -> String {
     };
     let states = diagnostics.states();
     format!(
-        "tasks total={} user={} active_users={} active_spaces={} pending_exits={} preemption_state={} preemption_enabled={} exit_closes={} states R{} Run{} B{} F{} preempt={} resume={}",
+        "tasks total={} user={} active_users={} active_spaces={} pending_exits={} preemption_state={} preemption_enabled={} return_closes={} sleep={}/{} states R{} Run{} B{} F{} preempt={} resume={}",
         diagnostics.total_tasks(),
         diagnostics.user_tasks(),
         diagnostics.active_user_tasks(),
@@ -185,7 +186,9 @@ fn scheduler_status_line() -> String {
         diagnostics.pending_user_exits(),
         diagnostics.preemption_state().as_str(),
         diagnostics.preemption_enabled(),
-        diagnostics.user_exit_preemption_window_closes(),
+        diagnostics.user_return_preemption_window_closes(),
+        diagnostics.user_sleep_blocks(),
+        diagnostics.user_sleep_wakes(),
         states.ready(),
         states.running(),
         states.blocked(),
