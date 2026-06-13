@@ -19,6 +19,8 @@
 //! - [`paging`] - Page table setup
 //! - [`runtime_allocator`] - Syscall-time frame allocator access
 //! - [`user_heap`] - User heap break mapping
+//! - [`user_layout`] - Static user virtual address layout
+//! - [`user_mapping`] - Anonymous user memory mapping
 //! - [`user_pointer`] - User pointer validation and copy helpers
 //! - [`user_stack`] - User-space stack mapping
 //! - [`virtual_allocator`] - Kernel virtual address range allocator
@@ -31,6 +33,8 @@ pub mod heap;
 pub mod paging;
 pub mod runtime_allocator;
 pub mod user_heap;
+pub mod user_layout;
+pub mod user_mapping;
 pub mod user_pointer;
 pub mod user_stack;
 pub mod virtual_allocator;

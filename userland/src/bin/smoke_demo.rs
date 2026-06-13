@@ -10,6 +10,7 @@ const DIRECTORY_BUFFER_BYTES: usize = core::mem::size_of::<syscall::UserDirector
 const ENTRY_ARGUMENT_MESSAGE: &[u8] = b"user entry arguments ok\n";
 const BSS_MESSAGE: &[u8] = b"user bss ok\n";
 const HEAP_MESSAGE: &[u8] = b"user heap ok\n";
+const MMAP_MESSAGE: &[u8] = b"user mmap ok\n";
 const SHELL_MESSAGE: &[u8] = b"user shell ok\n";
 const PASS_MESSAGE: &[u8] = b"user smoke ok\n";
 const BSS_SMOKE_MARKER: u64 = 0x4d414e414f535f36;
@@ -31,6 +32,7 @@ extern "C" fn _start(
     verify_user_shell();
     verify_bss_zero_initialization();
     verify_user_heap_growth();
+    verify_user_anonymous_mapping();
 
     let _ = syscall::write(STDOUT, PASS_MESSAGE);
     syscall::exit(0);
@@ -124,6 +126,37 @@ fn verify_user_heap_growth() {
     }
 
     let _ = syscall::write(STDOUT, HEAP_MESSAGE);
+}
+
+fn verify_user_anonymous_mapping() {
+    let mapping = syscall::mmap(
+        0,
+        8192,
+        syscall::PROT_READ | syscall::PROT_WRITE,
+        syscall::MAP_PRIVATE | syscall::MAP_ANONYMOUS,
+    );
+    if mapping < 0 {
+        syscall::exit(37);
+    }
+
+    let mapping = mapping as usize;
+    let first_byte = mapping as *mut u8;
+    let last_byte = (mapping + 8191) as *mut u8;
+    // SAFETY: A successful `mmap` call returned an 8192-byte writable user
+    // range owned by this task.
+    unsafe {
+        first_byte.write(0x41);
+        last_byte.write(0x4d);
+        if first_byte.read() != 0x41 || last_byte.read() != 0x4d {
+            syscall::exit(38);
+        }
+    }
+
+    if syscall::munmap(mapping, 8192) != 0 {
+        syscall::exit(39);
+    }
+
+    let _ = syscall::write(STDOUT, MMAP_MESSAGE);
 }
 
 fn verify_disk_file() {

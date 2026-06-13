@@ -12,6 +12,10 @@ pub const SYS_CLOSE: u64 = 3;
 pub const SYS_FSTAT: u64 = 5;
 /// Linux-compatible seek syscall number.
 pub const SYS_LSEEK: u64 = 8;
+/// Linux-compatible anonymous memory-map syscall number.
+pub const SYS_MMAP: u64 = 9;
+/// Linux-compatible memory-unmap syscall number.
+pub const SYS_MUNMAP: u64 = 11;
 /// Linux-compatible heap break syscall number.
 pub const SYS_BRK: u64 = 12;
 /// Linux-compatible get-process-identifier syscall number.
@@ -35,6 +39,17 @@ pub const SEEK_SET: u64 = 0;
 pub const SEEK_CUR: u64 = 1;
 /// Seek relative to the end of a file.
 pub const SEEK_END: u64 = 2;
+
+/// Mapping pages may be read by user code.
+pub const PROT_READ: u64 = 0x1;
+/// Mapping pages may be written by user code.
+pub const PROT_WRITE: u64 = 0x2;
+/// Mapping pages may be executed by user code.
+pub const PROT_EXEC: u64 = 0x4;
+/// Mapping is private to the current process.
+pub const MAP_PRIVATE: u64 = 0x02;
+/// Mapping is anonymous and not backed by a file descriptor.
+pub const MAP_ANONYMOUS: u64 = 0x20;
 
 /// File status type for a regular file.
 pub const FILE_TYPE_REGULAR: u64 = 1;

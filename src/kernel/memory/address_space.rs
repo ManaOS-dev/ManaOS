@@ -510,6 +510,7 @@ fn free_user_data_frame(
     if !frame_allocator.free_frames_for(range, FrameRangeOwner::UserElf)
         && !frame_allocator.free_frames_for(range, FrameRangeOwner::UserStack)
         && !frame_allocator.free_frames_for(range, FrameRangeOwner::UserHeap)
+        && !frame_allocator.free_frames_for(range, FrameRangeOwner::UserMapping)
     {
         panic!(
             "user address-space data frame {:#x} was not tracked as user-owned memory",

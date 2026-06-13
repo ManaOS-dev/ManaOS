@@ -155,6 +155,7 @@ pub(super) fn verify_status_strip_smoke() -> bool {
         && frame_allocator_line.contains("dynamic=")
         && frame_allocator_line.contains("user_pages=")
         && frame_allocator_line.contains("user_heap=")
+        && frame_allocator_line.contains("user_mapping=")
         && memory_line.contains("memory user_resource_records=")
         && memory_line.contains("kernel_stacks_reclaimed=")
         && memory_line.contains("writable_pages=")
@@ -201,7 +202,7 @@ fn frame_allocator_status_line() -> String {
     };
     let owners = diagnostics.owners();
     format!(
-        "frames free={} used={} reserved={} page_tables={} kernel_stack={} user_pages={} user_heap={} dynamic={} ahci_dma={}",
+        "frames free={} used={} reserved={} page_tables={} kernel_stack={} user_pages={} user_heap={} user_mapping={} dynamic={} ahci_dma={}",
         diagnostics.free(),
         diagnostics.used(),
         diagnostics.reserved(),
@@ -209,6 +210,7 @@ fn frame_allocator_status_line() -> String {
         owners.kernel_stack(),
         owners.user_pages(),
         owners.user_heap(),
+        owners.user_mapping(),
         owners.dynamic_kernel_mapping(),
         owners.ahci_dma()
     )

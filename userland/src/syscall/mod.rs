@@ -16,6 +16,8 @@
 //! - [`fstat`] - Read metadata for an open file descriptor
 //! - [`lseek`] - Seek an open file descriptor
 //! - [`brk`] - Move or query the user heap break
+//! - [`mmap`] - Map anonymous user memory
+//! - [`munmap`] - Unmap anonymous user memory
 //! - [`exit`] - Terminate the current user task
 
 #[path = "../../../src/shared/syscall_contract.rs"]
@@ -37,6 +39,10 @@ pub const SYS_CLOSE: usize = contract::SYS_CLOSE as usize;
 pub const SYS_FSTAT: usize = contract::SYS_FSTAT as usize;
 /// Linux-compatible seek syscall number.
 pub const SYS_LSEEK: usize = contract::SYS_LSEEK as usize;
+/// Linux-compatible anonymous memory-map syscall number.
+pub const SYS_MMAP: usize = contract::SYS_MMAP as usize;
+/// Linux-compatible memory-unmap syscall number.
+pub const SYS_MUNMAP: usize = contract::SYS_MUNMAP as usize;
 /// Linux-compatible heap break syscall number.
 pub const SYS_BRK: usize = contract::SYS_BRK as usize;
 /// Linux-compatible get-process-identifier syscall number.
@@ -60,6 +66,16 @@ pub const SEEK_SET: usize = contract::SEEK_SET as usize;
 pub const SEEK_CUR: usize = contract::SEEK_CUR as usize;
 /// Seek relative to the end of a file.
 pub const SEEK_END: usize = contract::SEEK_END as usize;
+/// Mapping pages may be read by user code.
+pub const PROT_READ: usize = contract::PROT_READ as usize;
+/// Mapping pages may be written by user code.
+pub const PROT_WRITE: usize = contract::PROT_WRITE as usize;
+/// Mapping pages may be executed by user code.
+pub const PROT_EXEC: usize = contract::PROT_EXEC as usize;
+/// Mapping is private to the current process.
+pub const MAP_PRIVATE: usize = contract::MAP_PRIVATE as usize;
+/// Mapping is anonymous and not backed by a file descriptor.
+pub const MAP_ANONYMOUS: usize = contract::MAP_ANONYMOUS as usize;
 /// File status type for a regular file.
 pub const FILE_TYPE_REGULAR: u64 = contract::FILE_TYPE_REGULAR;
 /// File status type for a directory.
@@ -154,6 +170,21 @@ pub fn lseek(file_descriptor: usize, offset: isize, whence: usize) -> isize {
 #[inline(always)]
 pub fn brk(requested_break: usize) -> isize {
     syscall1(SYS_BRK, requested_break)
+}
+
+/// Map anonymous private memory in the current ManaOS task.
+///
+/// The current ManaOS subset uses four syscall arguments, so `address` must be
+/// zero and file-backed mappings are not represented yet.
+#[inline(always)]
+pub fn mmap(address: usize, length: usize, protection: usize, flags: usize) -> isize {
+    syscall4(SYS_MMAP, address, length, protection, flags)
+}
+
+/// Unmap an anonymous mapping previously returned by [`mmap`].
+#[inline(always)]
+pub fn munmap(address: usize, length: usize) -> isize {
+    syscall2(SYS_MUNMAP, address, length)
 }
 
 /// Return the current ManaOS task identifier.

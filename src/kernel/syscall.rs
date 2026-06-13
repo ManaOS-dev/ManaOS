@@ -19,6 +19,8 @@
 //! - [`SYS_CLOSE`] - Linux-compatible close syscall number
 //! - [`SYS_FSTAT`] - Linux-compatible file status syscall number
 //! - [`SYS_LSEEK`] - Linux-compatible seek syscall number
+//! - [`SYS_MMAP`] - Linux-compatible anonymous memory-map syscall number
+//! - [`SYS_MUNMAP`] - Linux-compatible memory-unmap syscall number
 //! - [`SYS_BRK`] - Linux-compatible heap break syscall number
 //! - [`SYS_EXIT`] - Linux-compatible exit syscall number
 //! - [`SYS_GETDENTS64`] - Linux-compatible get-directory-entries syscall number
@@ -38,11 +40,12 @@ mod contract;
 
 pub use contract::{
     SYS_BRK, SYS_CLOSE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64, SYS_GETPID, SYS_LSEEK,
-    SYS_OPEN, SYS_OPENAT, SYS_READ, SYS_WRITE,
+    SYS_MMAP, SYS_MUNMAP, SYS_OPEN, SYS_OPENAT, SYS_READ, SYS_WRITE,
 };
 
 const ERROR_NOT_FOUND: u64 = linux_error(2);
 const ERROR_BAD_FILE_DESCRIPTOR: u64 = linux_error(9);
+const ERROR_OUT_OF_MEMORY: u64 = linux_error(12);
 const ERROR_BAD_ADDRESS: u64 = linux_error(14);
 const ERROR_NOT_DIRECTORY: u64 = linux_error(20);
 const ERROR_IS_DIRECTORY: u64 = linux_error(21);
@@ -53,6 +56,7 @@ const ERROR_NOT_SUPPORTED: u64 = linux_error(95);
 const USER_FILE_STAT_BYTES: usize = core::mem::size_of::<contract::UserFileStat>();
 const USER_DIRECTORY_ENTRY_BYTES: usize = core::mem::size_of::<contract::UserDirectoryEntry>();
 const MAX_USER_STRING_LENGTH: usize = 256;
+const PAGE_SIZE: u64 = 4096;
 /// Internal sentinel telling the syscall entry code to return to the kernel.
 pub const USER_EXIT_SENTINEL: u64 = u64::MAX;
 
@@ -89,6 +93,13 @@ pub extern "C" fn syscall_dispatch(
         SYS_CLOSE => sys_close(first_argument),
         SYS_FSTAT => sys_fstat(first_argument, second_argument),
         SYS_LSEEK => sys_lseek(first_argument, second_argument, third_argument),
+        SYS_MMAP => sys_mmap(
+            first_argument,
+            second_argument,
+            third_argument,
+            fourth_argument,
+        ),
+        SYS_MUNMAP => sys_munmap(first_argument, second_argument),
         SYS_BRK => sys_brk(first_argument),
         SYS_READ => sys_read(first_argument, second_argument, third_argument),
         SYS_GETDENTS64 => sys_getdents64(first_argument, second_argument, third_argument),
@@ -333,6 +344,69 @@ fn sys_brk(requested_break: u64) -> u64 {
     })
     .flatten()
     .unwrap_or(ERROR_NOT_IMPLEMENTED)
+}
+
+fn sys_mmap(requested_address: u64, length: u64, protection: u64, flags: u64) -> u64 {
+    if !is_supported_anonymous_mapping_request(requested_address, length, protection, flags) {
+        return ERROR_INVALID_ARGUMENT;
+    }
+
+    let writable = protection & contract::PROT_WRITE != 0;
+    let Some(result) = crate::kernel::memory::runtime_allocator::with_user_runtime_frame_allocator(
+        |frame_allocator| {
+            crate::kernel::task::process_current_user_mapping(
+                frame_allocator,
+                requested_address,
+                length,
+                writable,
+                protection,
+                flags,
+            )
+        },
+    ) else {
+        return ERROR_NOT_IMPLEMENTED;
+    };
+
+    result.unwrap_or(ERROR_OUT_OF_MEMORY)
+}
+
+fn sys_munmap(start_address: u64, length: u64) -> u64 {
+    if start_address == 0 || length == 0 || !start_address.is_multiple_of(PAGE_SIZE) {
+        return ERROR_INVALID_ARGUMENT;
+    }
+
+    let Some(result) = crate::kernel::memory::runtime_allocator::with_user_runtime_frame_allocator(
+        |frame_allocator| {
+            crate::kernel::task::process_current_user_unmapping(
+                frame_allocator,
+                start_address,
+                length,
+            )
+        },
+    ) else {
+        return ERROR_NOT_IMPLEMENTED;
+    };
+
+    if result.is_some() {
+        0
+    } else {
+        ERROR_INVALID_ARGUMENT
+    }
+}
+
+fn is_supported_anonymous_mapping_request(
+    requested_address: u64,
+    length: u64,
+    protection: u64,
+    flags: u64,
+) -> bool {
+    let supported_protection = contract::PROT_READ | contract::PROT_WRITE | contract::PROT_EXEC;
+    requested_address == 0
+        && length != 0
+        && (protection & !supported_protection) == 0
+        && (protection & contract::PROT_EXEC) == 0
+        && (protection & (contract::PROT_READ | contract::PROT_WRITE)) != 0
+        && flags == (contract::MAP_PRIVATE | contract::MAP_ANONYMOUS)
 }
 
 fn copy_input_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static [u8]> {

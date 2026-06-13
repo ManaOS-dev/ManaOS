@@ -871,7 +871,7 @@ fn record_memory_diagnostics_snapshot(
     let owners = diagnostics.owners();
     crate::log_info!(
         "memory",
-        "Frame allocator diagnostics snapshot: free={} used={} reserved={} page_table={} kernel_heap={} kernel_stack={} user_stack={} user_elf={} user_heap={} dynamic_kernel_mapping={} ahci_dma={}",
+        "Frame allocator diagnostics snapshot: free={} used={} reserved={} page_table={} kernel_heap={} kernel_stack={} user_stack={} user_elf={} user_heap={} user_mapping={} dynamic_kernel_mapping={} ahci_dma={}",
         diagnostics.free(),
         diagnostics.used(),
         diagnostics.reserved(),
@@ -881,6 +881,7 @@ fn record_memory_diagnostics_snapshot(
         owners.user_stack(),
         owners.user_elf(),
         owners.user_heap(),
+        owners.user_mapping(),
         owners.dynamic_kernel_mapping(),
         owners.ahci_dma()
     );
