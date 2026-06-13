@@ -90,6 +90,9 @@ Before per-process page tables are added, ownership is global and conservative:
   future process address space.
 - User stack frames are user-task-owned; the guard page is reserved and must
   remain unmapped.
+- Kernel stack frames are task-owned and mapped through higher-half kernel
+  virtual ranges. The adjacent lower virtual guard page remains unmapped and
+  does not consume a physical frame.
 - AHCI DMA frames are storage-driver-owned and must not be reused while the
   controller can access descriptors or data buffers.
 - Framebuffer and MMIO ranges are hardware-owned mappings. The allocator must
@@ -135,22 +138,27 @@ This keeps the guard-page stack work incremental:
 
 - reserve `N + 1` virtual pages for each guarded kernel stack,
 - leave the lowest page unmapped as the guard page,
-- map the remaining pages through `kernel::memory::paging` after that mapping
-  API exists.
+- map the remaining pages through `kernel::memory::paging` as kernel-only
+  writable non-executable pages.
 
 `kernel::task::stack` now stores that reservation metadata for schedulable
-kernel and user tasks. The active stack memory is still heap-backed, so the
-reservation is a future mapping contract rather than an active stack pointer.
+kernel and user tasks. The active scheduler-owned stack memory now uses the
+reserved higher-half range: writable pages are backed by physical frames owned
+as `KernelStack`, while the guard page stays unmapped.
+
+The current dynamic mappings are monotonic. They have no `unmap` or free path
+yet, so stack physical frames and virtual ranges live for the lifetime of their
+task metadata.
 
 ## Replacement Checklist
 
 - [x] Add frame-range state storage before adding `free`.
 - [x] Import the boot memory map as `Reserved` and `Free` ranges explicitly.
 - [x] Track explicit owners for page-table, heap, framebuffer backbuffer, DMA,
-      user stack, and user ELF allocations.
+      kernel stack, user stack, and user ELF allocations.
 - [x] Add owner classes and boot self-check coverage for kernel image, page
-      tables, heap, framebuffer, MMIO, DMA, user stack, user ELF, and guard
-      pages.
+      tables, heap, kernel stack, framebuffer, MMIO, DMA, user stack, user ELF,
+      and guard pages.
 - [x] Mark runtime `LOADER_CODE` and UEFI MMIO reservations with precise
       kernel-image and MMIO owners during boot memory-map import.
 - [ ] Mark future guard-page reservations with precise owners instead of

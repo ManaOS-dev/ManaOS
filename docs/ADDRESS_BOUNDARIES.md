@@ -61,6 +61,9 @@ untyped cross-domain `u64` values:
   to a raw pointer.
 - `KernelVirtualRange` represents reserved higher-half kernel virtual ranges
   for future dynamic mappings without implying that pages are already mapped.
+- `paging::map_kernel_writable_no_execute_range(...)` is the boundary that
+  turns a reserved `KernelVirtualRange` plus owned `PhysicalFrameRange` into
+  mapped kernel-only writable non-executable pages.
 
 ## Remaining Raw Address API Inventory
 
