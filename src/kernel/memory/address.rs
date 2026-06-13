@@ -1,6 +1,7 @@
 //! Typed memory address wrappers.
 
 const PAGE_SIZE: u64 = 4096;
+const KERNEL_DYNAMIC_MAPPING_START: u64 = 0xffff_8000_0000_0000;
 const USER_SPACE_END: u64 = 0x0000_8000_0000_0000;
 
 /// A raw physical byte address kept distinct from virtual addresses.
@@ -142,6 +143,67 @@ impl KernelVirtualAddress {
     /// Panics if the kernel virtual address does not fit in `usize`.
     pub fn as_mut_ptr(self) -> *mut u8 {
         usize::try_from(self.as_u64()).expect("kernel virtual address must fit in usize") as *mut u8
+    }
+}
+
+/// A reserved kernel virtual range for future dynamic mappings.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct KernelVirtualRange {
+    start: VirtAddr,
+    page_count: u64,
+}
+
+impl KernelVirtualRange {
+    /// Create a non-empty 4 KiB-aligned kernel virtual range.
+    pub const fn new(start: VirtAddr, page_count: u64) -> Option<Self> {
+        if page_count == 0
+            || !start.as_u64().is_multiple_of(PAGE_SIZE)
+            || start.as_u64() < KERNEL_DYNAMIC_MAPPING_START
+        {
+            return None;
+        }
+
+        let Some(byte_len) = page_count.checked_mul(PAGE_SIZE) else {
+            return None;
+        };
+        let Some(_) = start.as_u64().checked_add(byte_len) else {
+            return None;
+        };
+
+        Some(Self { start, page_count })
+    }
+
+    /// Return the first virtual address in the range.
+    pub const fn start(self) -> VirtAddr {
+        self.start
+    }
+
+    /// Return the number of 4 KiB pages in the range.
+    pub const fn page_count(self) -> u64 {
+        self.page_count
+    }
+
+    /// Return the byte length of the range.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `page_count * 4096` overflows `u64`.
+    pub const fn byte_len(self) -> u64 {
+        self.page_count
+            .checked_mul(PAGE_SIZE)
+            .expect("kernel virtual range byte length overflowed")
+    }
+
+    /// Return the first virtual address after this range.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the range end overflows `u64`. Construction prevents this for
+    /// valid ranges.
+    pub const fn end_exclusive(self) -> VirtAddr {
+        self.start
+            .checked_add(self.byte_len())
+            .expect("kernel virtual range end overflowed")
     }
 }
 

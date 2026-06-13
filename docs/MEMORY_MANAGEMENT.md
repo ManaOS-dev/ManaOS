@@ -124,6 +124,20 @@ The shrink path is therefore staged:
 4. Convert framebuffer and MMIO users independently because hardware ranges are
    not regular frame allocator ownership.
 
+## Kernel Virtual Range Reservation
+
+The kernel now has a monotonic allocator for reserved higher-half virtual
+address ranges intended for future dynamic mappings. It only reserves virtual
+addresses; page-table mapping, unmapping, and physical frame ownership remain
+separate responsibilities.
+
+This keeps the guard-page stack work incremental:
+
+- reserve `N + 1` virtual pages for each guarded kernel stack,
+- leave the lowest page unmapped as the guard page,
+- map the remaining pages through `kernel::memory::paging` after that mapping
+  API exists.
+
 ## Replacement Checklist
 
 - [x] Add frame-range state storage before adding `free`.
