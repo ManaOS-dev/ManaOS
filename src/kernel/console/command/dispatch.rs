@@ -2,7 +2,8 @@
 
 use super::output::{CommandEffect, CommandError};
 use super::{
-    cat, cd, clear, echo, fps, grep, help, hexdump, ls, mounts, pwd, stat, storage, syscalls, ticks,
+    cat, cd, clear, echo, fps, grep, help, hexdump, ls, mounts, pwd, stat, storage, syscalls,
+    tasks, ticks,
 };
 use alloc::string::String;
 
@@ -32,6 +33,7 @@ pub(super) fn run_stage(command: &str, input: &[String]) -> Result<CommandEffect
         "echo" => echo::run(arguments, input),
         "grep" => grep::run(arguments, input),
         "syscalls" => syscalls::run(arguments, input),
+        "tasks" => tasks::run(arguments, input),
         _ => Err(CommandError::UnknownCommand),
     }
 }

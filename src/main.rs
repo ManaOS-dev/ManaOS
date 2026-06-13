@@ -713,6 +713,17 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
     );
 }
 
+fn verify_scheduler_console_command() {
+    match kernel::console::verify_command_smoke("tasks") {
+        Some(output_lines) if output_lines >= 3 => crate::log_info!(
+            "console",
+            "Tasks command smoke passed: command=\"tasks\" output_lines={}",
+            output_lines
+        ),
+        _ => crate::log_warn!("console", "Tasks command smoke failed: command=\"tasks\""),
+    }
+}
+
 #[entry]
 fn main() -> Status {
     // ────────────────────────────────────────────────
@@ -798,6 +809,7 @@ fn main() -> Status {
 
     run_user_smoke_demo(&mut frame_allocator);
     verify_scheduler_task_diagnostics(2);
+    verify_scheduler_console_command();
 
     // Main Loop
     loop {
