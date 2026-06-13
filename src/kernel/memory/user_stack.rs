@@ -4,6 +4,7 @@ use crate::kernel::memory::{
     address::{PhysicalFrameRange, PhysicalFrameStart, UserVirtualAddress},
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
+    user_layout::{USER_STACK_REGION_BASE, USER_STACK_SLOT_BYTES},
 };
 use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::structures::paging::PageTableFlags;
@@ -14,18 +15,7 @@ const POINTER_SIZE: u64 = core::mem::size_of::<u64>() as u64;
 const USER_STACK_ALIGNMENT: u64 = 16;
 const MAX_USER_ENTRY_ARGUMENTS: usize = 8;
 const MAX_USER_ENTRY_ENVIRONMENT: usize = 8;
-/// Virtual base used by linked user demo executables.
-pub const USER_PROGRAM_BASE: u64 = 0x0000_4000_0000_0000;
-const USER_DATA_BASE: u64 = USER_PROGRAM_BASE + PAGE_SIZE;
-const USER_BAD_POINTER_BASE: u64 = USER_DATA_BASE + PAGE_SIZE;
-const USER_STACK_REGION_BASE: u64 = 0x0000_7fff_f000_0000;
-// Each stack slot reserves 1 MiB so smoke stacks stay visually distinct while
-// user address spaces and fixed stack-address reuse continue to evolve.
-const USER_STACK_SLOT_BYTES: u64 = 0x0010_0000;
 static NEXT_USER_STACK_SLOT: AtomicU64 = AtomicU64::new(0);
-const _: () = assert!(USER_BAD_POINTER_BASE == 0x0000_4000_0000_2000);
-const _: () = assert!(UserVirtualAddress::new(USER_PROGRAM_BASE).is_some());
-const _: () = assert!(UserVirtualAddress::new(USER_STACK_REGION_BASE).is_some());
 
 /// Allocated user stack virtual range.
 #[derive(Debug, Clone, Copy)]

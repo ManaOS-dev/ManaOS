@@ -18,6 +18,8 @@
 //! - [`run_active_user_tasks_until_empty`] - Drain active user tasks until none remain
 //! - [`UserTaskExit`] - User task exit result
 //! - [`process_current_user_break`] - Process a user heap break request
+//! - [`process_current_user_mapping`] - Process an anonymous user mapping request
+//! - [`process_current_user_unmapping`] - Process an anonymous user unmapping request
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
 //! - [`get_scheduler_diagnostics`] - Read scheduler accounting diagnostics
@@ -44,6 +46,7 @@ use crate::kernel::memory::address::UserVirtualAddress;
 use crate::kernel::memory::address_space::{self, UserAddressSpace, UserAddressSpaceReclaim};
 use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
 use crate::kernel::memory::user_heap::UserHeap;
+use crate::kernel::memory::user_mapping::UserMappings;
 use crate::kernel::memory::virtual_allocator::{
     new_dynamic_mapping_allocator, KernelVirtualRangeAllocator,
 };
@@ -95,6 +98,7 @@ struct UserTaskRuntime {
     address_space: Option<UserAddressSpace>,
     saved_frame: UserTrapFrame,
     heap: UserHeap,
+    mappings: UserMappings,
     syscall_frame_recorded: bool,
     interrupt_frame_recorded: bool,
 }
@@ -109,6 +113,7 @@ impl UserTaskRuntime {
             address_space: Some(address_space),
             saved_frame: entry_context.to_trap_frame(),
             heap: UserHeap::new(heap_start),
+            mappings: UserMappings::new(),
             syscall_frame_recorded: false,
             interrupt_frame_recorded: false,
         }
@@ -695,6 +700,72 @@ impl Scheduler {
         Some(next_break.as_u64())
     }
 
+    fn process_current_user_mapping(
+        &mut self,
+        frame_allocator: &mut PhysicalFrameAllocator,
+        requested_address: u64,
+        length: u64,
+        writable: bool,
+        protection: u64,
+        flags: u64,
+    ) -> Option<u64> {
+        let current_task = &mut self.tasks[self.current_index];
+        let task_id = current_task.get_id();
+        let TaskKind::User(user_runtime) = &mut current_task.kind else {
+            return None;
+        };
+        let address_space = user_runtime.address_space?;
+        let allocation = user_runtime.mappings.map_anonymous(
+            address_space,
+            frame_allocator,
+            length,
+            writable,
+        )?;
+        crate::log_info!(
+            "syscall",
+            "mmap -> task={} requested={:#x} start={:#x} length={} pages={} protection={:#x} flags={:#x} active_pages={}",
+            task_id,
+            requested_address,
+            allocation.start().as_u64(),
+            length,
+            allocation.page_count(),
+            protection,
+            flags,
+            user_runtime.mappings.active_pages()
+        );
+        Some(allocation.start().as_u64())
+    }
+
+    fn process_current_user_unmapping(
+        &mut self,
+        frame_allocator: &mut PhysicalFrameAllocator,
+        start_address: u64,
+        length: u64,
+    ) -> Option<u64> {
+        let current_task = &mut self.tasks[self.current_index];
+        let task_id = current_task.get_id();
+        let TaskKind::User(user_runtime) = &mut current_task.kind else {
+            return None;
+        };
+        let address_space = user_runtime.address_space?;
+        let unmapped_pages = user_runtime.mappings.unmap_exact(
+            address_space,
+            frame_allocator,
+            start_address,
+            length,
+        )?;
+        crate::log_info!(
+            "syscall",
+            "munmap -> task={} start={:#x} length={} pages={} unmapped=true active_pages={}",
+            task_id,
+            start_address,
+            length,
+            unmapped_pages,
+            user_runtime.mappings.active_pages()
+        );
+        Some(unmapped_pages)
+    }
+
     fn reclaim_finished_user_resources(
         &mut self,
         frame_allocator: &mut PhysicalFrameAllocator,
@@ -1094,6 +1165,40 @@ pub fn process_current_user_break(
     let mut scheduler = SCHEDULER.lock();
     scheduler.as_mut().and_then(|scheduler| {
         scheduler.process_current_user_break(frame_allocator, requested_break)
+    })
+}
+
+/// Process an anonymous `mmap` request for the currently running user task.
+pub fn process_current_user_mapping(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    requested_address: u64,
+    length: u64,
+    writable: bool,
+    protection: u64,
+    flags: u64,
+) -> Option<u64> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler.as_mut().and_then(|scheduler| {
+        scheduler.process_current_user_mapping(
+            frame_allocator,
+            requested_address,
+            length,
+            writable,
+            protection,
+            flags,
+        )
+    })
+}
+
+/// Process an anonymous `munmap` request for the currently running user task.
+pub fn process_current_user_unmapping(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    start_address: u64,
+    length: u64,
+) -> Option<u64> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler.as_mut().and_then(|scheduler| {
+        scheduler.process_current_user_unmapping(frame_allocator, start_address, length)
     })
 }
 

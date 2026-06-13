@@ -95,6 +95,9 @@ User tasks now own separate address-space roots:
   address space; the guard page remains unmapped.
 - User heap frames are user-task-owned, mapped by `brk` through the active user
   address space, and returned when the address space is destroyed.
+- Anonymous user mapping frames are user-task-owned, mapped by the ManaOS
+  four-argument `mmap` subset, and returned by exact `munmap` or address-space
+  destruction.
 - Kernel stack frames are task-owned and mapped through higher-half kernel
   virtual ranges. The adjacent lower virtual guard page remains unmapped and
   does not consume a physical frame.
@@ -184,10 +187,23 @@ the current heap break in each user task runtime, and `kernel::memory::user_heap
 maps writable non-executable user heap pages as the break grows. Shrinking the
 break unmaps no-longer-covered heap pages and returns their physical frames to
 the `UserHeap` owner pool, while page-table frames remain owned by the address
-space until process cleanup. The one-shot user runtime registers the boot-owned
-frame allocator only while user code can issue syscalls, so syscall dispatch can
-allocate and free heap frames without making the console or architecture layers
-own the allocator.
+space until process cleanup.
+
+Anonymous `mmap` is the second syscall-time user memory path. The current ABI
+supports `mmap(addr, len, prot, flags)` only for `addr = 0` and
+`MAP_PRIVATE | MAP_ANONYMOUS`; executable, file-backed, fixed-address, and
+partial-unmap mappings are intentionally rejected until the process model grows
+those ownership rules. The static user layout keeps the `brk` heap below
+`0x0000_6000_0000_0000`, anonymous mappings in
+`0x0000_6000_0000_0000..0x0000_7000_0000_0000`, and fixed stack slots above
+`0x0000_7fff_f000_0000`. Exact `munmap` removes all pages in a tracked
+anonymous mapping and returns their physical frames to the `UserMapping` owner
+pool.
+
+The one-shot user runtime registers the boot-owned frame allocator only while
+user code can issue syscalls, so syscall dispatch can allocate and free user
+heap and anonymous mapping frames without making the console or architecture
+layers own the allocator.
 
 ## User Address Spaces
 
@@ -217,10 +233,11 @@ reused across lifecycle runs.
 - [x] Add frame-range state storage before adding `free`.
 - [x] Import the boot memory map as `Reserved` and `Free` ranges explicitly.
 - [x] Track explicit owners for page-table, heap, framebuffer backbuffer, DMA,
-      kernel stack, user stack, user ELF, and user heap allocations.
+      kernel stack, user stack, user ELF, user heap, and anonymous user mapping
+      allocations.
 - [x] Add owner classes and boot self-check coverage for kernel image, page
       tables, heap, kernel stack, framebuffer, MMIO, DMA, user stack, user ELF,
-      user heap, and guard pages.
+      user heap, anonymous user mapping, and guard pages.
 - [x] Mark runtime `LOADER_CODE` and UEFI MMIO reservations with precise
       kernel-image and MMIO owners during boot memory-map import.
 - [ ] Mark future guard-page reservations with precise owners instead of
@@ -247,6 +264,8 @@ reused across lifecycle runs.
       pages through storage smoke.
 - [x] Add `brk` shrink unmapping that returns no-longer-covered user heap
       frames to the allocator.
+- [x] Add an anonymous `mmap`/`munmap` subset and prove exact unmap frame
+      release through storage smoke.
 - [x] Reclaim finished user address spaces by walking only the private user
       PML4 window and returning user/page-table frames to the allocator.
 - [ ] Continue proving the boot path with `just storage-smoke` after every

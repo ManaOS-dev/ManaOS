@@ -3,7 +3,7 @@ use crate::kernel::memory::{
     address::{PhysicalFrameStart, UserVirtualAddress, UserVirtualRange},
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
-    user_stack,
+    user_layout, user_stack,
 };
 use core::cmp::{max, min};
 use x86_64::structures::paging::PageTableFlags;
@@ -80,7 +80,7 @@ pub fn verify_invalid_elf_rejections() -> bool {
     if rejects_mutated_elf(|image| write_u64(image, 64 + 48, 24)) {
         passed += 1;
     }
-    if rejects_mutated_elf(|image| write_u64(image, 24, user_stack::USER_PROGRAM_BASE + PAGE_SIZE))
+    if rejects_mutated_elf(|image| write_u64(image, 24, user_layout::USER_PROGRAM_BASE + PAGE_SIZE))
     {
         passed += 1;
     }
@@ -482,7 +482,7 @@ fn valid_minimal_elf() -> [u8; 128] {
     write_u16(&mut image, 16, 2);
     write_u16(&mut image, 18, 0x3e);
     write_u32(&mut image, 20, 1);
-    write_u64(&mut image, 24, user_stack::USER_PROGRAM_BASE);
+    write_u64(&mut image, 24, user_layout::USER_PROGRAM_BASE);
     write_u64(&mut image, 32, 64);
     write_u16(&mut image, 52, 64);
     write_u16(&mut image, 54, 56);
@@ -490,7 +490,7 @@ fn valid_minimal_elf() -> [u8; 128] {
     write_u32(&mut image, 64, 1);
     write_u32(&mut image, 64 + 4, PF_READ | PF_EXECUTE);
     write_u64(&mut image, 64 + 8, 0);
-    write_u64(&mut image, 64 + 16, user_stack::USER_PROGRAM_BASE);
+    write_u64(&mut image, 64 + 16, user_layout::USER_PROGRAM_BASE);
     write_u64(&mut image, 64 + 32, 128);
     write_u64(&mut image, 64 + 40, PAGE_SIZE);
     write_u64(&mut image, 64 + 48, PAGE_SIZE);

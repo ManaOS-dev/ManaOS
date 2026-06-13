@@ -23,6 +23,7 @@ static DYNAMIC_KERNEL_MAPPING_PAGES: AtomicU64 = AtomicU64::new(0);
 static USER_STACK_PAGES: AtomicU64 = AtomicU64::new(0);
 static USER_ELF_PAGES: AtomicU64 = AtomicU64::new(0);
 static USER_HEAP_PAGES: AtomicU64 = AtomicU64::new(0);
+static USER_MAPPING_PAGES: AtomicU64 = AtomicU64::new(0);
 
 /// Physical frame allocator owner totals captured at a specific boot point.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -42,6 +43,7 @@ pub struct FrameAllocatorOwnerDiagnostics {
     user_stack: u64,
     user_elf: u64,
     user_heap: u64,
+    user_mapping: u64,
 }
 
 impl FrameAllocatorOwnerDiagnostics {
@@ -120,11 +122,17 @@ impl FrameAllocatorOwnerDiagnostics {
         self.user_heap
     }
 
+    /// Return anonymous user mapping pages.
+    pub const fn user_mapping(self) -> u64 {
+        self.user_mapping
+    }
+
     /// Return all currently user-owned physical pages.
     pub const fn user_pages(self) -> u64 {
         self.user_stack
             .saturating_add(self.user_elf)
             .saturating_add(self.user_heap)
+            .saturating_add(self.user_mapping)
     }
 }
 
@@ -201,6 +209,7 @@ pub fn record_frame_allocator_snapshot(frame_allocator: &PhysicalFrameAllocator)
     USER_STACK_PAGES.store(owners.user_stack, Ordering::Relaxed);
     USER_ELF_PAGES.store(owners.user_elf, Ordering::Relaxed);
     USER_HEAP_PAGES.store(owners.user_heap, Ordering::Relaxed);
+    USER_MAPPING_PAGES.store(owners.user_mapping, Ordering::Relaxed);
     SNAPSHOT_READY.store(true, Ordering::Release);
 }
 
@@ -232,6 +241,7 @@ pub fn get_frame_allocator_diagnostics() -> Option<FrameAllocatorDiagnostics> {
             user_stack: USER_STACK_PAGES.load(Ordering::Relaxed),
             user_elf: USER_ELF_PAGES.load(Ordering::Relaxed),
             user_heap: USER_HEAP_PAGES.load(Ordering::Relaxed),
+            user_mapping: USER_MAPPING_PAGES.load(Ordering::Relaxed),
         },
     ))
 }

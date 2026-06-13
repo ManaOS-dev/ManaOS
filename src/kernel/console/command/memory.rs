@@ -41,11 +41,12 @@ pub(super) fn run(
         owners.dynamic_kernel_mapping()
     ));
     output.push(format!(
-        "user_memory: user_pages={} user_stack={} user_elf={} user_heap={} guard_pages={} unknown_used={} owner_free={}",
+        "user_memory: user_pages={} user_stack={} user_elf={} user_heap={} user_mapping={} guard_pages={} unknown_used={} owner_free={}",
         owners.user_pages(),
         owners.user_stack(),
         owners.user_elf(),
         owners.user_heap(),
+        owners.user_mapping(),
         owners.guard_page(),
         owners.unknown_used(),
         owners.free()

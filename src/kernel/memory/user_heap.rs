@@ -2,16 +2,13 @@
 
 use super::{
     address::UserVirtualAddress, address_space::UserAddressSpace,
-    frame_allocator::PhysicalFrameAllocator,
+    frame_allocator::PhysicalFrameAllocator, user_layout::USER_HEAP_END,
 };
 use crate::kernel::memory::frame_allocator::FrameRangeOwner;
 use x86_64::structures::paging::PageTableFlags;
 
 const PAGE_SIZE: u64 = 4096;
 const PAGE_SIZE_USIZE: usize = 4096;
-// Keep the first heap model well below the fixed stack slots while process
-// address layout is still static.
-const USER_HEAP_MAX_END: u64 = 0x0000_7000_0000_0000;
 
 /// Per-user-task heap break and mapped extent.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -33,7 +30,7 @@ impl UserHeap {
             "user heap initial break must be page-aligned"
         );
         assert!(
-            initial_break.as_u64() < USER_HEAP_MAX_END,
+            initial_break.as_u64() < USER_HEAP_END,
             "user heap initial break must stay below the heap ceiling"
         );
 
@@ -79,7 +76,7 @@ impl UserHeap {
         if requested_break == 0 {
             return self.current_break;
         }
-        if requested_break < self.base.as_u64() || requested_break >= USER_HEAP_MAX_END {
+        if requested_break < self.base.as_u64() || requested_break >= USER_HEAP_END {
             return self.current_break;
         }
 
