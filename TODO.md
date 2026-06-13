@@ -153,6 +153,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Add a scheduler/preemption status strip to the console overlay.
 - [x] Add user kernel stack reclaim accounting to scheduler diagnostics and the console overlay.
 - [x] Aggregate finished user task resource reclaim inside the scheduler lifecycle path.
+- [x] Add per-task scheduler snapshots to the visible `tasks` console command.
 - [ ] Add kernel stack switching per task where needed; user task stacks are installed before entry and timer-context resume, Ring 3 timer interrupts use the installed TSS stack and save their raw frame there, and SYSCALL switches onto the task kernel stack. Bootstrap/IST stacks remain.
 - [x] Design the per-task kernel stack switching policy.
 
@@ -164,6 +165,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Move user task exit and run-once lifecycle handling into a process lifecycle module.
 - [x] Replace the global user-exit result latch with a scheduler-owned finished user exit queue.
 - [x] Add explicit set/take invariants for the one-shot user exit return stack window.
+- [x] Close scheduler preemption from `SYS_EXIT` before returning through the one-shot exit stack.
 - [x] Normalize user task scheduler state transitions.
 - [x] Define the task metadata model needed before process identifiers and parent-child relationships.
 

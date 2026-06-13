@@ -1,5 +1,7 @@
 //! Scheduler diagnostics snapshots.
 
+use super::state::TaskState;
+
 /// Number of tasks currently in each lifecycle state.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct TaskStateDiagnostics {
@@ -38,6 +40,95 @@ impl TaskStateDiagnostics {
     /// Return the number of finished tasks.
     pub const fn finished(self) -> u64 {
         self.finished
+    }
+}
+
+/// Schedulable task kind reported by scheduler diagnostics.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TaskKindDiagnostics {
+    /// A kernel-mode task.
+    Kernel,
+    /// A user-mode task.
+    User,
+}
+
+impl TaskKindDiagnostics {
+    /// Return a stable label for console diagnostics.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Kernel => "kernel",
+            Self::User => "user",
+        }
+    }
+}
+
+/// Snapshot of one scheduler task record.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SchedulerTaskSnapshot {
+    task_id: u64,
+    parent_task_id: Option<u64>,
+    kind: TaskKindDiagnostics,
+    state: TaskState,
+    active: bool,
+    address_space_owned: bool,
+    kernel_stack_owned: bool,
+}
+
+impl SchedulerTaskSnapshot {
+    /// Create a task snapshot from scheduler-owned task metadata.
+    pub(super) const fn new(
+        task_id: u64,
+        parent_task_id: Option<u64>,
+        kind: TaskKindDiagnostics,
+        state: TaskState,
+        active: bool,
+        address_space_owned: bool,
+        kernel_stack_owned: bool,
+    ) -> Self {
+        Self {
+            task_id,
+            parent_task_id,
+            kind,
+            state,
+            active,
+            address_space_owned,
+            kernel_stack_owned,
+        }
+    }
+
+    /// Return the scheduler-local task identifier.
+    pub const fn task_id(self) -> u64 {
+        self.task_id
+    }
+
+    /// Return the parent task identifier if the task was spawned by another task.
+    pub const fn parent_task_id(self) -> Option<u64> {
+        self.parent_task_id
+    }
+
+    /// Return the scheduler task kind.
+    pub const fn kind(self) -> TaskKindDiagnostics {
+        self.kind
+    }
+
+    /// Return the current scheduler lifecycle state.
+    pub const fn state(self) -> TaskState {
+        self.state
+    }
+
+    /// Return whether this user task is in the active scheduling set.
+    pub const fn active(self) -> bool {
+        self.active
+    }
+
+    /// Return whether this task still owns a user address space.
+    pub const fn address_space_owned(self) -> bool {
+        self.address_space_owned
+    }
+
+    /// Return whether this task still owns a scheduler-managed kernel stack.
+    pub const fn kernel_stack_owned(self) -> bool {
+        self.kernel_stack_owned
     }
 }
 

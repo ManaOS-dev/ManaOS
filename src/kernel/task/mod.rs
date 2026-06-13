@@ -49,7 +49,9 @@ use alloc::vec::Vec;
 pub use context::UserEntryArguments;
 use context::{TaskContext, TaskEntry, UserTaskContext, UserTrapFrame};
 use core::sync::atomic::{AtomicBool, Ordering};
-pub use diagnostics::{SchedulerDiagnostics, TaskStateDiagnostics};
+pub use diagnostics::{
+    SchedulerDiagnostics, SchedulerTaskSnapshot, TaskKindDiagnostics, TaskStateDiagnostics,
+};
 pub use metadata::{TaskIdentifier, TaskMetadata};
 pub use process_lifecycle::UserTaskExit;
 use reclaim::FinishedUserTaskReclaim;
@@ -485,6 +487,33 @@ impl Scheduler {
             reclaimed_user_kernel_stack_virtual_pages: self
                 .reclaimed_user_kernel_stack_virtual_pages,
         }
+    }
+
+    fn get_task_snapshots(&self) -> Vec<SchedulerTaskSnapshot> {
+        self.tasks
+            .iter()
+            .map(|task| {
+                let task_id = task.get_id();
+                let (kind, address_space_owned) = match &task.kind {
+                    TaskKind::Kernel => (TaskKindDiagnostics::Kernel, false),
+                    TaskKind::User(user_runtime) => (
+                        TaskKindDiagnostics::User,
+                        user_runtime.address_space.is_some(),
+                    ),
+                };
+                SchedulerTaskSnapshot::new(
+                    task_id,
+                    task.metadata
+                        .get_parent_identifier()
+                        .map(TaskIdentifier::as_u64),
+                    kind,
+                    task.state,
+                    self.is_user_task_active(task_id),
+                    address_space_owned,
+                    task.kernel_stack.is_some(),
+                )
+            })
+            .collect()
     }
 
     fn get_kernel_stack_guard_fault(&self, fault_address: u64) -> Option<KernelStackGuardFault> {
@@ -1111,6 +1140,13 @@ pub fn get_scheduler_diagnostics() -> Option<SchedulerDiagnostics> {
     SCHEDULER
         .try_lock()
         .and_then(|scheduler| scheduler.as_ref().map(Scheduler::get_diagnostics))
+}
+
+/// Return one snapshot row for each task retained by the scheduler.
+pub fn get_scheduler_task_snapshots() -> Option<Vec<SchedulerTaskSnapshot>> {
+    SCHEDULER
+        .try_lock()
+        .and_then(|scheduler| scheduler.as_ref().map(Scheduler::get_task_snapshots))
 }
 
 /// Return guard-fault diagnostics when `fault_address` is inside a known kernel

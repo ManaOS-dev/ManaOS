@@ -68,6 +68,7 @@ $expectedPatterns = @(
     "user shell ok",
     "user bss ok",
     "user smoke ok",
+    "User exit preemption window closed: task=.*",
     "User task exited: code=0",
     "Restored kernel address space after user exit",
     "User address space reclaimed: task=.* user_pages=.* page_table_pages=.*",
@@ -76,7 +77,8 @@ $expectedPatterns = @(
     "Active user lifecycle drained: exits=2",
     "Multi-user preemption smoke passed: tasks=2",
     "Scheduler diagnostics verified: .*user_tasks=2 .*finished=2 .*active_user_tasks=0 .*active_user_address_spaces=0 .*pending_user_exits=0 .*user_exit_return_stack_sets=2 .*user_exit_return_stack_takes=2 .*reclaimed_user_resource_records=2 .*reclaimed_user_kernel_stacks=2 .*reclaimed_kernel_stack_writable_pages=8 .*reclaimed_kernel_stack_virtual_pages=10 .*timer_preemptions=.* user_resumes=.* finished_tasks=2",
-    "Tasks command smoke passed: command=`"tasks`" output_lines=5",
+    "Scheduler task snapshots verified: rows=4 finished_user_tasks=2 fully_reclaimed_user_tasks=2",
+    "Tasks command smoke passed: command=`"tasks`" output_lines=9",
     "Console status strip smoke passed"
 )
 

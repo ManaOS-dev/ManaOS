@@ -764,9 +764,59 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
     );
 }
 
+fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
+    let snapshots = kernel::task::get_scheduler_task_snapshots()
+        .expect("scheduler task snapshots must be available after user smoke tasks");
+    let expected_total_tasks = usize::try_from(expected_user_tasks)
+        .expect("expected user task count must fit in usize")
+        .checked_add(2)
+        .expect("expected total task count must not overflow");
+    assert_eq!(
+        snapshots.len(),
+        expected_total_tasks,
+        "scheduler task snapshots must include bootstrap, idle, and smoke user tasks"
+    );
+
+    let mut finished_user_tasks = 0_u64;
+    let mut fully_reclaimed_user_tasks = 0_u64;
+    for snapshot in snapshots {
+        if snapshot.kind() != kernel::task::TaskKindDiagnostics::User {
+            continue;
+        }
+        assert!(
+            !snapshot.active(),
+            "finished user task snapshots must not be active"
+        );
+        assert_eq!(
+            snapshot.state(),
+            kernel::task::TaskState::Finished,
+            "user smoke task snapshots must be finished"
+        );
+        finished_user_tasks = finished_user_tasks.saturating_add(1);
+        if !snapshot.address_space_owned() && !snapshot.kernel_stack_owned() {
+            fully_reclaimed_user_tasks = fully_reclaimed_user_tasks.saturating_add(1);
+        }
+    }
+    assert_eq!(
+        finished_user_tasks, expected_user_tasks,
+        "scheduler snapshots must include every finished user smoke task"
+    );
+    assert_eq!(
+        fully_reclaimed_user_tasks, expected_user_tasks,
+        "scheduler snapshots must show user task address spaces and kernel stacks reclaimed"
+    );
+    crate::log_info!(
+        "task",
+        "Scheduler task snapshots verified: rows={} finished_user_tasks={} fully_reclaimed_user_tasks={}",
+        expected_total_tasks,
+        finished_user_tasks,
+        fully_reclaimed_user_tasks
+    );
+}
+
 fn verify_scheduler_console_command() {
     match kernel::console::verify_command_smoke("tasks") {
-        Some(output_lines) if output_lines >= 3 => crate::log_info!(
+        Some(output_lines) if output_lines >= 9 => crate::log_info!(
             "console",
             "Tasks command smoke passed: command=\"tasks\" output_lines={}",
             output_lines
@@ -868,6 +918,7 @@ fn main() -> Status {
 
     run_user_smoke_demo(&mut frame_allocator);
     verify_scheduler_task_diagnostics(2);
+    verify_scheduler_task_snapshots(2);
     verify_scheduler_console_command();
     verify_console_status_strip();
 

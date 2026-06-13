@@ -122,7 +122,9 @@ User task preemption stays disabled until all of the following are true:
 - Scheduler diagnostics expose task state counts, user address-space ownership,
   and preemption accounting so the boot smoke can assert lifecycle progress.
 - The `tasks` console command shows the same scheduler and preemption counters
-  on the interactive console overlay.
+  on the interactive console overlay, then lists one row per retained task with
+  kind, lifecycle state, active scheduling membership, user address-space
+  ownership, and scheduler-managed kernel stack ownership.
 - The console overlay status strip now keeps the scheduler and preemption
   counters visible even before a command is submitted.
 - `just storage-smoke` still proves the one-shot user path and now asserts that
@@ -134,8 +136,10 @@ User task preemption stays disabled until all of the following are true:
   records before asking the scheduler for one aggregate resource-reclaim pass
   across address spaces and kernel stacks. The one-shot `SYS_EXIT` return stack
   is guarded by an explicit return window that must be set and consumed exactly
-  once. The smoke lifecycle asks the scheduler for the next active user task
-  instead of selecting task identifiers in the composition root, so active-set
-  ownership stays inside `kernel::task`. The active user lifecycle can now be
-  drained through one scheduler-owned API that returns the completed exit
-  records.
+  once. `SYS_EXIT` closes scheduler preemption before returning through that
+  one-shot stack, so another active user task cannot consume the same return
+  window while lifecycle cleanup is still pending. The smoke lifecycle asks the
+  scheduler for the next active user task instead of selecting task identifiers
+  in the composition root, so active-set ownership stays inside `kernel::task`.
+  The active user lifecycle can now be drained through one scheduler-owned API
+  that returns the completed exit records.
