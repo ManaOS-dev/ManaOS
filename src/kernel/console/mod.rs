@@ -17,6 +17,7 @@
 //! - [`submit`] - Execute the current input line
 //! - [`verify_pipeline_smoke`] - Run a non-interactive pipeline smoke check
 //! - [`verify_command_smoke`] - Run a non-interactive command smoke check
+//! - [`verify_command_smoke_contains`] - Run a non-interactive command content smoke check
 //! - [`verify_status_strip_smoke`] - Probe the console overlay status strip
 //! - [`render_if_dirty`] - Redraw the command console when state changed
 
@@ -103,6 +104,11 @@ pub fn verify_pipeline_smoke(command: &str) -> Option<usize> {
 /// Run a non-interactive command and return the number of output lines.
 pub fn verify_command_smoke(command: &str) -> Option<usize> {
     command::verify_command_smoke(command)
+}
+
+/// Run a non-interactive command and require output text fragments.
+pub fn verify_command_smoke_contains(command: &str, required_needles: &[&str]) -> Option<usize> {
+    command::verify_command_smoke_contains(command, required_needles)
 }
 
 /// Verify that the console overlay can format its scheduler status strip.

@@ -181,6 +181,12 @@ console status strip expose the latest tracked free, used, reserved, page-table,
 kernel stack, user, dynamic mapping, and AHCI DMA page counts without sharing the
 mutable allocator with console code.
 
+The `tasks` console command exposes the static user virtual layout and one
+`task_vm` row for each retained user task. Those rows show the last scheduler
+runtime view of the `brk` heap and anonymous mapping table even after the
+address space has been reclaimed, which keeps process-memory state visible
+without keeping page tables alive.
+
 `brk` is the first syscall-time user heap growth path. The ELF loader reports a
 page-aligned heap start after the highest `PT_LOAD` segment, the scheduler stores
 the current heap break in each user task runtime, and `kernel::memory::user_heap`
@@ -266,6 +272,8 @@ reused across lifecycle runs.
       frames to the allocator.
 - [x] Add an anonymous `mmap`/`munmap` subset and prove exact unmap frame
       release through storage smoke.
+- [x] Expose per-user-task virtual memory snapshots through the `tasks` console
+      command.
 - [x] Reclaim finished user address spaces by walking only the private user
       PML4 window and returning user/page-table frames to the allocator.
 - [ ] Continue proving the boot path with `just storage-smoke` after every

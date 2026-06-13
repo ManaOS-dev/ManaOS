@@ -59,6 +59,15 @@ pub(super) fn run(
         diagnostics.user_exit_return_stack_sets(),
         diagnostics.user_exit_return_stack_takes()
     ));
+    output.push(format!(
+        "user_vm_layout: program_base={:#x} heap_end={:#x} mmap_start={:#x} mmap_end={:#x} stack_start={:#x} stack_slot_bytes={}",
+        crate::kernel::memory::user_layout::USER_PROGRAM_BASE,
+        crate::kernel::memory::user_layout::USER_HEAP_END,
+        crate::kernel::memory::user_layout::USER_MAPPING_BASE,
+        crate::kernel::memory::user_layout::USER_MAPPING_END,
+        crate::kernel::memory::user_layout::USER_STACK_REGION_BASE,
+        crate::kernel::memory::user_layout::USER_STACK_SLOT_BYTES
+    ));
     let Some(snapshots) = crate::kernel::task::get_scheduler_task_snapshots() else {
         output.push("task_table: unavailable".to_string());
         return Ok(CommandEffect::Output(output));
@@ -76,6 +85,18 @@ pub(super) fn run(
             snapshot.address_space_owned(),
             snapshot.kernel_stack_owned()
         ));
+        if let Some(user_virtual_memory) = snapshot.user_virtual_memory() {
+            output.push(format!(
+                "task_vm: id={} heap_base={:#x} heap_break={:#x} heap_pages={} mmap_next={:#x} mmap_pages={} mmap_records={}",
+                snapshot.task_id(),
+                user_virtual_memory.heap_base(),
+                user_virtual_memory.heap_break(),
+                user_virtual_memory.heap_mapped_pages(),
+                user_virtual_memory.mapping_next_start(),
+                user_virtual_memory.mapping_active_pages(),
+                user_virtual_memory.mapping_active_records()
+            ));
+        }
     }
     Ok(CommandEffect::Output(output))
 }

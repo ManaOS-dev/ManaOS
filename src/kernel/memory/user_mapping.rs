@@ -120,6 +120,21 @@ impl UserMappings {
             .fold(0_u64, u64::saturating_add)
     }
 
+    /// Return the number of active anonymous mapping records.
+    pub fn active_records(&self) -> u64 {
+        self.records
+            .iter()
+            .filter(|record| record.is_some())
+            .count()
+            .try_into()
+            .expect("active mapping record count must fit in u64")
+    }
+
+    /// Return the next anonymous mapping search start.
+    pub const fn next_start(&self) -> u64 {
+        self.next_start
+    }
+
     fn map_pages(
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,

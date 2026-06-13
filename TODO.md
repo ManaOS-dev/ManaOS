@@ -152,6 +152,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Checklist the prerequisites for enabling user task preemption.
 - [x] Add scheduler accounting and task state diagnostics.
 - [x] Add a visible `tasks` console command for scheduler and user-preemption diagnostics.
+- [x] Expose user virtual memory layout and per-task VM snapshots in `tasks`.
 - [x] Add a scheduler/preemption status strip to the console overlay.
 - [x] Add user kernel stack reclaim accounting to scheduler diagnostics and the console overlay.
 - [x] Aggregate finished user task resource reclaim inside the scheduler lifecycle path.
