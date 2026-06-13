@@ -159,6 +159,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Document the context switch ABI.
 - [x] Verify the `UserTrapFrame` register layout against `context_switch.s` offsets.
 - [x] Move user task exit and run-once lifecycle handling into a process lifecycle module.
+- [x] Replace the global user-exit result latch with a scheduler-owned finished user exit queue.
 - [x] Normalize user task scheduler state transitions.
 - [x] Define the task metadata model needed before process identifiers and parent-child relationships.
 

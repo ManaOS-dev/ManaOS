@@ -40,6 +40,7 @@ use crate::kernel::memory::virtual_allocator::{
     new_dynamic_mapping_allocator, KernelVirtualRangeAllocator,
 };
 use alloc::boxed::Box;
+use alloc::collections::VecDeque;
 use alloc::vec;
 use alloc::vec::Vec;
 pub use context::UserEntryArguments;
@@ -277,6 +278,7 @@ struct Scheduler {
     next_task_identifier: TaskIdentifier,
     kernel_stack_range_allocator: KernelVirtualRangeAllocator,
     active_user_task_identifiers: Vec<u64>,
+    finished_user_exits: VecDeque<UserTaskExit>,
     preemption_switch_logged: bool,
     user_resume_logged: bool,
     context_switch_count: u64,
@@ -297,6 +299,7 @@ impl Scheduler {
             next_task_identifier: TaskIdentifier::first_dynamic(),
             kernel_stack_range_allocator: new_dynamic_mapping_allocator(),
             active_user_task_identifiers: Vec::new(),
+            finished_user_exits: VecDeque::new(),
             preemption_switch_logged: false,
             user_resume_logged: false,
             context_switch_count: 0,
@@ -463,6 +466,8 @@ impl Scheduler {
             user_entries: self.user_entry_count,
             user_resumes: self.user_resume_count,
             finished_tasks: self.finished_task_count,
+            pending_user_exits: u64::try_from(self.finished_user_exits.len())
+                .expect("pending user exit count must fit in u64"),
             reclaimed_user_kernel_stacks: self.reclaimed_user_kernel_stack_count,
             reclaimed_user_kernel_stack_writable_pages: self
                 .reclaimed_user_kernel_stack_writable_pages,
@@ -550,8 +555,11 @@ impl Scheduler {
         })
     }
 
-    fn finish_current_task(&mut self) -> Option<u64> {
+    fn finish_current_task(&mut self, exit_code: u64) -> Option<UserTaskExit> {
         let task_id = self.tasks[self.current_index].get_id();
+        if !matches!(&self.tasks[self.current_index].kind, TaskKind::User(_)) {
+            return None;
+        }
         if !self.tasks[self.current_index].state.finish_running() {
             return None;
         }
@@ -565,7 +573,13 @@ impl Scheduler {
         self.deactivate_user_task(task_id);
         self.finished_task_count = self.finished_task_count.saturating_add(1);
 
-        Some(task_id)
+        let exit = UserTaskExit::new(task_id, exit_code);
+        self.finished_user_exits.push_back(exit);
+        Some(exit)
+    }
+
+    fn take_finished_user_exit(&mut self) -> Option<UserTaskExit> {
+        self.finished_user_exits.pop_front()
     }
 
     fn reclaim_finished_user_address_space(

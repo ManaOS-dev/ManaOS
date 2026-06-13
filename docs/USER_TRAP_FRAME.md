@@ -128,4 +128,7 @@ User task preemption stays disabled until all of the following are true:
 - `just storage-smoke` still proves the one-shot user path and now asserts that
   timer interrupts can enter another active user task, preempt and resume user
   code across two user task records, and finish tasks that own separate stack
-  slots, separate address spaces, and lifecycle diagnostics.
+  slots, separate address spaces, and lifecycle diagnostics. Finished user
+  exits are now reported through a scheduler-owned exit queue instead of a
+  global single-result latch, so lifecycle cleanup can drain task-specific exit
+  records before reclaiming address spaces and kernel stacks.
