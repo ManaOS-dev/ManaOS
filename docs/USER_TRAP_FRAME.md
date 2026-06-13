@@ -135,4 +135,6 @@ User task preemption stays disabled until all of the following are true:
   `SYS_EXIT` return stack is guarded by an explicit return window that must be
   set and consumed exactly once. The smoke lifecycle asks the scheduler for the
   next active user task instead of selecting task identifiers in the composition
-  root, so active-set ownership stays inside `kernel::task`.
+  root, so active-set ownership stays inside `kernel::task`. The active user
+  lifecycle can now be drained through one scheduler-owned API that returns the
+  completed exit records.

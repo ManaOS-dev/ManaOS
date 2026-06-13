@@ -15,6 +15,7 @@
 //! - [`spawn_user_task`] - Add a runnable user task
 //! - [`run_user_task_once`] - Run one user task until `SYS_EXIT`
 //! - [`run_next_user_task_once`] - Run the next active user task until one exits
+//! - [`run_active_user_tasks_until_empty`] - Drain active user tasks until none remain
 //! - [`UserTaskExit`] - User task exit result
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
@@ -950,6 +951,28 @@ pub fn run_next_user_task_once(
             .next_active_user_task_id()?
     };
     run_user_task_once(frame_allocator, task_id)
+}
+
+/// Run active user tasks until no runnable active user task remains.
+///
+/// Returns one exit record for each active user task that exited.
+///
+/// # Panics
+///
+/// Panics if the scheduler has not been initialized.
+pub fn run_active_user_tasks_until_empty(
+    frame_allocator: &mut PhysicalFrameAllocator,
+) -> Vec<UserTaskExit> {
+    let mut exits = Vec::new();
+    while let Some(exit) = run_next_user_task_once(frame_allocator) {
+        exits.push(exit);
+    }
+    crate::log_info!(
+        "task",
+        "Active user lifecycle drained: exits={}",
+        exits.len()
+    );
+    exits
 }
 
 /// Mark the currently running task as finished.
