@@ -138,6 +138,10 @@ This keeps the guard-page stack work incremental:
 - map the remaining pages through `kernel::memory::paging` after that mapping
   API exists.
 
+`kernel::task::stack` now stores that reservation metadata for schedulable
+kernel and user tasks. The active stack memory is still heap-backed, so the
+reservation is a future mapping contract rather than an active stack pointer.
+
 ## Replacement Checklist
 
 - [x] Add frame-range state storage before adding `free`.

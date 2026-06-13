@@ -9,11 +9,14 @@ ManaOS currently has three kernel stack categories:
 
 - Bootstrap stack: the stack active when the kernel enters from UEFI. It is not
   currently represented by `kernel::task`.
-- Kernel task stacks: owned by `kernel::task::stack::KernelStack` metadata and
-  currently backed by contiguous heap buffers with no unmapped guard page.
+- Kernel task stacks: owned by `kernel::task::stack::KernelStack` metadata,
+  currently backed by contiguous heap buffers, and paired with a higher-half
+  virtual reservation for the future guarded mapping.
 - User task kernel stacks: also owned by `KernelStack` metadata before Ring 3
-  entry, and the one-shot user path installs the stack top in the x86_64 TSS
-  through a registered architecture provider before entering Ring 3.
+  entry. The metadata reserves a future guard page plus writable virtual stack
+  range, while the one-shot user path still installs the heap-backed stack top
+  in the x86_64 TSS through a registered architecture provider before entering
+  Ring 3.
 - Architecture stacks: `arch::x86_64::global_descriptor_table` owns a Ring 0
   privilege stack and a double-fault interrupt stack table entry in the TSS.
   Both are currently static byte arrays.
@@ -51,9 +54,10 @@ Required placement rules:
 
 ## Allocation Policy
 
-Guarded kernel stacks require a kernel virtual memory allocator. Until that
-exists, kernel task stacks must stay as heap-owned buffers and the guard-page
-TODO must remain implementation-incomplete.
+Guarded kernel stacks require a kernel virtual memory allocator and page-table
+mapping support. Range reservation now exists, so kernel task stacks reserve the
+future guarded virtual range while staying as heap-owned buffers until writable
+stack pages can be mapped.
 
 When dynamic kernel mappings exist, stack allocation should move into a focused
 `kernel::task::stack` module:
@@ -109,7 +113,8 @@ by the faulting path.
    complete for reservation-only ranges; page-table mapping integration is
    still pending.
 2. Introduce `kernel::task::stack` metadata without changing scheduling.
-   This is complete for heap-backed kernel and user task records.
+   This is complete for heap-backed kernel and user task records, including
+   reservation-only virtual guard-page metadata.
 3. Move kernel task stack allocation from heap-backed `KernelStack` to guarded
    mapped stacks.
 4. Add an architecture provider for updating the x86_64 TSS Ring 0 stack.
