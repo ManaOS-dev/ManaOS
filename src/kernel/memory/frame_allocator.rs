@@ -49,6 +49,8 @@ pub enum FrameRangeOwner {
     PageTable,
     /// Frames back the kernel heap.
     KernelHeap,
+    /// Frames back guarded kernel stacks.
+    KernelStack,
     /// Frames back the display backbuffer.
     FramebufferBackbuffer,
     /// Frames back Advanced Host Controller Interface DMA buffers.
@@ -89,6 +91,8 @@ pub struct FrameAllocatorOwnerStatistics {
     pub page_table: u64,
     /// Number of kernel heap frames.
     pub kernel_heap: u64,
+    /// Number of guarded kernel stack frames.
+    pub kernel_stack: u64,
     /// Number of framebuffer backbuffer frames.
     pub framebuffer_backbuffer: u64,
     /// Number of AHCI DMA frames.
@@ -271,6 +275,9 @@ impl BumpFrameAllocator {
                 }
                 FrameRangeOwner::KernelHeap => {
                     statistics.kernel_heap = statistics.kernel_heap.saturating_add(pages);
+                }
+                FrameRangeOwner::KernelStack => {
+                    statistics.kernel_stack = statistics.kernel_stack.saturating_add(pages);
                 }
                 FrameRangeOwner::FramebufferBackbuffer => {
                     statistics.framebuffer_backbuffer =
@@ -746,6 +753,7 @@ pub fn verify_explicit_owner_coverage() -> bool {
     let allocation_plan = [
         (FrameRangeOwner::PageTable, 1),
         (FrameRangeOwner::KernelHeap, 2),
+        (FrameRangeOwner::KernelStack, 2),
         (FrameRangeOwner::FramebufferBackbuffer, 2),
         (FrameRangeOwner::AhciDma, 3),
         (FrameRangeOwner::UserStack, 2),
@@ -760,7 +768,7 @@ pub fn verify_explicit_owner_coverage() -> bool {
 
     frame_allocator.owner_statistics()
         == FrameAllocatorOwnerStatistics {
-            free: 2,
+            free: 0,
             firmware_reserved: 0,
             kernel_image: 1,
             mmio: 1,
@@ -768,6 +776,7 @@ pub fn verify_explicit_owner_coverage() -> bool {
             unknown_used: 0,
             page_table: 1,
             kernel_heap: 2,
+            kernel_stack: 2,
             framebuffer_backbuffer: 2,
             ahci_dma: 3,
             user_stack: 2,

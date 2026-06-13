@@ -5,18 +5,17 @@ kernel stack switching policy.
 
 ## Current Stack Model
 
-ManaOS currently has three kernel stack categories:
+ManaOS currently has four kernel stack categories:
 
 - Bootstrap stack: the stack active when the kernel enters from UEFI. It is not
   currently represented by `kernel::task`.
-- Kernel task stacks: owned by `kernel::task::stack::KernelStack` metadata,
-  currently backed by contiguous heap buffers, and paired with a higher-half
-  virtual reservation for the future guarded mapping.
+- Kernel task stacks: owned by `kernel::task::stack::KernelStack` metadata and
+  backed by higher-half writable stack mappings with an unmapped guard page
+  below them.
 - User task kernel stacks: also owned by `KernelStack` metadata before Ring 3
-  entry. The metadata reserves a future guard page plus writable virtual stack
-  range, while the one-shot user path still installs the heap-backed stack top
-  in the x86_64 TSS through a registered architecture provider before entering
-  Ring 3.
+  entry. The metadata owns a mapped writable stack range plus an unmapped guard
+  page, and the one-shot user path installs that mapped stack top in the
+  x86_64 TSS through a registered architecture provider before entering Ring 3.
 - Architecture stacks: `arch::x86_64::global_descriptor_table` owns a Ring 0
   privilege stack and a double-fault interrupt stack table entry in the TSS.
   Both are currently static byte arrays.
@@ -55,9 +54,13 @@ Required placement rules:
 ## Allocation Policy
 
 Guarded kernel stacks require a kernel virtual memory allocator and page-table
-mapping support. Range reservation now exists, so kernel task stacks reserve the
-future guarded virtual range while staying as heap-owned buffers until writable
-stack pages can be mapped.
+mapping support. Scheduler-owned kernel and user task stacks now reserve a
+higher-half virtual range, leave its lowest page unmapped as the guard page,
+allocate physical frames for writable pages, and map those pages
+`PRESENT | WRITABLE | NO_EXECUTE` without `USER_ACCESSIBLE`.
+
+The bootstrap stack and architecture-owned TSS/IST stacks are still separate
+static stack categories and do not yet use this allocation path.
 
 When dynamic kernel mappings exist, stack allocation should move into a focused
 `kernel::task::stack` module:
@@ -110,13 +113,13 @@ by the faulting path.
 ## Implementation Order
 
 1. Add kernel virtual address range allocation for stack mappings. This is
-   complete for reservation-only ranges; page-table mapping integration is
-   still pending.
+   complete for scheduler-owned task stacks, including writable page-table
+   mappings. Generic unmap/free support is still pending.
 2. Introduce `kernel::task::stack` metadata without changing scheduling.
-   This is complete for heap-backed kernel and user task records, including
-   reservation-only virtual guard-page metadata.
+   This is complete for scheduler-owned kernel and user task records.
 3. Move kernel task stack allocation from heap-backed `KernelStack` to guarded
-   mapped stacks.
+   mapped stacks. This is complete for scheduler-owned kernel and user task
+   kernel stacks; bootstrap and architecture-owned IST stacks remain pending.
 4. Add an architecture provider for updating the x86_64 TSS Ring 0 stack.
    This is complete for the one-shot user entry path.
 5. Give user tasks kernel stacks and install the stack before Ring 3 entry.

@@ -26,6 +26,7 @@ mod state;
 pub mod user_mode;
 
 use crate::kernel::memory::address::UserVirtualAddress;
+use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
 use crate::kernel::memory::virtual_allocator::{
     new_dynamic_mapping_allocator, KernelVirtualRangeAllocator,
 };
@@ -106,9 +107,10 @@ impl Task {
         identifier: TaskIdentifier,
         parent_identifier: TaskIdentifier,
         entry: TaskEntry,
+        frame_allocator: &mut BumpFrameAllocator,
         kernel_stack_range_allocator: &mut KernelVirtualRangeAllocator,
     ) -> Self {
-        let kernel_stack = KernelStack::new_default(kernel_stack_range_allocator);
+        let kernel_stack = KernelStack::new_default(frame_allocator, kernel_stack_range_allocator);
         let stack_top = kernel_stack.top();
         debug_assert!(kernel_stack.base() < stack_top);
         debug_assert!(kernel_stack.byte_len() >= 16);
@@ -116,8 +118,8 @@ impl Task {
             kernel_stack.reserved_page_count(),
             kernel_stack.writable_page_count() + 1
         );
-        // SAFETY: The stack is heap allocated, writable, and retained in the
-        // task object for as long as the context can be scheduled.
+        // SAFETY: The stack is mapped writable, kernel-owned, and retained in
+        // the task object for as long as the context can be scheduled.
         let context = unsafe { TaskContext::from_stack(stack_top, entry) };
 
         Self {
@@ -133,9 +135,10 @@ impl Task {
         identifier: TaskIdentifier,
         parent_identifier: TaskIdentifier,
         user_context: UserTaskContext,
+        frame_allocator: &mut BumpFrameAllocator,
         kernel_stack_range_allocator: &mut KernelVirtualRangeAllocator,
     ) -> Self {
-        let kernel_stack = KernelStack::new_default(kernel_stack_range_allocator);
+        let kernel_stack = KernelStack::new_default(frame_allocator, kernel_stack_range_allocator);
         debug_assert!(kernel_stack.base() < kernel_stack.top());
         debug_assert!(kernel_stack.byte_len() >= 16);
         debug_assert_eq!(
@@ -210,25 +213,56 @@ impl Scheduler {
         }
     }
 
-    fn spawn(&mut self, entry: TaskEntry) -> u64 {
+    fn spawn(&mut self, frame_allocator: &mut BumpFrameAllocator, entry: TaskEntry) -> u64 {
         let task_identifier = self.next_task_identifier.allocate();
         let parent_identifier = self.tasks[self.current_index].metadata.get_identifier();
         let task = Task::kernel(
             task_identifier,
             parent_identifier,
             entry,
+            frame_allocator,
             &mut self.kernel_stack_range_allocator,
         );
+        let kernel_stack_bytes = task
+            .kernel_stack_byte_len()
+            .expect("kernel tasks must own a kernel stack record");
+        let kernel_stack_guard_page_virtual_start = task
+            .kernel_stack_guard_page_virtual_start()
+            .expect("kernel tasks must own a kernel stack guard reservation");
+        let kernel_stack_writable_virtual_start = task
+            .kernel_stack_writable_virtual_start()
+            .expect("kernel tasks must own a writable kernel stack reservation");
+        let kernel_stack_virtual_top = task
+            .kernel_stack_virtual_top()
+            .expect("kernel tasks must own a kernel stack virtual top reservation");
+        let kernel_stack_reserved_pages = task
+            .kernel_stack_reserved_page_count()
+            .expect("kernel tasks must own kernel stack reservation pages");
+        let kernel_stack_writable_pages = task
+            .kernel_stack_writable_page_count()
+            .expect("kernel tasks must own kernel stack writable pages");
         debug_assert_eq!(
             task.metadata.get_parent_identifier(),
             Some(parent_identifier)
         );
         self.tasks.push(task);
+        crate::log_info!(
+            "task",
+            "Kernel task stack prepared: task={} bytes={} guard_virtual={:#x} writable_virtual={:#x} virtual_top={:#x} reserved_pages={} writable_pages={} guard_unmapped=true writable_mapped=true",
+            task_identifier.as_u64(),
+            kernel_stack_bytes,
+            kernel_stack_guard_page_virtual_start,
+            kernel_stack_writable_virtual_start,
+            kernel_stack_virtual_top,
+            kernel_stack_reserved_pages,
+            kernel_stack_writable_pages
+        );
         task_identifier.as_u64()
     }
 
     fn spawn_user_task(
         &mut self,
+        frame_allocator: &mut BumpFrameAllocator,
         entry_point: UserVirtualAddress,
         user_stack_top: UserVirtualAddress,
         entry_arguments: UserEntryArguments,
@@ -242,6 +276,7 @@ impl Scheduler {
             task_identifier,
             parent_identifier,
             user_context,
+            frame_allocator,
             &mut self.kernel_stack_range_allocator,
         );
         let kernel_stack_bytes = task
@@ -269,7 +304,7 @@ impl Scheduler {
         self.tasks.push(task);
         crate::log_info!(
             "task",
-            "User task kernel stack prepared: task={} bytes={} guard_virtual={:#x} writable_virtual={:#x} virtual_top={:#x} reserved_pages={} writable_pages={}",
+            "User task kernel stack prepared: task={} bytes={} guard_virtual={:#x} writable_virtual={:#x} virtual_top={:#x} reserved_pages={} writable_pages={} guard_unmapped=true writable_mapped=true",
             task_identifier.as_u64(),
             kernel_stack_bytes,
             kernel_stack_guard_page_virtual_start,
@@ -416,21 +451,24 @@ pub fn initialize() {
 ///
 /// # Panics
 ///
-/// Panics if the scheduler has not been initialized.
-pub fn spawn(entry: TaskEntry) -> u64 {
+/// Panics if the scheduler has not been initialized, kernel stack frames cannot
+/// be allocated, or kernel stack page-table mapping fails.
+pub fn spawn(frame_allocator: &mut BumpFrameAllocator, entry: TaskEntry) -> u64 {
     let mut scheduler = SCHEDULER.lock();
     scheduler
         .as_mut()
         .expect("scheduler must be initialized before spawning tasks")
-        .spawn(entry)
+        .spawn(frame_allocator, entry)
 }
 
 /// Add a runnable user-space task to the round-robin scheduler.
 ///
 /// # Panics
 ///
-/// Panics if the scheduler has not been initialized.
+/// Panics if the scheduler has not been initialized, kernel stack frames cannot
+/// be allocated, or kernel stack page-table mapping fails.
 pub fn spawn_user_task(
+    frame_allocator: &mut BumpFrameAllocator,
     entry_point: UserVirtualAddress,
     user_stack_top: UserVirtualAddress,
     entry_arguments: UserEntryArguments,
@@ -439,7 +477,12 @@ pub fn spawn_user_task(
     scheduler
         .as_mut()
         .expect("scheduler must be initialized before spawning user tasks")
-        .spawn_user_task(entry_point, user_stack_top, entry_arguments)
+        .spawn_user_task(
+            frame_allocator,
+            entry_point,
+            user_stack_top,
+            entry_arguments,
+        )
 }
 
 /// Run one user-space task until it exits through `SYS_EXIT`.

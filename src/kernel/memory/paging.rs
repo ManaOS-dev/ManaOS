@@ -1,5 +1,8 @@
 use crate::kernel::memory::{
-    address::{FramebufferPhysicalRange, PhysAddr as KernelPhysAddr, VirtAddr as KernelVirtAddr},
+    address::{
+        FramebufferPhysicalRange, KernelVirtualAddress, KernelVirtualRange,
+        PhysAddr as KernelPhysAddr, PhysicalFrameRange, VirtAddr as KernelVirtAddr,
+    },
     frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
 };
 use uefi::mem::memory_map::{MemoryDescriptor, MemoryType};
@@ -9,8 +12,8 @@ use x86_64::{
         model_specific::{Efer, EferFlags},
     },
     structures::paging::{
-        mapper::TranslateResult, Mapper, OffsetPageTable, PageTable, PageTableFlags, PhysFrame,
-        Size4KiB, Translate,
+        mapper::TranslateResult, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags,
+        PhysFrame, Size4KiB, Translate,
     },
     PhysAddr as X86PhysAddr, VirtAddr as X86VirtAddr,
 };
@@ -181,6 +184,116 @@ pub unsafe fn map_kernel_mmio_range(
             flags,
         );
     }
+}
+
+/// Map owned physical frames into a kernel-only writable non-executable range.
+///
+/// Returns the mapped kernel virtual start address.
+///
+/// # Panics
+///
+/// Panics if the virtual and physical page counts differ, if any target page is
+/// already mapped, or if page-table mapping fails.
+pub fn map_kernel_writable_no_execute_range(
+    frame_allocator: &mut BumpFrameAllocator,
+    virtual_range: KernelVirtualRange,
+    physical_range: PhysicalFrameRange,
+) -> KernelVirtualAddress {
+    assert_eq!(
+        virtual_range.page_count(),
+        physical_range.page_count(),
+        "kernel virtual mapping page count must match physical frame count"
+    );
+
+    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
+    let virtual_start = virtual_range.start();
+    let physical_start = physical_range.start().as_address();
+
+    let (level_4_frame, _) = Cr3::read();
+    let level_4_table = level_4_frame.start_address().as_u64() as *mut PageTable;
+    // SAFETY: ManaOS keeps active page tables identity mapped, so the physical
+    // address from CR3 is directly usable as a kernel virtual address.
+    let level_4_table = unsafe { &mut *level_4_table };
+    // SAFETY: The active address space uses an identity physical memory offset.
+    let mut mapper = unsafe { OffsetPageTable::new(level_4_table, X86VirtAddr::new(0)) };
+
+    for index in 0..virtual_range.page_count() {
+        let offset = index
+            .checked_mul(PAGE_SIZE)
+            .expect("kernel mapping offset overflowed");
+        let virtual_address = virtual_start
+            .checked_add(offset)
+            .expect("kernel virtual mapping address overflowed");
+        let physical_address = physical_start
+            .checked_add(offset)
+            .expect("kernel physical mapping address overflowed");
+        let page = Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_address.as_u64()));
+        let frame = PhysFrame::containing_address(X86PhysAddr::new(physical_address.as_u64()));
+
+        if let TranslateResult::Mapped { .. } = mapper.translate(page.start_address()) {
+            panic!(
+                "kernel virtual page is already mapped: {:#x}",
+                virtual_address.as_u64()
+            );
+        }
+
+        // SAFETY: `physical_range` is owned by the caller, `virtual_range` is a
+        // reserved kernel range, and FrameAllocWrapper supplies page-table
+        // frames when new tables are needed.
+        unsafe {
+            mapper
+                .map_to(
+                    page,
+                    frame,
+                    flags,
+                    &mut FrameAllocWrapper { frame_allocator },
+                )
+                .expect("failed to map kernel writable NX page")
+                .flush();
+        }
+    }
+
+    KernelVirtualAddress::new(virtual_start)
+}
+
+/// Return whether every page in the kernel range is writable and non-executable.
+pub fn is_kernel_range_mapped_writable_no_execute(range: KernelVirtualRange) -> bool {
+    for index in 0..range.page_count() {
+        let offset = index
+            .checked_mul(PAGE_SIZE)
+            .expect("kernel range verification offset overflowed");
+        let Some(address) = range.start().checked_add(offset) else {
+            return false;
+        };
+        let Some(flags) = mapping_flags_for_address(address) else {
+            return false;
+        };
+        if !flags.contains(
+            PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
+        ) || flags.contains(PageTableFlags::USER_ACCESSIBLE)
+        {
+            return false;
+        }
+    }
+
+    true
+}
+
+/// Return whether every page in the kernel range is currently unmapped.
+pub fn is_kernel_range_unmapped(range: KernelVirtualRange) -> bool {
+    for index in 0..range.page_count() {
+        let offset = index
+            .checked_mul(PAGE_SIZE)
+            .expect("kernel range verification offset overflowed");
+        let Some(address) = range.start().checked_add(offset) else {
+            return false;
+        };
+        if mapping_flags_for_address(address).is_some() {
+            return false;
+        }
+    }
+
+    true
 }
 
 fn validate_user_mapping(

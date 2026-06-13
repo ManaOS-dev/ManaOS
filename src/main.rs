@@ -149,9 +149,9 @@ fn allocate_backbuffer(
         .as_identity_mapped_kernel_address()
 }
 
-fn initialize_scheduler() {
+fn initialize_scheduler(frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator) {
     kernel::task::initialize();
-    kernel::task::spawn(idle_task);
+    kernel::task::spawn(frame_allocator, idle_task);
     let task_id = kernel::task::get_current_task_id()
         .expect("scheduler must expose a bootstrap task after initialization");
     crate::log_info!("task", "Scheduler initialized. current_task={}", task_id);
@@ -484,6 +484,7 @@ fn run_user_smoke_demo(frame_allocator: &mut kernel::memory::frame_allocator::Bu
     );
 
     let user_task_id = kernel::task::spawn_user_task(
+        frame_allocator,
         user_entry_point,
         prepared_user_stack.stack_pointer(),
         kernel::task::UserEntryArguments::new(
@@ -568,7 +569,7 @@ fn main() -> Status {
         verify_mounted_disk_file("/disk/hello.txt");
         verify_kernel_console_pipeline();
     }
-    initialize_scheduler();
+    initialize_scheduler(&mut frame_allocator);
     initialize_architecture_and_drivers();
 
     crate::log_info!("kernel", "ManaOS Kernel is alive.");
