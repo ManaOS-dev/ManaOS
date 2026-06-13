@@ -151,5 +151,5 @@ classification remains pending because those stacks are not yet represented by
    timer preemption and resume across the current two-task user smoke path.
 8. Attach user address spaces to user task records and switch CR3 before Ring 3
    entry or timer-context resume. This is complete for the current one-shot
-   smoke path; full lifecycle scheduling and address-space destruction remain
-   pending.
+   smoke path, including finished-task address-space destruction and scheduler
+   diagnostics for retained task records.
