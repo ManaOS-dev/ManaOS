@@ -88,6 +88,9 @@ Policy:
 - On x86_64, installing the user task kernel stack means updating TSS
   `privilege_stack_table[0]` through an architecture-owned API registered from
   `main.rs`.
+- `SYSCALL` does not use the TSS privilege stack automatically, so its entry
+  path still needs an explicit switch from the user stack to the current task's
+  guarded kernel stack.
 - `arch/` must not call `kernel::task` directly. `main.rs` remains the
   composition root for registering stack-switch providers.
 - Timer interrupts must not preempt a user task into a shared bootstrap stack

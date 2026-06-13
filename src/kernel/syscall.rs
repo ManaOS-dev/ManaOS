@@ -11,7 +11,8 @@
 //! - Per-process file descriptor tables
 //!
 //! ## Public API
-//! - [`dispatch`] - Dispatch one syscall from architecture entry code
+//! - [`syscall_dispatch`] - Dispatch one syscall from architecture entry code
+//! - [`syscall_dispatch_from_trap_frame`] - Dispatch one syscall from a saved user frame
 //! - [`SYS_READ`] - Linux-compatible read syscall number
 //! - [`SYS_WRITE`] - Linux-compatible write syscall number
 //! - [`SYS_OPEN`] - Linux-compatible open syscall number
@@ -28,6 +29,7 @@ use crate::kernel::memory::{
     address::{UserCString, UserReadableRange, UserVirtualRange, UserWritableRange},
     user_pointer,
 };
+use crate::kernel::task::context::UserTrapFrame;
 
 #[allow(dead_code)]
 #[path = "../shared/syscall_contract.rs"]
@@ -91,6 +93,47 @@ pub extern "C" fn syscall_dispatch(
         SYS_GETPID => sys_getpid(),
         _ => ERROR_NOT_IMPLEMENTED,
     }
+}
+
+/// Dispatch one syscall from a captured user trap frame.
+///
+/// The return value is written back to `trap_frame.rax` so the same frame can be
+/// used by future resume paths.
+///
+/// # Panics
+///
+/// Panics if `trap_frame` is null.
+///
+/// # Safety
+///
+/// `trap_frame` must point to writable storage containing the user register
+/// state captured by the architecture syscall entry path.
+#[no_mangle]
+pub unsafe extern "C" fn syscall_dispatch_from_trap_frame(trap_frame: *mut UserTrapFrame) -> u64 {
+    assert!(
+        !trap_frame.is_null(),
+        "syscall trap frame pointer must be non-null"
+    );
+
+    // SAFETY: The architecture syscall entry passes a non-null pointer to the
+    // stack-resident trap frame it just populated.
+    let trap_frame = unsafe { &mut *trap_frame };
+    let selectors = crate::kernel::task::user_mode::get_selectors();
+    trap_frame.code_segment = u64::from(selectors.code);
+    trap_frame.stack_segment = u64::from(selectors.data);
+
+    let result = syscall_dispatch(
+        trap_frame.rax,
+        trap_frame.rdi,
+        trap_frame.rsi,
+        trap_frame.rdx,
+        trap_frame.r10,
+    );
+    trap_frame.rax = result;
+    if result != USER_EXIT_SENTINEL {
+        crate::kernel::task::record_current_user_trap_frame(*trap_frame);
+    }
+    result
 }
 
 fn sys_write(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
