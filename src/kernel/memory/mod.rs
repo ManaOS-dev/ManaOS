@@ -13,6 +13,7 @@
 //! ## Public API
 //! - [`address_space`] - User address-space page-table roots
 //! - [`address`] - Typed memory address wrappers
+//! - [`diagnostics`] - Physical frame allocator diagnostics snapshots
 //! - [`frame_allocator`] - Reusable physical frame allocator
 //! - [`heap`] - Kernel heap allocator
 //! - [`paging`] - Page table setup
@@ -22,6 +23,7 @@
 
 pub mod address;
 pub mod address_space;
+pub mod diagnostics;
 pub mod frame_allocator;
 pub mod heap;
 pub mod paging;

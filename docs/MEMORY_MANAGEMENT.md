@@ -170,6 +170,12 @@ scheduler diagnostics snapshot records aggregate reclaim records, reclaimed user
 kernel stack count, writable pages, and guard-inclusive virtual pages so boot
 smoke tests and the console overlay can verify lifecycle cleanup.
 
+The boot composition root now records a read-only frame allocator diagnostics
+snapshot after the user smoke lifecycle drains. The `memory` console command and
+console status strip expose the latest tracked free, used, reserved, page-table,
+kernel stack, user, dynamic mapping, and AHCI DMA page counts without sharing the
+mutable allocator with console code.
+
 ## User Address Spaces
 
 `kernel::memory::address_space::UserAddressSpace` owns the physical frame
@@ -218,6 +224,8 @@ reused across lifecycle runs.
       range tracking.
 - [x] Prove the owner-coverage allocator behavior change with
       `just storage-smoke`.
+- [x] Expose frame allocator owner diagnostics through the console and storage
+      smoke.
 - [x] Add a boot self-check for dynamic kernel mapping map, unmap, virtual
       reuse, and physical reuse.
 - [x] Add user address-space roots for user task ELF and stack mappings, and

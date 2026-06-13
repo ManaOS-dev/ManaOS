@@ -122,12 +122,21 @@ fn push_status_lines(console_y: usize) {
         console_y + 46,
         12.0,
         Color::rgb(0xF2, 0xD5, 0x7C),
+        frame_allocator_status_line(),
+    ));
+    push_command(DrawCommand::Text(
+        Font::Inter,
+        CONSOLE_PADDING,
+        console_y + 60,
+        12.0,
+        Color::rgb(0xC5, 0xB3, 0xFF),
         memory_reclaim_status_line(),
     ));
 }
 
 pub(super) fn verify_status_strip_smoke() -> bool {
     let scheduler_line = scheduler_status_line();
+    let frame_allocator_line = frame_allocator_status_line();
     let memory_line = memory_reclaim_status_line();
     scheduler_line.contains("tasks total=")
         && scheduler_line.contains("user=")
@@ -139,6 +148,12 @@ pub(super) fn verify_status_strip_smoke() -> bool {
         && scheduler_line.contains("exit_closes=")
         && scheduler_line.contains("preempt=")
         && scheduler_line.contains("resume=")
+        && frame_allocator_line.contains("frames free=")
+        && frame_allocator_line.contains("used=")
+        && frame_allocator_line.contains("reserved=")
+        && frame_allocator_line.contains("page_tables=")
+        && frame_allocator_line.contains("dynamic=")
+        && frame_allocator_line.contains("user_pages=")
         && memory_line.contains("memory user_resource_records=")
         && memory_line.contains("kernel_stacks_reclaimed=")
         && memory_line.contains("writable_pages=")
@@ -175,6 +190,25 @@ fn scheduler_status_line() -> String {
         states.finished(),
         diagnostics.timer_preemptions(),
         diagnostics.user_resumes()
+    )
+}
+
+fn frame_allocator_status_line() -> String {
+    let Some(diagnostics) = crate::kernel::memory::diagnostics::get_frame_allocator_diagnostics()
+    else {
+        return "frames unavailable".to_string();
+    };
+    let owners = diagnostics.owners();
+    format!(
+        "frames free={} used={} reserved={} page_tables={} kernel_stack={} user_pages={} dynamic={} ahci_dma={}",
+        diagnostics.free(),
+        diagnostics.used(),
+        diagnostics.reserved(),
+        owners.page_table(),
+        owners.kernel_stack(),
+        owners.user_pages(),
+        owners.dynamic_kernel_mapping(),
+        owners.ahci_dma()
     )
 }
 
