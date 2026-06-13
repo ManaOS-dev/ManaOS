@@ -25,6 +25,7 @@
 //! - [`block_current_user_after_syscall`] - Block the current user task after saving its syscall frame
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
+//! - [`get_current_parent_task_id`] - Read the current parent task identifier
 //! - [`get_scheduler_diagnostics`] - Read scheduler accounting diagnostics
 //! - [`get_scheduler_task_snapshots`] - Read retained task rows for diagnostics
 //! - [`activate_user_task`] - Add a user task to the active scheduling set
@@ -540,6 +541,13 @@ impl Scheduler {
 
     fn get_current_task_id(&self) -> u64 {
         self.tasks[self.current_index].get_id()
+    }
+
+    fn get_current_parent_task_id(&self) -> Option<u64> {
+        self.tasks[self.current_index]
+            .metadata
+            .get_parent_identifier()
+            .map(TaskIdentifier::as_u64)
     }
 
     fn get_diagnostics(&self) -> SchedulerDiagnostics {
@@ -1521,6 +1529,15 @@ pub fn get_current_task_id() -> Option<u64> {
     SCHEDULER
         .try_lock()
         .and_then(|scheduler| scheduler.as_ref().map(Scheduler::get_current_task_id))
+}
+
+/// Return the currently selected task's parent identifier.
+pub fn get_current_parent_task_id() -> Option<u64> {
+    SCHEDULER.try_lock().and_then(|scheduler| {
+        scheduler
+            .as_ref()
+            .and_then(Scheduler::get_current_parent_task_id)
+    })
 }
 
 /// Return scheduler task counts and lifecycle accounting diagnostics.

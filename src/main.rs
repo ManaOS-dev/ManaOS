@@ -844,6 +844,7 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
     let mut fully_reclaimed_user_tasks = 0_u64;
     let mut user_vm_snapshots = 0_u64;
     let mut anonymous_mapping_release_snapshots = 0_u64;
+    let mut bootstrap_child_user_tasks = 0_u64;
     for snapshot in snapshots {
         if snapshot.kind() != kernel::task::TaskKindDiagnostics::User {
             continue;
@@ -857,6 +858,12 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
             kernel::task::TaskState::Finished,
             "user smoke task snapshots must be finished"
         );
+        assert_eq!(
+            snapshot.parent_task_id(),
+            Some(kernel::task::TaskIdentifier::BOOTSTRAP.as_u64()),
+            "user smoke task snapshots must retain the bootstrap parent task"
+        );
+        bootstrap_child_user_tasks = bootstrap_child_user_tasks.saturating_add(1);
         finished_user_tasks = finished_user_tasks.saturating_add(1);
         let user_virtual_memory = snapshot
             .user_virtual_memory()
@@ -898,11 +905,16 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
         anonymous_mapping_release_snapshots, expected_user_tasks,
         "scheduler snapshots must show anonymous mmap records released"
     );
+    assert_eq!(
+        bootstrap_child_user_tasks, expected_user_tasks,
+        "scheduler snapshots must show every user task as a bootstrap child"
+    );
     crate::log_info!(
         "task",
-        "Scheduler task snapshots verified: rows={} finished_user_tasks={} fully_reclaimed_user_tasks={} user_vm_snapshots={} released_mmap_snapshots={}",
+        "Scheduler task snapshots verified: rows={} finished_user_tasks={} bootstrap_child_user_tasks={} fully_reclaimed_user_tasks={} user_vm_snapshots={} released_mmap_snapshots={}",
         expected_total_tasks,
         finished_user_tasks,
+        bootstrap_child_user_tasks,
         fully_reclaimed_user_tasks,
         user_vm_snapshots,
         anonymous_mapping_release_snapshots

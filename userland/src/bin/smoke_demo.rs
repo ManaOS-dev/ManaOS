@@ -8,6 +8,7 @@ const STDOUT: usize = 1;
 const BUFFER_LENGTH: usize = 64;
 const DIRECTORY_BUFFER_BYTES: usize = core::mem::size_of::<syscall::UserDirectoryEntry>();
 const ENTRY_ARGUMENT_MESSAGE: &[u8] = b"user entry arguments ok\n";
+const PROCESS_ID_MESSAGE: &[u8] = b"user process ids ok\n";
 const SLEEP_MESSAGE: &[u8] = b"user sleep ok\n";
 const BSS_MESSAGE: &[u8] = b"user bss ok\n";
 const HEAP_MESSAGE: &[u8] = b"user heap ok\n";
@@ -24,9 +25,7 @@ extern "C" fn _start(
     argument_values: *const *const u8,
     environment_values: *const *const u8,
 ) -> ! {
-    if syscall::getpid() <= 0 {
-        syscall::exit(10);
-    }
+    verify_process_identifiers();
 
     verify_entry_arguments(argument_count, argument_values, environment_values);
     verify_user_sleep();
@@ -40,6 +39,17 @@ extern "C" fn _start(
 
     let _ = syscall::write(STDOUT, PASS_MESSAGE);
     syscall::exit(0);
+}
+
+fn verify_process_identifiers() {
+    if syscall::getpid() <= 0 {
+        syscall::exit(10);
+    }
+    if syscall::getppid() != 0 {
+        syscall::exit(57);
+    }
+
+    let _ = syscall::write(STDOUT, PROCESS_ID_MESSAGE);
 }
 
 fn verify_user_sleep() {
