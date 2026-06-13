@@ -71,6 +71,9 @@ pub fn run_user_task_once(
     );
 
     begin_user_exit_return_window(task_id);
+    crate::kernel::memory::runtime_allocator::register_user_runtime_frame_allocator(
+        frame_allocator,
+    );
     super::set_preemption_enabled(true);
     // SAFETY: The trap frame was derived from mapped user code and stack
     // addresses, and this restore path returns only through SYS_EXIT.
@@ -78,6 +81,7 @@ pub fn run_user_task_once(
         super::architecture::enter_user_mode_once(user_task.trap_frame.as_pointer());
     }
     super::set_preemption_enabled(false);
+    crate::kernel::memory::runtime_allocator::clear_user_runtime_frame_allocator();
     crate::kernel::memory::address_space::switch_to_kernel_address_space();
     assert_user_exit_return_window_consumed();
     crate::log_info!("task", "Restored kernel address space after user exit.");

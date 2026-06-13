@@ -19,6 +19,7 @@
 //! - [`SYS_CLOSE`] - Linux-compatible close syscall number
 //! - [`SYS_FSTAT`] - Linux-compatible file status syscall number
 //! - [`SYS_LSEEK`] - Linux-compatible seek syscall number
+//! - [`SYS_BRK`] - Linux-compatible heap break syscall number
 //! - [`SYS_EXIT`] - Linux-compatible exit syscall number
 //! - [`SYS_GETDENTS64`] - Linux-compatible get-directory-entries syscall number
 //! - [`SYS_EXIT_GROUP`] - Linux-compatible process exit syscall number
@@ -36,7 +37,7 @@ use crate::kernel::task::context::UserTrapFrame;
 mod contract;
 
 pub use contract::{
-    SYS_CLOSE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64, SYS_GETPID, SYS_LSEEK,
+    SYS_BRK, SYS_CLOSE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64, SYS_GETPID, SYS_LSEEK,
     SYS_OPEN, SYS_OPENAT, SYS_READ, SYS_WRITE,
 };
 
@@ -88,6 +89,7 @@ pub extern "C" fn syscall_dispatch(
         SYS_CLOSE => sys_close(first_argument),
         SYS_FSTAT => sys_fstat(first_argument, second_argument),
         SYS_LSEEK => sys_lseek(first_argument, second_argument, third_argument),
+        SYS_BRK => sys_brk(first_argument),
         SYS_READ => sys_read(first_argument, second_argument, third_argument),
         SYS_GETDENTS64 => sys_getdents64(first_argument, second_argument, third_argument),
         SYS_GETPID => sys_getpid(),
@@ -323,6 +325,14 @@ fn sys_lseek(file_descriptor: u64, offset: u64, whence: u64) -> u64 {
         }
         Err(error) => filesystem_error_to_linux(error),
     }
+}
+
+fn sys_brk(requested_break: u64) -> u64 {
+    crate::kernel::memory::runtime_allocator::with_user_runtime_frame_allocator(|frame_allocator| {
+        crate::kernel::task::process_current_user_break(frame_allocator, requested_break)
+    })
+    .flatten()
+    .unwrap_or(ERROR_NOT_IMPLEMENTED)
 }
 
 fn copy_input_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static [u8]> {

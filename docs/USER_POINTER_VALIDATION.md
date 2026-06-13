@@ -35,6 +35,7 @@ The implementation entry point is `kernel::memory::user_pointer`.
 | `getdents64(fd, dirp, count)` | `dirp` | kernel to user | `copy_to_user` | `count` must fit in `usize` and be at least one `UserDirectoryEntry`. |
 | `close(fd)` | none | none | none | No user pointer validation. |
 | `lseek(fd, offset, whence)` | none | none | none | No user pointer validation. |
+| `brk(addr)` | none | none | none | The address must stay within the task heap range; no user buffer is copied. |
 | `exit(code)` / `exit_group(code)` | none | none | none | No user pointer validation. |
 | `getpid()` | none | none | none | No user pointer validation. |
 

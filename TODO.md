@@ -87,7 +87,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Add `lseek`.
 - [x] Add `stat` or `newfstatat`.
 - [x] Add `getdents64`.
-- [ ] Add `brk` or another first heap-growth syscall.
+- [x] Add `brk` as the first heap-growth syscall.
 - [ ] Add `mmap` and `munmap` planning.
 - [ ] Add `nanosleep` or a minimal sleep syscall.
 - [ ] Add `fork` or document why the first process model uses `spawn`/`exec` instead.

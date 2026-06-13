@@ -15,6 +15,7 @@
 //! - [`open`] - Open a null-terminated path
 //! - [`fstat`] - Read metadata for an open file descriptor
 //! - [`lseek`] - Seek an open file descriptor
+//! - [`brk`] - Move or query the user heap break
 //! - [`exit`] - Terminate the current user task
 
 #[path = "../../../src/shared/syscall_contract.rs"]
@@ -36,6 +37,8 @@ pub const SYS_CLOSE: usize = contract::SYS_CLOSE as usize;
 pub const SYS_FSTAT: usize = contract::SYS_FSTAT as usize;
 /// Linux-compatible seek syscall number.
 pub const SYS_LSEEK: usize = contract::SYS_LSEEK as usize;
+/// Linux-compatible heap break syscall number.
+pub const SYS_BRK: usize = contract::SYS_BRK as usize;
 /// Linux-compatible get-process-identifier syscall number.
 pub const SYS_GETPID: usize = contract::SYS_GETPID as usize;
 /// Linux-compatible exit syscall number.
@@ -145,6 +148,12 @@ pub fn getdents64(file_descriptor: usize, entries: &mut [UserDirectoryEntry]) ->
 #[inline(always)]
 pub fn lseek(file_descriptor: usize, offset: isize, whence: usize) -> isize {
     syscall3(SYS_LSEEK, file_descriptor, offset as usize, whence)
+}
+
+/// Move or query the user heap break.
+#[inline(always)]
+pub fn brk(requested_break: usize) -> isize {
+    syscall1(SYS_BRK, requested_break)
 }
 
 /// Return the current ManaOS task identifier.

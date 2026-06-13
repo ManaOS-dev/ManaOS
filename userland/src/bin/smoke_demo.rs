@@ -9,6 +9,7 @@ const BUFFER_LENGTH: usize = 64;
 const DIRECTORY_BUFFER_BYTES: usize = core::mem::size_of::<syscall::UserDirectoryEntry>();
 const ENTRY_ARGUMENT_MESSAGE: &[u8] = b"user entry arguments ok\n";
 const BSS_MESSAGE: &[u8] = b"user bss ok\n";
+const HEAP_MESSAGE: &[u8] = b"user heap ok\n";
 const SHELL_MESSAGE: &[u8] = b"user shell ok\n";
 const PASS_MESSAGE: &[u8] = b"user smoke ok\n";
 const BSS_SMOKE_MARKER: u64 = 0x4d414e414f535f36;
@@ -29,6 +30,7 @@ extern "C" fn _start(
     verify_root_directory();
     verify_user_shell();
     verify_bss_zero_initialization();
+    verify_user_heap_growth();
 
     let _ = syscall::write(STDOUT, PASS_MESSAGE);
     syscall::exit(0);
@@ -72,6 +74,33 @@ fn verify_bss_zero_initialization() {
         syscall::exit(20);
     }
     let _ = syscall::write(STDOUT, BSS_MESSAGE);
+}
+
+fn verify_user_heap_growth() {
+    let initial_break = syscall::brk(0);
+    if initial_break <= 0 {
+        syscall::exit(30);
+    }
+
+    let initial_break = initial_break as usize;
+    let requested_break = initial_break + 8192;
+    if syscall::brk(requested_break) != requested_break as isize {
+        syscall::exit(31);
+    }
+
+    let first_byte = initial_break as *mut u8;
+    let last_byte = (requested_break - 1) as *mut u8;
+    // SAFETY: A successful `brk` call mapped the heap range from the previous
+    // break through `requested_break`.
+    unsafe {
+        first_byte.write(0x4d);
+        last_byte.write(0x53);
+        if first_byte.read() != 0x4d || last_byte.read() != 0x53 {
+            syscall::exit(32);
+        }
+    }
+
+    let _ = syscall::write(STDOUT, HEAP_MESSAGE);
 }
 
 fn verify_disk_file() {

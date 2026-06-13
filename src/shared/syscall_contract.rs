@@ -12,6 +12,8 @@ pub const SYS_CLOSE: u64 = 3;
 pub const SYS_FSTAT: u64 = 5;
 /// Linux-compatible seek syscall number.
 pub const SYS_LSEEK: u64 = 8;
+/// Linux-compatible heap break syscall number.
+pub const SYS_BRK: u64 = 12;
 /// Linux-compatible get-process-identifier syscall number.
 pub const SYS_GETPID: u64 = 39;
 /// Linux-compatible exit syscall number.
