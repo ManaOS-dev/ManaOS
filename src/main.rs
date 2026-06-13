@@ -671,6 +671,10 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
     let diagnostics = kernel::task::get_scheduler_diagnostics()
         .expect("scheduler diagnostics must be available after user smoke tasks");
     let states = diagnostics.states();
+    // User smoke tasks use the current default guarded kernel stack: four
+    // writable pages plus one reserved guard page.
+    let expected_reclaimed_user_kernel_stack_writable_pages = expected_user_tasks * 4;
+    let expected_reclaimed_user_kernel_stack_virtual_pages = expected_user_tasks * 5;
     assert_eq!(
         diagnostics.user_tasks(),
         expected_user_tasks,
@@ -694,9 +698,24 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
         diagnostics.user_resumes() > 0,
         "user smoke must record user resume accounting"
     );
+    assert_eq!(
+        diagnostics.reclaimed_user_kernel_stacks(),
+        expected_user_tasks,
+        "finished user tasks must reclaim their kernel stacks"
+    );
+    assert_eq!(
+        diagnostics.reclaimed_user_kernel_stack_writable_pages(),
+        expected_reclaimed_user_kernel_stack_writable_pages,
+        "finished user tasks must return writable kernel stack pages"
+    );
+    assert_eq!(
+        diagnostics.reclaimed_user_kernel_stack_virtual_pages(),
+        expected_reclaimed_user_kernel_stack_virtual_pages,
+        "finished user tasks must return guard-inclusive kernel stack virtual pages"
+    );
     crate::log_info!(
         "task",
-        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_address_spaces={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
+        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_address_spaces={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
         diagnostics.total_tasks(),
         diagnostics.kernel_tasks(),
         diagnostics.user_tasks(),
@@ -705,6 +724,9 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
         states.blocked(),
         states.finished(),
         diagnostics.active_user_address_spaces(),
+        diagnostics.reclaimed_user_kernel_stacks(),
+        diagnostics.reclaimed_user_kernel_stack_writable_pages(),
+        diagnostics.reclaimed_user_kernel_stack_virtual_pages(),
         diagnostics.context_switches(),
         diagnostics.timer_preemptions(),
         diagnostics.user_entries(),

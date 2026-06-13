@@ -35,12 +35,15 @@ pub(super) fn run(
         states.finished()
     ));
     output.push(format!(
-        "preemption: switches={} timer_user_preemptions={} user_entries={} user_resumes={} finished={}",
+        "preemption: switches={} timer_user_preemptions={} user_entries={} user_resumes={} finished={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={}",
         diagnostics.context_switches(),
         diagnostics.timer_preemptions(),
         diagnostics.user_entries(),
         diagnostics.user_resumes(),
-        diagnostics.finished_tasks()
+        diagnostics.finished_tasks(),
+        diagnostics.reclaimed_user_kernel_stacks(),
+        diagnostics.reclaimed_user_kernel_stack_writable_pages(),
+        diagnostics.reclaimed_user_kernel_stack_virtual_pages()
     ));
     Ok(CommandEffect::Output(output))
 }

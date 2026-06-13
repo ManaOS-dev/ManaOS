@@ -10,7 +10,7 @@ use crate::kernel::driver::display::font::Font;
 const CONSOLE_HEIGHT: usize = 210;
 const CONSOLE_PADDING: usize = 12;
 const LINE_HEIGHT: usize = 18;
-const TITLE_HEIGHT: usize = 48;
+const TITLE_HEIGHT: usize = 64;
 
 pub(super) fn render_if_dirty() {
     let Some(snapshot) = super::state::take_render_snapshot() else {
@@ -74,14 +74,7 @@ pub(super) fn render_if_dirty() {
         1,
         Color::rgb(0x1D, 0x2B, 0x3A),
     ));
-    push_command(DrawCommand::Text(
-        Font::Inter,
-        CONSOLE_PADDING,
-        console_y + 32,
-        12.0,
-        Color::rgb(0xA8, 0xF0, 0xC6),
-        scheduler_status_line(),
-    ));
+    push_status_lines(console_y);
 
     let mut text_y = console_y + TITLE_HEIGHT + CONSOLE_PADDING;
     for line in &snapshot.output {
@@ -114,13 +107,36 @@ pub(super) fn render_if_dirty() {
     ));
 }
 
+fn push_status_lines(console_y: usize) {
+    push_command(DrawCommand::Text(
+        Font::Inter,
+        CONSOLE_PADDING,
+        console_y + 32,
+        12.0,
+        Color::rgb(0xA8, 0xF0, 0xC6),
+        scheduler_status_line(),
+    ));
+    push_command(DrawCommand::Text(
+        Font::Inter,
+        CONSOLE_PADDING,
+        console_y + 46,
+        12.0,
+        Color::rgb(0xF2, 0xD5, 0x7C),
+        memory_reclaim_status_line(),
+    ));
+}
+
 pub(super) fn verify_status_strip_smoke() -> bool {
-    let status_line = scheduler_status_line();
-    status_line.contains("tasks total=")
-        && status_line.contains("user=")
-        && status_line.contains("active_spaces=")
-        && status_line.contains("preempt=")
-        && status_line.contains("resume=")
+    let scheduler_line = scheduler_status_line();
+    let memory_line = memory_reclaim_status_line();
+    scheduler_line.contains("tasks total=")
+        && scheduler_line.contains("user=")
+        && scheduler_line.contains("active_spaces=")
+        && scheduler_line.contains("preempt=")
+        && scheduler_line.contains("resume=")
+        && memory_line.contains("memory kernel_stacks_reclaimed=")
+        && memory_line.contains("writable_pages=")
+        && memory_line.contains("virtual_pages=")
 }
 
 fn input_cursor_marker(input: &str, cursor: usize) -> String {
@@ -148,5 +164,17 @@ fn scheduler_status_line() -> String {
         states.finished(),
         diagnostics.timer_preemptions(),
         diagnostics.user_resumes()
+    )
+}
+
+fn memory_reclaim_status_line() -> String {
+    let Some(diagnostics) = crate::kernel::task::get_scheduler_diagnostics() else {
+        return "memory unavailable".to_string();
+    };
+    format!(
+        "memory kernel_stacks_reclaimed={} writable_pages={} virtual_pages={}",
+        diagnostics.reclaimed_user_kernel_stacks(),
+        diagnostics.reclaimed_user_kernel_stack_writable_pages(),
+        diagnostics.reclaimed_user_kernel_stack_virtual_pages()
     )
 }
