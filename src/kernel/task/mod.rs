@@ -14,6 +14,7 @@
 //! - [`spawn`] - Add a runnable kernel task
 //! - [`spawn_user_task`] - Add a runnable user task
 //! - [`run_user_task_once`] - Run one user task until `SYS_EXIT`
+//! - [`run_next_user_task_once`] - Run the next active user task until one exits
 //! - [`UserTaskExit`] - User task exit result
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
@@ -454,6 +455,8 @@ impl Scheduler {
             total_tasks: u64::try_from(self.tasks.len()).expect("task count must fit in u64"),
             kernel_tasks,
             user_tasks,
+            active_user_tasks: u64::try_from(self.active_user_task_identifiers.len())
+                .expect("active user task count must fit in u64"),
             active_user_address_spaces,
             states: TaskStateDiagnostics::new(
                 ready_tasks,
@@ -518,6 +521,21 @@ impl Scheduler {
             self.active_user_task_identifiers.push(task_id);
         }
         true
+    }
+
+    fn next_active_user_task_id(&self) -> Option<u64> {
+        self.active_user_task_identifiers
+            .iter()
+            .copied()
+            .find(|task_id| {
+                let Some(task_index) = self.get_task_index(*task_id) else {
+                    return false;
+                };
+                let TaskKind::User(user_runtime) = &self.tasks[task_index].kind else {
+                    return false;
+                };
+                self.tasks[task_index].state.is_ready() && user_runtime.address_space.is_some()
+            })
     }
 
     fn deactivate_user_task(&mut self, task_id: u64) {
@@ -779,8 +797,6 @@ impl Scheduler {
         if let TaskKind::User(user_runtime) = &self.tasks[next_index].kind {
             if self.tasks[next_index].context.is_empty() {
                 self.user_entry_count = self.user_entry_count.saturating_add(1);
-                self.active_user_task_identifiers.clear();
-                self.active_user_task_identifiers.push(next_task_id);
                 return Some(SwitchAction::EnterUser {
                     current_context,
                     task_id: next_task_id,
@@ -916,6 +932,24 @@ pub fn run_user_task_once(
     task_id: u64,
 ) -> Option<UserTaskExit> {
     process_lifecycle::run_user_task_once(frame_allocator, task_id)
+}
+
+/// Run the next active user task until one active user task exits.
+///
+/// # Panics
+///
+/// Panics if the scheduler has not been initialized.
+pub fn run_next_user_task_once(
+    frame_allocator: &mut PhysicalFrameAllocator,
+) -> Option<UserTaskExit> {
+    let task_id = {
+        let scheduler = SCHEDULER.lock();
+        scheduler
+            .as_ref()
+            .expect("scheduler must be initialized before running active user tasks")
+            .next_active_user_task_id()?
+    };
+    run_user_task_once(frame_allocator, task_id)
 }
 
 /// Mark the currently running task as finished.
