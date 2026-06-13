@@ -49,7 +49,7 @@ pub use diagnostics::{SchedulerDiagnostics, TaskStateDiagnostics};
 pub use metadata::{TaskIdentifier, TaskMetadata};
 pub use process_lifecycle::UserTaskExit;
 use spin::Mutex;
-use stack::KernelStack;
+use stack::{KernelStack, KernelStackReclaim};
 pub use stack::{KernelStackFaultOwner, KernelStackGuardFault};
 pub use state::TaskState;
 
@@ -575,6 +575,23 @@ impl Scheduler {
             frame_allocator,
             address_space,
         ))
+    }
+
+    fn reclaim_finished_user_kernel_stack(
+        &mut self,
+        frame_allocator: &mut PhysicalFrameAllocator,
+        task_id: u64,
+    ) -> Option<KernelStackReclaim> {
+        let task_index = self.get_task_index(task_id)?;
+        if self.tasks[task_index].state != TaskState::Finished {
+            return None;
+        }
+        if !matches!(&self.tasks[task_index].kind, TaskKind::User(_)) {
+            return None;
+        }
+
+        let kernel_stack = self.tasks[task_index].kernel_stack.take()?;
+        Some(kernel_stack.destroy(frame_allocator, &mut self.kernel_stack_range_allocator))
     }
 
     fn record_current_user_trap_frame(

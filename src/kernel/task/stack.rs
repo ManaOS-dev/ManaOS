@@ -120,6 +120,10 @@ impl KernelStackVirtualReservation {
             .expect("kernel stack writable range must be valid")
     }
 
+    fn reserved_range(&self) -> KernelVirtualRange {
+        self.range
+    }
+
     fn stack_top(&self) -> VirtAddr {
         self.range.end_exclusive()
     }
@@ -130,6 +134,25 @@ impl KernelStackVirtualReservation {
 
     fn writable_page_count(&self) -> u64 {
         self.writable_page_count
+    }
+}
+
+/// Page counts reclaimed while destroying one finished task kernel stack.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct KernelStackReclaim {
+    writable_pages: u64,
+    virtual_pages: u64,
+}
+
+impl KernelStackReclaim {
+    /// Return the number of mapped writable stack pages returned to the frame allocator.
+    pub(super) const fn writable_pages(self) -> u64 {
+        self.writable_pages
+    }
+
+    /// Return the number of reserved virtual pages returned to the range allocator.
+    pub(super) const fn virtual_pages(self) -> u64 {
+        self.virtual_pages
     }
 }
 
@@ -265,5 +288,42 @@ impl KernelStack {
     /// Return the number of future writable stack pages.
     pub(super) fn writable_page_count(&self) -> u64 {
         self.virtual_reservation.writable_page_count()
+    }
+
+    /// Destroy this stack and return its physical frames and virtual reservation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if mapped writable pages are not owned by `KernelStack`, if the
+    /// reserved virtual range is still mapped after unmapping, or if the range
+    /// allocator rejects the returned reservation.
+    pub(super) fn destroy(
+        self,
+        frame_allocator: &mut PhysicalFrameAllocator,
+        virtual_range_allocator: &mut KernelVirtualRangeAllocator,
+    ) -> KernelStackReclaim {
+        let writable_range = self.virtual_reservation.writable_range();
+        let reserved_range = self.virtual_reservation.reserved_range();
+        let writable_pages = self.physical_range.page_count();
+        let virtual_pages = self.virtual_reservation.reserved_page_count();
+
+        paging::unmap_kernel_range_and_free_frames(
+            frame_allocator,
+            writable_range,
+            FrameRangeOwner::KernelStack,
+        );
+        assert!(
+            paging::is_kernel_range_unmapped(reserved_range),
+            "destroyed kernel stack virtual reservation must be fully unmapped"
+        );
+        assert!(
+            virtual_range_allocator.free_pages(reserved_range),
+            "destroyed kernel stack virtual reservation must be returned once"
+        );
+
+        KernelStackReclaim {
+            writable_pages,
+            virtual_pages,
+        }
     }
 }
