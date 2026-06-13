@@ -222,6 +222,12 @@ impl Task {
             kernel_stack.virtual_top(),
         ))
     }
+
+    fn contains_kernel_stack_writable_range(&self, start_address: u64, byte_len: u64) -> bool {
+        self.kernel_stack.as_ref().is_some_and(|kernel_stack| {
+            kernel_stack.contains_writable_range(start_address, byte_len)
+        })
+    }
 }
 
 struct Scheduler {
@@ -409,9 +415,17 @@ impl Scheduler {
         Some(task_id)
     }
 
-    fn record_current_user_trap_frame(&mut self, trap_frame: UserTrapFrame) {
+    fn record_current_user_trap_frame(
+        &mut self,
+        trap_frame: UserTrapFrame,
+        trap_frame_storage_address: u64,
+    ) {
         let current_task = &mut self.tasks[self.current_index];
         let task_id = current_task.get_id();
+        let trap_frame_byte_len = u64::try_from(core::mem::size_of::<UserTrapFrame>())
+            .expect("user trap frame size must fit in u64");
+        let trap_frame_on_kernel_stack = current_task
+            .contains_kernel_stack_writable_range(trap_frame_storage_address, trap_frame_byte_len);
         let TaskKind::User(user_runtime) = &mut current_task.kind else {
             return;
         };
@@ -423,8 +437,10 @@ impl Scheduler {
         if should_log {
             crate::log_info!(
                 "task",
-                "User syscall trap frame saved: task={} rip={:#x} rsp={:#x} rax={:#x} rdi={:#x} rsi={:#x} rdx={:#x} r10={:#x}",
+                "User syscall trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rdi={:#x} rsi={:#x} rdx={:#x} r10={:#x}",
                 task_id,
+                trap_frame_storage_address,
+                trap_frame_on_kernel_stack,
                 user_runtime.trap_frame.instruction_pointer,
                 user_runtime.trap_frame.stack_pointer,
                 user_runtime.trap_frame.rax,
@@ -561,10 +577,10 @@ pub fn finish_current_task(exit_code: u64) -> Option<u64> {
 }
 
 /// Save a captured user trap frame for the currently running user task.
-pub fn record_current_user_trap_frame(trap_frame: UserTrapFrame) {
+pub fn record_current_user_trap_frame(trap_frame: UserTrapFrame, trap_frame_storage_address: u64) {
     let mut scheduler = SCHEDULER.lock();
     if let Some(scheduler) = scheduler.as_mut() {
-        scheduler.record_current_user_trap_frame(trap_frame);
+        scheduler.record_current_user_trap_frame(trap_frame, trap_frame_storage_address);
     }
 }
 
@@ -612,6 +628,9 @@ pub fn process_timer_tick() {
             kernel_stack_top,
         } => {
             architecture::install_kernel_stack(
+                u64::try_from(kernel_stack_top).expect("kernel stack top must fit in u64"),
+            );
+            crate::kernel::interrupt::set_syscall_kernel_stack_top(
                 u64::try_from(kernel_stack_top).expect("kernel stack top must fit in u64"),
             );
             // SAFETY: The user trap frame was derived from a mapped entry

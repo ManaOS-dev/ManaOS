@@ -14,7 +14,14 @@
 //! - [`push_keyboard_byte`] - Route keyboard bytes to the keyboard queue
 //! - [`push_mouse_byte`] - Route mouse bytes to the mouse queue
 //! - [`process_page_fault`] - Log page-fault diagnostics
+//! - [`set_syscall_kernel_stack_top`] - Install the next SYSCALL kernel stack
 //! - [`syscall_entry`] - Ring 3 syscall entry
+
+use core::sync::atomic::{AtomicU64, Ordering};
+
+static SYSCALL_KERNEL_STACK_TOP: AtomicU64 = AtomicU64::new(0);
+static SYSCALL_ENTRY_USER_STACK_POINTER: AtomicU64 = AtomicU64::new(0);
+static SYSCALL_ENTRY_SYSCALL_NUMBER: AtomicU64 = AtomicU64::new(0);
 
 /// Route one timer interrupt tick to the kernel scheduler.
 pub fn process_timer_tick() {
@@ -29,6 +36,16 @@ pub fn push_keyboard_byte(byte: u8) {
 /// Route one mouse byte to the mouse input queue.
 pub fn push_mouse_byte(byte: u8) {
     crate::kernel::driver::input::mouse::push_byte(byte);
+}
+
+/// Install the guarded kernel stack top used by future `SYSCALL` entries.
+///
+/// # Panics
+///
+/// Panics if `stack_top` is zero.
+pub fn set_syscall_kernel_stack_top(stack_top: u64) {
+    assert!(stack_top != 0, "syscall kernel stack top must be non-zero");
+    SYSCALL_KERNEL_STACK_TOP.store(stack_top, Ordering::Release);
 }
 
 /// Log page-fault diagnostics before the architecture handler panics.
@@ -163,14 +180,18 @@ impl PageFaultPresence {
 #[unsafe(naked)]
 pub unsafe extern "C" fn syscall_entry() {
     core::arch::naked_asm!(
+        "mov qword ptr [rip + {entry_user_stack_pointer}], rsp",
+        "mov qword ptr [rip + {entry_syscall_number}], rax",
+        "mov rsp, qword ptr [rip + {syscall_kernel_stack_top}]",
         "sub rsp, 192",
         "mov qword ptr [rsp + 32], rcx",
         "mov qword ptr [rsp + 40], 0",
         "mov qword ptr [rsp + 48], r11",
-        "mov qword ptr [rsp + 72], rax",
-        "lea rax, [rsp + 192]",
+        "mov rax, qword ptr [rip + {entry_user_stack_pointer}]",
         "mov qword ptr [rsp + 56], rax",
         "mov qword ptr [rsp + 64], 0",
+        "mov rax, qword ptr [rip + {entry_syscall_number}]",
+        "mov qword ptr [rsp + 72], rax",
         "mov qword ptr [rsp + 80], rbx",
         "mov qword ptr [rsp + 88], rcx",
         "mov qword ptr [rsp + 96], rdx",
@@ -204,7 +225,7 @@ pub unsafe extern "C" fn syscall_entry() {
         "mov rcx, qword ptr [rsp + 32]",
         "mov r11, qword ptr [rsp + 48]",
         "mov rax, qword ptr [rsp + 72]",
-        "add rsp, 192",
+        "mov rsp, qword ptr [rsp + 56]",
         "sysretq",
         "2:",
         "call {get_return_stack}",
@@ -212,6 +233,9 @@ pub unsafe extern "C" fn syscall_entry() {
         "ret",
         dispatcher = sym crate::kernel::syscall::syscall_dispatch_from_trap_frame,
         get_return_stack = sym crate::kernel::task::process_lifecycle::get_user_exit_return_stack,
+        syscall_kernel_stack_top = sym SYSCALL_KERNEL_STACK_TOP,
+        entry_user_stack_pointer = sym SYSCALL_ENTRY_USER_STACK_POINTER,
+        entry_syscall_number = sym SYSCALL_ENTRY_SYSCALL_NUMBER,
         exit_sentinel = const crate::kernel::syscall::USER_EXIT_SENTINEL,
     );
 }
