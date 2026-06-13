@@ -51,9 +51,10 @@ use alloc::vec;
 use alloc::vec::Vec;
 pub use context::UserEntryArguments;
 use context::{TaskContext, TaskEntry, UserTaskContext, UserTrapFrame};
-use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 pub use diagnostics::{
-    SchedulerDiagnostics, SchedulerTaskSnapshot, TaskKindDiagnostics, TaskStateDiagnostics,
+    PreemptionStateDiagnostics, SchedulerDiagnostics, SchedulerTaskSnapshot, TaskKindDiagnostics,
+    TaskStateDiagnostics,
 };
 pub use metadata::{TaskIdentifier, TaskMetadata};
 pub use process_lifecycle::UserTaskExit;
@@ -66,8 +67,12 @@ pub use state::TaskState;
 const USER_TASK_PREEMPTION_ENABLED: bool = true;
 
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
-static PREEMPTION_ENABLED: AtomicBool = AtomicBool::new(true);
+static PREEMPTION_STATE: AtomicU8 = AtomicU8::new(PreemptionStateDiagnostics::Enabled.as_raw());
 static USER_EXIT_PREEMPTION_WINDOW_CLOSE_COUNT: AtomicU64 = AtomicU64::new(0);
+
+fn current_preemption_state() -> PreemptionStateDiagnostics {
+    PreemptionStateDiagnostics::from_raw(PREEMPTION_STATE.load(Ordering::Acquire))
+}
 
 enum TaskKind {
     Kernel,
@@ -482,7 +487,7 @@ impl Scheduler {
             finished_tasks: self.finished_task_count,
             pending_user_exits: u64::try_from(self.finished_user_exits.len())
                 .expect("pending user exit count must fit in u64"),
-            preemption_enabled: PREEMPTION_ENABLED.load(Ordering::Acquire),
+            preemption_state: current_preemption_state(),
             user_exit_preemption_window_closes: USER_EXIT_PREEMPTION_WINDOW_CLOSE_COUNT
                 .load(Ordering::Acquire),
             user_exit_return_stack_sets: process_lifecycle::user_exit_return_stack_set_count(),
@@ -1062,12 +1067,20 @@ pub fn record_current_user_interrupt_trap_frame(
 
 /// Enable or disable timer-driven task switching.
 pub fn set_preemption_enabled(enabled: bool) {
-    PREEMPTION_ENABLED.store(enabled, Ordering::Release);
+    let state = if enabled {
+        PreemptionStateDiagnostics::Enabled
+    } else {
+        PreemptionStateDiagnostics::Disabled
+    };
+    PREEMPTION_STATE.store(state.as_raw(), Ordering::Release);
 }
 
 /// Disable timer-driven task switching after a user task exits through `SYS_EXIT`.
 pub fn close_user_exit_preemption_window(task_id: u64) {
-    PREEMPTION_ENABLED.store(false, Ordering::Release);
+    PREEMPTION_STATE.store(
+        PreemptionStateDiagnostics::UserExitReturn.as_raw(),
+        Ordering::Release,
+    );
     USER_EXIT_PREEMPTION_WINDOW_CLOSE_COUNT.fetch_add(1, Ordering::AcqRel);
     crate::log_info!(
         "task",
@@ -1078,7 +1091,7 @@ pub fn close_user_exit_preemption_window(task_id: u64) {
 
 /// Process one timer tick and switch to the next runnable task when possible.
 pub fn process_timer_tick(interrupted_user_mode: bool) {
-    if !PREEMPTION_ENABLED.load(Ordering::Acquire) {
+    if !current_preemption_state().is_enabled() {
         return;
     }
 
