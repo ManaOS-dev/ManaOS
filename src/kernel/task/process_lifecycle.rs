@@ -79,20 +79,32 @@ pub fn run_user_task_once(
     if task_id == 0 {
         return None;
     }
-    let reclaim = {
+    let (address_space_reclaim, kernel_stack_reclaim) = {
         let mut scheduler = super::SCHEDULER.lock();
-        scheduler
+        let scheduler = scheduler
             .as_mut()
-            .expect("scheduler must be initialized before reclaiming user address spaces")
-            .reclaim_finished_user_address_space(frame_allocator, task_id)
+            .expect("scheduler must be initialized before reclaiming finished user task resources");
+        (
+            scheduler.reclaim_finished_user_address_space(frame_allocator, task_id),
+            scheduler.reclaim_finished_user_kernel_stack(frame_allocator, task_id),
+        )
     };
-    if let Some(reclaim) = reclaim {
+    if let Some(reclaim) = address_space_reclaim {
         crate::log_info!(
             "task",
             "User address space reclaimed: task={} user_pages={} page_table_pages={}",
             task_id,
             reclaim.user_pages(),
             reclaim.page_table_pages()
+        );
+    }
+    if let Some(reclaim) = kernel_stack_reclaim {
+        crate::log_info!(
+            "task",
+            "User kernel stack reclaimed: task={} writable_pages={} virtual_pages={}",
+            task_id,
+            reclaim.writable_pages(),
+            reclaim.virtual_pages()
         );
     }
 

@@ -117,6 +117,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Design kernel stack guard page placement and fault diagnostics.
 - [x] Add per-process page tables; user smoke tasks now own separate address-space roots for ELF and stack mappings.
 - [x] Reclaim finished user address spaces and return tracked user/page-table frames to the allocator.
+- [x] Reclaim finished user task kernel stacks after `SYS_EXIT`.
 - [x] Document the page ownership model required before per-process page tables.
 - [x] Add copy-in/copy-out helpers with consistent user pointer validation.
 - [x] Define a syscall-by-syscall user pointer validation policy.

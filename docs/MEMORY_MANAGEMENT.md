@@ -159,10 +159,12 @@ Dynamic kernel mappings now have a generic unmap path:
 - `KernelVirtualRangeAllocator::free_pages(...)` releases virtual ranges for
   reuse after their mappings are gone.
 
-Scheduler-owned stack physical frames and virtual ranges still live for the
-lifetime of their task metadata. Freeing a task stack remains a process
-lifecycle problem because no scheduler, interrupt, or architecture context may
-retain a reference when the stack is destroyed.
+Finished user tasks now destroy their scheduler-owned kernel stack metadata
+after `SYS_EXIT`: writable stack mappings are removed, `KernelStack` frames are
+returned to the physical frame allocator, and the guard-inclusive virtual
+reservation is returned to the kernel virtual range allocator. Bootstrap,
+kernel task, and architecture-owned stacks still live for the lifetime of their
+owning runtime metadata.
 
 ## User Address Spaces
 

@@ -71,6 +71,7 @@ $expectedPatterns = @(
     "User task exited: code=0",
     "Restored kernel address space after user exit",
     "User address space reclaimed: task=.* user_pages=.* page_table_pages=.*",
+    "User kernel stack reclaimed: task=.* writable_pages=4 virtual_pages=5",
     "Multi-user preemption smoke passed: tasks=2",
     "Scheduler diagnostics verified: .*user_tasks=2 .*finished=2 .*active_user_address_spaces=0 .*timer_preemptions=.* user_resumes=.* finished_tasks=2",
     "Tasks command smoke passed: command=`"tasks`" output_lines=3",
