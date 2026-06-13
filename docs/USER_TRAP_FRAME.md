@@ -5,20 +5,23 @@ preempt user tasks or resume user tasks after arbitrary interrupts and syscalls.
 
 ## Current Entry Context
 
-`kernel::task::context::UserTaskContext` is an initial-entry frame. It feeds
-`arch/x86_64/context_switch.s::enter_user_mode*` with:
+`kernel::task::context::UserTaskContext` is an initial-entry frame. It is
+converted into a `UserTrapFrame` before `arch/x86_64/context_switch.s`
+restores user registers with:
 
 - `rip`, `cs`, `rflags`, `rsp`, and `ss` for the `iretq` frame.
 - `argc`, `argv`, and `envp` loaded into `rdi`, `rsi`, and `rdx`.
 
-That context is sufficient for the current one-shot user smoke path. It is not
-enough to resume a user task after a timer interrupt, page fault, or syscall
-that can return to the same instruction stream with all registers preserved.
+The initial context is sufficient to create the first user trap frame, but it
+is not enough to resume a user task after a timer interrupt, page fault, or
+syscall that can return to the same instruction stream with all registers
+preserved. Interrupt and syscall capture still need to save real runtime
+register state before user preemption can be enabled.
 
 ## Full Trap Frame Layout
 
-`kernel::task::context::UserTrapFrame` is the future resume contract for user
-tasks. Its field order is fixed by `#[repr(C)]` and compile-time offset
+`kernel::task::context::UserTrapFrame` is the resume contract for user tasks.
+Its field order is fixed by `#[repr(C)]` and compile-time offset
 assertions:
 
 | Offset | Field | Source |

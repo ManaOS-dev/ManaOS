@@ -26,9 +26,9 @@ const USER_TRAP_FRAME_BYTES: usize = 160;
 
 /// Full user-mode register frame required to resume a preempted user task.
 ///
-/// This is a design contract for the future interrupt and syscall paths. The
-/// current boot path still enters user code through [`super::UserTaskContext`]
-/// and does not save or restore this frame yet.
+/// The one-shot user path restores an initial instance of this frame. Future
+/// interrupt and syscall paths still need to save runtime register state into
+/// the same layout before user preemption can be enabled.
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct UserTrapFrame {
@@ -72,6 +72,13 @@ pub struct UserTrapFrame {
     pub r14: u64,
     /// General-purpose `r15` register.
     pub r15: u64,
+}
+
+impl UserTrapFrame {
+    /// Return an immutable pointer suitable for architecture restore stubs.
+    pub fn as_pointer(&self) -> *const u64 {
+        core::ptr::addr_of!(self.instruction_pointer)
+    }
 }
 
 const _: () = {
