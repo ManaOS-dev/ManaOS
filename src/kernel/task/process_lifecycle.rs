@@ -41,11 +41,13 @@ pub fn run_user_task_once(task_id: u64) -> Option<UserTaskExit> {
             .expect("scheduler must be initialized before running user tasks")
             .prepare_one_shot_user_task(task_id)?
     };
+    crate::kernel::memory::address_space::switch_to_user_address_space(user_task.address_space);
     super::install_user_task_kernel_stack(user_task.kernel_stack_top);
     crate::log_info!(
         "task",
-        "Installed user task kernel stack: task={} top={:#x}",
+        "Installed user task kernel stack: task={} address_space={:#x} top={:#x}",
         task_id,
+        user_task.address_space.level_4_frame().as_u64(),
         user_task.kernel_stack_top
     );
     crate::log_info!(
@@ -67,6 +69,8 @@ pub fn run_user_task_once(task_id: u64) -> Option<UserTaskExit> {
         super::architecture::enter_user_mode_once(user_task.trap_frame.as_pointer());
     }
     super::set_preemption_enabled(false);
+    crate::kernel::memory::address_space::switch_to_kernel_address_space();
+    crate::log_info!("task", "Restored kernel address space after user exit.");
 
     let task_id = LAST_USER_EXIT_TASK_ID.load(Ordering::Acquire);
     if task_id == 0 {

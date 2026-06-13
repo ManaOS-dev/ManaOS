@@ -83,10 +83,12 @@ Policy:
 - Every schedulable task gets a kernel stack owner record.
 - Kernel tasks enter with their own kernel stack in `TaskContext`.
 - User tasks get a kernel stack used for syscall and interrupt handling.
-- User tasks get separate user stack virtual slots until per-process page
-  tables provide isolated fixed user stack addresses.
+- User tasks now own separate address spaces for ELF and stack mappings. The
+  smoke path still uses separate user stack virtual slots until fixed stack
+  address reuse is introduced.
 - Before entering or resuming a user task, the scheduler must install that
-  task's kernel stack top into the architecture task provider.
+  task's kernel stack top into the architecture task provider and switch CR3 to
+  the task's user address space.
 - On x86_64, installing the user task kernel stack means updating TSS
   `privilege_stack_table[0]` through an architecture-owned API registered from
   `main.rs`.
@@ -147,3 +149,7 @@ classification remains pending because those stacks are not yet represented by
 7. Enable user task preemption only after full user trap frames and per-task
    kernel stack switching are both verified. This is complete for x86_64 PIT
    timer preemption and resume across the current two-task user smoke path.
+8. Attach user address spaces to user task records and switch CR3 before Ring 3
+   entry or timer-context resume. This is complete for the current one-shot
+   smoke path; full lifecycle scheduling and address-space destruction remain
+   pending.

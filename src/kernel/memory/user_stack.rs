@@ -1,19 +1,12 @@
 //! User-space bootstrap stack and page mapping.
 
 use crate::kernel::memory::{
-    address::{PhysicalFrameStart, UserVirtualAddress, VirtAddr},
+    address::{PhysicalFrameRange, PhysicalFrameStart, UserVirtualAddress},
+    address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
-    paging,
 };
 use core::sync::atomic::{AtomicU64, Ordering};
-use x86_64::{
-    registers::control::Cr3,
-    structures::paging::{
-        FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags, PhysFrame,
-        Size4KiB,
-    },
-    PhysAddr as X86PhysAddr, VirtAddr as X86VirtAddr,
-};
+use x86_64::structures::paging::PageTableFlags;
 
 const PAGE_SIZE: u64 = 4096;
 const PAGE_SIZE_USIZE: usize = 4096;
@@ -26,8 +19,8 @@ pub const USER_PROGRAM_BASE: u64 = 0x0000_4000_0000_0000;
 const USER_DATA_BASE: u64 = USER_PROGRAM_BASE + PAGE_SIZE;
 const USER_BAD_POINTER_BASE: u64 = USER_DATA_BASE + PAGE_SIZE;
 const USER_STACK_REGION_BASE: u64 = 0x0000_7fff_f000_0000;
-// Each stack slot reserves 1 MiB so small smoke stacks have an unmapped gap
-// between writable stack ranges while per-process page tables are still absent.
+// Each stack slot reserves 1 MiB so smoke stacks stay visually distinct while
+// user address spaces and fixed stack-address reuse continue to evolve.
 const USER_STACK_SLOT_BYTES: u64 = 0x0010_0000;
 static NEXT_USER_STACK_SLOT: AtomicU64 = AtomicU64::new(0);
 const _: () = assert!(USER_BAD_POINTER_BASE == 0x0000_4000_0000_2000);
@@ -39,6 +32,7 @@ const _: () = assert!(UserVirtualAddress::new(USER_STACK_REGION_BASE).is_some())
 pub struct AllocatedUserStack {
     base: UserVirtualAddress,
     top: UserVirtualAddress,
+    physical_range: PhysicalFrameRange,
     page_count: u64,
 }
 
@@ -56,6 +50,11 @@ impl AllocatedUserStack {
     /// Return the number of writable 4 KiB pages in this stack.
     pub fn page_count(&self) -> u64 {
         self.page_count
+    }
+
+    /// Return the physical frames backing this user stack.
+    pub fn physical_range(&self) -> PhysicalFrameRange {
+        self.physical_range
     }
 
     fn byte_len(self) -> u64 {
@@ -104,6 +103,7 @@ impl PreparedUserStack {
 ///
 /// Panics if physical frames cannot be allocated or page-table mapping fails.
 pub fn allocate_user_stack(
+    address_space: UserAddressSpace,
     frame_allocator: &mut PhysicalFrameAllocator,
     pages: u64,
 ) -> AllocatedUserStack {
@@ -131,14 +131,25 @@ pub fn allocate_user_stack(
         .checked_add(stack_size)
         .expect("user stack top address overflowed");
 
-    // SAFETY: The active level-4 page table is identity mapped by early paging,
-    // and the provided allocator supplies page-table frames for missing levels.
-    unsafe {
-        map_user_range(
+    for index in 0..pages {
+        let offset = index
+            .checked_mul(PAGE_SIZE)
+            .expect("user stack mapping offset overflowed");
+        let virtual_address = stack_base
+            .checked_add(offset)
+            .expect("user stack virtual address overflowed");
+        let physical_start = PhysicalFrameStart::new(
+            physical_range
+                .start()
+                .as_u64()
+                .checked_add(offset)
+                .expect("user stack physical address overflowed"),
+        )
+        .expect("user stack physical page must remain aligned");
+        address_space.map_user_page(
             frame_allocator,
-            stack_base,
-            physical_range.start(),
-            pages,
+            virtual_address,
+            physical_start,
             PageTableFlags::PRESENT
                 | PageTableFlags::WRITABLE
                 | PageTableFlags::USER_ACCESSIBLE
@@ -149,6 +160,7 @@ pub fn allocate_user_stack(
     AllocatedUserStack {
         base: stack_base,
         top: stack_top,
+        physical_range,
         page_count: pages,
     }
 }
@@ -163,6 +175,7 @@ pub fn allocate_user_stack(
 /// Panics if the stack is invalid, the fixed argument limits are exceeded, or
 /// the argument block does not fit in the mapped stack range.
 pub fn prepare_initial_stack(
+    address_space: UserAddressSpace,
     stack: AllocatedUserStack,
     arguments: &[&str],
     environment: &[&str],
@@ -177,7 +190,7 @@ pub fn prepare_initial_stack(
     let stack_size = usize::try_from(stack.byte_len())
         .expect("user stack size must fit in usize before preparing arguments");
     assert!(
-        paging::is_user_range_mapped_writable(stack_base.as_usize(), stack_size,),
+        address_space.is_user_range_mapped_writable(stack_base.as_usize(), stack_size,),
         "user entry arguments require a mapped writable user stack"
     );
     assert!(
@@ -189,7 +202,7 @@ pub fn prepare_initial_stack(
         "too many user entry environment entries"
     );
 
-    let mut stack_cursor = UserStackCursor::new(stack_top_address, stack_base);
+    let mut stack_cursor = UserStackCursor::new(stack, stack_top_address);
     let mut argument_pointers = [None; MAX_USER_ENTRY_ARGUMENTS];
     let mut environment_pointers = [None; MAX_USER_ENTRY_ENVIRONMENT];
 
@@ -227,6 +240,7 @@ pub fn prepare_initial_stack(
 /// Panics if the address is not page-aligned, the address is outside user
 /// space, a physical frame cannot be allocated, or page-table mapping fails.
 pub fn allocate_and_map_user_page(
+    address_space: UserAddressSpace,
     frame_allocator: &mut PhysicalFrameAllocator,
     virtual_address: UserVirtualAddress,
     flags: PageTableFlags,
@@ -249,12 +263,11 @@ pub fn allocate_and_map_user_page(
     // SAFETY: `physical_address` is a freshly allocated identity-mapped frame.
     unsafe {
         core::ptr::write_bytes(page_pointer, 0, PAGE_SIZE_USIZE);
-        map_user_range(
+        address_space.map_user_page(
             frame_allocator,
             UserVirtualAddress::new(virtual_address)
                 .expect("validated user page address must remain valid"),
             physical_address,
-            1,
             flags,
         );
     }
@@ -267,7 +280,10 @@ pub fn allocate_and_map_user_page(
 /// # Panics
 ///
 /// Panics if the stack has no pages or the stack size overflows.
-pub fn verify_user_stack_mapping(stack: AllocatedUserStack) -> bool {
+pub fn verify_user_stack_mapping(
+    address_space: UserAddressSpace,
+    stack: AllocatedUserStack,
+) -> bool {
     assert!(
         stack.page_count() > 0,
         "user stack verification requires at least one page"
@@ -280,25 +296,25 @@ pub fn verify_user_stack_mapping(stack: AllocatedUserStack) -> bool {
         .checked_sub(PAGE_SIZE)
         .expect("user stack guard address underflowed");
 
-    paging::is_user_range_mapped_writable(stack.base().as_usize(), stack_size)
-        && !paging::is_user_range_mapped_readable(
+    address_space.is_user_range_mapped_writable(stack.base().as_usize(), stack_size)
+        && !address_space.is_user_range_mapped_readable(
             usize::try_from(guard_page).expect("user stack guard must fit in usize"),
             PAGE_SIZE_USIZE,
         )
 }
 
 struct UserStackCursor {
+    stack: AllocatedUserStack,
     pointer: UserVirtualAddress,
-    base: UserVirtualAddress,
 }
 
 impl UserStackCursor {
-    fn new(pointer: UserVirtualAddress, base: UserVirtualAddress) -> Self {
+    fn new(stack: AllocatedUserStack, pointer: UserVirtualAddress) -> Self {
         assert!(
-            pointer.as_u64() > base.as_u64(),
+            pointer.as_u64() > stack.base().as_u64(),
             "user stack cursor must start above the stack base"
         );
-        Self { pointer, base }
+        Self { stack, pointer }
     }
 
     fn push_bytes(&mut self, byte_count: u64) -> UserVirtualAddress {
@@ -307,7 +323,7 @@ impl UserStackCursor {
             .checked_sub(byte_count)
             .expect("user stack cursor underflowed");
         assert!(
-            next_pointer.as_u64() >= self.base.as_u64(),
+            next_pointer.as_u64() >= self.stack.base().as_u64(),
             "user entry data must fit in the mapped user stack"
         );
         self.pointer = next_pointer;
@@ -320,7 +336,7 @@ impl UserStackCursor {
         let aligned_pointer = UserVirtualAddress::new(aligned_pointer)
             .expect("aligned user stack pointer must remain valid");
         assert!(
-            aligned_pointer.as_u64() >= self.base.as_u64(),
+            aligned_pointer.as_u64() >= self.stack.base().as_u64(),
             "aligned user stack pointer must stay inside the mapped user stack"
         );
         self.pointer = aligned_pointer;
@@ -336,7 +352,7 @@ fn push_c_string(stack_cursor: &mut UserStackCursor, value: &str) -> UserVirtual
         .expect("user entry string length must fit in u64");
     let stack_pointer = stack_cursor.push_bytes(length);
 
-    let destination = stack_pointer.as_usize() as *mut u8;
+    let destination = stack_cursor.stack_pointer(stack_pointer);
     // SAFETY: The destination range was carved out of the mapped user stack,
     // and the source string plus trailing NUL fits in that range.
     unsafe {
@@ -369,7 +385,7 @@ fn push_pointer_array(
         let pointer = pointer
             .expect("user entry pointer array slot must be initialized")
             .as_u64();
-        write_stack_u64(slot_address, pointer);
+        stack_cursor.write_u64(slot_address, pointer);
     }
     let terminator_offset = u64::try_from(pointers.len())
         .expect("user entry pointer terminator index must fit in u64")
@@ -378,73 +394,38 @@ fn push_pointer_array(
     let terminator_address = stack_pointer
         .checked_add(terminator_offset)
         .expect("user entry pointer terminator address overflowed");
-    write_stack_u64(terminator_address, 0);
+    stack_cursor.write_u64(terminator_address, 0);
 
     stack_pointer
 }
 
-fn write_stack_u64(address: UserVirtualAddress, value: u64) {
-    let pointer = address.as_usize() as *mut u64;
-    // SAFETY: The caller provides an address inside a writable mapped user
-    // stack slot reserved for one 64-bit pointer value.
-    unsafe {
-        pointer.write(value);
+impl UserStackCursor {
+    fn stack_pointer(&self, address: UserVirtualAddress) -> *mut u8 {
+        let offset = address
+            .as_u64()
+            .checked_sub(self.stack.base().as_u64())
+            .expect("user stack write address must be inside stack");
+        assert!(
+            offset < self.stack.byte_len(),
+            "user stack write address must stay inside stack"
+        );
+        let physical_address = self
+            .stack
+            .physical_range()
+            .start()
+            .as_address()
+            .checked_add(offset)
+            .expect("user stack physical write address overflowed");
+        physical_address.as_usize() as *mut u8
     }
-}
 
-unsafe fn map_user_range(
-    frame_allocator: &mut PhysicalFrameAllocator,
-    virtual_start: UserVirtualAddress,
-    physical_start: PhysicalFrameStart,
-    pages: u64,
-    flags: PageTableFlags,
-) {
-    let (level_4_frame, _) = Cr3::read();
-    let level_4_table = level_4_frame.start_address().as_u64() as *mut PageTable;
-    // SAFETY: The active page table is identity mapped, so its physical address
-    // is a valid virtual address in the current address space.
-    let level_4_table = unsafe { &mut *level_4_table };
-    // SAFETY: ManaOS uses identity-mapped physical memory for page-table access.
-    let mut mapper = unsafe { OffsetPageTable::new(level_4_table, X86VirtAddr::new(0)) };
-    let mut wrapper = UserFrameAllocator { frame_allocator };
-    let virtual_start = VirtAddr::new(virtual_start.as_u64());
-    let physical_start = physical_start.as_address();
-
-    for index in 0..pages {
-        let offset = index
-            .checked_mul(PAGE_SIZE)
-            .expect("user mapping offset overflowed");
-        let virtual_address = virtual_start
-            .checked_add(offset)
-            .expect("user virtual address overflowed");
-        let physical_address = physical_start
-            .checked_add(offset)
-            .expect("user physical address overflowed");
-        let page = Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_address.as_u64()));
-        let frame = PhysFrame::containing_address(X86PhysAddr::new(physical_address.as_u64()));
-
-        // SAFETY: `frame` is owned by the caller for this range, `page` is in
-        // the fixed user stack range, and `wrapper` allocates new page-table
-        // frames when the mapper needs them.
+    fn write_u64(&self, address: UserVirtualAddress, value: u64) {
+        let bytes = value.to_ne_bytes();
+        let pointer = self.stack_pointer(address);
+        // SAFETY: The destination was translated into the physical frame range
+        // backing the prepared stack and reserved for one 64-bit pointer value.
         unsafe {
-            mapper
-                .map_to(page, frame, flags, &mut wrapper)
-                .expect("failed to map user page")
-                .flush();
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), pointer, bytes.len());
         }
-    }
-}
-
-struct UserFrameAllocator<'a> {
-    frame_allocator: &'a mut PhysicalFrameAllocator,
-}
-
-// SAFETY: UserFrameAllocator delegates to PhysicalFrameAllocator, which returns each
-// frame at most once from registered conventional memory regions.
-unsafe impl FrameAllocator<Size4KiB> for UserFrameAllocator<'_> {
-    fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
-        self.frame_allocator
-            .allocate_frame_for(FrameRangeOwner::PageTable)
-            .map(|address| PhysFrame::containing_address(X86PhysAddr::new(address.as_u64())))
     }
 }

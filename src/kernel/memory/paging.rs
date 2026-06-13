@@ -64,6 +64,10 @@ pub unsafe fn init<'a>(
     unsafe {
         Cr3::write(pml4_frame, x86_64::registers::control::Cr3Flags::empty());
     }
+    crate::kernel::memory::address_space::initialize_kernel_address_space(
+        PhysicalFrameStart::new(pml4_frame.start_address().as_u64())
+            .expect("kernel PML4 frame must be 4KiB-aligned"),
+    );
     crate::log_info!("paging", "Identity mapping complete.");
 }
 
@@ -79,64 +83,6 @@ pub fn is_user_range_mapped_writable(user_pointer: usize, length: usize) -> bool
         length,
         PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
     )
-}
-
-/// Verify representative kernel and user mapping permissions.
-///
-/// The kernel pointer must be mapped but not user-accessible. The user stack
-/// pointer must be mapped as writable, user-accessible, and non-executable. The
-/// user entry pointer must be mapped as user-accessible executable code and not
-/// writable.
-pub fn verify_kernel_user_mapping_permissions(
-    kernel_pointer: usize,
-    user_stack_pointer: usize,
-    user_entry_pointer: usize,
-) -> bool {
-    let Some(kernel_flags) = mapping_flags_for_address(KernelVirtAddr::new(kernel_pointer as u64))
-    else {
-        return false;
-    };
-    if !kernel_flags.contains(PageTableFlags::PRESENT)
-        || kernel_flags.contains(PageTableFlags::USER_ACCESSIBLE)
-    {
-        return false;
-    }
-
-    let Some(user_stack_flags) =
-        mapping_flags_for_address(KernelVirtAddr::new(user_stack_pointer as u64))
-    else {
-        return false;
-    };
-    if !user_stack_flags.contains(PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
-        || !user_stack_flags.contains(PageTableFlags::WRITABLE)
-        || !user_stack_flags.contains(PageTableFlags::NO_EXECUTE)
-    {
-        return false;
-    }
-
-    let Some(user_entry_flags) =
-        mapping_flags_for_address(KernelVirtAddr::new(user_entry_pointer as u64))
-    else {
-        return false;
-    };
-    user_entry_flags.contains(PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
-        && !user_entry_flags.contains(PageTableFlags::WRITABLE)
-        && !user_entry_flags.contains(PageTableFlags::NO_EXECUTE)
-}
-
-/// Verify syscall user-data pointer permission enforcement.
-///
-/// The writable stack pointer must pass readable and writable user-data checks.
-/// The executable user entry pointer must fail both checks because syscall data
-/// buffers are required to be non-executable.
-pub fn verify_syscall_user_data_permissions(
-    user_stack_pointer: usize,
-    user_entry_pointer: usize,
-) -> bool {
-    is_user_range_mapped_readable(user_stack_pointer, 1)
-        && is_user_range_mapped_writable(user_stack_pointer, 1)
-        && !is_user_range_mapped_readable(user_entry_pointer, 1)
-        && !is_user_range_mapped_writable(user_entry_pointer, 1)
 }
 
 /// Identity-map a kernel MMIO range as writable and uncached.

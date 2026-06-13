@@ -115,7 +115,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Add a kernel virtual memory allocator for dynamic mappings, including writable NX mapping and generic unmap/free for kernel ranges.
 - [ ] Add guard pages for kernel stacks; scheduler-owned task stacks now have mapped writable pages, unmapped virtual guards, and guard-fault diagnostics. Bootstrap/IST stacks remain.
 - [x] Design kernel stack guard page placement and fault diagnostics.
-- [ ] Add per-process page tables.
+- [x] Add per-process page tables; user smoke tasks now own separate address-space roots for ELF and stack mappings.
 - [x] Document the page ownership model required before per-process page tables.
 - [x] Add copy-in/copy-out helpers with consistent user pointer validation.
 - [x] Define a syscall-by-syscall user pointer validation policy.
@@ -141,7 +141,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Make preemptive scheduling safe for the current one-shot user task path.
 - [x] Add separate user stack slots so multiple user task records can coexist in the shared address space.
 - [x] Prove timer preemption and resume across two user task records in storage smoke.
-- [ ] Extend preemptive user scheduling across full process lifecycle paths after per-process page tables.
+- [ ] Extend preemptive user scheduling across full process lifecycle paths now that user tasks own separate address spaces.
 - [x] Checklist the prerequisites for enabling user task preemption.
 - [ ] Add scheduler accounting and task state diagnostics.
 - [ ] Add kernel stack switching per task where needed; user task stacks are installed before entry and timer-context resume, Ring 3 timer interrupts use the installed TSS stack and save their raw frame there, and SYSCALL switches onto the task kernel stack. Bootstrap/IST stacks remain.

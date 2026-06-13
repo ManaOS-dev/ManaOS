@@ -11,6 +11,7 @@
 //! - Device drivers (-> `kernel::driver`)
 //!
 //! ## Public API
+//! - [`address_space`] - User address-space page-table roots
 //! - [`address`] - Typed memory address wrappers
 //! - [`frame_allocator`] - Reusable physical frame allocator
 //! - [`heap`] - Kernel heap allocator
@@ -20,6 +21,7 @@
 //! - [`virtual_allocator`] - Kernel virtual address range allocator
 
 pub mod address;
+pub mod address_space;
 pub mod frame_allocator;
 pub mod heap;
 pub mod paging;

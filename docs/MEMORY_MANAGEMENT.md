@@ -13,8 +13,11 @@ the boot composition root into subsystems that need physical memory:
 - `src/kernel/boot/mod.rs` allocates the kernel heap after paging is enabled.
 - `src/kernel/memory/paging.rs` allocates page-table frames and identity maps
   memory map ranges, framebuffer pages, and later MMIO pages.
+- `src/kernel/memory/address_space.rs` allocates user PML4 roots, shares kernel
+  mappings, clears the process user window, and switches CR3 between kernel and
+  user address spaces.
 - `src/kernel/memory/user_stack.rs` allocates user stack pages and user page
-  table pages through `FrameAllocator` wrappers.
+  table pages in a specific user address space.
 - `src/kernel/elf/loader.rs` allocates frames for user ELF `PT_LOAD` segments.
 - `src/kernel/driver/storage/advanced_host_controller_interface/dma.rs`
   allocates AHCI command, FIS, command-table, and data DMA buffers.
@@ -77,18 +80,19 @@ without promising that separately allocated frames are adjacent. Contiguous
 allocation should be used only for hardware or ABI requirements that actually
 need physical contiguity.
 
-## Page Ownership Model Before Per-Process Page Tables
+## User Address-Space Ownership Model
 
-Before per-process page tables are added, ownership is global and conservative:
+User tasks now own separate address-space roots:
 
 - Kernel heap frames are kernel-owned for the lifetime of the kernel.
 - Kernel page-table frames are kernel-owned and must never be freed while their
   page table can be active.
-- User ELF segment frames are user-task-owned, but they live in the shared
-  active address space today and must not be freed independently of the whole
-  future process address space.
-- User stack frames are user-task-owned; the guard page is reserved and must
-  remain unmapped.
+- User address-space PML4 frames are task/process-owned and share kernel PML4
+  entries while clearing the process user PML4 window.
+- User ELF segment frames are user-task-owned and mapped only into the owning
+  user address space.
+- User stack frames are user-task-owned and mapped only into the owning user
+  address space; the guard page remains unmapped.
 - Kernel stack frames are task-owned and mapped through higher-half kernel
   virtual ranges. The adjacent lower virtual guard page remains unmapped and
   does not consume a physical frame.
@@ -100,10 +104,10 @@ Before per-process page tables are added, ownership is global and conservative:
   page is allowed only after all code paths that dereference the physical
   address as a virtual address have been removed or converted.
 
-The first per-process page-table implementation must introduce an address-space
-owner object before freeing user frames. Reclaiming user frames directly from
-task exit is not safe until mappings, page tables, and task/process metadata
-share one ownership boundary.
+Reclaiming user frames directly from task exit is still not safe until address
+spaces can walk and unmap their user page tables, release page-table frames,
+and prove no scheduler, syscall, interrupt, or architecture context can still
+reference the destroyed task.
 
 ## Identity Mapping Audit Notes
 
@@ -112,7 +116,8 @@ Current code assumes identity mapping in these places:
 - Page-table construction and CR3 table access in `paging.rs`.
 - MMIO and framebuffer mapping setup in `paging.rs`.
 - AHCI DMA buffer zeroing in `dma.rs`.
-- User stack and user page-table mapping helpers in `user_stack.rs`.
+- User stack preparation writes through physical frames while mapping into
+  explicit user address spaces.
 - ELF segment loading when copying bytes into allocated physical frames.
 
 The shrink path is therefore staged:
@@ -159,6 +164,22 @@ lifetime of their task metadata. Freeing a task stack remains a process
 lifecycle problem because no scheduler, interrupt, or architecture context may
 retain a reference when the stack is destroyed.
 
+## User Address Spaces
+
+`kernel::memory::address_space::UserAddressSpace` owns the physical frame
+containing one user PML4 root. Creation copies the active kernel template, then
+clears PML4 entries `128..256`, which cover the linked user program range and
+the current user stack slot range. Low identity mappings and higher-half kernel
+mappings remain shared and non-user-accessible so kernel code can run after a
+CR3 switch while Ring 3 cannot access kernel pages.
+
+ELF loading and user stack allocation now map pages into an explicit
+`UserAddressSpace` instead of the active CR3. Initial stack strings and pointer
+arrays are written through the stack backing frames, so setup does not require
+temporarily activating the user address space. The one-shot user lifecycle
+switches to the task address space before Ring 3 entry and restores the kernel
+address space after `SYS_EXIT`.
+
 ## Replacement Checklist
 
 - [x] Add frame-range state storage before adding `free`.
@@ -186,5 +207,7 @@ retain a reference when the stack is destroyed.
       `just storage-smoke`.
 - [x] Add a boot self-check for dynamic kernel mapping map, unmap, virtual
       reuse, and physical reuse.
+- [x] Add user address-space roots for user task ELF and stack mappings, and
+      prove template isolation with a boot self-check.
 - [ ] Continue proving the boot path with `just storage-smoke` after every
       future allocator behavior change.

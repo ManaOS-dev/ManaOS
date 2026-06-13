@@ -45,11 +45,15 @@ $expectedPatterns = @(
     "Frame allocator self-checks passed: .*released_frame_reuse=true",
     "Kernel virtual range allocator self-checks passed: non_overlapping_reuse=true exhaustion_rejection=true",
     "Dynamic kernel mapping lifecycle self-check passed: map=true unmap=true virtual_reuse=true physical_reuse=true",
+    "User address-space template self-check passed: kernel_shared=true user_window_empty=true",
     "Loading user ELF from filesystem: path=/disk/bin/smoke_demo",
+    "User address space prepared: pml4=",
     "ELF segment mapped: .*perms=R-X",
     "ELF segment mapped: .*perms=R--",
     "ELF segment mapped: .*perms=RW-",
     "User stack mapping verified: pages=4 .*guard_unmapped=true",
+    "User task spawned\. task_id=.* address_space=",
+    "Installed user task kernel stack: task=.* address_space=",
     "User entry arguments prepared: argc=2",
     "Multi-user smoke tasks spawned",
     "User timer trap frame saved",
@@ -62,6 +66,7 @@ $expectedPatterns = @(
     "user bss ok",
     "user smoke ok",
     "User task exited: code=0",
+    "Restored kernel address space after user exit",
     "Multi-user preemption smoke passed: tasks=2"
 )
 

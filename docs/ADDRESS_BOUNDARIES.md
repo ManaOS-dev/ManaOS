@@ -61,6 +61,8 @@ untyped cross-domain `u64` values:
   to a raw pointer.
 - `KernelVirtualRange` represents reserved higher-half kernel virtual ranges
   for future dynamic mappings without implying that pages are already mapped.
+- `UserAddressSpace` represents a task-owned user PML4 root and is passed to
+  ELF and user stack mapping helpers instead of relying on the active CR3.
 - `paging::map_kernel_writable_no_execute_range(...)` is the boundary that
   turns a reserved `KernelVirtualRange` plus owned `PhysicalFrameRange` into
   mapped kernel-only writable non-executable pages.
@@ -107,9 +109,10 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 
 ### User Memory
 
-- `kernel::memory::user_stack::allocate_user_stack(..., pages) ->
-  AllocatedUserStack` returns a typed user stack range with base, top, and
-  page count.
+- `kernel::memory::user_stack::allocate_user_stack(address_space, ..., pages)
+  -> AllocatedUserStack` maps into a specific user address space and returns a
+  typed user stack range with base, top, physical backing frames, and page
+  count.
 - `PreparedUserStack` exposes typed user virtual `stack_pointer`,
   `argument_values_pointer`, and `environment_values_pointer`.
 - Initial user stack argument layout uses a local `UserVirtualAddress` cursor;
@@ -128,6 +131,8 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 
 - `kernel::elf::LoadedElf::entry_point() -> UserVirtualAddress` exposes a typed
   user virtual entry point.
+- `kernel::elf::load_user_program(address_space, ...)` maps loadable segments
+  into the supplied user address-space root.
 - `ProgramHeader::virtual_address() -> u64` remains raw because it exposes a
   field parsed directly from the ELF file. Loader validation converts accepted
   loadable segments to a local typed `UserVirtualRange` before page mapping and
@@ -157,6 +162,8 @@ Continue introducing wrappers in small steps:
 - `KernelVirtualRange` for non-empty page-aligned higher-half virtual ranges
   reserved by the kernel dynamic mapping allocator. This now exists in
   `kernel::memory::address`.
+- `UserAddressSpace` for user page-table roots. This now exists in
+  `kernel::memory::address_space`.
 - `UserVirtualAddress` for non-null user pointers and ELF virtual addresses.
   This now covers loaded ELF entry points, prepared user stack pointers, and
   user page mapping requests.
