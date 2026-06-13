@@ -17,8 +17,9 @@ SYSCALL entry path switches onto the current task's guarded kernel stack,
 captures a runtime `UserTrapFrame`, and stores returning syscall frames on the
 current user task. The x86_64 timer interrupt entry also captures a complete
 general-purpose register snapshot for Ring 3 timer frames and records it on the
-current user task. User task preemption remains disabled until the scheduler can
-resume saved user trap frames after selecting a different runnable task.
+current user task. The scheduler can now preempt a Ring 3 task from the timer
+path, run a kernel task, and resume the preempted user task through the saved
+timer interrupt context.
 
 ## Full Trap Frame Layout
 
@@ -69,6 +70,13 @@ architecture hook acknowledges the PIC and passes a shared timer frame to
 `kernel::interrupt`, which records Ring 3 timer frames in task metadata without
 making `arch/` depend on `kernel/`.
 
+After the frame is recorded, `kernel::task` may switch away from the user task.
+The switch stores the interrupted task's kernel-side timer context in its
+`TaskContext`, so scheduling that task again returns to the timer handler and
+then `iretq` resumes user code. Initial user entries use a separate
+`switch_to_user_mode` architecture provider that saves the current task context
+before consuming a `UserTrapFrame`.
+
 ## Syscall Save Set
 
 The syscall path must preserve enough state to return through the syscall ABI:
@@ -96,13 +104,14 @@ User task preemption stays disabled until all of the following are true:
   lifecycle helpers. This is complete for returning syscalls and the current
   PIT timer interrupt path.
 - Per-task kernel stacks exist and are installed before entering or resuming a
-  user task.
+  user task. This is complete for first entry, syscall entry, and timer-context
+  resume on the current scheduler path.
 - Timer interrupt routing can distinguish user-mode frames from kernel-mode
   frames without depending on `kernel::task` from `arch/`. This is complete for
   the current PIT timer path.
 - Page-fault diagnostics can report whether a fault happened in user or kernel
   mode.
 - The scheduler can transition a user task from `Running` to `Ready` only after
-  its trap frame is saved.
-- `just storage-smoke` still proves the one-shot user path, and a dedicated
-  preemption smoke proves a timer interrupt can resume user code.
+  its trap frame is saved. This is complete for timer-driven preemption.
+- `just storage-smoke` still proves the one-shot user path and now asserts that
+  a timer interrupt can preempt and resume user code.

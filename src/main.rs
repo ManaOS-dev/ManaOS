@@ -182,7 +182,9 @@ fn initialize_architecture_and_drivers() {
     );
     kernel::profiler::register_timestamp_counter_provider(arch::x86_64::read_timestamp_counter);
     kernel::task::architecture::register_context_switch(arch::x86_64::switch_context);
-    kernel::task::architecture::register_user_mode_entry(arch::x86_64::enter_user_mode);
+    kernel::task::architecture::register_user_mode_switch(
+        arch::x86_64::switch_to_user_mode_context,
+    );
     kernel::task::architecture::register_returnable_user_mode_entry(
         arch::x86_64::enter_user_mode_once,
     );

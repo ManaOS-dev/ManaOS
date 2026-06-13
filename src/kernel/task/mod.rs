@@ -46,7 +46,7 @@ use stack::KernelStack;
 pub use stack::{KernelStackFaultOwner, KernelStackGuardFault};
 pub use state::TaskState;
 
-const USER_TASK_PREEMPTION_ENABLED: bool = false;
+const USER_TASK_PREEMPTION_ENABLED: bool = true;
 
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
 static PREEMPTION_ENABLED: AtomicBool = AtomicBool::new(true);
@@ -108,8 +108,10 @@ enum SwitchAction {
     SwitchKernel {
         current_context: *mut u64,
         next_context: *const u64,
+        next_user_kernel_stack_top: Option<usize>,
     },
     EnterUser {
+        current_context: *mut u64,
         trap_frame: UserTrapFrame,
         kernel_stack_top: usize,
     },
@@ -260,6 +262,8 @@ struct Scheduler {
     current_index: usize,
     next_task_identifier: TaskIdentifier,
     kernel_stack_range_allocator: KernelVirtualRangeAllocator,
+    preemption_switch_logged: bool,
+    user_resume_logged: bool,
 }
 
 impl Scheduler {
@@ -269,6 +273,8 @@ impl Scheduler {
             current_index: 0,
             next_task_identifier: TaskIdentifier::first_dynamic(),
             kernel_stack_range_allocator: new_dynamic_mapping_allocator(),
+            preemption_switch_logged: false,
+            user_resume_logged: false,
         }
     }
 
@@ -415,8 +421,11 @@ impl Scheduler {
             return None;
         }
 
-        self.tasks[self.current_index].state.prepare_to_wait();
+        if !self.tasks[self.current_index].state.prepare_to_block() {
+            return None;
+        }
         if !self.tasks[task_index].state.prepare_to_run() {
+            self.tasks[self.current_index].state.resume_blocked();
             return None;
         }
         self.current_index = task_index;
@@ -433,7 +442,9 @@ impl Scheduler {
         }
 
         if let Some(bootstrap_task) = self.tasks.first_mut() {
-            bootstrap_task.state.prepare_to_run();
+            if !bootstrap_task.state.resume_blocked() {
+                bootstrap_task.state.prepare_to_run();
+            }
             self.current_index = 0;
         }
 
@@ -494,10 +505,37 @@ impl Scheduler {
         }
     }
 
+    fn can_switch_current_task_away(&self) -> bool {
+        match &self.tasks[self.current_index].kind {
+            TaskKind::Kernel => true,
+            TaskKind::User(user_runtime) => user_runtime.interrupt_frame_recorded,
+        }
+    }
+
+    fn can_schedule_task(&self, index: usize) -> bool {
+        if !self.tasks[index].state.is_ready() {
+            return false;
+        }
+
+        match &self.tasks[index].kind {
+            TaskKind::Kernel => !self.tasks[index].context.is_empty(),
+            TaskKind::User(_) => USER_TASK_PREEMPTION_ENABLED,
+        }
+    }
+
+    fn user_kernel_stack_top(&self, index: usize) -> Option<usize> {
+        match &self.tasks[index].kind {
+            TaskKind::User(_) => Some(
+                self.tasks[index]
+                    .kernel_stack_top()
+                    .expect("user tasks must own a kernel stack before entry or resume"),
+            ),
+            TaskKind::Kernel => None,
+        }
+    }
+
     fn prepare_next_switch(&mut self) -> Option<SwitchAction> {
-        if matches!(self.tasks[self.current_index].kind, TaskKind::User(_)) {
-            // TODO(phase6): switch away from user tasks after saving a full
-            // user trap frame instead of the kernel-only callee-saved context.
+        if !self.can_switch_current_task_away() {
             return None;
         }
 
@@ -515,15 +553,40 @@ impl Scheduler {
         }
         self.current_index = next_index;
 
+        let current_task_id = self.tasks[current_index].get_id();
+        let next_task_id = self.tasks[next_index].get_id();
+        if matches!(self.tasks[current_index].kind, TaskKind::User(_))
+            && !self.preemption_switch_logged
+        {
+            crate::log_info!(
+                "task",
+                "User task preempted by timer: current={} next={} context_saved=true",
+                current_task_id,
+                next_task_id
+            );
+            self.preemption_switch_logged = true;
+        }
+
         let current_context = self.tasks[current_index].context.as_mut_pointer();
+        let next_user_kernel_stack_top = self.user_kernel_stack_top(next_index);
         if let TaskKind::User(user_runtime) = &self.tasks[next_index].kind {
             if self.tasks[next_index].context.is_empty() {
                 return Some(SwitchAction::EnterUser {
+                    current_context,
                     trap_frame: user_runtime.saved_frame,
-                    kernel_stack_top: self.tasks[next_index]
-                        .kernel_stack_top()
+                    kernel_stack_top: next_user_kernel_stack_top
                         .expect("user tasks must own a kernel stack before entry"),
                 });
+            }
+            if !self.user_resume_logged {
+                crate::log_info!(
+                    "task",
+                    "User task resumed from timer context: task={} kernel_stack_top={:#x}",
+                    next_task_id,
+                    next_user_kernel_stack_top
+                        .expect("user tasks must own a kernel stack before resume")
+                );
+                self.user_resume_logged = true;
             }
         }
 
@@ -531,6 +594,7 @@ impl Scheduler {
         Some(SwitchAction::SwitchKernel {
             current_context,
             next_context,
+            next_user_kernel_stack_top,
         })
     }
 
@@ -541,19 +605,20 @@ impl Scheduler {
 
         for offset in 1..=self.tasks.len() {
             let index = (self.current_index + offset) % self.tasks.len();
-            if !USER_TASK_PREEMPTION_ENABLED && matches!(self.tasks[index].kind, TaskKind::User(_))
-            {
-                // TODO(phase7): enable this after timer interrupts save and
-                // restore a full user trap frame.
-                continue;
-            }
-            if self.tasks[index].state.is_ready() {
+            if self.can_schedule_task(index) {
                 return Some(index);
             }
         }
 
         None
     }
+}
+
+pub(super) fn install_user_task_kernel_stack(kernel_stack_top: usize) {
+    let kernel_stack_top =
+        u64::try_from(kernel_stack_top).expect("kernel stack top must fit in u64");
+    architecture::install_kernel_stack(kernel_stack_top);
+    crate::kernel::interrupt::set_syscall_kernel_stack_top(kernel_stack_top);
 }
 
 /// Initialize the global scheduler with the current bootstrap task.
@@ -676,7 +741,11 @@ pub fn process_timer_tick() {
         SwitchAction::SwitchKernel {
             current_context,
             next_context,
+            next_user_kernel_stack_top,
         } => {
+            if let Some(kernel_stack_top) = next_user_kernel_stack_top {
+                install_user_task_kernel_stack(kernel_stack_top);
+            }
             // SAFETY: Context pointers come from tasks stored in the scheduler.
             // Task stacks are retained by their task objects and switching
             // occurs on one CPU.
@@ -685,19 +754,16 @@ pub fn process_timer_tick() {
             }
         }
         SwitchAction::EnterUser {
+            current_context,
             trap_frame,
             kernel_stack_top,
         } => {
-            architecture::install_kernel_stack(
-                u64::try_from(kernel_stack_top).expect("kernel stack top must fit in u64"),
-            );
-            crate::kernel::interrupt::set_syscall_kernel_stack_top(
-                u64::try_from(kernel_stack_top).expect("kernel stack top must fit in u64"),
-            );
-            // SAFETY: The user trap frame was derived from a mapped entry
-            // point and stack, and the assembly stub consumes it immediately.
+            install_user_task_kernel_stack(kernel_stack_top);
+            // SAFETY: The current context pointer and user trap frame come
+            // from tasks stored in the scheduler. The assembly entry saves the
+            // current context before consuming the user frame.
             unsafe {
-                architecture::enter_user_mode(trap_frame.as_pointer());
+                architecture::switch_to_user_mode(current_context, trap_frame.as_pointer());
             }
         }
     }

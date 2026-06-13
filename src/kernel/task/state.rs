@@ -37,6 +37,24 @@ impl TaskState {
         true
     }
 
+    pub(super) fn prepare_to_block(&mut self) -> bool {
+        if *self != Self::Running {
+            return false;
+        }
+
+        *self = Self::Blocked;
+        true
+    }
+
+    pub(super) fn resume_blocked(&mut self) -> bool {
+        if *self != Self::Blocked {
+            return false;
+        }
+
+        *self = Self::Running;
+        true
+    }
+
     pub(super) fn finish_running(&mut self) -> bool {
         if *self != Self::Running {
             return false;

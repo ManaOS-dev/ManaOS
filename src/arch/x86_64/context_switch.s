@@ -36,35 +36,26 @@ context_switch:
     popfq
     ret
 
-.def enter_user_mode
+.def switch_to_user_mode
 .scl 2
 .type 32
 .endef
-.globl enter_user_mode
+.globl switch_to_user_mode
 
-# UserTrapFrame layout, kept in sync with kernel::task::context:
-#   +0   user rip
-#   +8   user cs
-#   +16  user rflags
-#   +24  user rsp
-#   +32  user ss
-#   +40  rax
-#   +48  rbx
-#   +56  rcx
-#   +64  rdx
-#   +72  rsi
-#   +80  rdi
-#   +88  rbp
-#   +96  r8
-#   +104 r9
-#   +112 r10
-#   +120 r11
-#   +128 r12
-#   +136 r13
-#   +144 r14
-#   +152 r15
-enter_user_mode:
-    mov rbx, rcx
+# Saves the current kernel/task context at rcx, then restores the UserTrapFrame
+# pointed to by rdx and enters Ring 3 with iretq.
+switch_to_user_mode:
+    mov qword ptr [rcx + 0], rsp
+    mov qword ptr [rcx + 8], r15
+    mov qword ptr [rcx + 16], r14
+    mov qword ptr [rcx + 24], r13
+    mov qword ptr [rcx + 32], r12
+    mov qword ptr [rcx + 40], rbx
+    mov qword ptr [rcx + 48], rbp
+    pushfq
+    pop qword ptr [rcx + 56]
+
+    mov rbx, rdx
     mov rax, qword ptr [rbx + 32]
     push rax
     mov rax, qword ptr [rbx + 24]
