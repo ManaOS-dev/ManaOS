@@ -121,6 +121,8 @@ User task preemption stays disabled until all of the following are true:
   its trap frame is saved. This is complete for timer-driven preemption.
 - Scheduler diagnostics expose task state counts, user address-space ownership,
   and preemption accounting so the boot smoke can assert lifecycle progress.
+- The `tasks` console command shows the same scheduler and preemption counters
+  on the interactive console overlay.
 - `just storage-smoke` still proves the one-shot user path and now asserts that
   timer interrupts can enter another active user task, preempt and resume user
   code across two user task records, and finish tasks that own separate stack
