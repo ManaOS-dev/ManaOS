@@ -129,9 +129,12 @@ fn verify_user_heap_growth() {
 }
 
 fn verify_user_anonymous_mapping() {
+    const MAPPING_PAGE_BYTES: usize = 4096;
+    const MAPPING_BYTES: usize = MAPPING_PAGE_BYTES * 3;
+
     let mapping = syscall::mmap(
         0,
-        8192,
+        MAPPING_BYTES,
         syscall::PROT_READ | syscall::PROT_WRITE,
         syscall::MAP_PRIVATE | syscall::MAP_ANONYMOUS,
     );
@@ -141,19 +144,37 @@ fn verify_user_anonymous_mapping() {
 
     let mapping = mapping as usize;
     let first_byte = mapping as *mut u8;
-    let last_byte = (mapping + 8191) as *mut u8;
-    // SAFETY: A successful `mmap` call returned an 8192-byte writable user
+    let middle_byte = (mapping + MAPPING_PAGE_BYTES) as *mut u8;
+    let last_byte = (mapping + MAPPING_BYTES - 1) as *mut u8;
+    // SAFETY: A successful `mmap` call returned a writable anonymous user
     // range owned by this task.
     unsafe {
         first_byte.write(0x41);
+        middle_byte.write(0x50);
         last_byte.write(0x4d);
-        if first_byte.read() != 0x41 || last_byte.read() != 0x4d {
+        if first_byte.read() != 0x41 || middle_byte.read() != 0x50 || last_byte.read() != 0x4d {
             syscall::exit(38);
         }
     }
 
-    if syscall::munmap(mapping, 8192) != 0 {
+    if syscall::munmap(mapping + MAPPING_PAGE_BYTES, MAPPING_PAGE_BYTES) != 0 {
         syscall::exit(39);
+    }
+    // SAFETY: Unmapping the middle page leaves the first and third pages in
+    // separate tracked anonymous mapping records.
+    unsafe {
+        first_byte.write(0x42);
+        last_byte.write(0x4e);
+        if first_byte.read() != 0x42 || last_byte.read() != 0x4e {
+            syscall::exit(40);
+        }
+    }
+
+    if syscall::munmap(mapping, MAPPING_PAGE_BYTES) != 0 {
+        syscall::exit(41);
+    }
+    if syscall::munmap(mapping + (MAPPING_PAGE_BYTES * 2), MAPPING_PAGE_BYTES) != 0 {
+        syscall::exit(42);
     }
 
     let _ = syscall::write(STDOUT, MMAP_MESSAGE);

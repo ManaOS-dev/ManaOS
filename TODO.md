@@ -89,7 +89,8 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Add `getdents64`.
 - [x] Add `brk` as the first heap-growth syscall.
 - [x] Add an anonymous `mmap`/`munmap` syscall subset.
-- [ ] Add file-backed, fixed-address, and partial-unmap `mmap` planning.
+- [x] Support partial anonymous `munmap` with mapping-record splits.
+- [ ] Add file-backed and fixed-address `mmap` planning.
 - [ ] Add `nanosleep` or a minimal sleep syscall.
 - [ ] Add `fork` or document why the first process model uses `spawn`/`exec` instead.
 - [ ] Add syscall tracing controls.
