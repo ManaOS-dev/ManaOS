@@ -6,9 +6,83 @@ use crate::kernel::memory::paging;
 use crate::kernel::memory::virtual_allocator::KernelVirtualRangeAllocator;
 
 const PAGE_SIZE: usize = 4096;
+const PAGE_SIZE_U64: u64 = 4096;
 const DEFAULT_KERNEL_STACK_SIZE: usize = 16 * 1024;
 const DEFAULT_KERNEL_STACK_WRITABLE_PAGES: u64 = 4;
 const KERNEL_STACK_GUARD_PAGES: u64 = 1;
+
+/// The schedulable task kind that owns a guarded kernel stack.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum KernelStackFaultOwner {
+    /// A kernel task owns the guarded stack.
+    KernelTask,
+    /// A user task owns the guarded kernel stack.
+    UserTask,
+}
+
+impl KernelStackFaultOwner {
+    /// Return a stable diagnostic label for this stack owner.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::KernelTask => "kernel_task",
+            Self::UserTask => "user_task",
+        }
+    }
+}
+
+/// Diagnostic metadata for a fault inside a known kernel stack guard page.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct KernelStackGuardFault {
+    task_identifier: u64,
+    owner: KernelStackFaultOwner,
+    guard_page_start: u64,
+    writable_start: u64,
+    stack_top: u64,
+}
+
+impl KernelStackGuardFault {
+    /// Create a kernel stack guard-fault diagnostic record.
+    pub(super) const fn new(
+        task_identifier: u64,
+        owner: KernelStackFaultOwner,
+        guard_page_start: u64,
+        writable_start: u64,
+        stack_top: u64,
+    ) -> Self {
+        Self {
+            task_identifier,
+            owner,
+            guard_page_start,
+            writable_start,
+            stack_top,
+        }
+    }
+
+    /// Return the task identifier that owns the guard page.
+    pub const fn task_identifier(self) -> u64 {
+        self.task_identifier
+    }
+
+    /// Return the owner kind for the guarded stack.
+    pub const fn owner(self) -> KernelStackFaultOwner {
+        self.owner
+    }
+
+    /// Return the start address of the unmapped guard page.
+    pub const fn guard_page_start(self) -> u64 {
+        self.guard_page_start
+    }
+
+    /// Return the first mapped writable stack address.
+    pub const fn writable_start(self) -> u64 {
+        self.writable_start
+    }
+
+    /// Return the guarded stack top address.
+    pub const fn stack_top(self) -> u64 {
+        self.stack_top
+    }
+}
 
 struct KernelStackVirtualReservation {
     range: KernelVirtualRange,
@@ -150,6 +224,15 @@ impl KernelStack {
     /// Return the reserved guard page virtual start address.
     pub(super) fn guard_page_virtual_start(&self) -> u64 {
         self.virtual_reservation.guard_page_start().as_u64()
+    }
+
+    /// Return whether `address` is inside this stack's unmapped guard page.
+    pub(super) fn contains_guard_address(&self, address: u64) -> bool {
+        let guard_start = self.guard_page_virtual_start();
+        let guard_end = guard_start
+            .checked_add(PAGE_SIZE_U64)
+            .expect("kernel stack guard range end overflowed");
+        address >= guard_start && address < guard_end
     }
 
     /// Return the first virtual address reserved for future writable stack mapping.

@@ -110,6 +110,12 @@ Double-fault handling must remain minimal. It should report that the double
 fault used the IST stack and should avoid taking locks that may already be held
 by the faulting path.
 
+Scheduler-owned kernel and user task guard pages are now classified by
+`kernel::task` and reported by the page-fault diagnostic path before the
+generic fault line. Bootstrap and architecture-owned IST stack guard
+classification remains pending because those stacks are not yet represented by
+`kernel::task`.
+
 ## Implementation Order
 
 1. Add kernel virtual address range allocation for stack mappings. This is
@@ -124,6 +130,8 @@ by the faulting path.
    This is complete for the one-shot user entry path.
 5. Give user tasks kernel stacks and install the stack before Ring 3 entry.
    This is complete for the one-shot user entry path.
-6. Add page-fault diagnostics that detect known guard pages.
+6. Add page-fault diagnostics that detect known guard pages. This is complete
+   for scheduler-owned kernel and user task stacks; bootstrap and
+   architecture-owned IST stacks remain pending.
 7. Enable user task preemption only after full user trap frames and per-task
    kernel stack switching are both verified.

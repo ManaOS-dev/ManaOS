@@ -16,6 +16,8 @@
 //! - [`run_user_task_once`] - Run one user task until `SYS_EXIT`
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
+//! - [`get_kernel_stack_guard_fault`] - Classify a kernel stack guard fault
+//! - [`get_kernel_stack_guard_fault_diagnostic_sample`] - Probe guard-fault diagnostics
 
 pub mod architecture;
 pub mod context;
@@ -39,6 +41,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 pub use metadata::{TaskIdentifier, TaskMetadata};
 use spin::Mutex;
 use stack::KernelStack;
+pub use stack::{KernelStackFaultOwner, KernelStackGuardFault};
 pub use state::TaskState;
 
 const USER_TASK_PREEMPTION_ENABLED: bool = false;
@@ -49,6 +52,15 @@ static PREEMPTION_ENABLED: AtomicBool = AtomicBool::new(true);
 enum TaskKind {
     Kernel,
     User(Box<UserTaskRuntime>),
+}
+
+impl TaskKind {
+    fn kernel_stack_fault_owner(&self) -> KernelStackFaultOwner {
+        match self {
+            Self::Kernel => KernelStackFaultOwner::KernelTask,
+            Self::User(_) => KernelStackFaultOwner::UserTask,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -194,6 +206,21 @@ impl Task {
             .as_ref()
             .map(KernelStack::writable_page_count)
     }
+
+    fn kernel_stack_guard_fault(&self, fault_address: u64) -> Option<KernelStackGuardFault> {
+        let kernel_stack = self.kernel_stack.as_ref()?;
+        if !kernel_stack.contains_guard_address(fault_address) {
+            return None;
+        }
+
+        Some(KernelStackGuardFault::new(
+            self.metadata.get_identifier().as_u64(),
+            self.kind.kernel_stack_fault_owner(),
+            kernel_stack.guard_page_virtual_start(),
+            kernel_stack.writable_virtual_start(),
+            kernel_stack.virtual_top(),
+        ))
+    }
 }
 
 struct Scheduler {
@@ -318,6 +345,20 @@ impl Scheduler {
 
     fn get_current_task_id(&self) -> u64 {
         self.tasks[self.current_index].get_id()
+    }
+
+    fn get_kernel_stack_guard_fault(&self, fault_address: u64) -> Option<KernelStackGuardFault> {
+        self.tasks
+            .iter()
+            .find_map(|task| task.kernel_stack_guard_fault(fault_address))
+    }
+
+    fn get_kernel_stack_guard_fault_diagnostic_sample(&self) -> Option<KernelStackGuardFault> {
+        let sample_guard_address = self
+            .tasks
+            .iter()
+            .find_map(Task::kernel_stack_guard_page_virtual_start)?;
+        self.get_kernel_stack_guard_fault(sample_guard_address)
     }
 
     fn get_task_index(&self, task_id: u64) -> Option<usize> {
@@ -561,4 +602,23 @@ pub fn get_current_task_id() -> Option<u64> {
     SCHEDULER
         .try_lock()
         .and_then(|scheduler| scheduler.as_ref().map(Scheduler::get_current_task_id))
+}
+
+/// Return guard-fault diagnostics when `fault_address` is inside a known kernel
+/// stack guard page.
+pub fn get_kernel_stack_guard_fault(fault_address: u64) -> Option<KernelStackGuardFault> {
+    SCHEDULER.try_lock().and_then(|scheduler| {
+        scheduler
+            .as_ref()
+            .and_then(|scheduler| scheduler.get_kernel_stack_guard_fault(fault_address))
+    })
+}
+
+/// Return a representative guard-fault diagnostic sample for boot-time checks.
+pub fn get_kernel_stack_guard_fault_diagnostic_sample() -> Option<KernelStackGuardFault> {
+    SCHEDULER.try_lock().and_then(|scheduler| {
+        scheduler
+            .as_ref()
+            .and_then(Scheduler::get_kernel_stack_guard_fault_diagnostic_sample)
+    })
 }
