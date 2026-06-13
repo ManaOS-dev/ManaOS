@@ -1,7 +1,7 @@
 //! Kernel task stack owner metadata.
 
 use crate::kernel::memory::address::{KernelVirtualRange, PhysicalFrameRange, VirtAddr};
-use crate::kernel::memory::frame_allocator::{BumpFrameAllocator, FrameRangeOwner};
+use crate::kernel::memory::frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator};
 use crate::kernel::memory::paging;
 use crate::kernel::memory::virtual_allocator::KernelVirtualRangeAllocator;
 
@@ -150,7 +150,7 @@ impl KernelStack {
     /// Panics if physical stack frames cannot be allocated, virtual range
     /// reservation is exhausted, or page-table mapping fails.
     pub(super) fn new_default(
-        frame_allocator: &mut BumpFrameAllocator,
+        frame_allocator: &mut PhysicalFrameAllocator,
         virtual_range_allocator: &mut KernelVirtualRangeAllocator,
     ) -> Self {
         debug_assert_eq!(

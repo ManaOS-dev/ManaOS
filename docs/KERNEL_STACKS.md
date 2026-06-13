@@ -130,7 +130,8 @@ classification remains pending because those stacks are not yet represented by
 
 1. Add kernel virtual address range allocation for stack mappings. This is
    complete for scheduler-owned task stacks, including writable page-table
-   mappings. Generic unmap/free support is still pending.
+   mappings. Generic kernel range unmap/free support now exists, but scheduler
+   stack destruction remains tied to future task lifecycle cleanup.
 2. Introduce `kernel::task::stack` metadata without changing scheduling.
    This is complete for scheduler-owned kernel and user task records.
 3. Move kernel task stack allocation from heap-backed `KernelStack` to guarded

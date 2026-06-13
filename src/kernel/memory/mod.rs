@@ -12,7 +12,7 @@
 //!
 //! ## Public API
 //! - [`address`] - Typed memory address wrappers
-//! - [`frame_allocator`] - Bump frame allocator
+//! - [`frame_allocator`] - Reusable physical frame allocator
 //! - [`heap`] - Kernel heap allocator
 //! - [`paging`] - Page table setup
 //! - [`user_pointer`] - User pointer validation and copy helpers

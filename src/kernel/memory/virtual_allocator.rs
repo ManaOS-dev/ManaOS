@@ -2,7 +2,7 @@
 //!
 //! ## Owns
 //! - Kernel virtual address range reservation for future dynamic mappings
-//! - Monotonic allocation of non-overlapping kernel virtual page ranges
+//! - Reusable allocation of non-overlapping kernel virtual page ranges
 //!
 //! ## Does NOT own
 //! - Page-table mapping or unmapping (-> `kernel::memory::paging`)
@@ -10,7 +10,7 @@
 //! - Task stack metadata (-> `kernel::task::stack`)
 //!
 //! ## Public API
-//! - [`KernelVirtualRangeAllocator`] - Monotonic kernel virtual range allocator
+//! - [`KernelVirtualRangeAllocator`] - Reusable kernel virtual range allocator
 //! - [`new_dynamic_mapping_allocator`] - Create the default dynamic mapping allocator
 //! - [`verify_kernel_virtual_range_allocation`] - Boot-time allocation self-check
 //! - [`verify_kernel_virtual_range_exhaustion`] - Boot-time exhaustion self-check
@@ -20,11 +20,34 @@ use super::address::{KernelVirtualRange, VirtAddr};
 const PAGE_SIZE: u64 = 4096;
 const DYNAMIC_MAPPING_START: u64 = 0xffff_8000_0000_0000;
 const DYNAMIC_MAPPING_PAGE_COUNT: u64 = 262_144;
+const MAX_FREE_RANGES: usize = 128;
 
-/// A monotonic allocator for reserved kernel virtual page ranges.
+#[derive(Clone, Copy)]
+struct VirtualFreeRange {
+    start: VirtAddr,
+    page_count: u64,
+}
+
+impl VirtualFreeRange {
+    const fn empty() -> Self {
+        Self {
+            start: VirtAddr::new(0),
+            page_count: 0,
+        }
+    }
+
+    fn end_exclusive(self) -> Option<VirtAddr> {
+        let byte_len = self.page_count.checked_mul(PAGE_SIZE)?;
+        self.start.checked_add(byte_len)
+    }
+}
+
+/// A reusable allocator for reserved kernel virtual page ranges.
 pub struct KernelVirtualRangeAllocator {
-    next_start: VirtAddr,
-    remaining_pages: u64,
+    managed_start: VirtAddr,
+    managed_page_count: u64,
+    free_ranges: [VirtualFreeRange; MAX_FREE_RANGES],
+    free_count: usize,
 }
 
 impl KernelVirtualRangeAllocator {
@@ -36,28 +59,135 @@ impl KernelVirtualRangeAllocator {
         };
 
         Some(Self {
-            next_start: start,
-            remaining_pages: page_count,
+            managed_start: start,
+            managed_page_count: page_count,
+            free_ranges: {
+                let mut ranges = [VirtualFreeRange::empty(); MAX_FREE_RANGES];
+                ranges[0] = VirtualFreeRange { start, page_count };
+                ranges
+            },
+            free_count: 1,
         })
     }
 
     /// Allocate a non-overlapping kernel virtual range with `page_count` pages.
     pub fn allocate_pages(&mut self, page_count: u64) -> Option<KernelVirtualRange> {
-        if page_count == 0 || page_count > self.remaining_pages {
+        if page_count == 0 {
             return None;
         }
 
-        let byte_len = page_count.checked_mul(PAGE_SIZE)?;
-        let range = KernelVirtualRange::new(self.next_start, page_count)?;
-        let next_start = self.next_start.checked_add(byte_len)?;
-        self.next_start = next_start;
-        self.remaining_pages -= page_count;
-        Some(range)
+        for index in 0..self.free_count {
+            let free_range = self.free_ranges[index];
+            if free_range.page_count < page_count {
+                continue;
+            }
+
+            let range = KernelVirtualRange::new(free_range.start, page_count)?;
+            if free_range.page_count == page_count {
+                self.remove_free_range_at(index);
+            } else {
+                let byte_len = page_count.checked_mul(PAGE_SIZE)?;
+                self.free_ranges[index].start = free_range.start.checked_add(byte_len)?;
+                self.free_ranges[index].page_count -= page_count;
+            }
+            return Some(range);
+        }
+
+        None
+    }
+
+    /// Release a previously allocated kernel virtual range.
+    pub fn free_pages(&mut self, range: KernelVirtualRange) -> bool {
+        if !self.contains_range(range) {
+            return false;
+        }
+
+        let mut insert_index = 0;
+        while insert_index < self.free_count
+            && self.free_ranges[insert_index].start.as_u64() < range.start().as_u64()
+        {
+            insert_index += 1;
+        }
+
+        if insert_index > 0 {
+            let previous = self.free_ranges[insert_index - 1];
+            let Some(previous_end) = previous.end_exclusive() else {
+                return false;
+            };
+            if previous_end.as_u64() > range.start().as_u64() {
+                return false;
+            }
+        }
+        if insert_index < self.free_count {
+            let next = self.free_ranges[insert_index];
+            if range.end_exclusive().as_u64() > next.start.as_u64() {
+                return false;
+            }
+        }
+
+        if self.free_count >= MAX_FREE_RANGES {
+            return false;
+        }
+
+        for move_index in (insert_index..self.free_count).rev() {
+            self.free_ranges[move_index + 1] = self.free_ranges[move_index];
+        }
+        self.free_ranges[insert_index] = VirtualFreeRange {
+            start: range.start(),
+            page_count: range.page_count(),
+        };
+        self.free_count += 1;
+        self.merge_adjacent_free_ranges();
+        true
     }
 
     /// Return the number of unallocated pages left in the allocator.
-    pub const fn remaining_pages(&self) -> u64 {
-        self.remaining_pages
+    pub fn remaining_pages(&self) -> u64 {
+        let mut pages = 0_u64;
+        for index in 0..self.free_count {
+            pages = pages.saturating_add(self.free_ranges[index].page_count);
+        }
+        pages
+    }
+
+    fn contains_range(&self, range: KernelVirtualRange) -> bool {
+        let Some(managed_byte_len) = self.managed_page_count.checked_mul(PAGE_SIZE) else {
+            return false;
+        };
+        let Some(managed_end) = self.managed_start.checked_add(managed_byte_len) else {
+            return false;
+        };
+
+        range.start().as_u64() >= self.managed_start.as_u64()
+            && range.end_exclusive().as_u64() <= managed_end.as_u64()
+    }
+
+    fn remove_free_range_at(&mut self, index: usize) {
+        for move_index in index..self.free_count - 1 {
+            self.free_ranges[move_index] = self.free_ranges[move_index + 1];
+        }
+        self.free_count -= 1;
+    }
+
+    fn merge_adjacent_free_ranges(&mut self) {
+        if self.free_count < 2 {
+            return;
+        }
+
+        let mut write_index = 0;
+        for read_index in 1..self.free_count {
+            let current = self.free_ranges[write_index];
+            let next = self.free_ranges[read_index];
+            if current.end_exclusive() == Some(next.start) {
+                self.free_ranges[write_index].page_count = self.free_ranges[write_index]
+                    .page_count
+                    .saturating_add(next.page_count);
+            } else {
+                write_index += 1;
+                self.free_ranges[write_index] = next;
+            }
+        }
+        self.free_count = write_index + 1;
     }
 }
 
@@ -74,13 +204,19 @@ pub fn new_dynamic_mapping_allocator() -> KernelVirtualRangeAllocator {
     .expect("kernel dynamic mapping virtual range must be valid")
 }
 
-/// Verify that kernel virtual range allocation is monotonic and non-overlapping.
+/// Verify that kernel virtual range allocation is non-overlapping and reusable.
 pub fn verify_kernel_virtual_range_allocation() -> bool {
     let mut allocator = new_dynamic_mapping_allocator();
     let Some(first_range) = allocator.allocate_pages(1) else {
         return false;
     };
     let Some(second_range) = allocator.allocate_pages(2) else {
+        return false;
+    };
+    if !allocator.free_pages(first_range) {
+        return false;
+    }
+    let Some(reused_range) = allocator.allocate_pages(1) else {
         return false;
     };
 
@@ -90,6 +226,7 @@ pub fn verify_kernel_virtual_range_allocation() -> bool {
         && first_range.end_exclusive() == second_range.start()
         && second_range.page_count() == 2
         && second_range.byte_len() == PAGE_SIZE * 2
+        && reused_range == first_range
         && allocator.remaining_pages() == DYNAMIC_MAPPING_PAGE_COUNT - 3
 }
 
@@ -107,11 +244,17 @@ pub fn verify_kernel_virtual_range_exhaustion() -> bool {
     let exhausted_rejected = allocator.allocate_pages(1).is_none();
     let misaligned_rejected =
         KernelVirtualRangeAllocator::new(VirtAddr::new(DYNAMIC_MAPPING_START + 1), 1).is_none();
+    let outside_range_rejected =
+        match KernelVirtualRange::new(VirtAddr::new(DYNAMIC_MAPPING_START - PAGE_SIZE), 1) {
+            Some(range) => !allocator.free_pages(range),
+            None => true,
+        };
 
     zero_page_rejected
         && first_page_allocated
         && second_page_allocated
         && exhausted_rejected
         && misaligned_rejected
+        && outside_range_rejected
         && allocator.remaining_pages() == 0
 }
