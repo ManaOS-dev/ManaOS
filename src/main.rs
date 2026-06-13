@@ -290,6 +290,27 @@ fn verify_frame_allocator_rules() {
     }
 }
 
+fn verify_kernel_virtual_range_allocator_rules() {
+    let monotonic_allocation_ok =
+        kernel::memory::virtual_allocator::verify_kernel_virtual_range_allocation();
+    let exhaustion_rejection_ok =
+        kernel::memory::virtual_allocator::verify_kernel_virtual_range_exhaustion();
+
+    if monotonic_allocation_ok && exhaustion_rejection_ok {
+        crate::log_info!(
+            "memory",
+            "Kernel virtual range allocator self-checks passed: monotonic_allocation=true exhaustion_rejection=true"
+        );
+    } else {
+        crate::log_error!(
+            "memory",
+            "Kernel virtual range allocator self-checks failed: monotonic_allocation={} exhaustion_rejection={}",
+            monotonic_allocation_ok,
+            exhaustion_rejection_ok
+        );
+    }
+}
+
 fn verify_elf_loader_rules() {
     assert!(
         kernel::elf::verify_invalid_elf_rejections(),
@@ -511,6 +532,7 @@ fn main() -> Status {
     let mut frame_allocator = kernel::memory::frame_allocator::BumpFrameAllocator::new();
     import_boot_memory_map(&mut frame_allocator, mmap.entries());
     verify_frame_allocator_rules();
+    verify_kernel_virtual_range_allocator_rules();
     verify_elf_loader_rules();
 
     // ────────────────────────────────────────────────

@@ -59,6 +59,8 @@ untyped cross-domain `u64` values:
 - `KernelVirtualAddress` represents identity-mapped kernel virtual addresses
   such as the framebuffer backbuffer before display initialization converts it
   to a raw pointer.
+- `KernelVirtualRange` represents reserved higher-half kernel virtual ranges
+  for future dynamic mappings without implying that pages are already mapped.
 
 ## Remaining Raw Address API Inventory
 
@@ -145,6 +147,9 @@ Continue introducing wrappers in small steps:
   range. This now exists in `kernel::memory::address`.
 - `KernelVirtualAddress` for mapped kernel virtual addresses. This now exists
   in `kernel::memory::address`.
+- `KernelVirtualRange` for non-empty page-aligned higher-half virtual ranges
+  reserved by the kernel dynamic mapping allocator. This now exists in
+  `kernel::memory::address`.
 - `UserVirtualAddress` for non-null user pointers and ELF virtual addresses.
   This now covers loaded ELF entry points, prepared user stack pointers, and
   user page mapping requests.

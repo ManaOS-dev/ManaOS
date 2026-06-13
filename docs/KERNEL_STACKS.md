@@ -105,7 +105,9 @@ by the faulting path.
 
 ## Implementation Order
 
-1. Add kernel virtual address range allocation for stack mappings.
+1. Add kernel virtual address range allocation for stack mappings. This is
+   complete for reservation-only ranges; page-table mapping integration is
+   still pending.
 2. Introduce `kernel::task::stack` metadata without changing scheduling.
    This is complete for heap-backed kernel and user task records.
 3. Move kernel task stack allocation from heap-backed `KernelStack` to guarded

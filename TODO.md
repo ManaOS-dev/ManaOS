@@ -112,7 +112,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [ ] Replace the bump frame allocator with a reusable physical frame allocator.
 - [x] Track reserved, used, and free physical frame ranges.
 - [x] Design ownership rules for free, used, and reserved physical frame ranges.
-- [ ] Add a kernel virtual memory allocator for dynamic mappings.
+- [ ] Add a kernel virtual memory allocator for dynamic mappings; range reservation now exists, page-table mapping integration remains.
 - [ ] Add guard pages for kernel stacks.
 - [x] Design kernel stack guard page placement and fault diagnostics.
 - [ ] Add per-process page tables.
