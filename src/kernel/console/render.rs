@@ -134,6 +134,8 @@ pub(super) fn verify_status_strip_smoke() -> bool {
         && scheduler_line.contains("active_users=")
         && scheduler_line.contains("active_spaces=")
         && scheduler_line.contains("pending_exits=")
+        && scheduler_line.contains("preemption_enabled=")
+        && scheduler_line.contains("exit_closes=")
         && scheduler_line.contains("preempt=")
         && scheduler_line.contains("resume=")
         && memory_line.contains("memory user_resource_records=")
@@ -157,12 +159,14 @@ fn scheduler_status_line() -> String {
     };
     let states = diagnostics.states();
     format!(
-        "tasks total={} user={} active_users={} active_spaces={} pending_exits={} states R{} Run{} B{} F{} preempt={} resume={}",
+        "tasks total={} user={} active_users={} active_spaces={} pending_exits={} preemption_enabled={} exit_closes={} states R{} Run{} B{} F{} preempt={} resume={}",
         diagnostics.total_tasks(),
         diagnostics.user_tasks(),
         diagnostics.active_user_tasks(),
         diagnostics.active_user_address_spaces(),
         diagnostics.pending_user_exits(),
+        diagnostics.preemption_enabled(),
+        diagnostics.user_exit_preemption_window_closes(),
         states.ready(),
         states.running(),
         states.blocked(),

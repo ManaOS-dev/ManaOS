@@ -166,6 +166,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Replace the global user-exit result latch with a scheduler-owned finished user exit queue.
 - [x] Add explicit set/take invariants for the one-shot user exit return stack window.
 - [x] Close scheduler preemption from `SYS_EXIT` before returning through the one-shot exit stack.
+- [x] Expose user-exit preemption window close accounting in scheduler diagnostics.
 - [x] Normalize user task scheduler state transitions.
 - [x] Define the task metadata model needed before process identifiers and parent-child relationships.
 

@@ -670,15 +670,17 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
     let diagnostics = kernel::task::get_scheduler_diagnostics()
         .expect("scheduler diagnostics must be available after user smoke tasks");
     let states = diagnostics.states();
-    // User smoke tasks use the current default guarded kernel stack: four
-    // writable pages plus one reserved guard page.
-    let expected_reclaimed_user_kernel_stack_writable_pages = expected_user_tasks * 4;
-    let expected_reclaimed_user_kernel_stack_virtual_pages = expected_user_tasks * 5;
-    assert_eq!(
-        diagnostics.reclaimed_user_resource_records(),
-        expected_user_tasks,
-        "finished user tasks must emit one aggregate resource reclaim record"
-    );
+    verify_scheduler_task_counts(diagnostics, states, expected_user_tasks);
+    verify_scheduler_reclaim_diagnostics(diagnostics, expected_user_tasks);
+    verify_scheduler_exit_diagnostics(diagnostics, expected_user_tasks);
+    log_scheduler_task_diagnostics(diagnostics, states);
+}
+
+fn verify_scheduler_task_counts(
+    diagnostics: kernel::task::SchedulerDiagnostics,
+    states: kernel::task::TaskStateDiagnostics,
+    expected_user_tasks: u64,
+) {
     assert_eq!(
         diagnostics.user_tasks(),
         expected_user_tasks,
@@ -699,13 +701,20 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
         expected_user_tasks,
         "all user smoke tasks must be finished"
     );
-    assert!(
-        diagnostics.timer_preemptions() > 0,
-        "user smoke must record timer preemption accounting"
-    );
-    assert!(
-        diagnostics.user_resumes() > 0,
-        "user smoke must record user resume accounting"
+}
+
+fn verify_scheduler_reclaim_diagnostics(
+    diagnostics: kernel::task::SchedulerDiagnostics,
+    expected_user_tasks: u64,
+) {
+    // User smoke tasks use the current default guarded kernel stack: four
+    // writable pages plus one reserved guard page.
+    let expected_reclaimed_user_kernel_stack_writable_pages = expected_user_tasks * 4;
+    let expected_reclaimed_user_kernel_stack_virtual_pages = expected_user_tasks * 5;
+    assert_eq!(
+        diagnostics.reclaimed_user_resource_records(),
+        expected_user_tasks,
+        "finished user tasks must emit one aggregate resource reclaim record"
     );
     assert_eq!(
         diagnostics.reclaimed_user_kernel_stacks(),
@@ -722,10 +731,33 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
         expected_reclaimed_user_kernel_stack_virtual_pages,
         "finished user tasks must return guard-inclusive kernel stack virtual pages"
     );
+}
+
+fn verify_scheduler_exit_diagnostics(
+    diagnostics: kernel::task::SchedulerDiagnostics,
+    expected_user_tasks: u64,
+) {
+    assert!(
+        diagnostics.timer_preemptions() > 0,
+        "user smoke must record timer preemption accounting"
+    );
+    assert!(
+        diagnostics.user_resumes() > 0,
+        "user smoke must record user resume accounting"
+    );
     assert_eq!(
         diagnostics.pending_user_exits(),
         0,
         "reported user exits must not remain queued after lifecycle cleanup"
+    );
+    assert!(
+        diagnostics.preemption_enabled(),
+        "preemption must be re-enabled after active user lifecycle drain"
+    );
+    assert_eq!(
+        diagnostics.user_exit_preemption_window_closes(),
+        expected_user_tasks,
+        "every user smoke exit must close the preemption return window"
     );
     assert_eq!(
         diagnostics.user_exit_return_stack_sets(),
@@ -737,9 +769,15 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
         expected_user_tasks,
         "one-shot user exit return stacks must be consumed once per smoke run"
     );
+}
+
+fn log_scheduler_task_diagnostics(
+    diagnostics: kernel::task::SchedulerDiagnostics,
+    states: kernel::task::TaskStateDiagnostics,
+) {
     crate::log_info!(
         "task",
-        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_tasks={} active_user_address_spaces={} pending_user_exits={} user_exit_return_stack_sets={} user_exit_return_stack_takes={} reclaimed_user_resource_records={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
+        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_tasks={} active_user_address_spaces={} pending_user_exits={} preemption_enabled={} user_exit_preemption_window_closes={} user_exit_return_stack_sets={} user_exit_return_stack_takes={} reclaimed_user_resource_records={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
         diagnostics.total_tasks(),
         diagnostics.kernel_tasks(),
         diagnostics.user_tasks(),
@@ -750,6 +788,8 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
         diagnostics.active_user_tasks(),
         diagnostics.active_user_address_spaces(),
         diagnostics.pending_user_exits(),
+        diagnostics.preemption_enabled(),
+        diagnostics.user_exit_preemption_window_closes(),
         diagnostics.user_exit_return_stack_sets(),
         diagnostics.user_exit_return_stack_takes(),
         diagnostics.reclaimed_user_resource_records(),

@@ -147,6 +147,8 @@ pub struct SchedulerDiagnostics {
     pub(super) user_resumes: u64,
     pub(super) finished_tasks: u64,
     pub(super) pending_user_exits: u64,
+    pub(super) preemption_enabled: bool,
+    pub(super) user_exit_preemption_window_closes: u64,
     pub(super) user_exit_return_stack_sets: u64,
     pub(super) user_exit_return_stack_takes: u64,
     pub(super) reclaimed_user_resource_records: u64,
@@ -214,6 +216,16 @@ impl SchedulerDiagnostics {
     /// Return the number of finished user exits waiting to be reported.
     pub const fn pending_user_exits(self) -> u64 {
         self.pending_user_exits
+    }
+
+    /// Return whether timer-driven task switching is currently enabled.
+    pub const fn preemption_enabled(self) -> bool {
+        self.preemption_enabled
+    }
+
+    /// Return the number of user exits that closed the scheduler preemption window.
+    pub const fn user_exit_preemption_window_closes(self) -> u64 {
+        self.user_exit_preemption_window_closes
     }
 
     /// Return the number of one-shot user exit return stacks stored before Ring 3 entry.
