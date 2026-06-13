@@ -118,6 +118,8 @@ pub enum UserMappingPlacement {
     Any,
     /// Use the requested address only when the range is currently unmapped.
     FixedNoReplace(UserVirtualAddress),
+    /// Use the requested address after replacing overlapping private mappings.
+    FixedReplace(UserVirtualAddress),
 }
 
 impl UserMappingPlacement {
@@ -126,6 +128,7 @@ impl UserMappingPlacement {
         match self {
             Self::Any => "any",
             Self::FixedNoReplace(_) => "fixed_noreplace",
+            Self::FixedReplace(_) => "fixed_replace",
         }
     }
 }
@@ -173,9 +176,6 @@ impl UserMappings {
     ) -> Result<UserMappingAllocation, UserMappingError> {
         let length = plan.length();
         let page_count = page_count_for_length(length).ok_or(UserMappingError::InvalidRequest)?;
-        let record_index = self
-            .next_empty_record_index()
-            .ok_or(UserMappingError::OutOfMemory)?;
         let byte_len = page_count
             .checked_mul(PAGE_SIZE)
             .ok_or(UserMappingError::InvalidRequest)?;
@@ -186,6 +186,28 @@ impl UserMappings {
         if start_address < USER_MAPPING_BASE || end_address > USER_MAPPING_END {
             return Err(UserMappingError::InvalidRequest);
         }
+        if matches!(plan.placement(), UserMappingPlacement::FixedReplace(_)) {
+            self.ensure_replace_record_capacity(start_address, end_address)?;
+            let replaced_pages = self.replace_overlapping_pages(
+                address_space,
+                frame_allocator,
+                start_address,
+                end_address,
+            );
+            if replaced_pages > 0 {
+                crate::log_info!(
+                    "memory",
+                    "User mapping fixed replacement prepared: start={:#x} pages={} records={} active_pages={}",
+                    start_address,
+                    replaced_pages,
+                    self.active_records(),
+                    self.active_pages()
+                );
+            }
+        }
+        let record_index = self
+            .next_empty_record_index()
+            .ok_or(UserMappingError::OutOfMemory)?;
 
         let start =
             UserVirtualAddress::new(start_address).ok_or(UserMappingError::InvalidRequest)?;
@@ -415,17 +437,10 @@ impl UserMappings {
             UserMappingPlacement::Any => self
                 .next_available_start(self.next_start, byte_len)
                 .ok_or(UserMappingError::OutOfMemory),
+            UserMappingPlacement::FixedReplace(start) => fixed_start_address(start, byte_len),
             UserMappingPlacement::FixedNoReplace(start) => {
-                let start_address = start.as_u64();
-                let end_address = start_address
-                    .checked_add(byte_len)
-                    .ok_or(UserMappingError::InvalidRequest)?;
-                if !start_address.is_multiple_of(PAGE_SIZE)
-                    || start_address < USER_MAPPING_BASE
-                    || end_address > USER_MAPPING_END
-                {
-                    return Err(UserMappingError::InvalidRequest);
-                }
+                let start_address = fixed_start_address(start, byte_len)?;
+                let end_address = start_address + byte_len;
                 if self
                     .overlapping_record_end(start_address, end_address)
                     .is_some()
@@ -435,6 +450,90 @@ impl UserMappings {
                 Ok(start_address)
             }
         }
+    }
+
+    fn ensure_replace_record_capacity(
+        self,
+        start_address: u64,
+        end_address: u64,
+    ) -> Result<(), UserMappingError> {
+        let mut record_count: usize = self
+            .active_records()
+            .try_into()
+            .expect("active mapping record count must fit in usize");
+        for mapping in self.records.iter().flatten() {
+            let mapping_start = mapping.start.as_u64();
+            let mapping_end = mapping
+                .end_exclusive()
+                .ok_or(UserMappingError::InvalidRequest)?;
+            if start_address >= mapping_end || mapping_start >= end_address {
+                continue;
+            }
+
+            record_count -= 1;
+            if mapping_start < start_address {
+                record_count += 1;
+            }
+            if end_address < mapping_end {
+                record_count += 1;
+            }
+        }
+
+        if record_count < MAX_USER_MAPPINGS {
+            Ok(())
+        } else {
+            Err(UserMappingError::OutOfMemory)
+        }
+    }
+
+    fn replace_overlapping_pages(
+        &mut self,
+        address_space: UserAddressSpace,
+        frame_allocator: &mut PhysicalFrameAllocator,
+        start_address: u64,
+        end_address: u64,
+    ) -> u64 {
+        let mut replaced_pages = 0_u64;
+        for record_index in 0..self.records.len() {
+            let Some(record) = self.records[record_index] else {
+                continue;
+            };
+            let record_start = record.start.as_u64();
+            let record_end = record
+                .end_exclusive()
+                .expect("tracked mapping end must not overflow");
+            if start_address >= record_end || record_start >= end_address {
+                continue;
+            }
+
+            let overlap_start = record_start.max(start_address);
+            let overlap_end = record_end.min(end_address);
+            let overlap_pages = (overlap_end - overlap_start) / PAGE_SIZE;
+            let overlap_start = UserVirtualAddress::new(overlap_start)
+                .expect("replacement overlap start must be a valid user address");
+            Self::unmap_pages(address_space, frame_allocator, overlap_start, overlap_pages);
+            replaced_pages = replaced_pages.saturating_add(overlap_pages);
+
+            let left_pages = (overlap_start.as_u64() - record_start) / PAGE_SIZE;
+            let right_pages = (record_end - overlap_end) / PAGE_SIZE;
+            let split_record_index = if left_pages > 0 && right_pages > 0 {
+                Some(
+                    self.next_empty_record_index()
+                        .expect("replacement preflight must reserve split records"),
+                )
+            } else {
+                None
+            };
+            self.apply_record_unmap(
+                record_index,
+                split_record_index,
+                record,
+                left_pages,
+                right_pages,
+                overlap_end,
+            );
+        }
+        replaced_pages
     }
 
     fn next_available_start(self, preferred_start: u64, byte_len: u64) -> Option<u64> {
@@ -547,6 +646,20 @@ fn page_initialize_length(length: u64, page_index: u64) -> Option<usize> {
     let page_start_offset = page_index.checked_mul(PAGE_SIZE)?;
     let remaining = length.saturating_sub(page_start_offset);
     usize::try_from(remaining.min(PAGE_SIZE)).ok()
+}
+
+fn fixed_start_address(start: UserVirtualAddress, byte_len: u64) -> Result<u64, UserMappingError> {
+    let start_address = start.as_u64();
+    let end_address = start_address
+        .checked_add(byte_len)
+        .ok_or(UserMappingError::InvalidRequest)?;
+    if !start_address.is_multiple_of(PAGE_SIZE)
+        || start_address < USER_MAPPING_BASE
+        || end_address > USER_MAPPING_END
+    {
+        return Err(UserMappingError::InvalidRequest);
+    }
+    Ok(start_address)
 }
 
 fn align_up_to_page(address: u64) -> Option<u64> {

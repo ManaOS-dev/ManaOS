@@ -75,6 +75,8 @@ pub const PROT_WRITE: usize = contract::PROT_WRITE as usize;
 pub const PROT_EXEC: usize = contract::PROT_EXEC as usize;
 /// Mapping is private to the current process.
 pub const MAP_PRIVATE: usize = contract::MAP_PRIVATE as usize;
+/// Fixed mapping replaces overlapping mappings at the requested address.
+pub const MAP_FIXED: usize = contract::MAP_FIXED as usize;
 /// Mapping is anonymous and not backed by a file descriptor.
 pub const MAP_ANONYMOUS: usize = contract::MAP_ANONYMOUS as usize;
 /// Fixed mapping must fail when the requested range is already mapped.

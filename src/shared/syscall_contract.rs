@@ -48,6 +48,8 @@ pub const PROT_WRITE: u64 = 0x2;
 pub const PROT_EXEC: u64 = 0x4;
 /// Mapping is private to the current process.
 pub const MAP_PRIVATE: u64 = 0x02;
+/// Fixed mapping replaces overlapping mappings at the requested address.
+pub const MAP_FIXED: u64 = 0x10;
 /// Mapping is anonymous and not backed by a file descriptor.
 pub const MAP_ANONYMOUS: u64 = 0x20;
 /// Fixed mapping must fail when the requested range is already mapped.
