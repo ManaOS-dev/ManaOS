@@ -12,7 +12,7 @@ pub(super) fn run(
     }
 
     Ok(CommandEffect::Output(CommandOutput::single(
-        "commands: help clear pwd cd ls stat mounts hexdump cat read grep echo syscalls tasks"
+        "commands: help clear pwd cd ls stat mounts memory hexdump cat read grep echo syscalls tasks"
             .to_string(),
     )))
 }

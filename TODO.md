@@ -113,6 +113,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Track reserved, used, and free physical frame ranges.
 - [x] Design ownership rules for free, used, and reserved physical frame ranges.
 - [x] Add a kernel virtual memory allocator for dynamic mappings, including writable NX mapping and generic unmap/free for kernel ranges.
+- [x] Add visible frame allocator owner diagnostics to the `memory` console command and status strip.
 - [ ] Add guard pages for kernel stacks; scheduler-owned task stacks now have mapped writable pages, unmapped virtual guards, and guard-fault diagnostics. Bootstrap/IST stacks remain.
 - [x] Design kernel stack guard page placement and fault diagnostics.
 - [x] Add per-process page tables; user smoke tasks now own separate address-space roots for ELF and stack mappings.

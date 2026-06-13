@@ -24,6 +24,7 @@ mod grep;
 mod help;
 mod hexdump;
 mod ls;
+mod memory;
 mod mounts;
 mod output;
 mod pipeline;

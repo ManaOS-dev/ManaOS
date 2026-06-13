@@ -860,6 +860,29 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
     );
 }
 
+fn record_memory_diagnostics_snapshot(
+    frame_allocator: &kernel::memory::frame_allocator::PhysicalFrameAllocator,
+) {
+    kernel::memory::diagnostics::record_frame_allocator_snapshot(frame_allocator);
+    let diagnostics = kernel::memory::diagnostics::get_frame_allocator_diagnostics()
+        .expect("frame allocator diagnostics must be available after recording a snapshot");
+    let owners = diagnostics.owners();
+    crate::log_info!(
+        "memory",
+        "Frame allocator diagnostics snapshot: free={} used={} reserved={} page_table={} kernel_heap={} kernel_stack={} user_stack={} user_elf={} dynamic_kernel_mapping={} ahci_dma={}",
+        diagnostics.free(),
+        diagnostics.used(),
+        diagnostics.reserved(),
+        owners.page_table(),
+        owners.kernel_heap(),
+        owners.kernel_stack(),
+        owners.user_stack(),
+        owners.user_elf(),
+        owners.dynamic_kernel_mapping(),
+        owners.ahci_dma()
+    );
+}
+
 fn verify_scheduler_console_command() {
     match kernel::console::verify_command_smoke("tasks") {
         Some(output_lines) if output_lines >= 9 => crate::log_info!(
@@ -868,6 +891,17 @@ fn verify_scheduler_console_command() {
             output_lines
         ),
         _ => crate::log_warn!("console", "Tasks command smoke failed: command=\"tasks\""),
+    }
+}
+
+fn verify_memory_console_command() {
+    match kernel::console::verify_command_smoke("memory") {
+        Some(output_lines) if output_lines >= 3 => crate::log_info!(
+            "console",
+            "Memory command smoke passed: command=\"memory\" output_lines={}",
+            output_lines
+        ),
+        _ => crate::log_warn!("console", "Memory command smoke failed: command=\"memory\""),
     }
 }
 
@@ -965,7 +999,9 @@ fn main() -> Status {
     run_user_smoke_demo(&mut frame_allocator);
     verify_scheduler_task_diagnostics(2);
     verify_scheduler_task_snapshots(2);
+    record_memory_diagnostics_snapshot(&frame_allocator);
     verify_scheduler_console_command();
+    verify_memory_console_command();
     verify_console_status_strip();
 
     // Main Loop

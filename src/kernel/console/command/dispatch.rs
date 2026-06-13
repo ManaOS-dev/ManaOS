@@ -2,8 +2,8 @@
 
 use super::output::{CommandEffect, CommandError};
 use super::{
-    cat, cd, clear, echo, fps, grep, help, hexdump, ls, mounts, pwd, stat, storage, syscalls,
-    tasks, ticks,
+    cat, cd, clear, echo, fps, grep, help, hexdump, ls, memory, mounts, pwd, stat, storage,
+    syscalls, tasks, ticks,
 };
 use alloc::string::String;
 
@@ -24,6 +24,7 @@ pub(super) fn run_stage(command: &str, input: &[String]) -> Result<CommandEffect
         "ls" => ls::run(arguments, input),
         "stat" => stat::run(arguments, input),
         "mounts" => mounts::run(arguments, input),
+        "memory" => memory::run(arguments, input),
         "hexdump" => hexdump::run(arguments, input),
         "ticks" => ticks::run(arguments, input),
         "fps" => fps::run(arguments, input),
