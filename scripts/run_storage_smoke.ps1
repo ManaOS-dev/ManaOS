@@ -105,6 +105,8 @@ $expectedPatterns = @(
     "Frame allocator diagnostics snapshot: .*page_table=.* kernel_heap=.* kernel_stack=.* user_stack=0 user_elf=0 user_heap=0 user_mapping=0 dynamic_kernel_mapping=0 ahci_dma=.*",
     "Tasks command smoke passed: command=`"tasks`" output_lines=12",
     "Memory command smoke passed: command=`"memory`" output_lines=3",
+    "Syscall trace: record=1 task=.* number=39 result=0x",
+    "Syscall trace controls smoke passed: command=`"syscalls trace`" records=1",
     "Console status strip smoke passed"
 )
 

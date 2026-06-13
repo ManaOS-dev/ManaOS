@@ -195,16 +195,16 @@ break unmaps no-longer-covered heap pages and returns their physical frames to
 the `UserHeap` owner pool, while page-table frames remain owned by the address
 space until process cleanup.
 
-Anonymous `mmap` is the second syscall-time user memory path. The current ABI
-supports `mmap(addr, len, prot, flags)` for automatic anonymous mappings with
-`addr = 0` and for non-overlapping fixed anonymous mappings with
-`MAP_FIXED_NOREPLACE`. Executable, file-backed, and replacement `MAP_FIXED`
-mappings are intentionally rejected until the process model grows those
-ownership rules. The static user layout keeps the `brk` heap below
-`0x0000_6000_0000_0000`, anonymous mappings in
+Private `mmap` is the second syscall-time user memory path. The current ABI
+supports automatic anonymous mappings with `addr = 0`, non-overlapping fixed
+anonymous mappings with `MAP_FIXED_NOREPLACE`, replacement `MAP_FIXED` private
+mappings, and read-only file-private mappings from current VFS file
+descriptors. Executable mappings are intentionally rejected until executable
+mapping ownership and cache rules are defined. The static user layout keeps the
+`brk` heap below `0x0000_6000_0000_0000`, private mappings in
 `0x0000_6000_0000_0000..0x0000_7000_0000_0000`, and fixed stack slots above
-`0x0000_7fff_f000_0000`. `munmap` removes page-aligned ranges inside one
-tracked anonymous mapping, splits the remaining sides into separate records when
+`0x0000_7fff_f000_0000`. `munmap` removes page-aligned ranges inside tracked
+private mapping records, splits the remaining sides into separate records when
 needed, and returns removed physical frames to the `UserMapping` owner pool.
 
 The one-shot user runtime registers the boot-owned frame allocator only while
