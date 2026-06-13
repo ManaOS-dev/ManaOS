@@ -125,6 +125,7 @@ pub fn hlt_loop() -> ! {
 }
 
 core::arch::global_asm!(include_str!("context_switch.s"));
+core::arch::global_asm!(include_str!("interrupt_entry.s"));
 
 extern "C" {
     /// Switch from one saved task context to another.
