@@ -2,7 +2,7 @@
 
 use crate::kernel::memory::{
     address::{PhysicalFrameStart, UserVirtualAddress, VirtAddr},
-    frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
+    frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     paging,
 };
 use core::sync::atomic::{AtomicU64, Ordering};
@@ -104,7 +104,7 @@ impl PreparedUserStack {
 ///
 /// Panics if physical frames cannot be allocated or page-table mapping fails.
 pub fn allocate_user_stack(
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     pages: u64,
 ) -> AllocatedUserStack {
     assert!(pages > 0, "user stack must contain at least one page");
@@ -227,7 +227,7 @@ pub fn prepare_initial_stack(
 /// Panics if the address is not page-aligned, the address is outside user
 /// space, a physical frame cannot be allocated, or page-table mapping fails.
 pub fn allocate_and_map_user_page(
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     virtual_address: UserVirtualAddress,
     flags: PageTableFlags,
     owner: FrameRangeOwner,
@@ -393,7 +393,7 @@ fn write_stack_u64(address: UserVirtualAddress, value: u64) {
 }
 
 unsafe fn map_user_range(
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     virtual_start: UserVirtualAddress,
     physical_start: PhysicalFrameStart,
     pages: u64,
@@ -436,10 +436,10 @@ unsafe fn map_user_range(
 }
 
 struct UserFrameAllocator<'a> {
-    frame_allocator: &'a mut BumpFrameAllocator,
+    frame_allocator: &'a mut PhysicalFrameAllocator,
 }
 
-// SAFETY: UserFrameAllocator delegates to BumpFrameAllocator, which returns each
+// SAFETY: UserFrameAllocator delegates to PhysicalFrameAllocator, which returns each
 // frame at most once from registered conventional memory regions.
 unsafe impl FrameAllocator<Size4KiB> for UserFrameAllocator<'_> {
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {

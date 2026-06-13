@@ -31,7 +31,7 @@ mod state;
 pub mod user_mode;
 
 use crate::kernel::memory::address::UserVirtualAddress;
-use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
+use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
 use crate::kernel::memory::virtual_allocator::{
     new_dynamic_mapping_allocator, KernelVirtualRangeAllocator,
 };
@@ -149,7 +149,7 @@ impl Task {
         identifier: TaskIdentifier,
         parent_identifier: TaskIdentifier,
         entry: TaskEntry,
-        frame_allocator: &mut BumpFrameAllocator,
+        frame_allocator: &mut PhysicalFrameAllocator,
         kernel_stack_range_allocator: &mut KernelVirtualRangeAllocator,
     ) -> Self {
         let kernel_stack = KernelStack::new_default(frame_allocator, kernel_stack_range_allocator);
@@ -177,7 +177,7 @@ impl Task {
         identifier: TaskIdentifier,
         parent_identifier: TaskIdentifier,
         user_context: UserTaskContext,
-        frame_allocator: &mut BumpFrameAllocator,
+        frame_allocator: &mut PhysicalFrameAllocator,
         kernel_stack_range_allocator: &mut KernelVirtualRangeAllocator,
     ) -> Self {
         let kernel_stack = KernelStack::new_default(frame_allocator, kernel_stack_range_allocator);
@@ -282,7 +282,7 @@ impl Scheduler {
         }
     }
 
-    fn spawn(&mut self, frame_allocator: &mut BumpFrameAllocator, entry: TaskEntry) -> u64 {
+    fn spawn(&mut self, frame_allocator: &mut PhysicalFrameAllocator, entry: TaskEntry) -> u64 {
         let task_identifier = self.next_task_identifier.allocate();
         let parent_identifier = self.tasks[self.current_index].metadata.get_identifier();
         let task = Task::kernel(
@@ -331,7 +331,7 @@ impl Scheduler {
 
     fn spawn_user_task(
         &mut self,
-        frame_allocator: &mut BumpFrameAllocator,
+        frame_allocator: &mut PhysicalFrameAllocator,
         entry_point: UserVirtualAddress,
         user_stack_top: UserVirtualAddress,
         entry_arguments: UserEntryArguments,
@@ -646,7 +646,7 @@ pub fn initialize() {
 ///
 /// Panics if the scheduler has not been initialized, kernel stack frames cannot
 /// be allocated, or kernel stack page-table mapping fails.
-pub fn spawn(frame_allocator: &mut BumpFrameAllocator, entry: TaskEntry) -> u64 {
+pub fn spawn(frame_allocator: &mut PhysicalFrameAllocator, entry: TaskEntry) -> u64 {
     let mut scheduler = SCHEDULER.lock();
     scheduler
         .as_mut()
@@ -661,7 +661,7 @@ pub fn spawn(frame_allocator: &mut BumpFrameAllocator, entry: TaskEntry) -> u64 
 /// Panics if the scheduler has not been initialized, kernel stack frames cannot
 /// be allocated, or kernel stack page-table mapping fails.
 pub fn spawn_user_task(
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     entry_point: UserVirtualAddress,
     user_stack_top: UserVirtualAddress,
     entry_arguments: UserEntryArguments,

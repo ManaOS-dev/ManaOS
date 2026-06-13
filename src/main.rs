@@ -87,7 +87,7 @@ fn get_framebuffer_info() -> kernel::driver::display::framebuffer::FrameBufferIn
 }
 
 fn import_boot_memory_map<'a>(
-    frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator,
+    frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
     memory_descriptors: impl Iterator<Item = &'a MemoryDescriptor>,
 ) {
     for descriptor in memory_descriptors {
@@ -135,7 +135,7 @@ fn get_framebuffer_size(
 }
 
 fn allocate_backbuffer(
-    frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator,
+    frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
     framebuffer_size: u64,
 ) -> kernel::memory::address::KernelVirtualAddress {
     let backbuffer_pages = framebuffer_size.div_ceil(4096);
@@ -150,7 +150,9 @@ fn allocate_backbuffer(
         .as_identity_mapped_kernel_address()
 }
 
-fn initialize_scheduler(frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator) {
+fn initialize_scheduler(
+    frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
+) {
     kernel::task::initialize();
     kernel::task::spawn(frame_allocator, idle_task);
     let task_id = kernel::task::get_current_task_id()
@@ -279,6 +281,7 @@ fn verify_frame_allocator_rules() {
         kernel::memory::frame_allocator::verify_contiguous_allocation_boundaries();
     let reserved_exclusion_ok = kernel::memory::frame_allocator::verify_reserved_range_exclusion();
     let owner_tracking_ok = kernel::memory::frame_allocator::verify_owner_tracking();
+    let released_frame_reuse_ok = kernel::memory::frame_allocator::verify_released_frame_reuse();
     let owner_coverage_ok = kernel::memory::frame_allocator::verify_explicit_owner_coverage();
     if zero_skip_ok
         && range_tracking_ok
@@ -286,46 +289,61 @@ fn verify_frame_allocator_rules() {
         && contiguous_boundaries_ok
         && reserved_exclusion_ok
         && owner_tracking_ok
+        && released_frame_reuse_ok
         && owner_coverage_ok
     {
         crate::log_info!(
             "memory",
-            "Frame allocator self-checks passed: zero_skip=true range_tracking=true duplicate_allocation=true contiguous_boundaries=true reserved_exclusion=true owner_tracking=true owner_coverage=true"
+            "Frame allocator self-checks passed: zero_skip=true range_tracking=true duplicate_allocation=true contiguous_boundaries=true reserved_exclusion=true owner_tracking=true released_frame_reuse=true owner_coverage=true"
         );
     } else {
         crate::log_error!(
             "memory",
-            "Frame allocator self-checks failed: zero_skip={} range_tracking={} duplicate_allocation={} contiguous_boundaries={} reserved_exclusion={} owner_tracking={} owner_coverage={}",
+            "Frame allocator self-checks failed: zero_skip={} range_tracking={} duplicate_allocation={} contiguous_boundaries={} reserved_exclusion={} owner_tracking={} released_frame_reuse={} owner_coverage={}",
             zero_skip_ok,
             range_tracking_ok,
             duplicate_allocation_ok,
             contiguous_boundaries_ok,
             reserved_exclusion_ok,
             owner_tracking_ok,
+            released_frame_reuse_ok,
             owner_coverage_ok
         );
     }
 }
 
 fn verify_kernel_virtual_range_allocator_rules() {
-    let monotonic_allocation_ok =
+    let non_overlapping_reuse_ok =
         kernel::memory::virtual_allocator::verify_kernel_virtual_range_allocation();
     let exhaustion_rejection_ok =
         kernel::memory::virtual_allocator::verify_kernel_virtual_range_exhaustion();
 
-    if monotonic_allocation_ok && exhaustion_rejection_ok {
+    if non_overlapping_reuse_ok && exhaustion_rejection_ok {
         crate::log_info!(
             "memory",
-            "Kernel virtual range allocator self-checks passed: monotonic_allocation=true exhaustion_rejection=true"
+            "Kernel virtual range allocator self-checks passed: non_overlapping_reuse=true exhaustion_rejection=true"
         );
     } else {
         crate::log_error!(
             "memory",
-            "Kernel virtual range allocator self-checks failed: monotonic_allocation={} exhaustion_rejection={}",
-            monotonic_allocation_ok,
+            "Kernel virtual range allocator self-checks failed: non_overlapping_reuse={} exhaustion_rejection={}",
+            non_overlapping_reuse_ok,
             exhaustion_rejection_ok
         );
     }
+}
+
+fn verify_dynamic_kernel_mapping_lifecycle(
+    frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
+) {
+    assert!(
+        kernel::memory::paging::verify_kernel_dynamic_mapping_lifecycle(frame_allocator),
+        "dynamic kernel mapping lifecycle smoke must pass"
+    );
+    crate::log_info!(
+        "memory",
+        "Dynamic kernel mapping lifecycle self-check passed: map=true unmap=true virtual_reuse=true physical_reuse=true"
+    );
 }
 
 fn verify_elf_loader_rules() {
@@ -437,7 +455,7 @@ fn read_kernel_file(path: &str) -> Option<Vec<u8>> {
 }
 
 fn spawn_user_smoke_task(
-    frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator,
+    frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
     user_elf_path: &str,
     user_entry_point: kernel::memory::address::UserVirtualAddress,
     user_stack_pages: u64,
@@ -509,7 +527,9 @@ fn spawn_user_smoke_task(
     user_task_id
 }
 
-fn run_user_smoke_demo(frame_allocator: &mut kernel::memory::frame_allocator::BumpFrameAllocator) {
+fn run_user_smoke_demo(
+    frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
+) {
     kernel::task::set_preemption_enabled(false);
 
     let user_stack_pages = 4;
@@ -616,7 +636,7 @@ fn main() -> Status {
     // ────────────────────────────────────────────────
     kernel::serial::init();
     crate::log_info!("serial", "ExitBootServices OK.");
-    let mut frame_allocator = kernel::memory::frame_allocator::BumpFrameAllocator::new();
+    let mut frame_allocator = kernel::memory::frame_allocator::PhysicalFrameAllocator::new();
     import_boot_memory_map(&mut frame_allocator, mmap.entries());
     verify_frame_allocator_rules();
     verify_kernel_virtual_range_allocator_rules();
@@ -640,6 +660,7 @@ fn main() -> Status {
         },
         backbuffer_address,
     );
+    verify_dynamic_kernel_mapping_lifecycle(&mut frame_allocator);
     kernel::filesystem::initialize();
     crate::log_info!("fs", "Kernel filesystem initialized.");
     verify_kernel_filesystem();

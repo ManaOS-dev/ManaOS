@@ -108,11 +108,11 @@ items have been removed so the file stays useful for deciding the next task.
 
 ### Memory Management
 
-- [x] Audit `BumpFrameAllocator` call sites and document invariants required before replacing it.
-- [ ] Replace the bump frame allocator with a reusable physical frame allocator.
+- [x] Audit `PhysicalFrameAllocator` call sites and document reusable ownership invariants.
+- [x] Replace the bump frame allocator with a reusable physical frame allocator.
 - [x] Track reserved, used, and free physical frame ranges.
 - [x] Design ownership rules for free, used, and reserved physical frame ranges.
-- [ ] Add a kernel virtual memory allocator for dynamic mappings; writable NX mapping exists for kernel stacks, generic unmap/free remains.
+- [x] Add a kernel virtual memory allocator for dynamic mappings, including writable NX mapping and generic unmap/free for kernel ranges.
 - [ ] Add guard pages for kernel stacks; scheduler-owned task stacks now have mapped writable pages, unmapped virtual guards, and guard-fault diagnostics. Bootstrap/IST stacks remain.
 - [x] Design kernel stack guard page placement and fault diagnostics.
 - [ ] Add per-process page tables.

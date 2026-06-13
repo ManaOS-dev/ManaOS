@@ -1,11 +1,11 @@
 # ManaOS Memory Management
 
-This document records the invariants that must hold before replacing the current
-`BumpFrameAllocator` with a reusable physical frame allocator.
+This document records the invariants for ManaOS physical frame ownership,
+reusable frame allocation, and dynamic kernel virtual mappings.
 
-## Current `BumpFrameAllocator` Call Sites
+## Current `PhysicalFrameAllocator` Call Sites
 
-`BumpFrameAllocator` is still the only physical frame source. It is passed from
+`PhysicalFrameAllocator` is still the only physical frame source. It is passed from
 the boot composition root into subsystems that need physical memory:
 
 - `src/main.rs` registers UEFI conventional memory regions and passes the
@@ -23,9 +23,9 @@ the boot composition root into subsystems that need physical memory:
 - `src/kernel/driver/storage/mod.rs` passes the allocator into storage probing
   and persistent block-device setup.
 
-## Existing Allocator Invariants
+## Allocator Invariants
 
-The current bump allocator relies on these properties:
+The current physical frame allocator relies on these properties:
 
 - Only UEFI `CONVENTIONAL` memory is registered before `ExitBootServices`.
 - Memory registration APIs accept `PhysAddr` starts so reusable allocator
@@ -34,20 +34,19 @@ The current bump allocator relies on these properties:
   zero.
 - Registered ranges are sorted and adjacent ranges are merged before
   allocation.
-- Allocation is monotonic: a physical frame is returned at most once, and no
-  deallocation exists.
+- Allocation scans tracked free ranges; a physical frame is returned at most
+  once until its owner releases it back to the free pool.
+- Deallocation requires the caller to provide the expected owner. Owner
+  mismatches and double frees are rejected.
 - Contiguous allocation is guaranteed only inside a single registered range.
 - Returned physical addresses are assumed to be identity mapped when callers
   zero frames, build page tables, or hand addresses to AHCI DMA.
 - Callers treat returned frames as exclusively owned until boot ends or until a
   later ownership model explicitly transfers them.
 
-Any reusable allocator must preserve these properties for allocations made
-before it starts accepting frees.
-
 ## Reusable Physical Frame Allocator Design
 
-The next allocator should model physical memory as frame ranges with an explicit
+The allocator models physical memory as frame ranges with an explicit
 state:
 
 - `Reserved`: not allocatable. This includes physical address zero, firmware
@@ -129,10 +128,10 @@ The shrink path is therefore staged:
 
 ## Kernel Virtual Range Reservation
 
-The kernel now has a monotonic allocator for reserved higher-half virtual
-address ranges intended for future dynamic mappings. It only reserves virtual
-addresses; page-table mapping, unmapping, and physical frame ownership remain
-separate responsibilities.
+The kernel now has a reusable allocator for reserved higher-half virtual
+address ranges intended for dynamic mappings. It reserves virtual addresses;
+page-table mapping, unmapping, and physical frame ownership remain separate
+responsibilities.
 
 This keeps the guard-page stack work incremental:
 
@@ -146,9 +145,19 @@ kernel and user tasks. The active scheduler-owned stack memory now uses the
 reserved higher-half range: writable pages are backed by physical frames owned
 as `KernelStack`, while the guard page stays unmapped.
 
-The current dynamic mappings are monotonic. They have no `unmap` or free path
-yet, so stack physical frames and virtual ranges live for the lifetime of their
-task metadata.
+Dynamic kernel mappings now have a generic unmap path:
+
+- `paging::map_kernel_writable_no_execute_range(...)` maps an owned physical
+  range into a reserved kernel virtual range.
+- `paging::unmap_kernel_range_and_free_frames(...)` removes 4 KiB mappings and
+  returns the backing frames only when the expected owner matches.
+- `KernelVirtualRangeAllocator::free_pages(...)` releases virtual ranges for
+  reuse after their mappings are gone.
+
+Scheduler-owned stack physical frames and virtual ranges still live for the
+lifetime of their task metadata. Freeing a task stack remains a process
+lifecycle problem because no scheduler, interrupt, or architecture context may
+retain a reference when the stack is destroyed.
 
 ## Replacement Checklist
 
@@ -165,13 +174,17 @@ task metadata.
       relying on generic firmware reservations.
 - [ ] Split `LOADER_DATA` reservations into narrower owners once boot pool
       allocations, font assets, and kernel image data have separate ranges.
-- [ ] Keep `BumpFrameAllocator`-equivalent monotonic behavior until each owner
-      has a verified release path.
+- [x] Replace monotonic frame allocation with tracked free-range allocation and
+      owner-checked frame release.
+- [x] Add boot self-checks for released-frame reuse and owner-mismatch
+      rejection.
 - [x] Add boot self-checks for duplicate allocation, contiguous allocation
       boundaries, and reserved-range exclusion.
 - [x] Add boot self-checks for zero-frame reservation and reserved/free/used
       range tracking.
 - [x] Prove the owner-coverage allocator behavior change with
       `just storage-smoke`.
+- [x] Add a boot self-check for dynamic kernel mapping map, unmap, virtual
+      reuse, and physical reuse.
 - [ ] Continue proving the boot path with `just storage-smoke` after every
       future allocator behavior change.

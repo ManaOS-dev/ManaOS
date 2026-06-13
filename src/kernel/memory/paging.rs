@@ -1,9 +1,11 @@
 use crate::kernel::memory::{
     address::{
         FramebufferPhysicalRange, KernelVirtualAddress, KernelVirtualRange,
-        PhysAddr as KernelPhysAddr, PhysicalFrameRange, VirtAddr as KernelVirtAddr,
+        PhysAddr as KernelPhysAddr, PhysicalFrameRange, PhysicalFrameStart,
+        VirtAddr as KernelVirtAddr,
     },
-    frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
+    frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
+    virtual_allocator::new_dynamic_mapping_allocator,
 };
 use uefi::mem::memory_map::{MemoryDescriptor, MemoryType};
 use x86_64::{
@@ -29,7 +31,7 @@ const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 /// frames. The memory map iterator must describe memory that can be identity
 /// mapped, and the framebuffer range must come from the active graphics mode.
 pub unsafe fn init<'a>(
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     mmap_iter: impl Iterator<Item = &'a MemoryDescriptor>,
     framebuffer_range: FramebufferPhysicalRange,
 ) {
@@ -148,7 +150,7 @@ pub fn verify_syscall_user_data_permissions(
 /// The caller must ensure the physical range belongs to an MMIO device and that
 /// mapping it into the kernel address space does not alias regular RAM.
 pub unsafe fn map_kernel_mmio_range(
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     physical_start: KernelPhysAddr,
     size: u64,
 ) {
@@ -195,7 +197,7 @@ pub unsafe fn map_kernel_mmio_range(
 /// Panics if the virtual and physical page counts differ, if any target page is
 /// already mapped, or if page-table mapping fails.
 pub fn map_kernel_writable_no_execute_range(
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     virtual_range: KernelVirtualRange,
     physical_range: PhysicalFrameRange,
 ) -> KernelVirtualAddress {
@@ -254,6 +256,91 @@ pub fn map_kernel_writable_no_execute_range(
     }
 
     KernelVirtualAddress::new(virtual_start)
+}
+
+/// Unmap a kernel virtual range and return its physical frames to the allocator.
+///
+/// # Panics
+///
+/// Panics if a page is not mapped as a 4 KiB page or if any unmapped frame does
+/// not belong to `owner`.
+pub fn unmap_kernel_range_and_free_frames(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    virtual_range: KernelVirtualRange,
+    owner: FrameRangeOwner,
+) {
+    let (level_4_frame, _) = Cr3::read();
+    let level_4_table = level_4_frame.start_address().as_u64() as *mut PageTable;
+    // SAFETY: ManaOS keeps active page tables identity mapped, so the physical
+    // address from CR3 is directly usable as a kernel virtual address.
+    let level_4_table = unsafe { &mut *level_4_table };
+    // SAFETY: The active address space uses an identity physical memory offset.
+    let mut mapper = unsafe { OffsetPageTable::new(level_4_table, X86VirtAddr::new(0)) };
+
+    for index in 0..virtual_range.page_count() {
+        let offset = index
+            .checked_mul(PAGE_SIZE)
+            .expect("kernel unmapping offset overflowed");
+        let virtual_address = virtual_range
+            .start()
+            .checked_add(offset)
+            .expect("kernel virtual unmapping address overflowed");
+        let page = Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_address.as_u64()));
+        let (frame, flush) = mapper
+            .unmap(page)
+            .expect("failed to unmap kernel dynamic page");
+        flush.flush();
+
+        let physical_start = PhysicalFrameStart::new(frame.start_address().as_u64())
+            .expect("unmapped physical frame must be 4KiB-aligned");
+        let physical_range = PhysicalFrameRange::new(physical_start, 1)
+            .expect("single unmapped frame range must be valid");
+        assert!(
+            frame_allocator.free_frames_for(physical_range, owner),
+            "unmapped kernel frame owner did not match"
+        );
+    }
+}
+
+/// Verify dynamic kernel mapping map, unmap, and reuse behavior.
+pub fn verify_kernel_dynamic_mapping_lifecycle(
+    frame_allocator: &mut PhysicalFrameAllocator,
+) -> bool {
+    let mut virtual_allocator = new_dynamic_mapping_allocator();
+    let Some(virtual_range) = virtual_allocator.allocate_pages(2) else {
+        return false;
+    };
+    let Some(physical_range) =
+        frame_allocator.allocate_frames_for(2, FrameRangeOwner::DynamicKernelMapping)
+    else {
+        return false;
+    };
+
+    let mapped_start =
+        map_kernel_writable_no_execute_range(frame_allocator, virtual_range, physical_range);
+    let mapped = mapped_start.as_u64() == virtual_range.start().as_u64()
+        && is_kernel_range_mapped_writable_no_execute(virtual_range);
+    unmap_kernel_range_and_free_frames(
+        frame_allocator,
+        virtual_range,
+        FrameRangeOwner::DynamicKernelMapping,
+    );
+    let unmapped = is_kernel_range_unmapped(virtual_range);
+    let virtual_released = virtual_allocator.free_pages(virtual_range);
+
+    let Some(reused_virtual_range) = virtual_allocator.allocate_pages(2) else {
+        return false;
+    };
+    let Some(reused_physical_range) =
+        frame_allocator.allocate_frames_for(2, FrameRangeOwner::DynamicKernelMapping)
+    else {
+        return false;
+    };
+    let reused = reused_virtual_range == virtual_range && reused_physical_range == physical_range;
+    let physical_released = frame_allocator
+        .free_frames_for(reused_physical_range, FrameRangeOwner::DynamicKernelMapping);
+
+    mapped && unmapped && virtual_released && reused && physical_released
 }
 
 /// Return whether every page in the kernel range is writable and non-executable.
@@ -372,7 +459,7 @@ fn mapping_flags_for_address(address: KernelVirtAddr) -> Option<PageTableFlags> 
     }
 }
 
-unsafe fn create_pml4(frame_allocator: &mut BumpFrameAllocator) -> PhysFrame {
+unsafe fn create_pml4(frame_allocator: &mut PhysicalFrameAllocator) -> PhysFrame {
     let pml4_frame_start = frame_allocator
         .allocate_frame_for(FrameRangeOwner::PageTable)
         .expect("OOM: failed to allocate PML4 frame");
@@ -387,7 +474,7 @@ unsafe fn create_pml4(frame_allocator: &mut BumpFrameAllocator) -> PhysFrame {
 
 unsafe fn map_memory_regions<'a>(
     mapper: &mut OffsetPageTable,
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     mmap_iter: impl Iterator<Item = &'a MemoryDescriptor>,
 ) {
     let mut executable_pages = 0_u64;
@@ -497,7 +584,7 @@ fn is_executable_memory_type(memory_type: MemoryType) -> bool {
 
 unsafe fn map_identity_pages(
     mapper: &mut OffsetPageTable,
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     start_address: KernelPhysAddr,
     page_count: u64,
     flags: PageTableFlags,
@@ -541,7 +628,7 @@ unsafe fn map_identity_pages(
 
 unsafe fn map_framebuffer(
     mapper: &mut OffsetPageTable,
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     framebuffer_range: FramebufferPhysicalRange,
 ) {
     let framebuffer_start = framebuffer_range.start();
@@ -595,12 +682,12 @@ unsafe fn map_framebuffer(
     }
 }
 
-/// A wrapper to use our `BumpFrameAllocator` with `x86_64`'s `FrameAllocator` trait.
+/// A wrapper to use our `PhysicalFrameAllocator` with `x86_64`'s `FrameAllocator` trait.
 struct FrameAllocWrapper<'a> {
-    frame_allocator: &'a mut BumpFrameAllocator,
+    frame_allocator: &'a mut PhysicalFrameAllocator,
 }
 
-// SAFETY: FrameAllocWrapper delegates to BumpFrameAllocator, which returns each
+// SAFETY: FrameAllocWrapper delegates to PhysicalFrameAllocator, which returns each
 // frame at most once from registered conventional memory regions.
 unsafe impl x86_64::structures::paging::FrameAllocator<Size4KiB> for FrameAllocWrapper<'_> {
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {

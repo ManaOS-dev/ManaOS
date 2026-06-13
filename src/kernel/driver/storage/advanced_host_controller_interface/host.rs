@@ -1,6 +1,6 @@
 //! Advanced Host Controller Interface host bus adapter MMIO setup.
 
-use crate::kernel::memory::{address::PhysAddr, frame_allocator::BumpFrameAllocator, paging};
+use crate::kernel::memory::{address::PhysAddr, frame_allocator::PhysicalFrameAllocator, paging};
 
 use super::registers::{HbaMemory, HbaPort, MAX_PORTS};
 
@@ -8,7 +8,7 @@ const HOST_BUS_ADAPTER_MEMORY_SIZE: u64 = 0x1100;
 const GLOBAL_HOST_CONTROL_AHCI_ENABLE: u32 = 1 << 31;
 
 pub(super) fn map_memory(
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     base_address_register5: PhysAddr,
 ) -> *mut HbaMemory {
     crate::log_debug!(

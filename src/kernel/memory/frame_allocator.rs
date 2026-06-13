@@ -1,4 +1,4 @@
-//! A simple bump physical frame allocator.
+//! A reusable physical frame allocator with owner tracking.
 
 use super::address::{PhysAddr, PhysicalFrameRange, PhysicalFrameStart};
 
@@ -55,6 +55,8 @@ pub enum FrameRangeOwner {
     FramebufferBackbuffer,
     /// Frames back Advanced Host Controller Interface DMA buffers.
     AhciDma,
+    /// Frames back temporary dynamic kernel mappings.
+    DynamicKernelMapping,
     /// Frames back a user stack.
     UserStack,
     /// Frames back loaded user ELF segments.
@@ -97,31 +99,29 @@ pub struct FrameAllocatorOwnerStatistics {
     pub framebuffer_backbuffer: u64,
     /// Number of AHCI DMA frames.
     pub ahci_dma: u64,
+    /// Number of temporary dynamic kernel mapping frames.
+    pub dynamic_kernel_mapping: u64,
     /// Number of user stack frames.
     pub user_stack: u64,
     /// Number of user ELF frames.
     pub user_elf: u64,
 }
 
-/// A linear allocator for 4 KiB physical frames registered from UEFI memory map
+/// A reusable allocator for 4 KiB physical frames registered from UEFI memory map
 /// regions.
-pub struct BumpFrameAllocator {
+pub struct PhysicalFrameAllocator {
     regions: [Region; MAX_REGIONS],
     count: usize,
-    current: usize,
-    offset: u64,
     tracked_ranges: [TrackedRange; MAX_TRACKED_RANGES],
     tracked_count: usize,
 }
 
-impl BumpFrameAllocator {
+impl PhysicalFrameAllocator {
     /// Create an empty physical frame allocator.
     pub const fn new() -> Self {
         Self {
             regions: [Region { start: 0, pages: 0 }; MAX_REGIONS],
             count: 0,
-            current: 0,
-            offset: 0,
             tracked_ranges: [TrackedRange {
                 region: Region { start: 0, pages: 0 },
                 state: FrameRangeState::Reserved,
@@ -185,45 +185,45 @@ impl BumpFrameAllocator {
         if n == 0 {
             return None;
         }
+        assert_ne!(
+            owner,
+            FrameRangeOwner::Free,
+            "allocated frames must record a non-free owner"
+        );
 
-        while self.current < self.count {
-            let region = &self.regions[self.current];
-            let available_pages = region.pages.saturating_sub(self.offset);
-            if available_pages >= n {
-                let Some(candidate_offset) = self.offset.checked_mul(FRAME_SIZE) else {
-                    self.current += 1;
-                    self.offset = 0;
-                    continue;
-                };
-                let Some(candidate_address) = region.start.checked_add(candidate_offset) else {
-                    self.current += 1;
-                    self.offset = 0;
-                    continue;
-                };
-
-                if !self.mark_range_used(
-                    Region {
-                        start: candidate_address,
-                        pages: n,
-                    },
-                    owner,
-                ) {
-                    self.offset = self.offset.saturating_add(1);
-                    continue;
-                }
-                self.offset += n;
-                let start = PhysicalFrameStart::new(candidate_address)
-                    .expect("frame allocator returned an unaligned physical frame");
-                return Some(
-                    PhysicalFrameRange::new(start, n)
-                        .expect("frame allocator returned an empty physical frame range"),
-                );
+        for index in 0..self.tracked_count {
+            let tracked = self.tracked_ranges[index];
+            if tracked.state != FrameRangeState::Free || tracked.region.pages < n {
+                continue;
             }
-            // Move to the next region
-            self.current += 1;
-            self.offset = 0;
+
+            let candidate_region = Region {
+                start: tracked.region.start,
+                pages: n,
+            };
+            if self.mark_range_used(candidate_region, owner) {
+                let start = PhysicalFrameStart::new(candidate_region.start)
+                    .expect("frame allocator returned an unaligned physical frame");
+                return PhysicalFrameRange::new(start, n);
+            }
         }
+
         None
+    }
+
+    /// Return owned frames to the free pool when the expected owner matches.
+    pub fn free_frames_for(&mut self, range: PhysicalFrameRange, owner: FrameRangeOwner) -> bool {
+        if owner == FrameRangeOwner::Free {
+            return false;
+        }
+
+        self.mark_range_free(
+            Region {
+                start: range.start().as_u64(),
+                pages: range.page_count(),
+            },
+            owner,
+        )
     }
 
     /// Return page totals for reserved, free, and used tracked frame ranges.
@@ -285,6 +285,10 @@ impl BumpFrameAllocator {
                 }
                 FrameRangeOwner::AhciDma => {
                     statistics.ahci_dma = statistics.ahci_dma.saturating_add(pages);
+                }
+                FrameRangeOwner::DynamicKernelMapping => {
+                    statistics.dynamic_kernel_mapping =
+                        statistics.dynamic_kernel_mapping.saturating_add(pages);
                 }
                 FrameRangeOwner::UserStack => {
                     statistics.user_stack = statistics.user_stack.saturating_add(pages);
@@ -549,6 +553,82 @@ impl BumpFrameAllocator {
         false
     }
 
+    fn mark_range_free(&mut self, freed_region: Region, owner: FrameRangeOwner) -> bool {
+        let Some(freed_end) = region_end(freed_region) else {
+            return false;
+        };
+
+        for index in 0..self.tracked_count {
+            let tracked = self.tracked_ranges[index];
+            if tracked.state != FrameRangeState::Used || tracked.owner != owner {
+                continue;
+            }
+            let Some(tracked_end) = region_end(tracked.region) else {
+                return false;
+            };
+            if freed_region.start < tracked.region.start || freed_end > tracked_end {
+                continue;
+            }
+
+            let before_pages = (freed_region.start - tracked.region.start) / FRAME_SIZE;
+            let after_pages = (tracked_end - freed_end) / FRAME_SIZE;
+            self.tracked_ranges[index] = TrackedRange {
+                region: freed_region,
+                state: FrameRangeState::Free,
+                owner: FrameRangeOwner::Free,
+            };
+
+            if before_pages > 0 {
+                self.tracked_ranges[index] = TrackedRange {
+                    region: Region {
+                        start: tracked.region.start,
+                        pages: before_pages,
+                    },
+                    state: FrameRangeState::Used,
+                    owner,
+                };
+                self.insert_tracked_range_at(
+                    index + 1,
+                    TrackedRange {
+                        region: freed_region,
+                        state: FrameRangeState::Free,
+                        owner: FrameRangeOwner::Free,
+                    },
+                );
+                if after_pages > 0 {
+                    self.insert_tracked_range_at(
+                        index + 2,
+                        TrackedRange {
+                            region: Region {
+                                start: freed_end,
+                                pages: after_pages,
+                            },
+                            state: FrameRangeState::Used,
+                            owner,
+                        },
+                    );
+                }
+            } else if after_pages > 0 {
+                self.insert_tracked_range_at(
+                    index + 1,
+                    TrackedRange {
+                        region: Region {
+                            start: freed_end,
+                            pages: after_pages,
+                        },
+                        state: FrameRangeState::Used,
+                        owner,
+                    },
+                );
+            }
+
+            self.merge_adjacent_tracked_ranges();
+            return true;
+        }
+
+        false
+    }
+
     fn merge_adjacent_tracked_ranges(&mut self) {
         if self.tracked_count < 2 {
             return;
@@ -621,7 +701,7 @@ fn region_end(region: Region) -> Option<u64> {
 /// Verify the frame-zero skip behavior for multi-frame allocations.
 #[allow(dead_code)]
 pub fn verify_zero_address_skip_for_multi_frame_allocations() -> bool {
-    let mut frame_allocator = BumpFrameAllocator::new();
+    let mut frame_allocator = PhysicalFrameAllocator::new();
     frame_allocator.add_region(PhysAddr::new(0), 3);
 
     frame_allocator
@@ -633,7 +713,7 @@ pub fn verify_zero_address_skip_for_multi_frame_allocations() -> bool {
 /// Verify reserved, used, and free frame range tracking.
 #[allow(dead_code)]
 pub fn verify_reserved_used_and_free_range_tracking() -> bool {
-    let mut frame_allocator = BumpFrameAllocator::new();
+    let mut frame_allocator = PhysicalFrameAllocator::new();
     frame_allocator.reserve_region(PhysAddr::new(0), 1);
     frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 4);
 
@@ -652,7 +732,7 @@ pub fn verify_reserved_used_and_free_range_tracking() -> bool {
 /// Verify that allocations never return the same physical frame twice.
 #[allow(dead_code)]
 pub fn verify_duplicate_allocation_rejection() -> bool {
-    let mut frame_allocator = BumpFrameAllocator::new();
+    let mut frame_allocator = PhysicalFrameAllocator::new();
     frame_allocator.add_region(PhysAddr::new(0), 4);
 
     let Some(first_frame) = frame_allocator.allocate_frame() else {
@@ -674,7 +754,7 @@ pub fn verify_duplicate_allocation_rejection() -> bool {
 /// Verify that contiguous allocations do not cross registered region gaps.
 #[allow(dead_code)]
 pub fn verify_contiguous_allocation_boundaries() -> bool {
-    let mut frame_allocator = BumpFrameAllocator::new();
+    let mut frame_allocator = PhysicalFrameAllocator::new();
     frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 1);
     frame_allocator.add_region(PhysAddr::new(3 * FRAME_SIZE), 2);
 
@@ -687,7 +767,7 @@ pub fn verify_contiguous_allocation_boundaries() -> bool {
 /// Verify that reserved ranges inside a free region are not allocated.
 #[allow(dead_code)]
 pub fn verify_reserved_range_exclusion() -> bool {
-    let mut frame_allocator = BumpFrameAllocator::new();
+    let mut frame_allocator = PhysicalFrameAllocator::new();
     frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 4);
     frame_allocator.reserve_region(PhysAddr::new(2 * FRAME_SIZE), 1);
 
@@ -711,7 +791,7 @@ pub fn verify_reserved_range_exclusion() -> bool {
 /// Verify that used frame ranges record their explicit owners.
 #[allow(dead_code)]
 pub fn verify_owner_tracking() -> bool {
-    let mut frame_allocator = BumpFrameAllocator::new();
+    let mut frame_allocator = PhysicalFrameAllocator::new();
     frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 8);
 
     if frame_allocator
@@ -737,10 +817,53 @@ pub fn verify_owner_tracking() -> bool {
             }
 }
 
+/// Verify that released physical frames are reused and owner checked.
+#[allow(dead_code)]
+pub fn verify_released_frame_reuse() -> bool {
+    let mut frame_allocator = PhysicalFrameAllocator::new();
+    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 3);
+
+    let Some(dynamic_range) =
+        frame_allocator.allocate_frames_for(2, FrameRangeOwner::DynamicKernelMapping)
+    else {
+        return false;
+    };
+    if frame_allocator
+        .allocate_frame_for(FrameRangeOwner::UserStack)
+        .is_none()
+    {
+        return false;
+    }
+
+    let wrong_owner_rejected =
+        !frame_allocator.free_frames_for(dynamic_range, FrameRangeOwner::KernelStack);
+    let released =
+        frame_allocator.free_frames_for(dynamic_range, FrameRangeOwner::DynamicKernelMapping);
+    let double_free_rejected =
+        !frame_allocator.free_frames_for(dynamic_range, FrameRangeOwner::DynamicKernelMapping);
+    let Some(reused_range) = frame_allocator.allocate_frames_for(2, FrameRangeOwner::KernelStack)
+    else {
+        return false;
+    };
+
+    wrong_owner_rejected
+        && released
+        && double_free_rejected
+        && reused_range == dynamic_range
+        && frame_allocator.pages_owned_by(FrameRangeOwner::DynamicKernelMapping) == 0
+        && frame_allocator.pages_owned_by(FrameRangeOwner::KernelStack) == 2
+        && frame_allocator.statistics()
+            == FrameAllocatorStatistics {
+                reserved: 0,
+                free: 0,
+                used: 3,
+            }
+}
+
 /// Verify that tracked reserved and used ranges can record every current owner class.
 #[allow(dead_code)]
 pub fn verify_explicit_owner_coverage() -> bool {
-    let mut frame_allocator = BumpFrameAllocator::new();
+    let mut frame_allocator = PhysicalFrameAllocator::new();
     frame_allocator.reserve_region_for(PhysAddr::new(0), 1, FrameRangeOwner::KernelImage);
     frame_allocator.reserve_region_for(PhysAddr::new(FRAME_SIZE), 1, FrameRangeOwner::Mmio);
     frame_allocator.reserve_region_for(
@@ -748,7 +871,7 @@ pub fn verify_explicit_owner_coverage() -> bool {
         1,
         FrameRangeOwner::GuardPage,
     );
-    frame_allocator.add_region(PhysAddr::new(3 * FRAME_SIZE), 16);
+    frame_allocator.add_region(PhysAddr::new(3 * FRAME_SIZE), 17);
 
     let allocation_plan = [
         (FrameRangeOwner::PageTable, 1),
@@ -756,6 +879,7 @@ pub fn verify_explicit_owner_coverage() -> bool {
         (FrameRangeOwner::KernelStack, 2),
         (FrameRangeOwner::FramebufferBackbuffer, 2),
         (FrameRangeOwner::AhciDma, 3),
+        (FrameRangeOwner::DynamicKernelMapping, 1),
         (FrameRangeOwner::UserStack, 2),
         (FrameRangeOwner::UserElf, 4),
     ];
@@ -779,6 +903,7 @@ pub fn verify_explicit_owner_coverage() -> bool {
             kernel_stack: 2,
             framebuffer_backbuffer: 2,
             ahci_dma: 3,
+            dynamic_kernel_mapping: 1,
             user_stack: 2,
             user_elf: 4,
         }

@@ -14,7 +14,7 @@
 //! - [`get_detected_files`] - Return files detected from disk during probing
 
 use crate::kernel::memory::address::StorageDataAddress;
-use crate::kernel::memory::frame_allocator::BumpFrameAllocator;
+use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -125,7 +125,7 @@ struct DetectedFat32File {
 
 /// Discover and initialize supported storage controllers.
 pub fn init(
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     pci_configuration_access: PciConfigurationAccess,
 ) {
     STORAGE_DEVICES.lock().clear();

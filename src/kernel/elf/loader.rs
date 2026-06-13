@@ -1,7 +1,7 @@
 use crate::kernel::elf::parser::{ElfError, ElfFile, ProgramHeader};
 use crate::kernel::memory::{
     address::{PhysicalFrameStart, UserVirtualAddress, UserVirtualRange},
-    frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
+    frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     user_stack,
 };
 use core::cmp::{max, min};
@@ -31,7 +31,7 @@ impl LoadedElf {
 ///
 /// Panics if the ELF image is invalid, unsupported, or cannot be mapped.
 pub fn load_user_program(
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     image: &[u8],
     source_path: &str,
 ) -> LoadedElf {
@@ -180,7 +180,7 @@ impl LoadError {
 }
 
 fn load_user_elf(
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     image: &[u8],
 ) -> Result<LoadedElf, LoadError> {
     let elf = ElfFile::parse(image).map_err(LoadError::Elf)?;
@@ -237,7 +237,7 @@ fn validate_entry_point(entry_point: u64) -> Result<(), LoadError> {
 }
 
 fn map_load_segment(
-    frame_allocator: &mut BumpFrameAllocator,
+    frame_allocator: &mut PhysicalFrameAllocator,
     image: &[u8],
     program_header: ProgramHeader,
 ) -> Result<(), LoadError> {

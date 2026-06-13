@@ -2,7 +2,7 @@
 
 use crate::kernel::memory::{
     address::DmaPhysicalAddress,
-    frame_allocator::{BumpFrameAllocator, FrameRangeOwner},
+    frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
 };
 
 const DMA_PAGE_SIZE: usize = 4096;
@@ -18,7 +18,7 @@ pub(super) struct AhciDmaBuffers {
     pub(super) data_bytes: usize,
 }
 
-pub(super) fn allocate(frame_allocator: &mut BumpFrameAllocator) -> Option<AhciDmaBuffers> {
+pub(super) fn allocate(frame_allocator: &mut PhysicalFrameAllocator) -> Option<AhciDmaBuffers> {
     let command_list = frame_allocator.allocate_frame_for(FrameRangeOwner::AhciDma)?;
     let received_fis = frame_allocator.allocate_frame_for(FrameRangeOwner::AhciDma)?;
     let command_table = frame_allocator.allocate_frame_for(FrameRangeOwner::AhciDma)?;
