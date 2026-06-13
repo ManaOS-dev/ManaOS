@@ -184,7 +184,9 @@ temporarily activating the user address space. The one-shot user lifecycle
 switches to the task address space before Ring 3 entry and restores the kernel
 address space after `SYS_EXIT`. Finished user tasks then destroy their private
 user-window page tables and return tracked user stack, user ELF, and
-page-table frames to the reusable frame allocator.
+page-table frames to the reusable frame allocator. User exit reporting is owned
+by the scheduler, so lifecycle cleanup drains a task-specific exit record before
+reclaiming the matching address space and kernel stack resources.
 
 ## Replacement Checklist
 

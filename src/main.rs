@@ -713,9 +713,14 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
         expected_reclaimed_user_kernel_stack_virtual_pages,
         "finished user tasks must return guard-inclusive kernel stack virtual pages"
     );
+    assert_eq!(
+        diagnostics.pending_user_exits(),
+        0,
+        "reported user exits must not remain queued after lifecycle cleanup"
+    );
     crate::log_info!(
         "task",
-        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_address_spaces={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
+        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_address_spaces={} pending_user_exits={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
         diagnostics.total_tasks(),
         diagnostics.kernel_tasks(),
         diagnostics.user_tasks(),
@@ -724,6 +729,7 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
         states.blocked(),
         states.finished(),
         diagnostics.active_user_address_spaces(),
+        diagnostics.pending_user_exits(),
         diagnostics.reclaimed_user_kernel_stacks(),
         diagnostics.reclaimed_user_kernel_stack_writable_pages(),
         diagnostics.reclaimed_user_kernel_stack_virtual_pages(),

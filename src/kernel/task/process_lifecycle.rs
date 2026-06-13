@@ -1,10 +1,8 @@
 //! User process lifecycle transitions.
 
-use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 static USER_EXIT_RETURN_STACK: AtomicUsize = AtomicUsize::new(0);
-static LAST_USER_EXIT_CODE: AtomicU64 = AtomicU64::new(0);
-static LAST_USER_EXIT_TASK_ID: AtomicU64 = AtomicU64::new(0);
 
 /// Result reported by a user task that exited through `SYS_EXIT`.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -14,6 +12,11 @@ pub struct UserTaskExit {
 }
 
 impl UserTaskExit {
+    /// Create an exit result for a finished user task.
+    pub(super) const fn new(task_id: u64, exit_code: u64) -> Self {
+        Self { task_id, exit_code }
+    }
+
     /// Return the task identifier that exited.
     pub fn task_id(&self) -> u64 {
         self.task_id
@@ -64,7 +67,6 @@ pub fn run_user_task_once(
         user_task.trap_frame.rdx
     );
 
-    LAST_USER_EXIT_TASK_ID.store(0, Ordering::Release);
     super::set_preemption_enabled(true);
     // SAFETY: The trap frame was derived from mapped user code and stack
     // addresses, and this restore path returns only through SYS_EXIT.
@@ -75,20 +77,20 @@ pub fn run_user_task_once(
     crate::kernel::memory::address_space::switch_to_kernel_address_space();
     crate::log_info!("task", "Restored kernel address space after user exit.");
 
-    let task_id = LAST_USER_EXIT_TASK_ID.load(Ordering::Acquire);
-    if task_id == 0 {
-        return None;
-    }
-    let (address_space_reclaim, kernel_stack_reclaim) = {
+    let (exit, address_space_reclaim, kernel_stack_reclaim) = {
         let mut scheduler = super::SCHEDULER.lock();
         let scheduler = scheduler
             .as_mut()
             .expect("scheduler must be initialized before reclaiming finished user task resources");
-        (
-            scheduler.reclaim_finished_user_address_space(frame_allocator, task_id),
-            scheduler.reclaim_finished_user_kernel_stack(frame_allocator, task_id),
-        )
+        let exit = scheduler.take_finished_user_exit()?;
+        let task_id = exit.task_id();
+        let address_space_reclaim =
+            scheduler.reclaim_finished_user_address_space(frame_allocator, task_id);
+        let kernel_stack_reclaim =
+            scheduler.reclaim_finished_user_kernel_stack(frame_allocator, task_id);
+        (exit, address_space_reclaim, kernel_stack_reclaim)
     };
+    let task_id = exit.task_id();
     if let Some(reclaim) = address_space_reclaim {
         crate::log_info!(
             "task",
@@ -108,21 +110,16 @@ pub fn run_user_task_once(
         );
     }
 
-    Some(UserTaskExit {
-        task_id,
-        exit_code: LAST_USER_EXIT_CODE.load(Ordering::Acquire),
-    })
+    Some(exit)
 }
 
 /// Mark the currently running user task as finished.
 pub fn finish_current_task(exit_code: u64) -> Option<u64> {
-    let task_id = super::SCHEDULER
+    let exit = super::SCHEDULER
         .lock()
         .as_mut()
-        .and_then(super::Scheduler::finish_current_task)?;
-    LAST_USER_EXIT_CODE.store(exit_code, Ordering::Release);
-    LAST_USER_EXIT_TASK_ID.store(task_id, Ordering::Release);
-    Some(task_id)
+        .and_then(|scheduler| scheduler.finish_current_task(exit_code))?;
+    Some(exit.task_id())
 }
 
 /// Save the kernel return stack used by one-shot user tasks.

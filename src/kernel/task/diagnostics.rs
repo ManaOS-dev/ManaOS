@@ -54,6 +54,7 @@ pub struct SchedulerDiagnostics {
     pub(super) user_entries: u64,
     pub(super) user_resumes: u64,
     pub(super) finished_tasks: u64,
+    pub(super) pending_user_exits: u64,
     pub(super) reclaimed_user_kernel_stacks: u64,
     pub(super) reclaimed_user_kernel_stack_writable_pages: u64,
     pub(super) reclaimed_user_kernel_stack_virtual_pages: u64,
@@ -108,6 +109,11 @@ impl SchedulerDiagnostics {
     /// Return the number of tasks marked finished through the scheduler.
     pub const fn finished_tasks(self) -> u64 {
         self.finished_tasks
+    }
+
+    /// Return the number of finished user exits waiting to be reported.
+    pub const fn pending_user_exits(self) -> u64 {
+        self.pending_user_exits
     }
 
     /// Return the number of finished user task kernel stacks reclaimed.
