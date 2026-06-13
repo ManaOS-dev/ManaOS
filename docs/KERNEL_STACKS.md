@@ -97,7 +97,9 @@ Policy:
 - `arch/` must not call `kernel::task` directly. `main.rs` remains the
   composition root for registering stack-switch providers.
 - Timer interrupts must not preempt a user task into a shared bootstrap stack
-  once user preemption is enabled.
+  once user preemption is enabled. The one-shot user path blocks the bootstrap
+  task while its SYS_EXIT return stack is live, so timer preemption chooses a
+  schedulable kernel task context instead of a stale bootstrap context.
 
 ## Fault Diagnostics
 
@@ -140,4 +142,5 @@ classification remains pending because those stacks are not yet represented by
    for scheduler-owned kernel and user task stacks; bootstrap and
    architecture-owned IST stacks remain pending.
 7. Enable user task preemption only after full user trap frames and per-task
-   kernel stack switching are both verified.
+   kernel stack switching are both verified. This is complete for x86_64 PIT
+   timer preemption and resume of the current one-shot user smoke path.

@@ -2,8 +2,6 @@
 
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
-use super::architecture;
-
 static USER_EXIT_RETURN_STACK: AtomicUsize = AtomicUsize::new(0);
 static LAST_USER_EXIT_CODE: AtomicU64 = AtomicU64::new(0);
 
@@ -22,12 +20,7 @@ pub fn run_user_task_once(task_id: u64) -> Option<u64> {
             .expect("scheduler must be initialized before running user tasks")
             .prepare_one_shot_user_task(task_id)?
     };
-    architecture::install_kernel_stack(
-        u64::try_from(user_task.kernel_stack_top).expect("kernel stack top must fit in u64"),
-    );
-    crate::kernel::interrupt::set_syscall_kernel_stack_top(
-        u64::try_from(user_task.kernel_stack_top).expect("kernel stack top must fit in u64"),
-    );
+    super::install_user_task_kernel_stack(user_task.kernel_stack_top);
     crate::log_info!(
         "task",
         "Installed user task kernel stack: task={} top={:#x}",
@@ -48,7 +41,7 @@ pub fn run_user_task_once(task_id: u64) -> Option<u64> {
     // SAFETY: The trap frame was derived from mapped user code and stack
     // addresses, and this restore path returns only through SYS_EXIT.
     unsafe {
-        architecture::enter_user_mode_once(user_task.trap_frame.as_pointer());
+        super::architecture::enter_user_mode_once(user_task.trap_frame.as_pointer());
     }
 
     Some(LAST_USER_EXIT_CODE.load(Ordering::Acquire))
