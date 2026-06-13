@@ -56,5 +56,23 @@ pub(super) fn run(
         diagnostics.user_exit_return_stack_sets(),
         diagnostics.user_exit_return_stack_takes()
     ));
+    let Some(snapshots) = crate::kernel::task::get_scheduler_task_snapshots() else {
+        output.push("task_table: unavailable".to_string());
+        return Ok(CommandEffect::Output(output));
+    };
+    for snapshot in snapshots {
+        output.push(format!(
+            "task: id={} parent={} kind={} state={} active={} address_space_owned={} kernel_stack_owned={}",
+            snapshot.task_id(),
+            snapshot
+                .parent_task_id()
+                .map_or_else(|| "-".to_string(), |task_id| task_id.to_string()),
+            snapshot.kind().as_str(),
+            snapshot.state().as_str(),
+            snapshot.active(),
+            snapshot.address_space_owned(),
+            snapshot.kernel_stack_owned()
+        ));
+    }
     Ok(CommandEffect::Output(output))
 }

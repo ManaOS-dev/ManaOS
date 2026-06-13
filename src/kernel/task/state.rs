@@ -15,6 +15,16 @@ pub enum TaskState {
 }
 
 impl TaskState {
+    /// Return a stable label for console diagnostics.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ready => "ready",
+            Self::Running => "running",
+            Self::Blocked => "blocked",
+            Self::Finished => "finished",
+        }
+    }
+
     pub(super) fn is_ready(self) -> bool {
         self == Self::Ready
     }
