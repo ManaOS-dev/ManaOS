@@ -82,21 +82,20 @@ pub fn run_user_task_once(
     assert_user_exit_return_window_consumed();
     crate::log_info!("task", "Restored kernel address space after user exit.");
 
-    let (exit, address_space_reclaim, kernel_stack_reclaim) = {
+    let (exit, resource_reclaim) = {
         let mut scheduler = super::SCHEDULER.lock();
         let scheduler = scheduler
             .as_mut()
             .expect("scheduler must be initialized before reclaiming finished user task resources");
         let exit = scheduler.take_finished_user_exit()?;
         let task_id = exit.task_id();
-        let address_space_reclaim =
-            scheduler.reclaim_finished_user_address_space(frame_allocator, task_id);
-        let kernel_stack_reclaim =
-            scheduler.reclaim_finished_user_kernel_stack(frame_allocator, task_id);
-        (exit, address_space_reclaim, kernel_stack_reclaim)
+        let resource_reclaim = scheduler
+            .reclaim_finished_user_resources(frame_allocator, task_id)
+            .expect("finished user exit must reference a reclaimable user task");
+        (exit, resource_reclaim)
     };
     let task_id = exit.task_id();
-    if let Some(reclaim) = address_space_reclaim {
+    if let Some(reclaim) = resource_reclaim.address_space() {
         crate::log_info!(
             "task",
             "User address space reclaimed: task={} user_pages={} page_table_pages={}",
@@ -105,7 +104,7 @@ pub fn run_user_task_once(
             reclaim.page_table_pages()
         );
     }
-    if let Some(reclaim) = kernel_stack_reclaim {
+    if let Some(reclaim) = resource_reclaim.kernel_stack() {
         crate::log_info!(
             "task",
             "User kernel stack reclaimed: task={} writable_pages={} virtual_pages={}",
@@ -114,6 +113,13 @@ pub fn run_user_task_once(
             reclaim.virtual_pages()
         );
     }
+    crate::log_info!(
+        "task",
+        "User task resources reclaimed: task={} address_space={} kernel_stack={}",
+        task_id,
+        resource_reclaim.reclaimed_address_space(),
+        resource_reclaim.reclaimed_kernel_stack()
+    );
 
     Some(exit)
 }

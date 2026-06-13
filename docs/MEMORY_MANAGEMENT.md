@@ -164,9 +164,11 @@ after `SYS_EXIT`: writable stack mappings are removed, `KernelStack` frames are
 returned to the physical frame allocator, and the guard-inclusive virtual
 reservation is returned to the kernel virtual range allocator. Bootstrap,
 kernel task, and architecture-owned stacks still live for the lifetime of their
-owning runtime metadata. The scheduler diagnostics snapshot records reclaimed
-user kernel stack count, writable pages, and guard-inclusive virtual pages so
-boot smoke tests and the console overlay can verify lifecycle cleanup.
+owning runtime metadata. Scheduler cleanup emits one finished user resource
+reclaim record that aggregates address-space and kernel stack reclamation. The
+scheduler diagnostics snapshot records aggregate reclaim records, reclaimed user
+kernel stack count, writable pages, and guard-inclusive virtual pages so boot
+smoke tests and the console overlay can verify lifecycle cleanup.
 
 ## User Address Spaces
 
@@ -186,9 +188,10 @@ address space after `SYS_EXIT`. Finished user tasks then destroy their private
 user-window page tables and return tracked user stack, user ELF, and
 page-table frames to the reusable frame allocator. User exit reporting is owned
 by the scheduler, so lifecycle cleanup drains a task-specific exit record before
-reclaiming the matching address space and kernel stack resources. The one-shot
-exit return stack now uses an explicit set/take return window so stale return
-stack pointers cannot be reused across lifecycle runs.
+asking the scheduler for one aggregate resource-reclaim pass over the matching
+address space and kernel stack resources. The one-shot exit return stack now
+uses an explicit set/take return window so stale return stack pointers cannot be
+reused across lifecycle runs.
 
 ## Replacement Checklist
 

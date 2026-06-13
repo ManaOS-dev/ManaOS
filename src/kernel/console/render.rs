@@ -136,7 +136,8 @@ pub(super) fn verify_status_strip_smoke() -> bool {
         && scheduler_line.contains("pending_exits=")
         && scheduler_line.contains("preempt=")
         && scheduler_line.contains("resume=")
-        && memory_line.contains("memory kernel_stacks_reclaimed=")
+        && memory_line.contains("memory user_resource_records=")
+        && memory_line.contains("kernel_stacks_reclaimed=")
         && memory_line.contains("writable_pages=")
         && memory_line.contains("virtual_pages=")
 }
@@ -176,7 +177,8 @@ fn memory_reclaim_status_line() -> String {
         return "memory unavailable".to_string();
     };
     format!(
-        "memory kernel_stacks_reclaimed={} writable_pages={} virtual_pages={}",
+        "memory user_resource_records={} kernel_stacks_reclaimed={} writable_pages={} virtual_pages={}",
+        diagnostics.reclaimed_user_resource_records(),
         diagnostics.reclaimed_user_kernel_stacks(),
         diagnostics.reclaimed_user_kernel_stack_writable_pages(),
         diagnostics.reclaimed_user_kernel_stack_virtual_pages()
