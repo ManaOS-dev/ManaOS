@@ -235,6 +235,18 @@ impl KernelStack {
         address >= guard_start && address < guard_end
     }
 
+    /// Return whether a byte range is fully inside this stack's writable pages.
+    pub(super) fn contains_writable_range(&self, start_address: u64, byte_len: u64) -> bool {
+        if byte_len == 0 {
+            return false;
+        }
+
+        let Some(end_address) = start_address.checked_add(byte_len) else {
+            return false;
+        };
+        start_address >= self.writable_virtual_start() && end_address <= self.virtual_top()
+    }
+
     /// Return the first virtual address reserved for future writable stack mapping.
     pub(super) fn writable_virtual_start(&self) -> u64 {
         self.virtual_reservation.writable_start().as_u64()

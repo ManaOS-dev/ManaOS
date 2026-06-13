@@ -25,6 +25,9 @@ pub fn run_user_task_once(task_id: u64) -> Option<u64> {
     architecture::install_kernel_stack(
         u64::try_from(user_task.kernel_stack_top).expect("kernel stack top must fit in u64"),
     );
+    crate::kernel::interrupt::set_syscall_kernel_stack_top(
+        u64::try_from(user_task.kernel_stack_top).expect("kernel stack top must fit in u64"),
+    );
     crate::log_info!(
         "task",
         "Installed user task kernel stack: task={} top={:#x}",

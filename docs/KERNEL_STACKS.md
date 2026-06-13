@@ -89,8 +89,8 @@ Policy:
   `privilege_stack_table[0]` through an architecture-owned API registered from
   `main.rs`.
 - `SYSCALL` does not use the TSS privilege stack automatically, so its entry
-  path still needs an explicit switch from the user stack to the current task's
-  guarded kernel stack.
+  path uses the current task's installed stack top to switch from the user stack
+  to the guarded kernel stack before dispatching.
 - `arch/` must not call `kernel::task` directly. `main.rs` remains the
   composition root for registering stack-switch providers.
 - Timer interrupts must not preempt a user task into a shared bootstrap stack
