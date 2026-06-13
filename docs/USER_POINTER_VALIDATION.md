@@ -37,7 +37,7 @@ The implementation entry point is `kernel::memory::user_pointer`.
 | `lseek(fd, offset, whence)` | none | none | none | No user pointer validation. |
 | `brk(addr)` | none | none | none | The address must stay within the task heap range; no user buffer is copied. |
 | `mmap(addr, len, prot, flags)` | none | none | none | Anonymous private mappings only; `addr` must be zero, `len` must be non-zero, and executable mappings are rejected. |
-| `munmap(addr, len)` | none | none | none | Exact anonymous mapping unmaps only; `addr` must be page-aligned and no user buffer is copied. |
+| `munmap(addr, len)` | none | none | none | Anonymous mapping range unmap only; `addr` must be page-aligned, the range must stay inside one tracked mapping record, and no user buffer is copied. |
 | `exit(code)` / `exit_group(code)` | none | none | none | No user pointer validation. |
 | `getpid()` | none | none | none | No user pointer validation. |
 

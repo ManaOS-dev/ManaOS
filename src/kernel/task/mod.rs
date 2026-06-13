@@ -763,7 +763,7 @@ impl Scheduler {
             return None;
         };
         let address_space = user_runtime.address_space?;
-        let unmapped_pages = user_runtime.mappings.unmap_exact(
+        let unmapped_pages = user_runtime.mappings.unmap_range(
             address_space,
             frame_allocator,
             start_address,
@@ -771,12 +771,13 @@ impl Scheduler {
         )?;
         crate::log_info!(
             "syscall",
-            "munmap -> task={} start={:#x} length={} pages={} unmapped=true active_pages={}",
+            "munmap -> task={} start={:#x} length={} pages={} unmapped=true active_pages={} active_records={}",
             task_id,
             start_address,
             length,
             unmapped_pages,
-            user_runtime.mappings.active_pages()
+            user_runtime.mappings.active_pages(),
+            user_runtime.mappings.active_records()
         );
         Some(unmapped_pages)
     }

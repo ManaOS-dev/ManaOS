@@ -37,6 +37,14 @@ struct UserMapping {
     page_count: u64,
 }
 
+impl UserMapping {
+    fn end_exclusive(self) -> Option<u64> {
+        self.start
+            .as_u64()
+            .checked_add(self.page_count.checked_mul(PAGE_SIZE)?)
+    }
+}
+
 /// Anonymous user mappings owned by one user task.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserMappings {
@@ -83,11 +91,12 @@ impl UserMappings {
         Some(UserMappingAllocation { start, page_count })
     }
 
-    /// Unmap an exact anonymous mapping and return the number of removed pages.
+    /// Unmap a page-aligned anonymous mapping range and return removed pages.
     ///
-    /// Partial unmap and split mappings are intentionally not supported by this
-    /// first foundation layer.
-    pub fn unmap_exact(
+    /// The range must be fully contained in one existing mapping record. When
+    /// the removed range is in the middle of a record, the record is split so
+    /// both remaining sides stay tracked.
+    pub fn unmap_range(
         &mut self,
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
@@ -99,15 +108,37 @@ impl UserMappings {
         }
         let start = UserVirtualAddress::new(start_address)?;
         let page_count = page_count_for_length(length)?;
-        let record_index = self.find_exact_record_index(start, page_count)?;
+        let end_address = start_address.checked_add(page_count.checked_mul(PAGE_SIZE)?)?;
+        let record_index = self.find_containing_record_index(start_address, end_address)?;
+        let record = self.records[record_index].expect("containing record must exist");
+        let record_start = record.start.as_u64();
+        let record_end = record
+            .end_exclusive()
+            .expect("tracked mapping end must not overflow");
+        let left_pages = (start_address - record_start) / PAGE_SIZE;
+        let right_pages = (record_end - end_address) / PAGE_SIZE;
+        let split_record_index = if left_pages > 0 && right_pages > 0 {
+            Some(self.next_empty_record_index()?)
+        } else {
+            None
+        };
 
         Self::unmap_pages(address_space, frame_allocator, start, page_count);
-        self.records[record_index] = None;
+        self.apply_record_unmap(
+            record_index,
+            split_record_index,
+            record,
+            left_pages,
+            right_pages,
+            end_address,
+        );
         crate::log_info!(
             "memory",
-            "User anonymous mapping unmapped: start={:#x} pages={}",
+            "User anonymous mapping unmapped: start={:#x} pages={} records={} active_pages={}",
             start.as_u64(),
-            page_count
+            page_count,
+            self.active_records(),
+            self.active_pages()
         );
         Some(page_count)
     }
@@ -212,13 +243,58 @@ impl UserMappings {
         self.records.iter().position(Option::is_none)
     }
 
-    fn find_exact_record_index(self, start: UserVirtualAddress, page_count: u64) -> Option<usize> {
+    fn find_containing_record_index(self, start_address: u64, end_address: u64) -> Option<usize> {
         self.records.iter().position(|record| {
-            matches!(
-                record,
-                Some(mapping) if mapping.start == start && mapping.page_count == page_count
-            )
+            let Some(mapping) = record else {
+                return false;
+            };
+            let Some(mapping_end) = mapping.end_exclusive() else {
+                return false;
+            };
+            mapping.start.as_u64() <= start_address && end_address <= mapping_end
         })
+    }
+
+    fn apply_record_unmap(
+        &mut self,
+        record_index: usize,
+        split_record_index: Option<usize>,
+        record: UserMapping,
+        left_pages: u64,
+        right_pages: u64,
+        right_start_address: u64,
+    ) {
+        match (left_pages, right_pages) {
+            (0, 0) => self.records[record_index] = None,
+            (_, 0) => {
+                self.records[record_index] = Some(UserMapping {
+                    start: record.start,
+                    page_count: left_pages,
+                });
+            }
+            (0, _) => {
+                let right_start = UserVirtualAddress::new(right_start_address)
+                    .expect("right split mapping start must be a valid user address");
+                self.records[record_index] = Some(UserMapping {
+                    start: right_start,
+                    page_count: right_pages,
+                });
+            }
+            (_, _) => {
+                let split_record_index =
+                    split_record_index.expect("middle unmap must reserve a split record");
+                let right_start = UserVirtualAddress::new(right_start_address)
+                    .expect("right split mapping start must be a valid user address");
+                self.records[record_index] = Some(UserMapping {
+                    start: record.start,
+                    page_count: left_pages,
+                });
+                self.records[split_record_index] = Some(UserMapping {
+                    start: right_start,
+                    page_count: right_pages,
+                });
+            }
+        }
     }
 }
 

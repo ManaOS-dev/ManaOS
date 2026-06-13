@@ -96,7 +96,7 @@ User tasks now own separate address-space roots:
 - User heap frames are user-task-owned, mapped by `brk` through the active user
   address space, and returned when the address space is destroyed.
 - Anonymous user mapping frames are user-task-owned, mapped by the ManaOS
-  four-argument `mmap` subset, and returned by exact `munmap` or address-space
+  four-argument `mmap` subset, and returned by `munmap` or address-space
   destruction.
 - Kernel stack frames are task-owned and mapped through higher-half kernel
   virtual ranges. The adjacent lower virtual guard page remains unmapped and
@@ -197,14 +197,14 @@ space until process cleanup.
 
 Anonymous `mmap` is the second syscall-time user memory path. The current ABI
 supports `mmap(addr, len, prot, flags)` only for `addr = 0` and
-`MAP_PRIVATE | MAP_ANONYMOUS`; executable, file-backed, fixed-address, and
-partial-unmap mappings are intentionally rejected until the process model grows
-those ownership rules. The static user layout keeps the `brk` heap below
+`MAP_PRIVATE | MAP_ANONYMOUS`; executable, file-backed, and fixed-address
+mappings are intentionally rejected until the process model grows those
+ownership rules. The static user layout keeps the `brk` heap below
 `0x0000_6000_0000_0000`, anonymous mappings in
 `0x0000_6000_0000_0000..0x0000_7000_0000_0000`, and fixed stack slots above
-`0x0000_7fff_f000_0000`. Exact `munmap` removes all pages in a tracked
-anonymous mapping and returns their physical frames to the `UserMapping` owner
-pool.
+`0x0000_7fff_f000_0000`. `munmap` removes page-aligned ranges inside one
+tracked anonymous mapping, splits the remaining sides into separate records when
+needed, and returns removed physical frames to the `UserMapping` owner pool.
 
 The one-shot user runtime registers the boot-owned frame allocator only while
 user code can issue syscalls, so syscall dispatch can allocate and free user
@@ -270,8 +270,10 @@ reused across lifecycle runs.
       pages through storage smoke.
 - [x] Add `brk` shrink unmapping that returns no-longer-covered user heap
       frames to the allocator.
-- [x] Add an anonymous `mmap`/`munmap` subset and prove exact unmap frame
-      release through storage smoke.
+- [x] Add an anonymous `mmap`/`munmap` subset and prove unmap frame release
+      through storage smoke.
+- [x] Add partial anonymous `munmap` and prove split-record tracking through
+      storage smoke.
 - [x] Expose per-user-task virtual memory snapshots through the `tasks` console
       command.
 - [x] Reclaim finished user address spaces by walking only the private user
