@@ -178,7 +178,9 @@ ELF loading and user stack allocation now map pages into an explicit
 arrays are written through the stack backing frames, so setup does not require
 temporarily activating the user address space. The one-shot user lifecycle
 switches to the task address space before Ring 3 entry and restores the kernel
-address space after `SYS_EXIT`.
+address space after `SYS_EXIT`. Finished user tasks then destroy their private
+user-window page tables and return tracked user stack, user ELF, and
+page-table frames to the reusable frame allocator.
 
 ## Replacement Checklist
 
@@ -209,5 +211,7 @@ address space after `SYS_EXIT`.
       reuse, and physical reuse.
 - [x] Add user address-space roots for user task ELF and stack mappings, and
       prove template isolation with a boot self-check.
+- [x] Reclaim finished user address spaces by walking only the private user
+      PML4 window and returning user/page-table frames to the allocator.
 - [ ] Continue proving the boot path with `just storage-smoke` after every
       future allocator behavior change.

@@ -46,6 +46,7 @@ $expectedPatterns = @(
     "Kernel virtual range allocator self-checks passed: non_overlapping_reuse=true exhaustion_rejection=true",
     "Dynamic kernel mapping lifecycle self-check passed: map=true unmap=true virtual_reuse=true physical_reuse=true",
     "User address-space template self-check passed: kernel_shared=true user_window_empty=true",
+    "User address-space reclaim self-check passed: user_pages=1 page_table_pages=4",
     "Loading user ELF from filesystem: path=/disk/bin/smoke_demo",
     "User address space prepared: pml4=",
     "ELF segment mapped: .*perms=R-X",
@@ -67,6 +68,7 @@ $expectedPatterns = @(
     "user smoke ok",
     "User task exited: code=0",
     "Restored kernel address space after user exit",
+    "User address space reclaimed: task=.* user_pages=.* page_table_pages=.*",
     "Multi-user preemption smoke passed: tasks=2"
 )
 
