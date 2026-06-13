@@ -60,7 +60,9 @@ allocate physical frames for writable pages, and map those pages
 `PRESENT | WRITABLE | NO_EXECUTE` without `USER_ACCESSIBLE`.
 Finished user tasks reclaim those scheduler-owned stack resources after
 `SYS_EXIT`, once execution has returned to the kernel address space and the
-scheduler has marked the task `Finished`.
+scheduler has marked the task `Finished`. Scheduler diagnostics keep reclaim
+accounting for finished user stacks, and the console overlay renders those
+counts alongside the task status strip.
 
 The bootstrap stack and architecture-owned TSS/IST stacks are still separate
 static stack categories and do not yet use this allocation path.
@@ -160,3 +162,6 @@ classification remains pending because those stacks are not yet represented by
 9. Reclaim finished user task kernel stacks after `SYS_EXIT`. This is complete
    for scheduler-owned user task stacks; bootstrap, kernel task, and
    architecture-owned stacks remain outside this lifecycle path.
+10. Expose finished user task kernel stack reclaim accounting through scheduler
+    diagnostics and the console overlay. This is complete for stack count,
+    writable page count, and guard-inclusive virtual page count.

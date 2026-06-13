@@ -284,6 +284,9 @@ struct Scheduler {
     user_entry_count: u64,
     user_resume_count: u64,
     finished_task_count: u64,
+    reclaimed_user_kernel_stack_count: u64,
+    reclaimed_user_kernel_stack_writable_pages: u64,
+    reclaimed_user_kernel_stack_virtual_pages: u64,
 }
 
 impl Scheduler {
@@ -301,6 +304,9 @@ impl Scheduler {
             user_entry_count: 0,
             user_resume_count: 0,
             finished_task_count: 0,
+            reclaimed_user_kernel_stack_count: 0,
+            reclaimed_user_kernel_stack_writable_pages: 0,
+            reclaimed_user_kernel_stack_virtual_pages: 0,
         }
     }
 
@@ -457,6 +463,11 @@ impl Scheduler {
             user_entries: self.user_entry_count,
             user_resumes: self.user_resume_count,
             finished_tasks: self.finished_task_count,
+            reclaimed_user_kernel_stacks: self.reclaimed_user_kernel_stack_count,
+            reclaimed_user_kernel_stack_writable_pages: self
+                .reclaimed_user_kernel_stack_writable_pages,
+            reclaimed_user_kernel_stack_virtual_pages: self
+                .reclaimed_user_kernel_stack_virtual_pages,
         }
     }
 
@@ -591,7 +602,16 @@ impl Scheduler {
         }
 
         let kernel_stack = self.tasks[task_index].kernel_stack.take()?;
-        Some(kernel_stack.destroy(frame_allocator, &mut self.kernel_stack_range_allocator))
+        let reclaim = kernel_stack.destroy(frame_allocator, &mut self.kernel_stack_range_allocator);
+        self.reclaimed_user_kernel_stack_count =
+            self.reclaimed_user_kernel_stack_count.saturating_add(1);
+        self.reclaimed_user_kernel_stack_writable_pages = self
+            .reclaimed_user_kernel_stack_writable_pages
+            .saturating_add(reclaim.writable_pages());
+        self.reclaimed_user_kernel_stack_virtual_pages = self
+            .reclaimed_user_kernel_stack_virtual_pages
+            .saturating_add(reclaim.virtual_pages());
+        Some(reclaim)
     }
 
     fn record_current_user_trap_frame(

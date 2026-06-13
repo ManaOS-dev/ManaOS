@@ -54,6 +54,9 @@ pub struct SchedulerDiagnostics {
     pub(super) user_entries: u64,
     pub(super) user_resumes: u64,
     pub(super) finished_tasks: u64,
+    pub(super) reclaimed_user_kernel_stacks: u64,
+    pub(super) reclaimed_user_kernel_stack_writable_pages: u64,
+    pub(super) reclaimed_user_kernel_stack_virtual_pages: u64,
 }
 
 impl SchedulerDiagnostics {
@@ -105,5 +108,20 @@ impl SchedulerDiagnostics {
     /// Return the number of tasks marked finished through the scheduler.
     pub const fn finished_tasks(self) -> u64 {
         self.finished_tasks
+    }
+
+    /// Return the number of finished user task kernel stacks reclaimed.
+    pub const fn reclaimed_user_kernel_stacks(self) -> u64 {
+        self.reclaimed_user_kernel_stacks
+    }
+
+    /// Return the number of writable kernel stack pages reclaimed from user tasks.
+    pub const fn reclaimed_user_kernel_stack_writable_pages(self) -> u64 {
+        self.reclaimed_user_kernel_stack_writable_pages
+    }
+
+    /// Return the number of reserved kernel stack virtual pages reclaimed from user tasks.
+    pub const fn reclaimed_user_kernel_stack_virtual_pages(self) -> u64 {
+        self.reclaimed_user_kernel_stack_virtual_pages
     }
 }

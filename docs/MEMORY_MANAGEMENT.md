@@ -164,7 +164,9 @@ after `SYS_EXIT`: writable stack mappings are removed, `KernelStack` frames are
 returned to the physical frame allocator, and the guard-inclusive virtual
 reservation is returned to the kernel virtual range allocator. Bootstrap,
 kernel task, and architecture-owned stacks still live for the lifetime of their
-owning runtime metadata.
+owning runtime metadata. The scheduler diagnostics snapshot records reclaimed
+user kernel stack count, writable pages, and guard-inclusive virtual pages so
+boot smoke tests and the console overlay can verify lifecycle cleanup.
 
 ## User Address Spaces
 
