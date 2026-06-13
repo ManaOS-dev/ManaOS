@@ -216,7 +216,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Add serial log assertions for boot milestones.
 - [x] Add a disk-image fixture generator with multiple files and directories.
 - [ ] Add parser unit tests for GPT and FAT32 using byte fixtures.
-- [ ] Add syscall ABI tests for success and errno paths.
+- [x] Add syscall ABI tests for success and errno paths.
 - [ ] Add userland build checks to CI for every committed user program.
 - [x] Add architecture boundary checks that reject `arch` to `kernel` imports.
 - [ ] Add docs for the direct maintainer branch workflow.

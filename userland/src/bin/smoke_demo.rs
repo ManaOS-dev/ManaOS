@@ -9,6 +9,7 @@ const BUFFER_LENGTH: usize = 64;
 const DIRECTORY_BUFFER_BYTES: usize = core::mem::size_of::<syscall::UserDirectoryEntry>();
 const ENTRY_ARGUMENT_MESSAGE: &[u8] = b"user entry arguments ok\n";
 const PROCESS_ID_MESSAGE: &[u8] = b"user process ids ok\n";
+const SYSCALL_ERROR_MESSAGE: &[u8] = b"user syscall errors ok\n";
 const SLEEP_MESSAGE: &[u8] = b"user sleep ok\n";
 const BSS_MESSAGE: &[u8] = b"user bss ok\n";
 const HEAP_MESSAGE: &[u8] = b"user heap ok\n";
@@ -26,6 +27,7 @@ extern "C" fn _start(
     environment_values: *const *const u8,
 ) -> ! {
     verify_process_identifiers();
+    verify_syscall_error_paths();
 
     verify_entry_arguments(argument_count, argument_values, environment_values);
     verify_user_sleep();
@@ -50,6 +52,83 @@ fn verify_process_identifiers() {
     }
 
     let _ = syscall::write(STDOUT, PROCESS_ID_MESSAGE);
+}
+
+fn verify_syscall_error_paths() {
+    let missing_path = b"/disk/missing.txt\0";
+    if syscall::open(missing_path) != syscall::ERROR_NOT_FOUND {
+        syscall::exit(58);
+    }
+
+    let mut stat = syscall::FileStat::empty();
+    if syscall::fstat(usize::MAX, &mut stat) != syscall::ERROR_BAD_FILE_DESCRIPTOR {
+        syscall::exit(59);
+    }
+
+    let mut buffer = [0_u8; 4];
+    if syscall::read(usize::MAX, &mut buffer) != syscall::ERROR_BAD_FILE_DESCRIPTOR {
+        syscall::exit(60);
+    }
+    if syscall::close(usize::MAX) != syscall::ERROR_BAD_FILE_DESCRIPTOR {
+        syscall::exit(61);
+    }
+
+    let root_path = b"/\0";
+    if syscall::openat(123, root_path, syscall::OPEN_READ_ONLY, 0) != syscall::ERROR_NOT_IMPLEMENTED
+    {
+        syscall::exit(62);
+    }
+
+    if syscall::mmap_anonymous(
+        0,
+        0,
+        syscall::PROT_READ | syscall::PROT_WRITE,
+        syscall::MAP_PRIVATE,
+    ) != syscall::ERROR_INVALID_ARGUMENT
+    {
+        syscall::exit(63);
+    }
+    if syscall::mmap_anonymous(0, 4096, syscall::PROT_EXEC, syscall::MAP_PRIVATE)
+        != syscall::ERROR_INVALID_ARGUMENT
+    {
+        syscall::exit(64);
+    }
+    if syscall::munmap(1, 4096) != syscall::ERROR_INVALID_ARGUMENT {
+        syscall::exit(65);
+    }
+
+    let invalid_duration = syscall::Timespec {
+        seconds: 0,
+        nanoseconds: 1_000_000_000,
+    };
+    if syscall::nanosleep(&invalid_duration) != syscall::ERROR_INVALID_ARGUMENT {
+        syscall::exit(66);
+    }
+    if syscall::syscall2(syscall::SYS_NANOSLEEP, 1, 0) != syscall::ERROR_BAD_ADDRESS {
+        syscall::exit(67);
+    }
+
+    let directory_descriptor = syscall::open(root_path);
+    if directory_descriptor < 0 {
+        syscall::exit(68);
+    }
+    let directory_descriptor = directory_descriptor as usize;
+    let mut directory_entry = syscall::UserDirectoryEntry::empty();
+    let getdents64_result = syscall::syscall3(
+        syscall::SYS_GETDENTS64,
+        directory_descriptor,
+        &mut directory_entry as *mut syscall::UserDirectoryEntry as usize,
+        0,
+    );
+    if getdents64_result != syscall::ERROR_INVALID_ARGUMENT {
+        let _ = syscall::close(directory_descriptor);
+        syscall::exit(69);
+    }
+    if syscall::close(directory_descriptor) != 0 {
+        syscall::exit(70);
+    }
+
+    let _ = syscall::write(STDOUT, SYSCALL_ERROR_MESSAGE);
 }
 
 fn verify_user_sleep() {
