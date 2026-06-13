@@ -112,73 +112,160 @@ impl PreemptionStateDiagnostics {
     }
 }
 
+/// Snapshot of one user task's heap bookkeeping.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct UserHeapDiagnosticsSnapshot {
+    base: u64,
+    current_break: u64,
+    mapped_pages: u64,
+}
+
+impl UserHeapDiagnosticsSnapshot {
+    /// Create a user heap diagnostics snapshot.
+    pub(super) const fn new(base: u64, current_break: u64, mapped_pages: u64) -> Self {
+        Self {
+            base,
+            current_break,
+            mapped_pages,
+        }
+    }
+}
+
+/// Snapshot of one user task's active private mapping state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct UserMappingActiveDiagnosticsSnapshot {
+    next_start: u64,
+    active_pages: u64,
+    active_records: u64,
+    file_private_records: u64,
+}
+
+impl UserMappingActiveDiagnosticsSnapshot {
+    /// Create active private mapping diagnostics.
+    pub(super) const fn new(
+        next_start: u64,
+        active_pages: u64,
+        active_records: u64,
+        file_private_records: u64,
+    ) -> Self {
+        Self {
+            next_start,
+            active_pages,
+            active_records,
+            file_private_records,
+        }
+    }
+}
+
+/// Snapshot of one user task's private mapping lifecycle counters.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct UserMappingLifecycleDiagnosticsSnapshot {
+    total_mapped_pages: u64,
+    total_released_pages: u64,
+    peak_active_pages: u64,
+    peak_active_records: u64,
+    file_private_map_count: u64,
+}
+
+impl UserMappingLifecycleDiagnosticsSnapshot {
+    /// Create private mapping lifecycle diagnostics.
+    pub(super) const fn new(
+        total_mapped_pages: u64,
+        total_released_pages: u64,
+        peak_active_pages: u64,
+        peak_active_records: u64,
+        file_private_map_count: u64,
+    ) -> Self {
+        Self {
+            total_mapped_pages,
+            total_released_pages,
+            peak_active_pages,
+            peak_active_records,
+            file_private_map_count,
+        }
+    }
+}
+
 /// Snapshot of one user task's virtual memory bookkeeping.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserVirtualMemorySnapshot {
-    heap_base: u64,
-    heap_break: u64,
-    heap_mapped_pages: u64,
-    mapping_next_start: u64,
-    mapping_active_pages: u64,
-    mapping_active_records: u64,
-    mapping_file_private_records: u64,
+    heap: UserHeapDiagnosticsSnapshot,
+    mapping_active: UserMappingActiveDiagnosticsSnapshot,
+    mapping_lifecycle: UserMappingLifecycleDiagnosticsSnapshot,
 }
 
 impl UserVirtualMemorySnapshot {
     /// Create a user virtual memory snapshot from scheduler-owned runtime state.
     pub(super) const fn new(
-        heap_base: u64,
-        heap_break: u64,
-        heap_mapped_pages: u64,
-        mapping_next_start: u64,
-        mapping_active_pages: u64,
-        mapping_active_records: u64,
-        mapping_file_private_records: u64,
+        heap: UserHeapDiagnosticsSnapshot,
+        mapping_active: UserMappingActiveDiagnosticsSnapshot,
+        mapping_lifecycle: UserMappingLifecycleDiagnosticsSnapshot,
     ) -> Self {
         Self {
-            heap_base,
-            heap_break,
-            heap_mapped_pages,
-            mapping_next_start,
-            mapping_active_pages,
-            mapping_active_records,
-            mapping_file_private_records,
+            heap,
+            mapping_active,
+            mapping_lifecycle,
         }
     }
 
     /// Return the first virtual address managed by `brk`.
     pub const fn heap_base(self) -> u64 {
-        self.heap_base
+        self.heap.base
     }
 
     /// Return the current user heap break.
     pub const fn heap_break(self) -> u64 {
-        self.heap_break
+        self.heap.current_break
     }
 
     /// Return the number of heap pages currently tracked by the user runtime.
     pub const fn heap_mapped_pages(self) -> u64 {
-        self.heap_mapped_pages
+        self.heap.mapped_pages
     }
 
     /// Return the next private mapping address candidate.
     pub const fn mapping_next_start(self) -> u64 {
-        self.mapping_next_start
+        self.mapping_active.next_start
     }
 
     /// Return the number of active private mapping pages.
     pub const fn mapping_active_pages(self) -> u64 {
-        self.mapping_active_pages
+        self.mapping_active.active_pages
     }
 
     /// Return the number of active private mapping records.
     pub const fn mapping_active_records(self) -> u64 {
-        self.mapping_active_records
+        self.mapping_active.active_records
     }
 
     /// Return the number of active file-private mapping records.
     pub const fn mapping_file_private_records(self) -> u64 {
-        self.mapping_file_private_records
+        self.mapping_active.file_private_records
+    }
+
+    /// Return the total pages mapped by successful private mapping syscalls.
+    pub const fn mapping_total_mapped_pages(self) -> u64 {
+        self.mapping_lifecycle.total_mapped_pages
+    }
+
+    /// Return the total private mapping pages released by unmap or replacement.
+    pub const fn mapping_total_released_pages(self) -> u64 {
+        self.mapping_lifecycle.total_released_pages
+    }
+
+    /// Return the highest active private mapping page count observed.
+    pub const fn mapping_peak_active_pages(self) -> u64 {
+        self.mapping_lifecycle.peak_active_pages
+    }
+
+    /// Return the highest active private mapping record count observed.
+    pub const fn mapping_peak_active_records(self) -> u64 {
+        self.mapping_lifecycle.peak_active_records
+    }
+
+    /// Return the number of successful file-private mapping calls.
+    pub const fn mapping_file_private_map_count(self) -> u64 {
+        self.mapping_lifecycle.file_private_map_count
     }
 }
 

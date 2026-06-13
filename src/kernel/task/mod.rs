@@ -67,6 +67,10 @@ pub use diagnostics::{
     PreemptionStateDiagnostics, SchedulerDiagnostics, SchedulerTaskSnapshot, TaskKindDiagnostics,
     TaskStateDiagnostics, UserVirtualMemorySnapshot,
 };
+use diagnostics::{
+    UserHeapDiagnosticsSnapshot, UserMappingActiveDiagnosticsSnapshot,
+    UserMappingLifecycleDiagnosticsSnapshot,
+};
 pub use metadata::{TaskIdentifier, TaskMetadata};
 pub use process_lifecycle::UserTaskExit;
 use reclaim::FinishedUserTaskReclaim;
@@ -175,6 +179,11 @@ struct UserTaskRuntime {
     saved_frame: UserTrapFrame,
     heap: UserHeap,
     mappings: UserMappings,
+    mapping_total_mapped_pages: u64,
+    mapping_total_released_pages: u64,
+    mapping_peak_active_pages: u64,
+    mapping_peak_active_records: u64,
+    mapping_file_private_map_count: u64,
     sleep_wake_tick: Option<u64>,
     syscall_frame_recorded: bool,
     interrupt_frame_recorded: bool,
@@ -191,6 +200,11 @@ impl UserTaskRuntime {
             saved_frame: entry_context.to_trap_frame(),
             heap: UserHeap::new(heap_start),
             mappings: UserMappings::new(),
+            mapping_total_mapped_pages: 0,
+            mapping_total_released_pages: 0,
+            mapping_peak_active_pages: 0,
+            mapping_peak_active_records: 0,
+            mapping_file_private_map_count: 0,
             sleep_wake_tick: None,
             syscall_frame_recorded: false,
             interrupt_frame_recorded: false,
@@ -633,13 +647,24 @@ impl Scheduler {
                     ),
                     TaskKind::User(user_runtime) => {
                         let user_virtual_memory = UserVirtualMemorySnapshot::new(
-                            user_runtime.heap.base().as_u64(),
-                            user_runtime.heap.current_break().as_u64(),
-                            user_runtime.heap.mapped_pages(),
-                            user_runtime.mappings.next_start(),
-                            user_runtime.mappings.active_pages(),
-                            user_runtime.mappings.active_records(),
-                            user_runtime.mappings.active_file_private_records(),
+                            UserHeapDiagnosticsSnapshot::new(
+                                user_runtime.heap.base().as_u64(),
+                                user_runtime.heap.current_break().as_u64(),
+                                user_runtime.heap.mapped_pages(),
+                            ),
+                            UserMappingActiveDiagnosticsSnapshot::new(
+                                user_runtime.mappings.next_start(),
+                                user_runtime.mappings.active_pages(),
+                                user_runtime.mappings.active_records(),
+                                user_runtime.mappings.active_file_private_records(),
+                            ),
+                            UserMappingLifecycleDiagnosticsSnapshot::new(
+                                user_runtime.mapping_total_mapped_pages,
+                                user_runtime.mapping_total_released_pages,
+                                user_runtime.mapping_peak_active_pages,
+                                user_runtime.mapping_peak_active_records,
+                                user_runtime.mapping_file_private_map_count,
+                            ),
                         );
                         SchedulerTaskSnapshot::new_user(
                             task_id,
@@ -837,6 +862,23 @@ impl Scheduler {
             ),
             initialize_page,
         )?;
+        user_runtime.mapping_total_mapped_pages = user_runtime
+            .mapping_total_mapped_pages
+            .saturating_add(allocation.page_count());
+        user_runtime.mapping_total_released_pages = user_runtime
+            .mapping_total_released_pages
+            .saturating_add(allocation.replaced_page_count());
+        user_runtime.mapping_peak_active_pages = user_runtime
+            .mapping_peak_active_pages
+            .max(user_runtime.mappings.active_pages());
+        user_runtime.mapping_peak_active_records = user_runtime
+            .mapping_peak_active_records
+            .max(user_runtime.mappings.active_records());
+        if request.source() == UserMappingSource::FilePrivate {
+            user_runtime.mapping_file_private_map_count = user_runtime
+                .mapping_file_private_map_count
+                .saturating_add(1);
+        }
         crate::log_info!(
             "syscall",
             "mmap -> task={} requested={:#x} start={:#x} length={} pages={} protection={:#x} flags={:#x} placement={} source={} active_pages={} file_private_records={}",
@@ -873,6 +915,15 @@ impl Scheduler {
             start_address,
             length,
         )?;
+        user_runtime.mapping_total_released_pages = user_runtime
+            .mapping_total_released_pages
+            .saturating_add(unmapped_pages);
+        user_runtime.mapping_peak_active_pages = user_runtime
+            .mapping_peak_active_pages
+            .max(user_runtime.mappings.active_pages());
+        user_runtime.mapping_peak_active_records = user_runtime
+            .mapping_peak_active_records
+            .max(user_runtime.mappings.active_records());
         crate::log_info!(
             "syscall",
             "munmap -> task={} start={:#x} length={} pages={} unmapped=true active_pages={} active_records={}",

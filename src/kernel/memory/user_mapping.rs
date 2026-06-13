@@ -17,6 +17,7 @@ const MAX_USER_MAPPINGS: usize = 32;
 pub struct UserMappingAllocation {
     start: UserVirtualAddress,
     page_count: u64,
+    replaced_page_count: u64,
 }
 
 impl UserMappingAllocation {
@@ -28,6 +29,11 @@ impl UserMappingAllocation {
     /// Return the number of mapped 4 KiB pages.
     pub const fn page_count(self) -> u64 {
         self.page_count
+    }
+
+    /// Return pages released while replacing overlapping mappings.
+    pub const fn replaced_page_count(self) -> u64 {
+        self.replaced_page_count
     }
 }
 
@@ -186,20 +192,21 @@ impl UserMappings {
         if start_address < USER_MAPPING_BASE || end_address > USER_MAPPING_END {
             return Err(UserMappingError::InvalidRequest);
         }
+        let mut replaced_page_count = 0_u64;
         if matches!(plan.placement(), UserMappingPlacement::FixedReplace(_)) {
             self.ensure_replace_record_capacity(start_address, end_address)?;
-            let replaced_pages = self.replace_overlapping_pages(
+            replaced_page_count = self.replace_overlapping_pages(
                 address_space,
                 frame_allocator,
                 start_address,
                 end_address,
             );
-            if replaced_pages > 0 {
+            if replaced_page_count > 0 {
                 crate::log_info!(
                     "memory",
                     "User mapping fixed replacement prepared: start={:#x} pages={} records={} active_pages={}",
                     start_address,
-                    replaced_pages,
+                    replaced_page_count,
                     self.active_records(),
                     self.active_pages()
                 );
@@ -229,7 +236,11 @@ impl UserMappings {
         if matches!(plan.placement(), UserMappingPlacement::Any) {
             self.next_start = end_address;
         }
-        Ok(UserMappingAllocation { start, page_count })
+        Ok(UserMappingAllocation {
+            start,
+            page_count,
+            replaced_page_count,
+        })
     }
 
     /// Unmap a page-aligned private mapping range and return removed pages.
