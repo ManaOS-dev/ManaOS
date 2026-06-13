@@ -718,9 +718,19 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
         0,
         "reported user exits must not remain queued after lifecycle cleanup"
     );
+    assert_eq!(
+        diagnostics.user_exit_return_stack_sets(),
+        expected_user_tasks,
+        "one-shot user exit return stacks must be stored once per smoke run"
+    );
+    assert_eq!(
+        diagnostics.user_exit_return_stack_takes(),
+        expected_user_tasks,
+        "one-shot user exit return stacks must be consumed once per smoke run"
+    );
     crate::log_info!(
         "task",
-        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_address_spaces={} pending_user_exits={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
+        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_address_spaces={} pending_user_exits={} user_exit_return_stack_sets={} user_exit_return_stack_takes={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} user_resumes={} finished_tasks={}",
         diagnostics.total_tasks(),
         diagnostics.kernel_tasks(),
         diagnostics.user_tasks(),
@@ -730,6 +740,8 @@ fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
         states.finished(),
         diagnostics.active_user_address_spaces(),
         diagnostics.pending_user_exits(),
+        diagnostics.user_exit_return_stack_sets(),
+        diagnostics.user_exit_return_stack_takes(),
         diagnostics.reclaimed_user_kernel_stacks(),
         diagnostics.reclaimed_user_kernel_stack_writable_pages(),
         diagnostics.reclaimed_user_kernel_stack_virtual_pages(),

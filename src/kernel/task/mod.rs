@@ -468,6 +468,8 @@ impl Scheduler {
             finished_tasks: self.finished_task_count,
             pending_user_exits: u64::try_from(self.finished_user_exits.len())
                 .expect("pending user exit count must fit in u64"),
+            user_exit_return_stack_sets: process_lifecycle::user_exit_return_stack_set_count(),
+            user_exit_return_stack_takes: process_lifecycle::user_exit_return_stack_take_count(),
             reclaimed_user_kernel_stacks: self.reclaimed_user_kernel_stack_count,
             reclaimed_user_kernel_stack_writable_pages: self
                 .reclaimed_user_kernel_stack_writable_pages,

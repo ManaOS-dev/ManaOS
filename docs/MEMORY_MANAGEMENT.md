@@ -186,7 +186,9 @@ address space after `SYS_EXIT`. Finished user tasks then destroy their private
 user-window page tables and return tracked user stack, user ELF, and
 page-table frames to the reusable frame allocator. User exit reporting is owned
 by the scheduler, so lifecycle cleanup drains a task-specific exit record before
-reclaiming the matching address space and kernel stack resources.
+reclaiming the matching address space and kernel stack resources. The one-shot
+exit return stack now uses an explicit set/take return window so stale return
+stack pointers cannot be reused across lifecycle runs.
 
 ## Replacement Checklist
 

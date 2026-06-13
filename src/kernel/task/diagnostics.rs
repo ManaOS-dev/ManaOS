@@ -55,6 +55,8 @@ pub struct SchedulerDiagnostics {
     pub(super) user_resumes: u64,
     pub(super) finished_tasks: u64,
     pub(super) pending_user_exits: u64,
+    pub(super) user_exit_return_stack_sets: u64,
+    pub(super) user_exit_return_stack_takes: u64,
     pub(super) reclaimed_user_kernel_stacks: u64,
     pub(super) reclaimed_user_kernel_stack_writable_pages: u64,
     pub(super) reclaimed_user_kernel_stack_virtual_pages: u64,
@@ -114,6 +116,16 @@ impl SchedulerDiagnostics {
     /// Return the number of finished user exits waiting to be reported.
     pub const fn pending_user_exits(self) -> u64 {
         self.pending_user_exits
+    }
+
+    /// Return the number of one-shot user exit return stacks stored before Ring 3 entry.
+    pub const fn user_exit_return_stack_sets(self) -> u64 {
+        self.user_exit_return_stack_sets
+    }
+
+    /// Return the number of one-shot user exit return stacks consumed by `SYS_EXIT`.
+    pub const fn user_exit_return_stack_takes(self) -> u64 {
+        self.user_exit_return_stack_takes
     }
 
     /// Return the number of finished user task kernel stacks reclaimed.
