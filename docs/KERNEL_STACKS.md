@@ -88,6 +88,9 @@ Policy:
 - On x86_64, installing the user task kernel stack means updating TSS
   `privilege_stack_table[0]` through an architecture-owned API registered from
   `main.rs`.
+- Ring 3 interrupt entries use the installed TSS privilege stack, so timer
+  interrupts taken from user mode arrive on the current task's guarded kernel
+  stack.
 - `SYSCALL` does not use the TSS privilege stack automatically, so its entry
   path uses the current task's installed stack top to switch from the user stack
   to the guarded kernel stack before dispatching.

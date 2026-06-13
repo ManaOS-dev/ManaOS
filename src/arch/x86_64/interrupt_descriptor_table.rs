@@ -16,7 +16,7 @@ static PAGE_FAULT_REPORTER: AtomicUsize = AtomicUsize::new(0);
 #[derive(Clone, Copy)]
 pub struct InterruptProcessors {
     /// Called after each timer interrupt is acknowledged.
-    pub timer_tick: fn(),
+    pub timer_tick: fn(u64, u64, u64, u64, u64),
     /// Called with each keyboard byte received from hardware.
     pub keyboard_byte: fn(u8),
     /// Called with each mouse byte received from hardware.
@@ -113,7 +113,7 @@ extern "x86-interrupt" fn double_fault_handler(
     panic!("[EXCEPT] DOUBLE FAULT\n{stack_frame:#?}");
 }
 
-extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
+extern "x86-interrupt" fn timer_interrupt_handler(stack_frame: InterruptStackFrame) {
     TICKS.fetch_add(1, Ordering::Relaxed);
     // SAFETY: Notify EOI to the PIC to allow future interrupts.
     unsafe {
@@ -121,7 +121,13 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
             InterruptIndex::Timer.as_u8(),
         );
     }
-    call_timer_tick_processor();
+    call_timer_tick_processor(
+        stack_frame.instruction_pointer.as_u64(),
+        u64::from(stack_frame.code_segment.0),
+        stack_frame.cpu_flags.bits(),
+        stack_frame.stack_pointer.as_u64(),
+        u64::from(stack_frame.stack_segment.0),
+    );
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
@@ -159,15 +165,27 @@ fn status_read() -> u8 {
     unsafe { Port::<u8>::new(0x64).read() }
 }
 
-fn call_timer_tick_processor() {
+fn call_timer_tick_processor(
+    instruction_pointer: u64,
+    code_segment: u64,
+    cpu_flags: u64,
+    stack_pointer: u64,
+    stack_segment: u64,
+) {
     let processor = TIMER_TICK_PROCESSOR.load(Ordering::Acquire);
     if processor == 0 {
         return;
     }
 
-    // SAFETY: register_processors stores only valid fn() pointers.
-    let processor: fn() = unsafe { core::mem::transmute(processor) };
-    processor();
+    // SAFETY: register_processors stores only valid timer tick processor pointers.
+    let processor: fn(u64, u64, u64, u64, u64) = unsafe { core::mem::transmute(processor) };
+    processor(
+        instruction_pointer,
+        code_segment,
+        cpu_flags,
+        stack_pointer,
+        stack_segment,
+    );
 }
 
 fn call_keyboard_byte_processor(byte: u8) {
