@@ -68,6 +68,8 @@ impl UserHeap {
     ///
     /// A request of zero returns the current break. Invalid or out-of-memory
     /// growth requests leave the break unchanged and return the current break.
+    /// Shrink requests unmap heap pages that are no longer covered by the
+    /// requested break.
     pub fn process_break(
         &mut self,
         address_space: UserAddressSpace,
@@ -89,6 +91,9 @@ impl UserHeap {
             && !self.map_new_pages(address_space, frame_allocator, mapped_end)
         {
             return self.current_break;
+        }
+        if mapped_end < self.mapped_end.as_u64() {
+            self.unmap_old_pages(address_space, frame_allocator, mapped_end);
         }
 
         self.current_break = requested_break;
@@ -129,6 +134,37 @@ impl UserHeap {
             self.mapped_end = page_start;
         }
         true
+    }
+
+    fn unmap_old_pages(
+        &mut self,
+        address_space: UserAddressSpace,
+        frame_allocator: &mut PhysicalFrameAllocator,
+        mapped_end: u64,
+    ) {
+        let mut page_start = self.mapped_end;
+        let mut unmapped_pages = 0_u64;
+        while page_start.as_u64() > mapped_end {
+            page_start = page_start
+                .checked_sub(PAGE_SIZE)
+                .expect("user heap unmapping address underflowed");
+            assert!(
+                address_space.unmap_user_page_for(
+                    frame_allocator,
+                    page_start,
+                    FrameRangeOwner::UserHeap,
+                ),
+                "shrinking user heap must unmap a mapped heap page"
+            );
+            self.mapped_end = page_start;
+            unmapped_pages = unmapped_pages.saturating_add(1);
+        }
+        crate::log_info!(
+            "memory",
+            "User heap pages unmapped: new_mapped_end={:#x} pages={}",
+            self.mapped_end.as_u64(),
+            unmapped_pages
+        );
     }
 }
 

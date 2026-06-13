@@ -65,6 +65,8 @@ $expectedPatterns = @(
     "fstat -> fd=",
     "getdents64 -> fd=",
     "brk -> task=.* mapped_pages=2",
+    "User heap pages unmapped: .*pages=1",
+    "brk -> task=.* mapped_pages=1",
     "user entry arguments ok",
     "user shell ok",
     "user bss ok",

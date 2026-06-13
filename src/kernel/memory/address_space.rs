@@ -94,6 +94,48 @@ impl UserAddressSpace {
         }
     }
 
+    /// Unmap one 4 KiB user page and return its frame to the expected owner.
+    ///
+    /// Returns `false` when the page is already unmapped.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the user virtual address is not page-aligned, the mapped
+    /// physical frame is not 4 KiB-aligned, or the frame allocator rejects the
+    /// expected owner.
+    pub fn unmap_user_page_for(
+        self,
+        frame_allocator: &mut PhysicalFrameAllocator,
+        virtual_address: UserVirtualAddress,
+        owner: FrameRangeOwner,
+    ) -> bool {
+        assert!(
+            virtual_address.as_u64().is_multiple_of(PAGE_SIZE),
+            "user page virtual address must be 4KiB aligned"
+        );
+
+        let level_4_table = level_4_table_from_frame(self.level_4_frame);
+        // SAFETY: ManaOS keeps physical memory identity mapped in every kernel
+        // address-space template, so the page-table frame is directly
+        // reachable while removing user mappings.
+        let mut mapper = unsafe { OffsetPageTable::new(level_4_table, X86VirtAddr::new(0)) };
+        let page = Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_address.as_u64()));
+        let Ok((frame, flush)) = mapper.unmap(page) else {
+            return false;
+        };
+        flush.flush();
+
+        let physical_start = PhysicalFrameStart::new(frame.start_address().as_u64())
+            .expect("unmapped user page frame must be 4KiB aligned");
+        let physical_range =
+            PhysicalFrameRange::new(physical_start, 1).expect("single-frame range must be valid");
+        assert!(
+            frame_allocator.free_frames_for(physical_range, owner),
+            "unmapped user page frame owner did not match expected owner"
+        );
+        true
+    }
+
     /// Return whether the range is mapped as readable non-executable user data.
     pub fn is_user_range_mapped_readable(self, user_pointer: usize, length: usize) -> bool {
         self.validate_user_mapping(user_pointer, length, PageTableFlags::NO_EXECUTE)
