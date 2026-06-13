@@ -7,10 +7,10 @@ use crate::kernel::driver::display::color::Color;
 use crate::kernel::driver::display::command::{push_command, DrawCommand};
 use crate::kernel::driver::display::font::Font;
 
-const CONSOLE_HEIGHT: usize = 150;
+const CONSOLE_HEIGHT: usize = 210;
 const CONSOLE_PADDING: usize = 12;
 const LINE_HEIGHT: usize = 18;
-const TITLE_HEIGHT: usize = 24;
+const TITLE_HEIGHT: usize = 48;
 
 pub(super) fn render_if_dirty() {
     let Some(snapshot) = super::state::take_render_snapshot() else {
@@ -67,6 +67,21 @@ pub(super) fn render_if_dirty() {
         Color::rgb(0xA7, 0xC7, 0xE7),
         "ManaOS Command".to_string(),
     ));
+    push_command(DrawCommand::FillRect(
+        CONSOLE_PADDING,
+        console_y + 30,
+        console_width.saturating_sub(CONSOLE_PADDING * 2),
+        1,
+        Color::rgb(0x1D, 0x2B, 0x3A),
+    ));
+    push_command(DrawCommand::Text(
+        Font::Inter,
+        CONSOLE_PADDING,
+        console_y + 32,
+        12.0,
+        Color::rgb(0xA8, 0xF0, 0xC6),
+        scheduler_status_line(),
+    ));
 
     let mut text_y = console_y + TITLE_HEIGHT + CONSOLE_PADDING;
     for line in &snapshot.output {
@@ -99,6 +114,15 @@ pub(super) fn render_if_dirty() {
     ));
 }
 
+pub(super) fn verify_status_strip_smoke() -> bool {
+    let status_line = scheduler_status_line();
+    status_line.contains("tasks total=")
+        && status_line.contains("user=")
+        && status_line.contains("active_spaces=")
+        && status_line.contains("preempt=")
+        && status_line.contains("resume=")
+}
+
 fn input_cursor_marker(input: &str, cursor: usize) -> String {
     let cursor = cursor.min(input.len());
     let mut output = String::new();
@@ -106,4 +130,23 @@ fn input_cursor_marker(input: &str, cursor: usize) -> String {
     output.push('_');
     output.push_str(&input[cursor..]);
     output
+}
+
+fn scheduler_status_line() -> String {
+    let Some(diagnostics) = crate::kernel::task::get_scheduler_diagnostics() else {
+        return "tasks unavailable".to_string();
+    };
+    let states = diagnostics.states();
+    format!(
+        "tasks total={} user={} active_spaces={} states R{} Run{} B{} F{} preempt={} resume={}",
+        diagnostics.total_tasks(),
+        diagnostics.user_tasks(),
+        diagnostics.active_user_address_spaces(),
+        states.ready(),
+        states.running(),
+        states.blocked(),
+        states.finished(),
+        diagnostics.timer_preemptions(),
+        diagnostics.user_resumes()
+    )
 }

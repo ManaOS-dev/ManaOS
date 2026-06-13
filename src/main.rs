@@ -724,6 +724,14 @@ fn verify_scheduler_console_command() {
     }
 }
 
+fn verify_console_status_strip() {
+    if kernel::console::verify_status_strip_smoke() {
+        crate::log_info!("console", "Console status strip smoke passed.");
+    } else {
+        crate::log_warn!("console", "Console status strip smoke failed.");
+    }
+}
+
 #[entry]
 fn main() -> Status {
     // ────────────────────────────────────────────────
@@ -810,6 +818,7 @@ fn main() -> Status {
     run_user_smoke_demo(&mut frame_allocator);
     verify_scheduler_task_diagnostics(2);
     verify_scheduler_console_command();
+    verify_console_status_strip();
 
     // Main Loop
     loop {
