@@ -44,6 +44,8 @@ $expectedPatterns = @(
     "Invalid ELF rejection smoke passed",
     "Frame allocator self-checks passed: .*released_frame_reuse=true",
     "Kernel virtual range allocator self-checks passed: non_overlapping_reuse=true exhaustion_rejection=true",
+    "ACPI parser self-check passed: rsdp=true root_table=true",
+    "ACPI root table verified: source=uefi_acpi[12] revision=.* root_table=(xsdt|rsdt) root_address=0x[0-9a-f]+ root_revision=.* root_length=.* entries=[1-9][0-9]* checksum=true",
     "Dynamic kernel mapping lifecycle self-check passed: map=true unmap=true virtual_reuse=true physical_reuse=true",
     "User address-space template self-check passed: kernel_shared=true user_window_empty=true",
     "User address-space reclaim self-check passed: user_pages=1 page_table_pages=4",

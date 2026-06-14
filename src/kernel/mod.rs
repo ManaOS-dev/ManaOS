@@ -8,6 +8,7 @@
 //! - Bootloader entry wiring (-> main.rs)
 //!
 //! ## Public API
+//! - [`acpi`] - ACPI root table discovery support
 //! - [`console`] - Kernel command console
 //! - [`diagnostic`] - Kernel diagnostic logging
 //! - [`driver`] - Kernel device drivers
@@ -23,6 +24,7 @@
 //! - [`task`] - Task context support
 //! - [`time`] - Kernel time source boundary
 
+pub mod acpi;
 pub mod boot;
 pub mod console;
 pub mod diagnostic;
