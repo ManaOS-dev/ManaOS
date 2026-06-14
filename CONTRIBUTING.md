@@ -126,7 +126,7 @@ runtime boundaries.
 | Documentation only | `git diff --check` or `git show --check` |
 | Formatting-only Rust changes | `just fmt` |
 | Kernel Rust behavior | `cargo check --target x86_64-unknown-uefi` |
-| Userland no-std behavior | `cargo clippy --manifest-path userland/Cargo.toml --target x86_64-unknown-none --target-dir target/userland --lib --bin file_demo --bin bad_pointer_demo --bin smoke_demo -- -D warnings` |
+| Userland no-std behavior | `cargo clippy --manifest-path userland/Cargo.toml --target x86_64-unknown-none --target-dir target/userland --lib --bin file_demo --bin bad_pointer_demo --bin smoke_demo --bin user_shell -- -D warnings` |
 | Architecture or kernel/userland boundary | `just lint` |
 | Boot-visible runtime behavior | `just storage-smoke` |
 

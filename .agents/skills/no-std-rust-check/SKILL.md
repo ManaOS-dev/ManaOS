@@ -30,7 +30,7 @@ Use this skill when editing Rust code, `Cargo.toml`, `build.rs`, feature flags, 
 ## Repo-Specific Commands
 
 - Kernel build/check target: `cargo check --target x86_64-unknown-uefi`
-- Userland lint target from `justfile`: `cargo clippy --manifest-path userland/Cargo.toml --target x86_64-unknown-none --target-dir target/userland --lib --bin file_demo --bin bad_pointer_demo --bin smoke_demo -- -D warnings`
+- Userland lint target from `justfile`: `cargo clippy --manifest-path userland/Cargo.toml --target x86_64-unknown-none --target-dir target/userland --lib --bin file_demo --bin bad_pointer_demo --bin smoke_demo --bin user_shell -- -D warnings`
 - Full lint: `just lint`
 - Strict clippy: `cargo clippy --all-targets --all-features -- -D warnings`
 - Boot proof when runtime behavior changes: `just storage-smoke`

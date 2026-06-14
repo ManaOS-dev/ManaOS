@@ -72,6 +72,10 @@ active roadmap can list only unfinished work.
 - [x] Add TODO links from deferred `fork` work to the address-space copy plan.
 - [x] Add errno mappings for spawn memory allocation failures.
 
+### Minimal User Shell
+
+- [x] Add a minimal userland shell binary to the userland build.
+
 ### User Process Scheduling
 
 - [x] Add a storage smoke case with three active user processes.

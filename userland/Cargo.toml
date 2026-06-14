@@ -29,6 +29,12 @@ path = "src/bin/smoke_demo.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "user_shell"
+path = "src/bin/user_shell.rs"
+test = false
+bench = false
+
 [profile.dev]
 opt-level = 1
 panic = "abort"

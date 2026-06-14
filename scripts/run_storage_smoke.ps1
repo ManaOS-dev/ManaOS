@@ -39,6 +39,7 @@ $expectedPatterns = @(
     "Registered FAT32 file backend for virtual filesystem",
     "Registered FAT32 file backend for virtual filesystem: path=/disk/bin/smoke_demo",
     "Registered FAT32 file backend for virtual filesystem: path=/disk/bin/file_demo",
+    "Registered FAT32 file backend for virtual filesystem: path=/disk/bin/user_shell",
     "Disk file smoke read",
     "Pipeline command smoke passed",
     "ManaOS Kernel is alive\.",

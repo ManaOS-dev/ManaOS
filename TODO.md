@@ -32,7 +32,6 @@ reviewable unit before implementing it.
 
 ### Minimal User Shell
 
-- [ ] Add a minimal userland shell binary to the userland build.
 - [ ] Start the userland shell as the initial interactive process after smoke gating.
 - [ ] Implement fixed-buffer command reading from stdin.
 - [ ] Implement whitespace tokenization without heap allocation.

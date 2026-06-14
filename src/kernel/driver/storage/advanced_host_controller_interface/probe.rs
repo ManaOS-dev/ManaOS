@@ -91,36 +91,48 @@ pub(super) fn inspect_initial_storage(
         hello_entry.disk_mount_path(),
     );
 
-    if let Some(smoke_entry) = file_allocation_table::find_entry_by_path(
+    register_detected_file_by_path(
         &mut partition_device,
+        partition,
         volume,
         "bin/smoke_demo",
         data_address,
-    ) {
-        register_detected_file(
-            partition,
-            volume,
-            smoke_entry,
-            String::from("/disk/bin/smoke_demo"),
-        );
-    } else {
-        crate::log_warn!("storage", "FAT32 user ELF not found: path=/bin/smoke_demo");
-    }
+        "/disk/bin/smoke_demo",
+    );
 
-    if let Some(file_demo_entry) = file_allocation_table::find_entry_by_path(
+    register_detected_file_by_path(
         &mut partition_device,
+        partition,
         volume,
         "bin/file_demo",
         data_address,
-    ) {
-        register_detected_file(
-            partition,
-            volume,
-            file_demo_entry,
-            String::from("/disk/bin/file_demo"),
-        );
+        "/disk/bin/file_demo",
+    );
+
+    register_detected_file_by_path(
+        &mut partition_device,
+        partition,
+        volume,
+        "bin/user_shell",
+        data_address,
+        "/disk/bin/user_shell",
+    );
+}
+
+fn register_detected_file_by_path(
+    block_device: &mut impl BlockDevice,
+    partition: guid_partition_table::GuidPartitionTablePartition,
+    volume: file_allocation_table::FileAllocationTable32Volume,
+    disk_path: &str,
+    data_address: StorageDataAddress,
+    mount_path: &str,
+) {
+    if let Some(entry) =
+        file_allocation_table::find_entry_by_path(block_device, volume, disk_path, data_address)
+    {
+        register_detected_file(partition, volume, entry, String::from(mount_path));
     } else {
-        crate::log_warn!("storage", "FAT32 user ELF not found: path=/bin/file_demo");
+        crate::log_warn!("storage", "FAT32 user ELF not found: path=/{}", disk_path);
     }
 }
 

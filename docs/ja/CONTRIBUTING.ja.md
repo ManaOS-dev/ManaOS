@@ -124,7 +124,7 @@ just lint
 | docs-only | `git diff --check` または `git show --check` |
 | formatting-only Rust changes | `just fmt` |
 | kernel Rust behavior | `cargo check --target x86_64-unknown-uefi` |
-| userland no-std behavior | `cargo clippy --manifest-path userland/Cargo.toml --target x86_64-unknown-none --target-dir target/userland --lib --bin file_demo --bin bad_pointer_demo --bin smoke_demo -- -D warnings` |
+| userland no-std behavior | `cargo clippy --manifest-path userland/Cargo.toml --target x86_64-unknown-none --target-dir target/userland --lib --bin file_demo --bin bad_pointer_demo --bin smoke_demo --bin user_shell -- -D warnings` |
 | architecture または kernel/userland boundary | `just lint` |
 | boot-visible runtime behavior | `just storage-smoke` |
 

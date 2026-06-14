@@ -5,7 +5,7 @@ use std::{
 };
 
 const USERLAND_TARGET: &str = "x86_64-unknown-none";
-const USERLAND_BINARIES: &[&str] = &["file_demo", "bad_pointer_demo", "smoke_demo"];
+const USERLAND_BINARIES: &[&str] = &["file_demo", "bad_pointer_demo", "smoke_demo", "user_shell"];
 
 fn main() {
     println!("cargo:rerun-if-changed=userland/Cargo.toml");
@@ -17,6 +17,7 @@ fn main() {
     println!("cargo:rerun-if-changed=userland/src/bin/file_demo.rs");
     println!("cargo:rerun-if-changed=userland/src/bin/bad_pointer_demo.rs");
     println!("cargo:rerun-if-changed=userland/src/bin/smoke_demo.rs");
+    println!("cargo:rerun-if-changed=userland/src/bin/user_shell.rs");
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let output_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));

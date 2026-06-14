@@ -30,7 +30,7 @@ spawned process origin diagnostics、2つの concurrently spawned user program s
 spawn 前の argv/envp entry vector 表現、spawn path lookup failure と memory allocation failure の
 errno mapping、
 spawned process の current working directory inheritance、task-owned current directory を読む
-no-std `getcwd` wrapper が
+no-std `getcwd` wrapper、最小 no-std `user_shell` binary の build と storage smoke disk image 登録が
 完了済みです。user process scheduling は、3つの active user process を同時に扱う storage smoke まで
 完了済みです。さらに、per-task の last preemption / last resume diagnostics と、preempted
 process の exit 後も別の active process が継続する storage smoke も完了済みです。正本は英語版の
