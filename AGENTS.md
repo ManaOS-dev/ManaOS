@@ -282,10 +282,104 @@ push `origin/master`, and delete the task branch after success.
    working-tree changes to include.
 2. Create a focused branch such as `feature/...`, `fix/...`, `refactor/...`, or
    `docs/...`.
-3. Commit with a clear English message. Conventional Commit prefixes are
-   optional, not mandatory.
+3. Commit with a clear English message that follows the commit rules below.
 4. Run the relevant checks before merging. For Rust code, run `cargo fmt`,
    `cargo check`, and `cargo clippy --all-targets --all-features`; run
    `just lint` when the change touches kernel/userland boundaries.
 5. Merge the verified branch into `master`, push `origin/master`, then delete
    the local and remote task branch.
+
+---
+
+## 12. Commit Message And History Rules
+
+Commit history is part of the maintainer workflow. Agents must keep it readable
+and recoverable.
+
+### Commit Message Format
+
+- Use English only.
+- Use a concise imperative subject line, for example
+  `Polish documentation templates`.
+- Conventional Commit prefixes are optional. Use them only when they make the
+  change type clearer, for example `docs: ...`, `fix: ...`, or `refactor: ...`.
+- Keep the subject focused on the change, not on the tool or agent that made it.
+- For non-trivial changes, include a short body with the reason and validation
+  commands.
+- Do not mention skipped checks unless the reason is specific and actionable.
+
+### Commit Scope
+
+- Prefer one verified commit per focused task branch.
+- Do not mix unrelated code, documentation, generated metadata, and formatting
+  churn in the same commit.
+- If generated files change, mention the generator command in the commit body
+  or handoff notes.
+- If a commit updates `TODO.md`, keep the completed/unfinished split consistent
+  in the same commit.
+
+### History Cleanup
+
+- Do not rewrite `master` history unless the project owner explicitly requests
+  it.
+- Before rewriting `master`, create a backup branch that points to the exact
+  pre-rewrite tip.
+- Prefer non-interactive history cleanup commands with an explicit base commit.
+- Use `--force-with-lease` rather than an unconditional force push when pushing
+  rewritten `master`.
+- After cleanup, verify that `master` is clean, the backup branch exists, and
+  the intended commit range was rewritten.
+
+---
+
+## 13. Markdown And Documentation Maintenance
+
+Documentation is part of the project contract. Agents must keep Markdown files
+accurate, navigable, and synchronized with implementation reality.
+
+### English Source Of Truth
+
+- English Markdown files are the source of truth.
+- Japanese files are companion documents for discussion and onboarding.
+- When adding or changing a contributor-facing document under `docs/`, add or
+  update the matching `docs/ja/*.ja.md` file unless the project owner explicitly
+  says not to.
+- Do not create Japanese companion files for agent-only instruction files unless
+  the project owner explicitly requests them.
+
+### README And Documentation Map
+
+- If a new contributor-facing Markdown file is added, update the documentation
+  map in `README.md` and `docs/ja/README.ja.md`.
+- Keep README topic guidance concrete: tell readers which document to read for
+  architecture, memory, syscall, storage, scheduler, tooling, and TODO work.
+- Prefer precise ownership, invariants, failure modes, and validation commands
+  over broad marketing language.
+
+### TODO Files
+
+- `TODO.md` must list unfinished work only.
+- Completed TODO items must move to `TODO_COMPLETED.md` after the implementing
+  branch is verified.
+- `docs/ja/TODO.ja.md` is a Japanese guide to the active roadmap, not a stale
+  duplicate checklist.
+- `docs/ja/TODO_COMPLETED.ja.md` is a Japanese guide to the completed archive,
+  not the authoritative item-by-item record.
+
+### Generated And External Metadata
+
+- Do not hand-edit generated Markdown such as `THIRD_PARTY_LICENSES.md`.
+- Refresh generated license metadata with `just licenses` after dependency
+  changes.
+- If generated content needs explanation, add it to a separate guide file rather
+  than modifying the generated table by hand.
+
+### Documentation Verification
+
+- For docs-only changes, run `git diff --check` before committing.
+- After committing docs-only changes, run `git show --check --stat --oneline
+  HEAD` or an equivalent staged/commit whitespace check.
+- Check local Markdown links when changing README files, documentation maps, or
+  file names.
+- Rust build, lint, and QEMU smoke checks are not required for docs-only changes
+  unless the docs change accompanies behavior changes.

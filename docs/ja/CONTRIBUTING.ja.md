@@ -6,7 +6,7 @@ ManaOS プロジェクトへの参加を歓迎します！ManaOS は「開発者
 
 外部コントリビュータはプルリクエストのワークフローを使用してください。
 対象変更に外部コントリビュータが関与していない場合、メンテナおよびプロジェクト所有の自動化は、ローカル検証後に `AGENTS.md`
-で定義された直接ブランチ運用を使用できます。
+で必須化され、[`MAINTAINER_WORKFLOW.ja.md`](MAINTAINER_WORKFLOW.ja.md) に記載された直接ブランチ運用を使用できます。
 
 1. **フォーク (Fork)**: リポジトリを自分のアカウントにフォークします。
 2. **ブランチ作成**: 機能追加や修正のためのブランチを作成します: `git checkout -b feature/your-awesome-feature` または `git checkout -b fix/your-bug`
@@ -79,7 +79,8 @@ just lint
 
 ### 3. ドキュメントの記述
 - すべてのパブリックな項目 (`pub` 関数、構造体、列挙型など) には、`///` を使用したドキュメントコメントを記述してください。
-- 内部的なロジックが複雑な場合は、適宜インラインコメントを追加してください。
+- Rust のコメントと Rust doc comment は英語で書いてください。Markdown 文書は上記の言語ポリシーに従います。
+- 内部的なロジックが複雑な場合は、英語のインラインコメントを最小限追加してください。
 
 ### 4. 命名
 - `fb_info`、`h`、`v` のような不明瞭なローカル略語は避けてください。
@@ -98,21 +99,52 @@ just lint
 - `unsafe` ブロックの使用は最小限に留めてください。
 - `unsafe` を使用する場合は、**必ず** `// SAFETY:` コメントを添え、なぜその操作が安全であるかを論理的に説明してください。
 
+## 📚 ドキュメント標準
+
+ドキュメント変更は、実装の後付け説明ではなく、engineering contract の一部として扱います。
+
+- 英語文書を正本とします。
+- 日本語 companion document が存在する場合は、英語版と同じ運用上の意味を説明します。
+- generated file は手で編集しません。`THIRD_PARTY_LICENSES.md` は `just licenses` で再生成します。
+- `TODO.md` には未完了作業だけを残します。完了済み項目は、実装 branch の検証後に
+  `TODO_COMPLETED.md` へ移動します。
+- architecture、memory、syscall、storage、scheduler、userland behavior を変更する場合は、
+  同じ branch で近い design document も更新します。
+- `docs/` 配下に新しい Markdown を追加する場合は、日本語 companion を追加するか、
+  追加しない理由を明確にし、contributor-facing document なら `README.md` の documentation map も更新します。
+- あいまいな roadmap text より、具体的な invariant、ownership rule、failure mode、
+  validation command を優先します。
+
+## ✅ 検証マトリクス
+
+変更内容に合う最小の検証から始め、runtime boundary をまたぐ場合は広い検証へ進みます。
+
+| Change type | Minimum verification |
+| --- | --- |
+| docs-only | `git diff --check` または `git show --check` |
+| formatting-only Rust changes | `just fmt` |
+| kernel Rust behavior | `cargo check --target x86_64-unknown-uefi` |
+| userland no-std behavior | `cargo clippy --manifest-path userland/Cargo.toml --target x86_64-unknown-none --target-dir target/userland --lib --bin file_demo --bin bad_pointer_demo --bin smoke_demo -- -D warnings` |
+| architecture または kernel/userland boundary | `just lint` |
+| boot-visible runtime behavior | `just storage-smoke` |
+
+local で command を実行できない場合は、正確な理由と必要な follow-up validation を記録します。
+
 ---
 
 ## 🛠 設計原則 (拡張性とコントリビュートのしやすさ)
 
 ### 1. HAL (Hardware Abstraction Layer)
 アーキテクチャ依存のコードと、OS のコアロジックを厳格に分離します。これにより、将来的な他アーキテクチャ（AArch64 など）への対応を容易にします。
-- **`src/kernel/`**: プラットフォームに依存しないロジック（スケジューラ、ファイルシステム、ネットワークスタックなど）。
-- **`src/arch/x86_64/`**: CPU 固有の実装（GDT, IDT, ページテーブル操作、コンテキストスイッチなど）。
+- **`src/kernel/`**: memory、task scheduling、syscall、filesystem、driver、diagnostics、console service、runtime service など、プラットフォームに依存しない kernel policy。
+- **`src/arch/x86_64/`**: GDT、IDT、interrupt-controller setup、context switching、architecture entry path など、CPU 固有の実装。
 - **インターフェース**: カーネルコアは `arch::` モジュールが提供する抽象化 API を通じてのみハードウェアを操作します。
 - **割り込み境界**: `arch/` は `kernel::...` を直接呼びません。割り込みハンドラは `main.rs` が登録したコールバックへ配送します。
 
 ### 2. トレイト駆動のドライバ設計
-デバイスドライバを Rust のトレイトで抽象化し、モジュール式の拡張を可能にします。
-- **Console トレイト**: シリアルポートや GOP フレームバッファなどを、共通の書き込み操作として扱います。
-- **BlockDevice トレイト**: AHCI, NVMe などの異なるディスクアクセスを抽象化します。
+driver abstraction は、それを必要とする device class の近くに小さく置きます。
+- **BlockDevice trait**: storage code は、AHCI device、partition、filesystem parser 用に内部 block-device interface を使います。
+- **Console / display path**: serial logging は `core::fmt::Write` を使い、framebuffer output は display command、renderer、framebuffer driver を通ります。広い console/display trait を追加する場合は、先に design document を更新してください。
 
 ### 3. 型安全なメモリ管理 (Newtype パターン)
 物理アドレスと仮想アドレスを型レベルで厳密に区別し、誤用によるバグを防ぎます。

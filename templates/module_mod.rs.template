@@ -1,0 +1,25 @@
+//! # `kernel::<module_path>`
+//!
+//! ## Owns
+//! - Replace with the single state, workflow, or boundary owned by this module.
+//!
+//! ## Does NOT own
+//! - Replace with adjacent responsibilities owned by sibling modules.
+//!
+//! ## Public API
+//! - [`init`] - Initialize module-owned state or providers.
+//! - [`process_events`] - Process pending work from the main loop.
+
+mod state;
+
+pub use state::ModuleState;
+
+/// Initialize module-owned state or providers.
+pub fn init() {
+    // Keep initialization narrow and delegate detailed work to sibling modules.
+}
+
+/// Process pending module work from the main loop.
+pub fn process_events() {
+    // Move processing logic into a focused sibling module before this grows.
+}

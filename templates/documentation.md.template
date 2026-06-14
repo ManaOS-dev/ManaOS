@@ -1,0 +1,40 @@
+# <Document Title>
+
+## Purpose
+
+Replace with the concrete engineering question this document answers.
+
+## Scope
+
+- In scope: replace with owned subsystem, workflow, or invariant.
+- Out of scope: replace with adjacent work intentionally not covered here.
+
+## Ownership
+
+| Area | Owner |
+| --- | --- |
+| `<state or boundary>` | `<module or document>` |
+
+## Current Behavior
+
+Replace with the behavior that exists today. Avoid describing planned work as if
+it is already implemented.
+
+## Invariants
+
+- Replace with invariant 1.
+- Replace with invariant 2.
+
+## Failure Modes
+
+- Replace with the expected failure or panic behavior.
+- Replace with the diagnostic signal a maintainer should see.
+
+## Validation
+
+```powershell
+git diff --check
+```
+
+Add the subsystem-specific command from `CONTRIBUTING.md` when this document
+ships with implementation changes.

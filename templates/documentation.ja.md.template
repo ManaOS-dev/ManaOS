@@ -1,0 +1,42 @@
+# <Document Title> 日本語ガイド
+
+このファイルは `<English document path>` の日本語 companion です。英語版を正本とし、
+このファイルでは同じ operational meaning を日本語で説明します。
+
+## 目的
+
+この document が答える engineering question を書きます。
+
+## 範囲
+
+- 対象: 所有する subsystem、workflow、invariant を書きます。
+- 対象外: ここで扱わない隣接 work を書きます。
+
+## Ownership
+
+| Area | Owner |
+| --- | --- |
+| `<state or boundary>` | `<module or document>` |
+
+## 現在の挙動
+
+今日存在する behavior を書きます。planned work を実装済みのように書かないでください。
+
+## Invariants
+
+- invariant 1 を書きます。
+- invariant 2 を書きます。
+
+## Failure Modes
+
+- expected failure または panic behavior を書きます。
+- maintainer が確認すべき diagnostic signal を書きます。
+
+## Validation
+
+```powershell
+git diff --check
+```
+
+implementation change と同じ branch で出す場合は、`CONTRIBUTING.md` の subsystem-specific command も
+追加してください。
