@@ -156,6 +156,7 @@ $expectedPatterns = @(
     "User return preemption window closed: task=.*",
     "User task exited: code=0",
     "User task exit status retained: parent=0 child=.* code=0 waitable=true",
+    "Child exit record retained: parent=0 child=.* code=0 waitable=true",
     "Restored kernel address space after user stop",
     "User address space reclaimed: task=.* user_pages=.* page_table_pages=.*",
     "User kernel stack reclaimed: task=.* writable_pages=4 virtual_pages=5",

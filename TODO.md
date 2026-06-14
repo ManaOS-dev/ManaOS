@@ -16,11 +16,8 @@ reviewable unit before implementing it.
 
 ### `waitpid`, Exit Status, And Reaping
 
-- [ ] Add scheduler-owned child exit records keyed by parent process ID.
-- [ ] Preserve exit status until the parent reaps the child.
 - [ ] Support blocking wait for any child.
 - [ ] Support nonblocking wait with a minimal `WNOHANG` equivalent.
-- [ ] Prevent double-reaping of the same child exit record.
 - [ ] Reparent orphaned children to a documented initial process policy.
 - [ ] Reclaim finished child address spaces after the exit record is safe.
 - [ ] Reclaim finished child kernel stacks after the exit record is safe.

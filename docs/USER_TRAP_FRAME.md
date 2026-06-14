@@ -152,8 +152,8 @@ User task preemption stays disabled until all of the following are true:
   without changing the syscall ABI.
   The same smoke path now verifies syscall-visible task identifiers and retained
   parent-child task metadata through `getpid`, `getppid`, and scheduler
-  snapshots. Finished user task records now retain an exit code after resource
-  reclamation, expose whether that status is still waitable or already
-  collected, and let the bootstrap parent collect each smoke child exit exactly
-  once. This keeps the future `waitpid` syscall state model scheduler-owned
-  before user-created child processes exist.
+  snapshots. Finished user task records now retain parent-keyed child exit
+  records after resource reclamation, expose whether that status is still
+  waitable or already collected, and let the bootstrap parent collect each smoke
+  child exit exactly once. This keeps the `waitpid` syscall state model
+  scheduler-owned before user-created child processes exist.

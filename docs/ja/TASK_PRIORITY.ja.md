@@ -7,7 +7,7 @@ kernel engineering 上の順序を示す文書です。
 ## 残っている高リスク作業の順序
 
 1. Full user process lifecycle
-   - `execve` の current directory と close-on-exec の残り gap を完了する。
+   - `execve` の current directory の残り gap を完了する。
    - user-visible `wait` または `waitpid` を追加する。
    - minimal user shell process を追加する。
    - general process lifecycle path へ preemptive scheduling を拡張する。
@@ -54,8 +54,8 @@ full user process lifecycle を進めることです。`execve` の kernel-side 
 successful self-replacement path、current image diagnostics は
 [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。ここからは小さい runtime slice で進めます。
 
-1. `execve` の current directory、close-on-exec、replacement-state diagnostics の残り gap を閉じる。
-2. `waitpid` に必要な scheduler-owned child exit record model を定義する。
+1. `execve` の current directory と replacement-state diagnostics の残り gap を閉じる。
+2. user-visible `waitpid` behavior を scheduler-owned child exit record に接続する。
 3. broader user shell の前に、複数 spawned user process の smoke coverage を拡張する。
 4. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
 

@@ -405,6 +405,33 @@ impl Task {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ChildExitRecord {
+    parent_task_id: u64,
+    child_task_id: u64,
+    exit_code: u64,
+    collected: bool,
+}
+
+impl ChildExitRecord {
+    const fn new(parent_task_id: u64, child_task_id: u64, exit_code: u64) -> Self {
+        Self {
+            parent_task_id,
+            child_task_id,
+            exit_code,
+            collected: false,
+        }
+    }
+
+    const fn waitable_for_parent(self, parent_task_id: u64) -> bool {
+        self.parent_task_id == parent_task_id && !self.collected
+    }
+
+    fn mark_collected(&mut self) {
+        self.collected = true;
+    }
+}
+
 pub(super) struct Scheduler {
     tasks: Vec<Task>,
     current_index: usize,
@@ -412,6 +439,7 @@ pub(super) struct Scheduler {
     kernel_stack_range_allocator: KernelVirtualRangeAllocator,
     active_user_task_identifiers: Vec<u64>,
     finished_user_exits: VecDeque<UserTaskExit>,
+    child_exit_records: Vec<ChildExitRecord>,
     preemption_switch_logged: bool,
     user_resume_logged: bool,
     context_switch_count: u64,
@@ -441,6 +469,7 @@ impl Scheduler {
             kernel_stack_range_allocator: new_dynamic_mapping_allocator(),
             active_user_task_identifiers: Vec::new(),
             finished_user_exits: VecDeque::new(),
+            child_exit_records: Vec::new(),
             preemption_switch_logged: false,
             user_resume_logged: false,
             context_switch_count: 0,

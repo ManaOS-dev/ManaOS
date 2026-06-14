@@ -48,6 +48,9 @@ active roadmap can list only unfinished work.
 - [x] Return `EINTR` only after an interrupt policy exists, or document that it is unsupported.
 - [x] Add a negative smoke case for waiting on a non-child PID.
 - [x] Document parent-child lifecycle state transitions.
+- [x] Add scheduler-owned child exit records keyed by parent process ID.
+- [x] Preserve exit status until the parent reaps the child.
+- [x] Prevent double-reaping of the same child exit record.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

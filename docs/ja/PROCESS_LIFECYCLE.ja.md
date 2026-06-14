@@ -31,8 +31,9 @@ address space と scheduler-owned kernel stack を reclaim できます。
 user-visible child creation、scheduler-backed な `waitpid` の wait/reap state machine は今後の作業です。
 descriptor close-on-exec metadata と successful-`execve` close behavior は、現在の global descriptor
 table 向けに実装済みです。`waitpid` の syscall number、option constant、no-std userland wrapper、
-selector validation、no-child `ECHILD` path は実装済みなので、後続の child-exit 実装は安定した
-ABI target に向けて進められます。
+selector validation、no-child `ECHILD` path、parent task identifier で key 付けされた
+scheduler-owned child exit record は実装済みなので、後続の child-exit 実装は安定した ABI target に
+向けて進められます。
 
 ## `waitpid` syscall contract
 
@@ -79,10 +80,11 @@ behavior change は明示的に変わります。
 
 - Running or ready child: child task は parent identifier を持ち、live user runtime resource を
   所有しており、まだ waitable ではありません。
-- Finished waitable child: `SYS_EXIT` が user task を `Finished` へ移し、exit code を保持し、
-  記録済み parent から観測可能にします。
+- Finished waitable child: `SYS_EXIT` が user task を `Finished` へ移し、parent-keyed child exit
+  record に exit code を保持し、記録済み parent から観測可能にします。
 - Collected child: parent-side collection path が保持済み exit code を一度だけ消費済みです。
-  同じ child に対する二度目の collection は exit record を返しません。
+  child exit record は collected として mark され、同じ child に対する二度目の collection は
+  exit record を返しません。
 - Reclaimed child resources: current smoke lifecycle が child を再開しなくなった後で、scheduler-owned
   cleanup path が finished child の user address space と kernel stack を解放済みです。
 
@@ -240,6 +242,8 @@ unmarked descriptor は default で descriptor number と offset を保持し、
   reset することを検証します。
 - storage smoke は、current user task に child がない場合と、正の process identifier が child ではない場合に、
   `waitpid` が `-ECHILD` を返すことを検証します。
+- storage smoke は、parent-keyed child exit record を保持する scheduler log line と、その record を一度だけ
+  collect する log line を assert します。
 - `tasks` console command は、user task ごとの current image generation、retained image path、last successful
   old-image reclaim count を表示します。
 

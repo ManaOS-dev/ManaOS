@@ -120,9 +120,21 @@ impl Scheduler {
 
         let exit = UserTaskExit::new(task_id, exit_code);
         self.finished_user_exits.push_back(exit);
+        self.child_exit_records.push(super::ChildExitRecord::new(
+            parent_task_id,
+            task_id,
+            exit_code,
+        ));
         crate::log_info!(
             "task",
             "User task exit status retained: parent={} child={} code={} waitable=true",
+            parent_task_id,
+            task_id,
+            exit_code
+        );
+        crate::log_info!(
+            "task",
+            "Child exit record retained: parent={} child={} code={} waitable=true",
             parent_task_id,
             task_id,
             exit_code
@@ -138,33 +150,33 @@ impl Scheduler {
         &mut self,
         parent_task_id: u64,
     ) -> Option<UserTaskExit> {
-        for task in &mut self.tasks {
-            let child_task_id = task.get_id();
-            if task
-                .metadata
-                .get_parent_identifier()
-                .map(TaskIdentifier::as_u64)
-                != Some(parent_task_id)
-            {
-                continue;
-            }
-            if !matches!(&task.kind, TaskKind::User(_)) {
-                continue;
-            }
-            let Some(exit_code) = task.metadata.collect_waitable_exit() else {
-                continue;
-            };
-            crate::log_info!(
-                "task",
-                "Waitable child exit collected: parent={} child={} code={}",
-                parent_task_id,
-                child_task_id,
-                exit_code
-            );
-            return Some(UserTaskExit::new(child_task_id, exit_code));
-        }
+        let record_index = self
+            .child_exit_records
+            .iter()
+            .position(|record| record.waitable_for_parent(parent_task_id))?;
+        let child_task_id = self.child_exit_records[record_index].child_task_id;
+        let exit_code = self.child_exit_records[record_index].exit_code;
+        let task_index = self
+            .get_task_index(child_task_id)
+            .expect("child exit record must reference a retained task");
+        let collected_exit_code = self.tasks[task_index]
+            .metadata
+            .collect_waitable_exit()
+            .expect("child exit record must reference a waitable task status");
+        assert_eq!(
+            collected_exit_code, exit_code,
+            "child exit record must match retained task exit status"
+        );
+        self.child_exit_records[record_index].mark_collected();
+        crate::log_info!(
+            "task",
+            "Waitable child exit collected: parent={} child={} code={}",
+            parent_task_id,
+            child_task_id,
+            exit_code
+        );
 
-        None
+        Some(UserTaskExit::new(child_task_id, exit_code))
     }
 
     pub(in crate::kernel::task) fn current_user_task_has_child(

@@ -33,7 +33,8 @@ ownership, user-visible child creation, and the scheduler-backed `waitpid`
 wait/reap state machine are still future work. Descriptor close-on-exec
 metadata and successful-`execve` close behavior exist for the current global
 descriptor table. The `waitpid` syscall number, option constants, no-std
-userland wrapper, selector validation, and no-child `ECHILD` path are in place
+userland wrapper, selector validation, no-child `ECHILD` path, and
+scheduler-owned child exit records keyed by parent task identifier are in place
 now so later child-exit work has a stable ABI target.
 
 ## `waitpid` Syscall Contract
@@ -87,9 +88,11 @@ The current lifecycle states are:
 - Running or ready child: the child task has a parent identifier, still owns any
   live user runtime resources, and is not waitable yet.
 - Finished waitable child: `SYS_EXIT` moved the user task to `Finished`,
-  retained its exit code, and made the status available to the recorded parent.
+  retained its exit code in a parent-keyed child exit record, and made the
+  status available to the recorded parent.
 - Collected child: the parent-side collection path consumed the retained exit
-  code once. A second collection for the same child returns no exit record.
+  code once and marked the child exit record collected. A second collection for
+  the same child returns no exit record.
 - Reclaimed child resources: the scheduler-owned cleanup path released the
   finished child's user address space and kernel stack after the current smoke
   lifecycle no longer needs to resume the child.
@@ -274,6 +277,8 @@ Current runtime diagnostics cover the first successful replacement path:
   bookkeeping before the post-exec image exits.
 - Storage smoke verifies that `waitpid` returns `-ECHILD` when the current user
   task has no child and when a positive process identifier is not its child.
+- Storage smoke asserts the scheduler log line that retains a parent-keyed
+  child exit record and the later line that collects that record once.
 - The `tasks` console command shows each user task's current image generation,
   retained image path, and last successful old-image reclaim counts.
 
