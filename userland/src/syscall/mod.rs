@@ -24,6 +24,7 @@
 //! - [`munmap`] - Unmap private user memory
 //! - [`getpid`] - Return the current task identifier
 //! - [`getppid`] - Return the parent task identifier
+//! - [`waitpid`] - Wait for a child process
 //! - [`execve`] - Replace the current process image
 //! - [`exit`] - Terminate the current user task
 
@@ -35,13 +36,14 @@ mod raw;
 pub use api::{
     brk, close, execve, exit, exit_group, fstat, getdents64, getpid, getppid, lseek, mmap,
     mmap_anonymous, mmap_file_private, munmap, nanosleep, open, open_with_options, openat, read,
-    write, AT_FDCWD, ERROR_ARGUMENT_LIST_TOO_LONG, ERROR_BAD_ADDRESS, ERROR_BAD_FILE_DESCRIPTOR,
-    ERROR_FILE_EXISTS, ERROR_INVALID_ARGUMENT, ERROR_IS_DIRECTORY, ERROR_NOT_FOUND,
-    ERROR_NOT_IMPLEMENTED, FILE_TYPE_DEVICE, FILE_TYPE_DIRECTORY, FILE_TYPE_REGULAR, MAP_ANONYMOUS,
-    MAP_FIXED, MAP_FIXED_NOREPLACE, MAP_PRIVATE, OPEN_READ_ONLY, PROT_EXEC, PROT_READ, PROT_WRITE,
-    SEEK_CUR, SEEK_END, SEEK_SET, SYS_BRK, SYS_CLOSE, SYS_EXECVE, SYS_EXIT, SYS_EXIT_GROUP,
-    SYS_FSTAT, SYS_GETDENTS64, SYS_GETPID, SYS_GETPPID, SYS_LSEEK, SYS_MMAP, SYS_MUNMAP,
-    SYS_NANOSLEEP, SYS_OPEN, SYS_OPENAT, SYS_READ, SYS_WRITE,
+    waitpid, write, AT_FDCWD, ERROR_ARGUMENT_LIST_TOO_LONG, ERROR_BAD_ADDRESS,
+    ERROR_BAD_FILE_DESCRIPTOR, ERROR_FILE_EXISTS, ERROR_INVALID_ARGUMENT, ERROR_IS_DIRECTORY,
+    ERROR_NOT_FOUND, ERROR_NOT_IMPLEMENTED, ERROR_NO_CHILD, FILE_TYPE_DEVICE, FILE_TYPE_DIRECTORY,
+    FILE_TYPE_REGULAR, MAP_ANONYMOUS, MAP_FIXED, MAP_FIXED_NOREPLACE, MAP_PRIVATE, OPEN_READ_ONLY,
+    PROT_EXEC, PROT_READ, PROT_WRITE, SEEK_CUR, SEEK_END, SEEK_SET, SYS_BRK, SYS_CLOSE, SYS_EXECVE,
+    SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64, SYS_GETPID, SYS_GETPPID, SYS_LSEEK,
+    SYS_MMAP, SYS_MUNMAP, SYS_NANOSLEEP, SYS_OPEN, SYS_OPENAT, SYS_READ, SYS_WAITPID, SYS_WRITE,
+    WAIT_ANY, WNOHANG,
 };
 pub use contract::{
     UserDirectoryEntry, UserFileStat as FileStat, UserTimespec as Timespec,

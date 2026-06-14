@@ -29,6 +29,7 @@
 //! - [`SYS_NANOSLEEP`] - Linux-compatible high-resolution sleep syscall number
 //! - [`SYS_EXECVE`] - Linux-compatible execute-program syscall number
 //! - [`SYS_EXIT`] - Linux-compatible exit syscall number
+//! - [`SYS_WAITPID`] - Linux-compatible wait4 syscall number reserved for `waitpid`
 //! - [`SYS_GETDENTS64`] - Linux-compatible get-directory-entries syscall number
 //! - [`SYS_EXIT_GROUP`] - Linux-compatible process exit syscall number
 //! - [`SYS_GETPID`] - Linux-compatible get-process-identifier syscall number
@@ -52,7 +53,7 @@ mod memory;
 pub use contract::{
     SYS_BRK, SYS_CLOSE, SYS_EXECVE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64,
     SYS_GETPID, SYS_GETPPID, SYS_LSEEK, SYS_MMAP, SYS_MUNMAP, SYS_NANOSLEEP, SYS_OPEN, SYS_OPENAT,
-    SYS_READ, SYS_WRITE,
+    SYS_READ, SYS_WAITPID, SYS_WRITE,
 };
 
 const ERROR_NOT_FOUND: u64 = linux_error(2);
@@ -215,12 +216,17 @@ fn dispatch_syscall(syscall_number: u64, arguments: [u64; 6]) -> u64 {
         SYS_BRK => memory::sys_brk(first_argument),
         SYS_NANOSLEEP => memory::sys_nanosleep(first_argument, second_argument),
         SYS_EXECVE => sys_execve(first_argument, second_argument, third_argument, None),
+        SYS_WAITPID => sys_waitpid(first_argument, second_argument, third_argument),
         SYS_READ => sys_read(first_argument, second_argument, third_argument),
         SYS_GETDENTS64 => sys_getdents64(first_argument, second_argument, third_argument),
         SYS_GETPID => sys_getpid(),
         SYS_GETPPID => sys_getppid(),
         _ => ERROR_NOT_IMPLEMENTED,
     }
+}
+
+fn sys_waitpid(_process_identifier: u64, _status_pointer: u64, _options: u64) -> u64 {
+    ERROR_NOT_IMPLEMENTED
 }
 
 /// Enable or disable syscall trace logging.

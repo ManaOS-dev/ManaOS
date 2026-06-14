@@ -37,6 +37,12 @@ active roadmap can list only unfinished work.
 - [x] Preserve open file descriptors that do not have close-on-exec semantics.
 - [x] Add a boot smoke case that `execve`s a second user program from `/disk`.
 
+### `waitpid`, Exit Status, And Reaping
+
+- [x] Define the `waitpid` syscall contract and supported option subset.
+- [x] Add the shared syscall number and ABI constants for `waitpid`.
+- [x] Add a no-std userland wrapper for `waitpid`.
+
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 
 ### Address Space Lifecycle

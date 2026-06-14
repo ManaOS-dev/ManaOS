@@ -18,9 +18,6 @@ reviewable unit before implementing it.
 
 ### `waitpid`, Exit Status, And Reaping
 
-- [ ] Define the `waitpid` syscall contract and supported option subset.
-- [ ] Add the shared syscall number and ABI constants for `waitpid`.
-- [ ] Add a no-std userland wrapper for `waitpid`.
 - [ ] Add scheduler-owned child exit records keyed by parent process ID.
 - [ ] Preserve exit status until the parent reaps the child.
 - [ ] Return `ECHILD` when the caller has no matching child.

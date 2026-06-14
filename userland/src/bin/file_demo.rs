@@ -5,12 +5,14 @@ use mana_userland::syscall;
 
 const STDOUT: usize = 1;
 const BUFFER_LENGTH: usize = 64;
+const WAITPID_MESSAGE: &[u8] = b"user waitpid unsupported ok\n";
 
 #[no_mangle]
 extern "C" fn _start() -> ! {
     if syscall::getpid() <= 0 {
         syscall::exit(4);
     }
+    verify_waitpid_unsupported();
 
     let path = b"/disk/hello.txt\0";
     let file_descriptor = syscall::open_with_options(path, syscall::OPEN_READ_ONLY, 0);
@@ -51,4 +53,19 @@ extern "C" fn _start() -> ! {
         bytes_read,
     );
     syscall::exit(0);
+}
+
+fn verify_waitpid_unsupported() {
+    if syscall::waitpid(syscall::WAIT_ANY, core::ptr::null_mut(), 0)
+        != syscall::ERROR_NOT_IMPLEMENTED
+    {
+        syscall::exit(8);
+    }
+    if syscall::waitpid(syscall::WAIT_ANY, core::ptr::null_mut(), syscall::WNOHANG)
+        != syscall::ERROR_NOT_IMPLEMENTED
+    {
+        syscall::exit(9);
+    }
+
+    let _ = syscall::write(STDOUT, WAITPID_MESSAGE);
 }

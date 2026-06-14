@@ -30,6 +30,8 @@ pub const SYS_GETPID: usize = contract::SYS_GETPID as usize;
 pub const SYS_EXECVE: usize = contract::SYS_EXECVE as usize;
 /// Linux-compatible exit syscall number.
 pub const SYS_EXIT: usize = contract::SYS_EXIT as usize;
+/// Linux-compatible wait4 syscall number reserved for the `ManaOS` `waitpid` subset.
+pub const SYS_WAITPID: usize = contract::SYS_WAITPID as usize;
 /// Linux-compatible get-parent-process-identifier syscall number.
 pub const SYS_GETPPID: usize = contract::SYS_GETPPID as usize;
 /// Linux-compatible get-directory-entries syscall number.
@@ -49,6 +51,10 @@ pub const SEEK_SET: usize = contract::SEEK_SET as usize;
 pub const SEEK_CUR: usize = contract::SEEK_CUR as usize;
 /// Seek relative to the end of a file.
 pub const SEEK_END: usize = contract::SEEK_END as usize;
+/// Match any child process in `waitpid`.
+pub const WAIT_ANY: isize = contract::WAIT_ANY;
+/// Return immediately from `waitpid` if no matching child has exited.
+pub const WNOHANG: usize = contract::WNOHANG as usize;
 /// Mapping pages may be read by user code.
 pub const PROT_READ: usize = contract::PROT_READ as usize;
 /// Mapping pages may be written by user code.
@@ -75,6 +81,8 @@ pub const ERROR_NOT_FOUND: isize = contract::ERROR_NOT_FOUND;
 pub const ERROR_ARGUMENT_LIST_TOO_LONG: isize = contract::ERROR_ARGUMENT_LIST_TOO_LONG;
 /// Linux-compatible bad file descriptor error as a signed syscall result.
 pub const ERROR_BAD_FILE_DESCRIPTOR: isize = contract::ERROR_BAD_FILE_DESCRIPTOR;
+/// Linux-compatible no-child-process error as a signed syscall result.
+pub const ERROR_NO_CHILD: isize = contract::ERROR_NO_CHILD;
 /// Bad address error return value as a signed syscall result.
 pub const ERROR_BAD_ADDRESS: isize = contract::ERROR_BAD_ADDRESS;
 /// Linux-compatible file exists error as a signed syscall result.
@@ -243,6 +251,17 @@ pub fn getpid() -> isize {
 #[inline(always)]
 pub fn getppid() -> isize {
     syscall1(SYS_GETPPID, 0)
+}
+
+/// Wait for a child process and optionally store its wait status.
+#[inline(always)]
+pub fn waitpid(process_identifier: isize, status_pointer: *mut i32, options: usize) -> isize {
+    syscall3(
+        SYS_WAITPID,
+        process_identifier as usize,
+        status_pointer as usize,
+        options,
+    )
 }
 
 /// Replace the current process image with a new executable.

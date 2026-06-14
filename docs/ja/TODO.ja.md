@@ -46,9 +46,10 @@
 `execve` の kernel-side contract、shared syscall number、no-std userland wrapper、argv/envp copy-in、
 bounded staging、filesystem path validation、cleanup invariant、successful image publish、old image
 reclaim、no-return self-`execve` smoke、open descriptor inheritance smoke、second program smoke は
-[`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。次の `execve` 周辺作業では、
-current directory、close-on-exec metadata / close behavior、replacement-state diagnostics を
-小さい branch に分けて進めます。
+[`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。`waitpid` は syscall ABI
+contract、shared number/constants、no-std wrapper まで完了済みで、次は scheduler-owned child
+exit record と reaping state を小さい branch に分けて進めます。`execve` 周辺の残りは current
+directory、close-on-exec metadata / close behavior、replacement-state diagnostics です。
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

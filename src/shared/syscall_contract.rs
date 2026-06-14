@@ -26,6 +26,8 @@ pub const SYS_GETPID: u64 = 39;
 pub const SYS_EXECVE: u64 = 59;
 /// Linux-compatible exit syscall number.
 pub const SYS_EXIT: u64 = 60;
+/// Linux-compatible wait4 syscall number reserved for the `ManaOS` `waitpid` subset.
+pub const SYS_WAITPID: u64 = 61;
 /// Linux-compatible get-parent-process-identifier syscall number.
 pub const SYS_GETPPID: u64 = 110;
 /// Linux-compatible get-directory-entries syscall number.
@@ -45,6 +47,10 @@ pub const SEEK_SET: u64 = 0;
 pub const SEEK_CUR: u64 = 1;
 /// Seek relative to the end of a file.
 pub const SEEK_END: u64 = 2;
+/// Match any child process in `waitpid`.
+pub const WAIT_ANY: isize = -1;
+/// Return immediately from `waitpid` if no matching child has exited.
+pub const WNOHANG: u64 = 0x1;
 
 /// Mapping pages may be read by user code.
 pub const PROT_READ: u64 = 0x1;
@@ -76,6 +82,8 @@ pub const ERROR_NOT_FOUND: isize = -2;
 pub const ERROR_ARGUMENT_LIST_TOO_LONG: isize = -7;
 /// Linux-compatible bad file descriptor error as a signed syscall result.
 pub const ERROR_BAD_FILE_DESCRIPTOR: isize = -9;
+/// Linux-compatible no-child-process error as a signed syscall result.
+pub const ERROR_NO_CHILD: isize = -10;
 /// Bad address error return value as a signed syscall result.
 pub const ERROR_BAD_ADDRESS: isize = -14;
 /// Linux-compatible file exists error as a signed syscall result.

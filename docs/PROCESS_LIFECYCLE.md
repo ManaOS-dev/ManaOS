@@ -30,7 +30,45 @@ finished user address spaces and scheduler-owned kernel stacks.
 
 General user-created process lifecycle is not complete yet. Current-directory
 ownership, descriptor close-on-exec metadata, user-visible child creation, and
-`waitpid` are still future work.
+the scheduler-backed `waitpid` wait/reap state machine are still future work.
+The `waitpid` syscall number, option constants, and no-std userland wrapper are
+reserved now so later child-exit work has a stable ABI target.
+
+## `waitpid` Syscall Contract
+
+`waitpid` will let a parent process observe and reap exited child processes
+without exposing scheduler-internal exit records to userland. ManaOS reserves
+the Linux-compatible `wait4` syscall number as `SYS_WAITPID` and intentionally
+starts with the narrower `waitpid` argument subset.
+
+The syscall ABI slice uses the normal ManaOS syscall register convention:
+
+- `rdi`: process identifier selector. A positive value matches that child
+  process identifier. `WAIT_ANY` (`-1`) matches any child. Process-group
+  selectors are not supported in the first subset.
+- `rsi`: user pointer to a 32-bit wait status word. A null pointer is accepted
+  and suppresses status storage.
+- `rdx`: option bits. `0` means a blocking wait. `WNOHANG` returns immediately
+  when no matching child has exited. Any other option bit should return
+  `-EINVAL`.
+
+Current kernel dispatch returns `-ENOSYS` for `waitpid` until scheduler-owned
+child exit records are implemented. Storage smoke covers that unsupported
+result through the no-std userland wrapper so later behavior changes are
+explicit.
+
+The future scheduler-backed contract is:
+
+- Return the reaped child process identifier on success.
+- Store normal process exit status as `(exit_code & 0xff) << 8` when the status
+  pointer is non-null.
+- Return `0` for `WNOHANG` when the caller has a matching child but no matching
+  exited child is ready to reap.
+- Return `-ECHILD` when the caller has no matching child process.
+- Do not return `-EINTR` until ManaOS has a documented user interrupt policy.
+- Preserve each child exit status until exactly one successful reap consumes it.
+- Reclaim address-space and kernel-stack resources only after the exit record is
+  safe according to the scheduler-owned lifecycle policy.
 
 ## `execve` Kernel Contract
 
