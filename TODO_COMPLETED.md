@@ -61,6 +61,7 @@ active roadmap can list only unfinished work.
 - [x] Define a kernel-internal spawn helper for creating a process from a filesystem path.
 - [x] Add scheduler metadata for spawned process origin.
 - [x] Add a smoke case for two concurrently spawned user programs.
+- [x] Define how argv and envp are represented before user stack construction.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

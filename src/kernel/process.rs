@@ -13,6 +13,7 @@
 //! ## Public API
 //! - [`spawn_user_program`] - Spawn a user program from a filesystem path
 //! - [`UserProgramSpawnRequest`] - User program spawn parameters
+//! - [`UserProgramEntryVectors`] - User program argument and environment vectors
 //! - [`UserProgramSpawnError`] - User program spawn failure reason
 
 use crate::kernel::{
@@ -32,8 +33,7 @@ use alloc::vec::Vec;
 #[derive(Clone, Copy)]
 pub struct UserProgramSpawnRequest<'a> {
     path: &'a str,
-    arguments: &'a [&'a str],
-    environment: &'a [&'a str],
+    entry_vectors: UserProgramEntryVectors<'a>,
     user_stack_pages: u64,
     kernel_probe_address: Option<usize>,
 }
@@ -42,14 +42,12 @@ impl<'a> UserProgramSpawnRequest<'a> {
     /// Create a spawn request for a user program.
     pub const fn new(
         path: &'a str,
-        arguments: &'a [&'a str],
-        environment: &'a [&'a str],
+        entry_vectors: UserProgramEntryVectors<'a>,
         user_stack_pages: u64,
     ) -> Self {
         Self {
             path,
-            arguments,
-            environment,
+            entry_vectors,
             user_stack_pages,
             kernel_probe_address: None,
         }
@@ -59,6 +57,43 @@ impl<'a> UserProgramSpawnRequest<'a> {
     pub const fn with_kernel_probe_address(mut self, kernel_probe_address: usize) -> Self {
         self.kernel_probe_address = Some(kernel_probe_address);
         self
+    }
+}
+
+/// User program argument and environment vectors before stack construction.
+#[derive(Clone, Copy)]
+pub struct UserProgramEntryVectors<'a> {
+    arguments: &'a [&'a str],
+    environment: &'a [&'a str],
+}
+
+impl<'a> UserProgramEntryVectors<'a> {
+    /// Create user entry vectors from borrowed argument and environment slices.
+    pub const fn new(arguments: &'a [&'a str], environment: &'a [&'a str]) -> Self {
+        Self {
+            arguments,
+            environment,
+        }
+    }
+
+    /// Return the argument vector used to build the initial user stack.
+    pub const fn arguments(self) -> &'a [&'a str] {
+        self.arguments
+    }
+
+    /// Return the environment vector used to build the initial user stack.
+    pub const fn environment(self) -> &'a [&'a str] {
+        self.environment
+    }
+
+    /// Return the number of user entry arguments.
+    pub const fn argument_count(self) -> usize {
+        self.arguments.len()
+    }
+
+    /// Return the number of user entry environment entries.
+    pub const fn environment_count(self) -> usize {
+        self.environment.len()
     }
 }
 
@@ -105,12 +140,9 @@ pub fn spawn_user_program(
         user_entry_point,
         request.kernel_probe_address,
     );
-    let prepared_user_stack = prepare_user_entry_stack(
-        user_address_space,
-        user_stack,
-        request.arguments,
-        request.environment,
-    );
+    log_user_entry_vectors(request.entry_vectors);
+    let prepared_user_stack =
+        prepare_user_entry_stack(user_address_space, user_stack, request.entry_vectors);
     let user_task_id = spawn_prepared_user_task(
         frame_allocator,
         user_address_space,
@@ -127,6 +159,15 @@ pub fn spawn_user_program(
         prepared_user_stack.argument_count()
     );
     Ok(user_task_id)
+}
+
+fn log_user_entry_vectors(entry_vectors: UserProgramEntryVectors<'_>) {
+    crate::log_info!(
+        "task",
+        "User program entry vectors staged: argument_count={} environment_count={}",
+        entry_vectors.argument_count(),
+        entry_vectors.environment_count()
+    );
 }
 
 fn load_program_image(path: &str) -> Result<Vec<u8>, UserProgramSpawnError> {
@@ -221,11 +262,14 @@ fn verify_user_program_mappings(
 fn prepare_user_entry_stack(
     user_address_space: UserAddressSpace,
     user_stack: AllocatedUserStack,
-    arguments: &[&str],
-    environment: &[&str],
+    entry_vectors: UserProgramEntryVectors<'_>,
 ) -> PreparedUserStack {
-    let prepared_user_stack =
-        user_stack::prepare_initial_stack(user_address_space, user_stack, arguments, environment);
+    let prepared_user_stack = user_stack::prepare_initial_stack(
+        user_address_space,
+        user_stack,
+        entry_vectors.arguments(),
+        entry_vectors.environment(),
+    );
     crate::log_info!(
         "task",
         "User entry arguments prepared: argc={} argv={:#x} envp={:#x}",

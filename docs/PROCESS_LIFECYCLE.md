@@ -31,6 +31,8 @@ The kernel-internal `kernel::process::spawn_user_program` helper now owns the
 boot-visible path from filesystem executable path to initial user task record,
 while filesystem lookup, ELF mapping, address-space construction, and scheduler
 metadata remain owned by their existing modules.
+`kernel::process::UserProgramEntryVectors` is the named pre-stack
+representation for borrowed `argv` and `envp` slices used by spawned programs.
 Scheduler diagnostics retain the spawned origin path separately from the current
 image path, so a later successful `execve` can change `path=` while `origin=`
 still identifies the program that created the task record.
@@ -287,6 +289,8 @@ Current runtime diagnostics cover the first successful replacement path:
 - Storage smoke starts user programs through the kernel-internal
   `spawn_user_program` helper so filesystem path loading, ELF mapping, initial
   argv/envp stack construction, and scheduler task creation share one path.
+- Storage smoke asserts the staged entry vector counts before the helper builds
+  the initial user stack.
 - Storage smoke asserts two distinct user tasks spawned from the same
   filesystem path before both are activated together.
 - Storage smoke asserts that `tasks` output retains the original spawn path as

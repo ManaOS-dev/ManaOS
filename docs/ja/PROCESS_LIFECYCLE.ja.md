@@ -29,6 +29,8 @@ address space と scheduler-owned kernel stack を reclaim できます。
 kernel-internal な `kernel::process::spawn_user_program` helper は、filesystem executable path から
 initial user task record までの boot-visible path を所有します。一方で filesystem lookup、ELF
 mapping、address-space construction、scheduler metadata は既存 module の所有のままです。
+`kernel::process::UserProgramEntryVectors` は、spawned program が使う borrowed `argv` / `envp`
+slice を user stack construction 前に表す named representation です。
 scheduler diagnostics は spawned origin path を current image path と別に保持するため、後続の
 successful `execve` で `path=` が変わっても、`origin=` は task record を作った program を示し続けます。
 
@@ -249,6 +251,7 @@ unmarked descriptor は default で descriptor number と offset を保持し、
 - storage smoke は kernel-internal な `spawn_user_program` helper 経由で user program を起動し、
   filesystem path loading、ELF mapping、initial argv/envp stack construction、scheduler task creation が
   1つの path を共有することを検証します。
+- storage smoke は、helper が initial user stack を構築する前に staged entry vector count を assert します。
 - storage smoke は、同じ filesystem path から distinct な user task を2つ spawn し、両方をまとめて
   active set に入れる前提を assert します。
 - storage smoke は、同じ task が `execve` で current image を置き換えた後も、`tasks` output が

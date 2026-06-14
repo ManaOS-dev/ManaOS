@@ -14,10 +14,13 @@ fn spawn_user_smoke_task(
 ) -> u64 {
     let user_entry_arguments = [user_elf_path, "--storage-smoke"];
     let user_entry_environment = ["MANAOS_BOOT=storage-smoke"];
-    let request = crate::kernel::process::UserProgramSpawnRequest::new(
-        user_elf_path,
+    let user_entry_vectors = crate::kernel::process::UserProgramEntryVectors::new(
         &user_entry_arguments,
         &user_entry_environment,
+    );
+    let request = crate::kernel::process::UserProgramSpawnRequest::new(
+        user_elf_path,
+        user_entry_vectors,
         user_stack_pages,
     )
     .with_kernel_probe_address(run_user_smoke_demo as *const () as usize);
