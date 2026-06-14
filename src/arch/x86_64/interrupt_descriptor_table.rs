@@ -8,6 +8,8 @@ use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, Pag
 use x86_64::VirtAddr;
 
 const INTERRUPT_CONTROLLER_1_OFFSET: u8 = 32;
+const SPURIOUS_INTERRUPT_VECTOR: u8 = u8::MAX;
+const UNEXPECTED_EXTERNAL_INTERRUPT_VECTOR_START: u8 = INTERRUPT_CONTROLLER_1_OFFSET + 2;
 const RAW_TIMER_INTERRUPT_FRAME_INSTRUCTION_POINTER_OFFSET: usize = 0;
 const RAW_TIMER_INTERRUPT_FRAME_CODE_SEGMENT_OFFSET: usize = 8;
 const RAW_TIMER_INTERRUPT_FRAME_CPU_FLAGS_OFFSET: usize = 16;
@@ -35,6 +37,8 @@ static TIMER_TICK_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
 static KEYBOARD_BYTE_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
 static MOUSE_BYTE_PROCESSOR: AtomicUsize = AtomicUsize::new(0);
 static PAGE_FAULT_REPORTER: AtomicUsize = AtomicUsize::new(0);
+static SPURIOUS_INTERRUPT_COUNT: AtomicU64 = AtomicU64::new(0);
+static UNEXPECTED_EXTERNAL_INTERRUPT_COUNT: AtomicU64 = AtomicU64::new(0);
 
 /// Kernel callback invoked after each timer interrupt is acknowledged.
 pub type TimerTickProcessor = fn(&TimerInterruptFrame);
@@ -53,9 +57,55 @@ pub struct InterruptProcessors {
 /// Callback invoked before the page fault handler panics.
 pub type PageFaultReporter = fn(fault_address: u64, error_code: u64, instruction_pointer: u64);
 
+/// IDT vector diagnostics for unexpected external interrupts.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct InterruptVectorDiagnostics {
+    spurious_interrupt_vector: u8,
+    spurious_interrupt_count: u64,
+    unexpected_external_interrupt_count: u64,
+}
+
+impl InterruptVectorDiagnostics {
+    const fn new(
+        spurious_interrupt_vector: u8,
+        spurious_interrupt_count: u64,
+        unexpected_external_interrupt_count: u64,
+    ) -> Self {
+        Self {
+            spurious_interrupt_vector,
+            spurious_interrupt_count,
+            unexpected_external_interrupt_count,
+        }
+    }
+
+    /// Return the IDT vector reserved for Local APIC spurious interrupts.
+    pub const fn spurious_interrupt_vector(self) -> u8 {
+        self.spurious_interrupt_vector
+    }
+
+    /// Return the number of Local APIC spurious interrupts observed.
+    pub const fn spurious_interrupt_count(self) -> u64 {
+        self.spurious_interrupt_count
+    }
+
+    /// Return the number of unexpected external interrupts observed.
+    pub const fn unexpected_external_interrupt_count(self) -> u64 {
+        self.unexpected_external_interrupt_count
+    }
+}
+
 /// Return the number of timer ticks since interrupt initialization.
 pub fn get_ticks() -> u64 {
     TICKS.load(Ordering::Relaxed)
+}
+
+/// Return IDT vector diagnostics for interrupt-controller smoke checks.
+pub fn get_interrupt_vector_diagnostics() -> InterruptVectorDiagnostics {
+    InterruptVectorDiagnostics::new(
+        SPURIOUS_INTERRUPT_VECTOR,
+        SPURIOUS_INTERRUPT_COUNT.load(Ordering::Acquire),
+        UNEXPECTED_EXTERNAL_INTERRUPT_COUNT.load(Ordering::Acquire),
+    )
 }
 
 /// Register kernel callbacks invoked by architecture interrupt handlers.
@@ -176,6 +226,7 @@ static INTERRUPT_DESCRIPTOR_TABLE: LazyLock<InterruptDescriptorTable> = LazyLock
     }
     table[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
     table[InterruptIndex::Mouse.as_u8()].set_handler_fn(mouse_interrupt_handler);
+    install_interrupt_vector_diagnostics(&mut table);
     table
 });
 
@@ -299,6 +350,37 @@ extern "x86-interrupt" fn mouse_interrupt_handler(_stack_frame: InterruptStackFr
             InterruptIndex::Mouse.as_u8(),
         );
     }
+}
+
+extern "x86-interrupt" fn push_spurious_interrupt(_stack_frame: InterruptStackFrame) {
+    SPURIOUS_INTERRUPT_COUNT.fetch_add(1, Ordering::Relaxed);
+}
+
+extern "x86-interrupt" fn push_unexpected_external_interrupt(_stack_frame: InterruptStackFrame) {
+    UNEXPECTED_EXTERNAL_INTERRUPT_COUNT.fetch_add(1, Ordering::Relaxed);
+    // SAFETY: This handler is installed only for external interrupt vectors.
+    // When APIC routing is active, the Local APIC requires one EOI for an
+    // accepted interrupt before more interrupts of the same priority can arrive.
+    unsafe {
+        crate::arch::x86_64::interrupt_controller::notify_unexpected_external_end_of_interrupt();
+    }
+}
+
+fn install_interrupt_vector_diagnostics(table: &mut InterruptDescriptorTable) {
+    let mut vector = UNEXPECTED_EXTERNAL_INTERRUPT_VECTOR_START;
+    while vector < SPURIOUS_INTERRUPT_VECTOR {
+        if !is_known_external_interrupt_vector(vector) {
+            table[vector].set_handler_fn(push_unexpected_external_interrupt);
+        }
+        vector += 1;
+    }
+    table[SPURIOUS_INTERRUPT_VECTOR].set_handler_fn(push_spurious_interrupt);
+}
+
+fn is_known_external_interrupt_vector(vector: u8) -> bool {
+    vector == InterruptIndex::Timer.as_u8()
+        || vector == InterruptIndex::Keyboard.as_u8()
+        || vector == InterruptIndex::Mouse.as_u8()
 }
 
 fn status_read() -> u8 {

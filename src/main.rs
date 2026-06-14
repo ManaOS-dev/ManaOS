@@ -797,6 +797,46 @@ fn verify_apic_eoi_diagnostics() {
     );
 }
 
+fn verify_interrupt_vector_diagnostics() {
+    // SAFETY: The Local APIC MMIO page remains identity-mapped after boot-time
+    // APIC setup and can be read for diagnostic verification.
+    let local_apic_eoi_status =
+        unsafe { arch::x86_64::interrupt_controller::inspect_local_apic_eoi_provider() }
+            .expect("Local APIC EOI provider must be configured before vector diagnostics");
+    let vector_diagnostics =
+        arch::x86_64::interrupt_descriptor_table::get_interrupt_vector_diagnostics();
+    assert!(
+        local_apic_eoi_status.is_software_enabled(),
+        "Local APIC must be software-enabled before vector diagnostics"
+    );
+    assert!(
+        local_apic_eoi_status.has_diagnostic_spurious_interrupt_vector(),
+        "Local APIC spurious interrupt vector must use the diagnostic vector"
+    );
+    assert_eq!(
+        vector_diagnostics.spurious_interrupt_vector(),
+        local_apic_eoi_status.spurious_interrupt_vector_number(),
+        "IDT and Local APIC spurious interrupt vectors must match"
+    );
+    assert_eq!(
+        vector_diagnostics.spurious_interrupt_count(),
+        0,
+        "boot smoke should not observe Local APIC spurious interrupts"
+    );
+    assert_eq!(
+        vector_diagnostics.unexpected_external_interrupt_count(),
+        0,
+        "boot smoke should not observe unexpected external interrupts"
+    );
+    crate::log_info!(
+        "arch",
+        "Interrupt vector diagnostics verified: spurious_vector={} spurious_count={} unexpected_external_count={}",
+        vector_diagnostics.spurious_interrupt_vector(),
+        vector_diagnostics.spurious_interrupt_count(),
+        vector_diagnostics.unexpected_external_interrupt_count()
+    );
+}
+
 fn start_local_apic_timer_calibration() {
     let start_ticks = kernel::time::get_timer_ticks();
     // SAFETY: The Local APIC MMIO page was identity-mapped during ACPI
@@ -1929,6 +1969,7 @@ fn main() -> Status {
 
     run_user_smoke_demo(&mut frame_allocator);
     verify_apic_eoi_diagnostics();
+    verify_interrupt_vector_diagnostics();
     verify_local_apic_timer_post_smoke();
     verify_scheduler_task_diagnostics(2);
     verify_scheduler_task_snapshots(2);
