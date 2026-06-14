@@ -11,8 +11,6 @@ reviewable unit before implementing it.
 
 ### `execve` And Image Replacement
 
-- [ ] Add the shared syscall number and ABI constants for `execve`.
-- [ ] Add a no-std userland wrapper for `execve`.
 - [ ] Copy `argv` strings through the existing user pointer validation policy.
 - [ ] Copy `envp` strings through the existing user pointer validation policy.
 - [ ] Bound total argument and environment bytes with a documented limit.

@@ -26,10 +26,12 @@ pub const SYS_BRK: usize = contract::SYS_BRK as usize;
 pub const SYS_NANOSLEEP: usize = contract::SYS_NANOSLEEP as usize;
 /// Linux-compatible get-process-identifier syscall number.
 pub const SYS_GETPID: usize = contract::SYS_GETPID as usize;
-/// Linux-compatible get-parent-process-identifier syscall number.
-pub const SYS_GETPPID: usize = contract::SYS_GETPPID as usize;
+/// Linux-compatible execute-program syscall number.
+pub const SYS_EXECVE: usize = contract::SYS_EXECVE as usize;
 /// Linux-compatible exit syscall number.
 pub const SYS_EXIT: usize = contract::SYS_EXIT as usize;
+/// Linux-compatible get-parent-process-identifier syscall number.
+pub const SYS_GETPPID: usize = contract::SYS_GETPPID as usize;
 /// Linux-compatible get-directory-entries syscall number.
 pub const SYS_GETDENTS64: usize = contract::SYS_GETDENTS64 as usize;
 /// Linux-compatible exit-group syscall number.
@@ -237,6 +239,21 @@ pub fn getpid() -> isize {
 #[inline(always)]
 pub fn getppid() -> isize {
     syscall1(SYS_GETPPID, 0)
+}
+
+/// Replace the current process image with a new executable.
+///
+/// `path` must point to a NUL-terminated path. `arguments` and `environment`
+/// must point to NUL-terminated pointer arrays, or be null when the kernel
+/// supports the documented empty-vector policy.
+#[inline(always)]
+pub fn execve(path: &[u8], arguments: *const *const u8, environment: *const *const u8) -> isize {
+    syscall3(
+        SYS_EXECVE,
+        path.as_ptr() as usize,
+        arguments as usize,
+        environment as usize,
+    )
 }
 
 /// Terminate the current user task.

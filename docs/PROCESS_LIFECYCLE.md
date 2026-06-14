@@ -43,8 +43,10 @@ The syscall ABI slice should use the normal ManaOS syscall register convention:
 - `rsi`: user pointer to a NUL-terminated `argv` pointer array.
 - `rdx`: user pointer to a NUL-terminated `envp` pointer array.
 
-The shared syscall number and userland wrapper are separate TODO items. When
-they are added, the kernel and userland constants must be updated together.
+The shared syscall number and no-std userland wrapper are reserved now. The
+kernel runtime implementation remains pending, so `SYS_EXECVE` currently
+returns an unsupported syscall result until the lifecycle replacement path is
+added.
 
 The kernel-side contract is:
 

@@ -22,10 +22,12 @@ pub const SYS_BRK: u64 = 12;
 pub const SYS_NANOSLEEP: u64 = 35;
 /// Linux-compatible get-process-identifier syscall number.
 pub const SYS_GETPID: u64 = 39;
-/// Linux-compatible get-parent-process-identifier syscall number.
-pub const SYS_GETPPID: u64 = 110;
+/// Linux-compatible execute-program syscall number.
+pub const SYS_EXECVE: u64 = 59;
 /// Linux-compatible exit syscall number.
 pub const SYS_EXIT: u64 = 60;
+/// Linux-compatible get-parent-process-identifier syscall number.
+pub const SYS_GETPPID: u64 = 110;
 /// Linux-compatible get-directory-entries syscall number.
 pub const SYS_GETDENTS64: u64 = 217;
 /// Linux-compatible exit-group syscall number.

@@ -14,8 +14,8 @@
 
 ### Process Lifecycle And User Program Execution
 
-`execve` の kernel-side contract と、image replacement 時の ownership / cleanup invariant の
-文書化が完了済みです。正本は英語版の `TODO_COMPLETED.md` と
+`execve` の kernel-side contract、shared syscall number、no-std userland wrapper、image replacement
+時の ownership / cleanup invariant の文書化が完了済みです。正本は英語版の `TODO_COMPLETED.md` と
 [`PROCESS_LIFECYCLE.md`](../PROCESS_LIFECYCLE.md) です。
 
 ### Immediate Priorities

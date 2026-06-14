@@ -27,6 +27,7 @@
 //! - [`SYS_MUNMAP`] - Linux-compatible memory-unmap syscall number
 //! - [`SYS_BRK`] - Linux-compatible heap break syscall number
 //! - [`SYS_NANOSLEEP`] - Linux-compatible high-resolution sleep syscall number
+//! - [`SYS_EXECVE`] - Linux-compatible execute-program syscall number
 //! - [`SYS_EXIT`] - Linux-compatible exit syscall number
 //! - [`SYS_GETDENTS64`] - Linux-compatible get-directory-entries syscall number
 //! - [`SYS_EXIT_GROUP`] - Linux-compatible process exit syscall number
@@ -47,9 +48,9 @@ mod contract;
 mod memory;
 
 pub use contract::{
-    SYS_BRK, SYS_CLOSE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64, SYS_GETPID,
-    SYS_GETPPID, SYS_LSEEK, SYS_MMAP, SYS_MUNMAP, SYS_NANOSLEEP, SYS_OPEN, SYS_OPENAT, SYS_READ,
-    SYS_WRITE,
+    SYS_BRK, SYS_CLOSE, SYS_EXECVE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64,
+    SYS_GETPID, SYS_GETPPID, SYS_LSEEK, SYS_MMAP, SYS_MUNMAP, SYS_NANOSLEEP, SYS_OPEN, SYS_OPENAT,
+    SYS_READ, SYS_WRITE,
 };
 
 const ERROR_NOT_FOUND: u64 = linux_error(2);
@@ -203,6 +204,7 @@ fn dispatch_syscall(syscall_number: u64, arguments: [u64; 6]) -> u64 {
         SYS_MUNMAP => memory::sys_munmap(first_argument, second_argument),
         SYS_BRK => memory::sys_brk(first_argument),
         SYS_NANOSLEEP => memory::sys_nanosleep(first_argument, second_argument),
+        SYS_EXECVE => sys_execve(first_argument, second_argument, third_argument),
         SYS_READ => sys_read(first_argument, second_argument, third_argument),
         SYS_GETDENTS64 => sys_getdents64(first_argument, second_argument, third_argument),
         SYS_GETPID => sys_getpid(),
@@ -519,6 +521,22 @@ fn sys_lseek(file_descriptor: u64, offset: u64, whence: u64) -> u64 {
         }
         Err(error) => filesystem_error_to_linux(error),
     }
+}
+
+fn sys_execve(
+    user_path_pointer: u64,
+    user_argument_values_pointer: u64,
+    user_environment_values_pointer: u64,
+) -> u64 {
+    crate::log_debug!(
+        "syscall",
+        "execve(path={:#018x}, argv={:#018x}, envp={:#018x}) is not implemented",
+        user_path_pointer,
+        user_argument_values_pointer,
+        user_environment_values_pointer
+    );
+
+    ERROR_NOT_IMPLEMENTED
 }
 
 fn copy_input_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static [u8]> {
