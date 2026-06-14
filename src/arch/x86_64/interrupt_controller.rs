@@ -1,6 +1,6 @@
 //! Interrupt controller selection and initialization.
 
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use pic8259::ChainedPics;
 use spin::Mutex;
 
@@ -15,6 +15,11 @@ const APIC_PROVIDER_TRUNCATED_FLAG: u8 = 1 << 3;
 const LOCAL_APIC_EOI_PROVIDER_CONFIGURED_FLAG: u8 = 1;
 const LOCAL_APIC_EOI_PROVIDER_ROUTING_ACTIVE_FLAG: u8 = 1 << 1;
 const LOCAL_APIC_EOI_PROVIDER_SOFTWARE_ENABLED_FLAG: u8 = 1 << 2;
+const IOAPIC_ACTIVATION_READBACK_MATCHED_FLAG: u8 = 1;
+const IOAPIC_ACTIVATION_ALL_UNMASKED_FLAG: u8 = 1 << 1;
+const IOAPIC_ACTIVATION_LOCAL_APIC_SOFTWARE_ENABLED_FLAG: u8 = 1 << 2;
+const IOAPIC_ACTIVATION_LEGACY_PIC_MASKED_FLAG: u8 = 1 << 3;
+const IOAPIC_ACTIVATION_ROUTING_ACTIVE_FLAG: u8 = 1 << 4;
 const LOCAL_APIC_ID_REGISTER: usize = 0x20;
 const LOCAL_APIC_VERSION_REGISTER: usize = 0x30;
 const LOCAL_APIC_EOI_REGISTER: usize = 0xb0;
@@ -67,6 +72,9 @@ pub(super) static LEGACY_INTERRUPT_CONTROLLERS: Mutex<ChainedPics> =
 static APIC_ROUTING_PROVIDER: Mutex<ApicRoutingProviderState> =
     Mutex::new(ApicRoutingProviderState::new());
 static LOCAL_APIC_EOI_BASE_ADDRESS: AtomicUsize = AtomicUsize::new(0);
+static IOAPIC_ROUTING_ACTIVE: AtomicBool = AtomicBool::new(false);
+static APIC_END_OF_INTERRUPT_COUNT: AtomicU64 = AtomicU64::new(0);
+static LEGACY_END_OF_INTERRUPT_COUNT: AtomicU64 = AtomicU64::new(0);
 
 /// Available interrupt controller backends.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -792,6 +800,192 @@ impl LocalApicEoiProviderStatus {
     }
 }
 
+/// Result of activating IOAPIC interrupt routing.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct IoApicRoutingActivationStatus {
+    flags: u8,
+    planned_entry_count: usize,
+    activated_entry_count: usize,
+    out_of_range_entry_count: usize,
+    timer_low_readback: u32,
+    timer_high_readback: u32,
+    keyboard_low_readback: u32,
+    keyboard_high_readback: u32,
+    mouse_low_readback: u32,
+    mouse_high_readback: u32,
+}
+
+impl IoApicRoutingActivationStatus {
+    const fn new(planned_entry_count: usize) -> Self {
+        Self {
+            flags: IOAPIC_ACTIVATION_READBACK_MATCHED_FLAG | IOAPIC_ACTIVATION_ALL_UNMASKED_FLAG,
+            planned_entry_count,
+            activated_entry_count: 0,
+            out_of_range_entry_count: 0,
+            timer_low_readback: 0,
+            timer_high_readback: 0,
+            keyboard_low_readback: 0,
+            keyboard_high_readback: 0,
+            mouse_low_readback: 0,
+            mouse_high_readback: 0,
+        }
+    }
+
+    /// Return the number of redirection entries from the current plan.
+    pub const fn planned_entry_count(self) -> usize {
+        self.planned_entry_count
+    }
+
+    /// Return the number of redirection entries activated.
+    pub const fn activated_entry_count(self) -> usize {
+        self.activated_entry_count
+    }
+
+    /// Return the number of planned entries outside the IOAPIC table range.
+    pub const fn out_of_range_entry_count(self) -> usize {
+        self.out_of_range_entry_count
+    }
+
+    /// Return whether activated entries matched their readback values.
+    pub const fn readback_matches(self) -> bool {
+        self.flags & IOAPIC_ACTIVATION_READBACK_MATCHED_FLAG != 0
+    }
+
+    /// Return whether all activated entries were unmasked after readback.
+    pub const fn all_entries_unmasked(self) -> bool {
+        self.flags & IOAPIC_ACTIVATION_ALL_UNMASKED_FLAG != 0
+    }
+
+    /// Return whether the Local APIC software-enable bit was set.
+    pub const fn local_apic_software_enabled(self) -> bool {
+        self.flags & IOAPIC_ACTIVATION_LOCAL_APIC_SOFTWARE_ENABLED_FLAG != 0
+    }
+
+    /// Return whether the legacy PIC lines were masked during activation.
+    pub const fn legacy_pic_masked(self) -> bool {
+        self.flags & IOAPIC_ACTIVATION_LEGACY_PIC_MASKED_FLAG != 0
+    }
+
+    /// Return whether IOAPIC routing is active.
+    pub const fn is_routing_active(self) -> bool {
+        self.flags & IOAPIC_ACTIVATION_ROUTING_ACTIVE_FLAG != 0
+    }
+
+    /// Return the timer low redirection dword readback.
+    pub const fn timer_low_readback(self) -> u32 {
+        self.timer_low_readback
+    }
+
+    /// Return the timer high redirection dword readback.
+    pub const fn timer_high_readback(self) -> u32 {
+        self.timer_high_readback
+    }
+
+    /// Return the keyboard low redirection dword readback.
+    pub const fn keyboard_low_readback(self) -> u32 {
+        self.keyboard_low_readback
+    }
+
+    /// Return the keyboard high redirection dword readback.
+    pub const fn keyboard_high_readback(self) -> u32 {
+        self.keyboard_high_readback
+    }
+
+    /// Return the mouse low redirection dword readback.
+    pub const fn mouse_low_readback(self) -> u32 {
+        self.mouse_low_readback
+    }
+
+    /// Return the mouse high redirection dword readback.
+    pub const fn mouse_high_readback(self) -> u32 {
+        self.mouse_high_readback
+    }
+
+    fn mark_local_apic_software_enabled(&mut self) {
+        self.flags |= IOAPIC_ACTIVATION_LOCAL_APIC_SOFTWARE_ENABLED_FLAG;
+    }
+
+    fn mark_legacy_pic_masked(&mut self) {
+        self.flags |= IOAPIC_ACTIVATION_LEGACY_PIC_MASKED_FLAG;
+    }
+
+    fn mark_routing_active(&mut self) {
+        self.flags |= IOAPIC_ACTIVATION_ROUTING_ACTIVE_FLAG;
+    }
+
+    fn record_activated_entry(
+        &mut self,
+        entry: IoApicRedirectionEntry,
+        low_value: u32,
+        high_value: u32,
+        low_readback: u32,
+        high_readback: u32,
+    ) {
+        self.activated_entry_count += 1;
+        if (low_readback & IOAPIC_REDIRECTION_LOW_READBACK_MASK) != low_value
+            || high_readback != high_value
+        {
+            self.flags &= !IOAPIC_ACTIVATION_READBACK_MATCHED_FLAG;
+        }
+        if low_readback & IOAPIC_REDIRECTION_MASKED_BIT != 0 {
+            self.flags &= !IOAPIC_ACTIVATION_ALL_UNMASKED_FLAG;
+        }
+        match entry.legacy_irq() {
+            LEGACY_TIMER_IRQ => {
+                self.timer_low_readback = low_readback;
+                self.timer_high_readback = high_readback;
+            }
+            LEGACY_KEYBOARD_IRQ => {
+                self.keyboard_low_readback = low_readback;
+                self.keyboard_high_readback = high_readback;
+            }
+            LEGACY_MOUSE_IRQ => {
+                self.mouse_low_readback = low_readback;
+                self.mouse_high_readback = high_readback;
+            }
+            _ => {}
+        }
+    }
+
+    fn record_out_of_range_entry(&mut self) {
+        self.out_of_range_entry_count += 1;
+        self.flags &= !IOAPIC_ACTIVATION_READBACK_MATCHED_FLAG;
+    }
+}
+
+/// Interrupt-controller EOI diagnostics.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct EndOfInterruptStatus {
+    ioapic_routing_active: bool,
+    apic_count: u64,
+    legacy_count: u64,
+}
+
+impl EndOfInterruptStatus {
+    const fn new(ioapic_routing_active: bool, apic_count: u64, legacy_count: u64) -> Self {
+        Self {
+            ioapic_routing_active,
+            apic_count,
+            legacy_count,
+        }
+    }
+
+    /// Return whether IOAPIC routing is active.
+    pub const fn is_ioapic_routing_active(self) -> bool {
+        self.ioapic_routing_active
+    }
+
+    /// Return the number of Local APIC EOI writes.
+    pub const fn apic_count(self) -> u64 {
+        self.apic_count
+    }
+
+    /// Return the number of legacy PIC EOI notifications.
+    pub const fn legacy_count(self) -> u64 {
+        self.legacy_count
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct ApicRoutingProviderState {
     configured: bool,
@@ -944,6 +1138,71 @@ pub unsafe fn inspect_local_apic_eoi_provider() -> Option<LocalApicEoiProviderSt
     ))
 }
 
+/// Activate IOAPIC routing for the planned legacy interrupt sources.
+///
+/// This unmasks the timer, keyboard, and mouse IOAPIC redirection entries,
+/// masks the legacy PIC, and switches EOI dispatch to the Local APIC.
+///
+/// # Safety
+///
+/// Interrupts must be disabled. The Local APIC and IOAPIC MMIO pages must be
+/// identity-mapped as writable uncached kernel memory, and no other code may
+/// concurrently program those interrupt-controller registers.
+pub unsafe fn activate_ioapic_routing() -> Option<IoApicRoutingActivationStatus> {
+    let configuration = {
+        let provider = APIC_ROUTING_PROVIDER.lock();
+        if !provider.configured {
+            return None;
+        }
+        provider.configuration
+    };
+
+    let plan = IoApicRedirectionPlan::from_configuration(&configuration);
+    let local_apic_base_address = LOCAL_APIC_EOI_BASE_ADDRESS.load(Ordering::Acquire);
+    if local_apic_base_address == 0 {
+        return None;
+    }
+
+    let local_apic_registers = LocalApicRegisters::new(local_apic_base_address);
+    let ioapic_registers = IoApicRegisters::new(configuration.ioapic().physical_address());
+    let mut status = IoApicRoutingActivationStatus::new(plan.entry_count());
+
+    // SAFETY: The caller guarantees Local APIC MMIO is mapped and exclusively
+    // programmed during interrupt-controller activation.
+    if unsafe { ensure_local_apic_software_enabled(&local_apic_registers) } {
+        status.mark_local_apic_software_enabled();
+    }
+    // SAFETY: The caller guarantees IOAPIC MMIO is mapped and exclusively
+    // programmed during interrupt-controller activation.
+    unsafe {
+        activate_ioapic_redirection_plan(&ioapic_registers, plan, &mut status);
+    }
+
+    assert!(
+        status.readback_matches()
+            && status.all_entries_unmasked()
+            && status.activated_entry_count() == status.planned_entry_count()
+            && status.out_of_range_entry_count() == 0
+            && status.local_apic_software_enabled(),
+        "IOAPIC routing activation preconditions failed"
+    );
+
+    mask_legacy_interrupts_for_apic_routing();
+    status.mark_legacy_pic_masked();
+    IOAPIC_ROUTING_ACTIVE.store(true, Ordering::Release);
+    status.mark_routing_active();
+    Some(status)
+}
+
+/// Return interrupt-controller EOI counters.
+pub fn get_end_of_interrupt_status() -> EndOfInterruptStatus {
+    EndOfInterruptStatus::new(
+        has_ioapic_routing(),
+        APIC_END_OF_INTERRUPT_COUNT.load(Ordering::Acquire),
+        LEGACY_END_OF_INTERRUPT_COUNT.load(Ordering::Acquire),
+    )
+}
+
 fn redirection_entry_for_legacy_irq(
     configuration: &ApicRoutingConfiguration,
     legacy_irq: u8,
@@ -975,6 +1234,90 @@ fn redirection_entry_for_legacy_irq(
         low_value,
         high_value,
     ))
+}
+
+unsafe fn ensure_local_apic_software_enabled(registers: &LocalApicRegisters) -> bool {
+    // SAFETY: The caller guarantees Local APIC MMIO is mapped and exclusively
+    // programmed during interrupt-controller activation.
+    let spurious_interrupt_vector =
+        unsafe { registers.read(LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_REGISTER) };
+    if spurious_interrupt_vector & LOCAL_APIC_SOFTWARE_ENABLE_BIT == 0 {
+        // SAFETY: The caller guarantees Local APIC MMIO is mapped and
+        // exclusively programmed during interrupt-controller activation.
+        unsafe {
+            registers.write(
+                LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_REGISTER,
+                spurious_interrupt_vector | LOCAL_APIC_SOFTWARE_ENABLE_BIT,
+            );
+        }
+    }
+    // SAFETY: The caller guarantees Local APIC MMIO is mapped and exclusively
+    // programmed during interrupt-controller activation.
+    let enabled_spurious_interrupt_vector =
+        unsafe { registers.read(LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_REGISTER) };
+    enabled_spurious_interrupt_vector & LOCAL_APIC_SOFTWARE_ENABLE_BIT != 0
+}
+
+unsafe fn activate_ioapic_redirection_plan(
+    registers: &IoApicRegisters,
+    plan: IoApicRedirectionPlan,
+    status: &mut IoApicRoutingActivationStatus,
+) {
+    // SAFETY: The caller guarantees IOAPIC MMIO is mapped and exclusively
+    // programmed during interrupt-controller activation.
+    let version = unsafe { registers.read(IOAPIC_VERSION_REGISTER) };
+    let maximum_redirection_entry = maximum_redirection_entry_from_version(version);
+
+    let mut index = 0;
+    while index < plan.entry_count() {
+        let entry = plan
+            .entry(index)
+            .expect("retained IOAPIC redirection plan entry must exist");
+        if entry.table_index() > maximum_redirection_entry {
+            status.record_out_of_range_entry();
+            index += 1;
+            continue;
+        }
+
+        // SAFETY: The redirection entry was range-checked against the IOAPIC
+        // version register, and the caller guarantees exclusive MMIO access.
+        unsafe {
+            activate_ioapic_redirection_entry(registers, entry, status);
+        }
+        index += 1;
+    }
+}
+
+unsafe fn activate_ioapic_redirection_entry(
+    registers: &IoApicRegisters,
+    entry: IoApicRedirectionEntry,
+    status: &mut IoApicRoutingActivationStatus,
+) {
+    let low_value = entry.low_value() & !IOAPIC_REDIRECTION_MASKED_BIT;
+    let high_value = entry.high_value();
+    // SAFETY: The caller guarantees the redirection registers are valid for
+    // this IOAPIC and exclusively programmed during activation.
+    unsafe {
+        registers.write(entry.high_register(), high_value);
+        registers.write(entry.low_register(), low_value);
+    }
+    // SAFETY: The redirection registers were just programmed through the mapped
+    // IOAPIC window and can be read back for diagnostics.
+    let high_readback = unsafe { registers.read(entry.high_register()) };
+    // SAFETY: The redirection registers were just programmed through the mapped
+    // IOAPIC window and can be read back for diagnostics.
+    let low_readback = unsafe { registers.read(entry.low_register()) };
+    status.record_activated_entry(entry, low_value, high_value, low_readback, high_readback);
+}
+
+fn mask_legacy_interrupts_for_apic_routing() {
+    let mut interrupt_controllers = LEGACY_INTERRUPT_CONTROLLERS.lock();
+    // SAFETY: Interrupts are disabled during IOAPIC routing activation, and
+    // masking both PICs prevents legacy PIC delivery after IOAPIC routes become
+    // active.
+    unsafe {
+        interrupt_controllers.write_masks(0xff, 0xff);
+    }
 }
 
 struct LocalApicRegisters {
@@ -1103,6 +1446,7 @@ pub unsafe fn notify_legacy_end_of_interrupt(interrupt_index: u8) {
     LEGACY_INTERRUPT_CONTROLLERS
         .lock()
         .notify_end_of_interrupt(interrupt_index);
+    LEGACY_END_OF_INTERRUPT_COUNT.fetch_add(1, Ordering::Relaxed);
 }
 
 /// Notify the configured interrupt controller that one interrupt completed.
@@ -1124,6 +1468,7 @@ pub unsafe fn notify_end_of_interrupt(interrupt_index: u8) {
         unsafe {
             registers.write(LOCAL_APIC_EOI_REGISTER, LOCAL_APIC_EOI_VALUE);
         }
+        APIC_END_OF_INTERRUPT_COUNT.fetch_add(1, Ordering::Relaxed);
     } else {
         // SAFETY: The legacy PIC backend remains active while IOAPIC routing is
         // disabled, so the interrupt must be acknowledged through the PIC.
@@ -1140,9 +1485,8 @@ pub fn has_local_apic() -> bool {
 
 /// Return whether IOAPIC routing is available to use.
 ///
-/// `ManaOS` currently configures APIC routing provider data but still routes
-/// interrupts through the legacy controllers until IOAPIC redirection entries
-/// and EOI handling are wired.
+/// This becomes true only after the planned IOAPIC redirection entries are
+/// unmasked, the legacy PIC is masked, and Local APIC EOI dispatch is active.
 pub fn has_ioapic_routing() -> bool {
-    false
+    IOAPIC_ROUTING_ACTIVE.load(Ordering::Acquire)
 }

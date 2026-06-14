@@ -253,6 +253,7 @@ fn initialize_architecture_and_drivers() {
     kernel::driver::input::mouse::init();
     crate::log_info!("driver", "Mouse initialized.");
 
+    activate_ioapic_interrupt_routing();
     arch::x86_64::enable_interrupts();
 }
 
@@ -734,6 +735,60 @@ fn stage_ioapic_redirection_entries(
         staging_status.keyboard_high_readback(),
         staging_status.mouse_low_readback(),
         staging_status.mouse_high_readback()
+    );
+}
+
+fn activate_ioapic_interrupt_routing() {
+    // SAFETY: Architecture initialization keeps CPU interrupts disabled here,
+    // and Local APIC plus IOAPIC MMIO pages were identity-mapped during ACPI
+    // verification before this activation step.
+    let activation_status =
+        unsafe { arch::x86_64::interrupt_controller::activate_ioapic_routing() }
+            .expect("APIC routing provider must be configured before IOAPIC activation");
+    let eoi_status = arch::x86_64::interrupt_controller::get_end_of_interrupt_status();
+    crate::log_info!(
+        "arch",
+        "IOAPIC routing activated: entries={} activated={} readback_matches={} routing_active={} masked={} local_apic_software_enabled={} legacy_pic_masked={} out_of_range_entries={} timer_low_readback={:#x} timer_high_readback={:#x} keyboard_low_readback={:#x} keyboard_high_readback={:#x} mouse_low_readback={:#x} mouse_high_readback={:#x} apic_eoi_count={} legacy_eoi_count={}",
+        activation_status.planned_entry_count(),
+        activation_status.activated_entry_count(),
+        activation_status.readback_matches(),
+        activation_status.is_routing_active(),
+        !activation_status.all_entries_unmasked(),
+        activation_status.local_apic_software_enabled(),
+        activation_status.legacy_pic_masked(),
+        activation_status.out_of_range_entry_count(),
+        activation_status.timer_low_readback(),
+        activation_status.timer_high_readback(),
+        activation_status.keyboard_low_readback(),
+        activation_status.keyboard_high_readback(),
+        activation_status.mouse_low_readback(),
+        activation_status.mouse_high_readback(),
+        eoi_status.apic_count(),
+        eoi_status.legacy_count()
+    );
+}
+
+fn verify_apic_eoi_diagnostics() {
+    let eoi_status = arch::x86_64::interrupt_controller::get_end_of_interrupt_status();
+    assert!(
+        eoi_status.is_ioapic_routing_active(),
+        "IOAPIC routing must be active before APIC EOI diagnostics"
+    );
+    assert!(
+        eoi_status.apic_count() > 0,
+        "APIC EOI count must increase after timer interrupts"
+    );
+    assert_eq!(
+        eoi_status.legacy_count(),
+        0,
+        "legacy PIC EOI count must stay zero after IOAPIC activation"
+    );
+    crate::log_info!(
+        "arch",
+        "APIC EOI diagnostics verified: routing_active={} apic_eoi_count={} legacy_eoi_count={}",
+        eoi_status.is_ioapic_routing_active(),
+        eoi_status.apic_count(),
+        eoi_status.legacy_count()
     );
 }
 
@@ -1636,6 +1691,7 @@ fn main() -> Status {
     kernel::runtime::initialize();
 
     run_user_smoke_demo(&mut frame_allocator);
+    verify_apic_eoi_diagnostics();
     verify_scheduler_task_diagnostics(2);
     verify_scheduler_task_snapshots(2);
     record_memory_diagnostics_snapshot(&frame_allocator);

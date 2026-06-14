@@ -44,19 +44,23 @@ The current foundation validates:
   spurious-vector state.
 - Unified interrupt EOI dispatch that continues to acknowledge the legacy PIC
   until IOAPIC routing is explicitly activated.
+- IOAPIC route activation for timer, keyboard, and mouse interrupts with
+  unmasked redirection readback diagnostics.
+- Local APIC EOI counter diagnostics proving timer interrupts are acknowledged
+  through APIC EOI after IOAPIC routing activation.
 
 The boot smoke logs the validated root table, MADT diagnostics, retained
 interrupt topology, APIC routing provider configuration, and dry-run IOAPIC
 redirection plan before staging the planned entries as masked IOAPIC routes.
 It also verifies Local APIC and IOAPIC MMIO mapping, Local APIC EOI-provider
-diagnostics, and masked IOAPIC redirection readback while keeping hardware
-interrupt routing inactive.
+diagnostics, masked IOAPIC redirection readback, IOAPIC route activation, and
+post-activation APIC EOI counts.
 
 ## Next Steps
 
-1. Unmask the staged IOAPIC redirection entries and activate APIC EOI dispatch
-   under the same validation gate.
-2. Add diagnostics proving interrupts are acknowledged through Local APIC EOI
-   after IOAPIC routing is active.
-3. Replace legacy PIC routing after IOAPIC validation.
-4. Calibrate and move scheduling ticks to the Local APIC timer.
+1. Harden the legacy PIC fallback boundary now that IOAPIC routing is active.
+2. Replace legacy PIC initialization after IOAPIC validation no longer needs the
+   fallback backend during normal boot.
+3. Calibrate and move scheduling ticks to the Local APIC timer.
+4. Add broader interrupt-controller diagnostics for spurious or unexpected
+   vectors before expanding hardware coverage.
