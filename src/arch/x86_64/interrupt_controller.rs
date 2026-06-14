@@ -1,6 +1,6 @@
 //! Interrupt controller selection and initialization.
 
-use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 use pic8259::ChainedPics;
 use spin::Mutex;
 
@@ -15,6 +15,13 @@ const APIC_PROVIDER_TRUNCATED_FLAG: u8 = 1 << 3;
 const LOCAL_APIC_EOI_PROVIDER_CONFIGURED_FLAG: u8 = 1;
 const LOCAL_APIC_EOI_PROVIDER_ROUTING_ACTIVE_FLAG: u8 = 1 << 1;
 const LOCAL_APIC_EOI_PROVIDER_SOFTWARE_ENABLED_FLAG: u8 = 1 << 2;
+const LEGACY_PIC_INITIALIZED_FLAG: u8 = 1;
+const LEGACY_PIC_FALLBACK_ENABLED_FLAG: u8 = 1 << 1;
+const LEGACY_PIC_MASKED_FOR_APIC_ROUTING_FLAG: u8 = 1 << 2;
+const LEGACY_PIC_MASTER_APIC_MASK: u8 = 0xff;
+const LEGACY_PIC_SLAVE_APIC_MASK: u8 = 0xff;
+const LEGACY_PIC_MASTER_FALLBACK_MASK: u8 = 0xf8;
+const LEGACY_PIC_SLAVE_FALLBACK_MASK: u8 = 0xef;
 const IOAPIC_ACTIVATION_READBACK_MATCHED_FLAG: u8 = 1;
 const IOAPIC_ACTIVATION_ALL_UNMASKED_FLAG: u8 = 1 << 1;
 const IOAPIC_ACTIVATION_LOCAL_APIC_SOFTWARE_ENABLED_FLAG: u8 = 1 << 2;
@@ -62,7 +69,7 @@ const ACPI_INTERRUPT_ACTIVE_LOW: u16 = 0b11;
 const ACPI_INTERRUPT_TRIGGER_MASK: u16 = 0b11 << 2;
 const ACPI_INTERRUPT_LEVEL_TRIGGERED: u16 = 0b11 << 2;
 
-pub(super) static LEGACY_INTERRUPT_CONTROLLERS: Mutex<ChainedPics> =
+static LEGACY_INTERRUPT_CONTROLLERS: Mutex<ChainedPics> =
     // SAFETY: The offsets reserve CPU exception vectors and match the configured
     // interrupt descriptor table entries.
     Mutex::new(unsafe {
@@ -75,6 +82,9 @@ static LOCAL_APIC_EOI_BASE_ADDRESS: AtomicUsize = AtomicUsize::new(0);
 static IOAPIC_ROUTING_ACTIVE: AtomicBool = AtomicBool::new(false);
 static APIC_END_OF_INTERRUPT_COUNT: AtomicU64 = AtomicU64::new(0);
 static LEGACY_END_OF_INTERRUPT_COUNT: AtomicU64 = AtomicU64::new(0);
+static LEGACY_PIC_STATE_FLAGS: AtomicU8 = AtomicU8::new(0);
+static LEGACY_PIC_MASTER_MASK: AtomicU8 = AtomicU8::new(LEGACY_PIC_MASTER_APIC_MASK);
+static LEGACY_PIC_SLAVE_MASK: AtomicU8 = AtomicU8::new(LEGACY_PIC_SLAVE_APIC_MASK);
 
 /// Available interrupt controller backends.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -986,6 +996,49 @@ impl EndOfInterruptStatus {
     }
 }
 
+/// Legacy PIC boundary diagnostics for the selected interrupt backend.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct LegacyPicBoundaryStatus {
+    flags: u8,
+    master_mask: u8,
+    slave_mask: u8,
+}
+
+impl LegacyPicBoundaryStatus {
+    const fn new(flags: u8, master_mask: u8, slave_mask: u8) -> Self {
+        Self {
+            flags,
+            master_mask,
+            slave_mask,
+        }
+    }
+
+    /// Return whether the legacy PIC backend was initialized.
+    pub const fn is_initialized(self) -> bool {
+        self.flags & LEGACY_PIC_INITIALIZED_FLAG != 0
+    }
+
+    /// Return whether legacy PIC fallback delivery is enabled.
+    pub const fn is_fallback_enabled(self) -> bool {
+        self.flags & LEGACY_PIC_FALLBACK_ENABLED_FLAG != 0
+    }
+
+    /// Return whether the legacy PIC is masked for APIC routing.
+    pub const fn is_masked_for_apic_routing(self) -> bool {
+        self.flags & LEGACY_PIC_MASKED_FOR_APIC_ROUTING_FLAG != 0
+    }
+
+    /// Return the current master PIC interrupt mask.
+    pub const fn master_mask(self) -> u8 {
+        self.master_mask
+    }
+
+    /// Return the current slave PIC interrupt mask.
+    pub const fn slave_mask(self) -> u8 {
+        self.slave_mask
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct ApicRoutingProviderState {
     configured: bool,
@@ -1008,6 +1061,28 @@ pub fn get_preferred_kind() -> InterruptControllerKind {
     } else {
         InterruptControllerKind::Legacy8259
     }
+}
+
+/// Initialize the interrupt-controller backend required for early boot.
+///
+/// APIC-capable boots keep the legacy PIC masked until IOAPIC routing is
+/// activated. The legacy backend is initialized only when APIC routing provider
+/// data is unavailable.
+///
+/// # Safety
+///
+/// Must be called while interrupts are disabled.
+pub unsafe fn initialize_interrupt_controller_backend() -> LegacyPicBoundaryStatus {
+    if should_mask_legacy_pic_for_apic_backend() {
+        mask_legacy_interrupts_for_apic_routing();
+    } else {
+        // SAFETY: The caller guarantees that CPU interrupts are disabled during
+        // early architecture initialization.
+        unsafe {
+            initialize_legacy();
+        }
+    }
+    get_legacy_pic_boundary_status()
 }
 
 /// Configure the architecture-owned APIC routing provider data.
@@ -1203,6 +1278,26 @@ pub fn get_end_of_interrupt_status() -> EndOfInterruptStatus {
     )
 }
 
+/// Return legacy PIC boundary diagnostics.
+pub fn get_legacy_pic_boundary_status() -> LegacyPicBoundaryStatus {
+    LegacyPicBoundaryStatus::new(
+        LEGACY_PIC_STATE_FLAGS.load(Ordering::Acquire),
+        LEGACY_PIC_MASTER_MASK.load(Ordering::Acquire),
+        LEGACY_PIC_SLAVE_MASK.load(Ordering::Acquire),
+    )
+}
+
+fn should_mask_legacy_pic_for_apic_backend() -> bool {
+    let provider = APIC_ROUTING_PROVIDER.lock();
+    if !provider.configured || !has_local_apic() {
+        return false;
+    }
+
+    provider.configuration.local_apic().is_enabled()
+        && provider.configuration.local_apic().physical_address() != 0
+        && provider.configuration.ioapic().physical_address() != 0
+}
+
 fn redirection_entry_for_legacy_irq(
     configuration: &ApicRoutingConfiguration,
     legacy_irq: u8,
@@ -1316,8 +1411,19 @@ fn mask_legacy_interrupts_for_apic_routing() {
     // masking both PICs prevents legacy PIC delivery after IOAPIC routes become
     // active.
     unsafe {
-        interrupt_controllers.write_masks(0xff, 0xff);
+        interrupt_controllers.write_masks(LEGACY_PIC_MASTER_APIC_MASK, LEGACY_PIC_SLAVE_APIC_MASK);
     }
+    record_legacy_pic_boundary_status(
+        LEGACY_PIC_MASKED_FOR_APIC_ROUTING_FLAG,
+        LEGACY_PIC_MASTER_APIC_MASK,
+        LEGACY_PIC_SLAVE_APIC_MASK,
+    );
+}
+
+fn record_legacy_pic_boundary_status(flags: u8, master_mask: u8, slave_mask: u8) {
+    LEGACY_PIC_MASTER_MASK.store(master_mask, Ordering::Release);
+    LEGACY_PIC_SLAVE_MASK.store(slave_mask, Ordering::Release);
+    LEGACY_PIC_STATE_FLAGS.store(flags, Ordering::Release);
 }
 
 struct LocalApicRegisters {
@@ -1429,11 +1535,27 @@ const fn maximum_lvt_entry_from_version(version: u32) -> u32 {
 /// Must be called while interrupts are disabled.
 pub unsafe fn initialize_legacy() {
     let mut interrupt_controllers = LEGACY_INTERRUPT_CONTROLLERS.lock();
-    interrupt_controllers.initialize();
+    // SAFETY: The caller guarantees that interrupts are disabled while the
+    // chained PICs are remapped and initialized.
+    unsafe {
+        interrupt_controllers.initialize();
+    }
 
     // 0xf8: 11111000 (Timer, Keyboard, Cascade enabled)
     // 0xef: 11101111 (Mouse enabled)
-    interrupt_controllers.write_masks(0xf8, 0xef);
+    // SAFETY: The caller guarantees that interrupts are disabled while the
+    // fallback PIC masks are written.
+    unsafe {
+        interrupt_controllers.write_masks(
+            LEGACY_PIC_MASTER_FALLBACK_MASK,
+            LEGACY_PIC_SLAVE_FALLBACK_MASK,
+        );
+    }
+    record_legacy_pic_boundary_status(
+        LEGACY_PIC_INITIALIZED_FLAG | LEGACY_PIC_FALLBACK_ENABLED_FLAG,
+        LEGACY_PIC_MASTER_FALLBACK_MASK,
+        LEGACY_PIC_SLAVE_FALLBACK_MASK,
+    );
 }
 
 /// Notify the legacy interrupt controller that one interrupt has completed.
