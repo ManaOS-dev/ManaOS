@@ -6,10 +6,27 @@ use spin::Mutex;
 const INTERRUPT_CONTROLLER_1_OFFSET: u8 = 32;
 const INTERRUPT_CONTROLLER_2_OFFSET: u8 = INTERRUPT_CONTROLLER_1_OFFSET + 8;
 const LEGACY_IRQ_ROUTE_CAPACITY: usize = 16;
+const IOAPIC_REDIRECTION_PLAN_CAPACITY: usize = 3;
 const APIC_PROVIDER_CONFIGURED_FLAG: u8 = 1;
 const APIC_PROVIDER_ROUTING_ACTIVE_FLAG: u8 = 1 << 1;
 const APIC_PROVIDER_LOCAL_APIC_SUPPORTED_FLAG: u8 = 1 << 2;
 const APIC_PROVIDER_TRUNCATED_FLAG: u8 = 1 << 3;
+const LEGACY_TIMER_IRQ: u8 = 0;
+const LEGACY_KEYBOARD_IRQ: u8 = 1;
+const LEGACY_MOUSE_IRQ: u8 = 12;
+const TIMER_INTERRUPT_VECTOR: u8 = INTERRUPT_CONTROLLER_1_OFFSET;
+const KEYBOARD_INTERRUPT_VECTOR: u8 = INTERRUPT_CONTROLLER_1_OFFSET + 1;
+const MOUSE_INTERRUPT_VECTOR: u8 = INTERRUPT_CONTROLLER_1_OFFSET + LEGACY_MOUSE_IRQ;
+const IOAPIC_REDIRECTION_TABLE_BASE_REGISTER: u32 = 0x10;
+const IOAPIC_REDIRECTION_VECTOR_MASK: u32 = 0xff;
+const IOAPIC_REDIRECTION_ACTIVE_LOW_BIT: u32 = 1 << 13;
+const IOAPIC_REDIRECTION_LEVEL_TRIGGERED_BIT: u32 = 1 << 15;
+const IOAPIC_REDIRECTION_MASKED_BIT: u32 = 1 << 16;
+const IOAPIC_DESTINATION_SHIFT: u32 = 24;
+const ACPI_INTERRUPT_POLARITY_MASK: u16 = 0b11;
+const ACPI_INTERRUPT_ACTIVE_LOW: u16 = 0b11;
+const ACPI_INTERRUPT_TRIGGER_MASK: u16 = 0b11 << 2;
+const ACPI_INTERRUPT_LEVEL_TRIGGERED: u16 = 0b11 << 2;
 
 pub(super) static LEGACY_INTERRUPT_CONTROLLERS: Mutex<ChainedPics> =
     // SAFETY: The offsets reserve CPU exception vectors and match the configured
@@ -150,6 +167,196 @@ impl LegacyIrqRoute {
     }
 }
 
+/// Planned IOAPIC redirection-table entry.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct IoApicRedirectionEntry {
+    legacy_irq: u8,
+    global_system_interrupt: u32,
+    vector: u8,
+    table_index: u32,
+    low_register: u32,
+    low_value: u32,
+    high_value: u32,
+}
+
+impl IoApicRedirectionEntry {
+    const EMPTY: Self = Self::new(0, 0, 0, 0, 0, 0, 0);
+
+    const fn new(
+        legacy_irq: u8,
+        global_system_interrupt: u32,
+        vector: u8,
+        table_index: u32,
+        low_register: u32,
+        low_value: u32,
+        high_value: u32,
+    ) -> Self {
+        Self {
+            legacy_irq,
+            global_system_interrupt,
+            vector,
+            table_index,
+            low_register,
+            low_value,
+            high_value,
+        }
+    }
+
+    /// Return the legacy IRQ source line for this route.
+    pub const fn legacy_irq(self) -> u8 {
+        self.legacy_irq
+    }
+
+    /// Return the global system interrupt for this route.
+    pub const fn global_system_interrupt(self) -> u32 {
+        self.global_system_interrupt
+    }
+
+    /// Return the IDT vector programmed into the redirection entry.
+    pub const fn vector(self) -> u8 {
+        self.vector
+    }
+
+    /// Return the IOAPIC redirection table index.
+    pub const fn table_index(self) -> u32 {
+        self.table_index
+    }
+
+    /// Return the IOAPIC register index for the low redirection dword.
+    pub const fn low_register(self) -> u32 {
+        self.low_register
+    }
+
+    /// Return the IOAPIC register index for the high redirection dword.
+    pub const fn high_register(self) -> u32 {
+        self.low_register + 1
+    }
+
+    /// Return the raw low redirection dword to program.
+    pub const fn low_value(self) -> u32 {
+        self.low_value
+    }
+
+    /// Return the raw high redirection dword to program.
+    pub const fn high_value(self) -> u32 {
+        self.high_value
+    }
+
+    /// Return whether the route uses active-low interrupt polarity.
+    pub const fn is_active_low(self) -> bool {
+        self.low_value & IOAPIC_REDIRECTION_ACTIVE_LOW_BIT != 0
+    }
+
+    /// Return whether the route uses level-triggered delivery.
+    pub const fn is_level_triggered(self) -> bool {
+        self.low_value & IOAPIC_REDIRECTION_LEVEL_TRIGGERED_BIT != 0
+    }
+
+    /// Return whether the route is masked in the planned low dword.
+    pub const fn is_masked(self) -> bool {
+        self.low_value & IOAPIC_REDIRECTION_MASKED_BIT != 0
+    }
+}
+
+/// Planned IOAPIC redirection entries for the current legacy IRQ sources.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct IoApicRedirectionPlan {
+    entries: [IoApicRedirectionEntry; IOAPIC_REDIRECTION_PLAN_CAPACITY],
+    entry_count: usize,
+    truncated: bool,
+}
+
+impl IoApicRedirectionPlan {
+    const fn new() -> Self {
+        Self {
+            entries: [IoApicRedirectionEntry::EMPTY; IOAPIC_REDIRECTION_PLAN_CAPACITY],
+            entry_count: 0,
+            truncated: false,
+        }
+    }
+
+    fn from_configuration(configuration: &ApicRoutingConfiguration) -> Self {
+        let mut plan = Self::new();
+        let destination_apic_id = configuration.local_apic().apic_id();
+        plan.push_legacy_irq_entry(
+            configuration,
+            LEGACY_TIMER_IRQ,
+            TIMER_INTERRUPT_VECTOR,
+            destination_apic_id,
+        );
+        plan.push_legacy_irq_entry(
+            configuration,
+            LEGACY_KEYBOARD_IRQ,
+            KEYBOARD_INTERRUPT_VECTOR,
+            destination_apic_id,
+        );
+        plan.push_legacy_irq_entry(
+            configuration,
+            LEGACY_MOUSE_IRQ,
+            MOUSE_INTERRUPT_VECTOR,
+            destination_apic_id,
+        );
+        plan
+    }
+
+    /// Return the number of retained redirection entries.
+    pub const fn entry_count(self) -> usize {
+        self.entry_count
+    }
+
+    /// Return whether redirection entries exceeded the retained capacity.
+    pub const fn is_truncated(self) -> bool {
+        self.truncated
+    }
+
+    /// Return a redirection entry by retained index.
+    pub const fn entry(self, index: usize) -> Option<IoApicRedirectionEntry> {
+        if index < self.entry_count {
+            Some(self.entries[index])
+        } else {
+            None
+        }
+    }
+
+    /// Return a redirection entry for a legacy IRQ source line.
+    pub fn entry_for_legacy_irq(self, legacy_irq: u8) -> Option<IoApicRedirectionEntry> {
+        let mut index = 0;
+        while index < self.entry_count {
+            let entry = self.entries[index];
+            if entry.legacy_irq() == legacy_irq {
+                return Some(entry);
+            }
+            index += 1;
+        }
+        None
+    }
+
+    fn push_legacy_irq_entry(
+        &mut self,
+        configuration: &ApicRoutingConfiguration,
+        legacy_irq: u8,
+        vector: u8,
+        destination_apic_id: u32,
+    ) {
+        let Some(entry) = redirection_entry_for_legacy_irq(
+            configuration,
+            legacy_irq,
+            vector,
+            destination_apic_id,
+        ) else {
+            self.truncated = true;
+            return;
+        };
+
+        if self.entry_count < IOAPIC_REDIRECTION_PLAN_CAPACITY {
+            self.entries[self.entry_count] = entry;
+            self.entry_count += 1;
+        } else {
+            self.truncated = true;
+        }
+    }
+}
+
 /// Architecture-owned APIC routing configuration derived by `main.rs`.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct ApicRoutingConfiguration {
@@ -232,6 +439,7 @@ pub struct ApicRoutingProviderStatus {
     flags: u8,
     local_apic: LocalApicConfiguration,
     ioapic: IoApicConfiguration,
+    redirection_plan: IoApicRedirectionPlan,
     legacy_irq_route_count: usize,
     legacy_irq0_global_system_interrupt: u32,
     legacy_irq0_flags: u16,
@@ -245,6 +453,7 @@ impl ApicRoutingProviderStatus {
             flags: 0,
             local_apic: LocalApicConfiguration::EMPTY,
             ioapic: IoApicConfiguration::EMPTY,
+            redirection_plan: IoApicRedirectionPlan::new(),
             legacy_irq_route_count: 0,
             legacy_irq0_global_system_interrupt: 0,
             legacy_irq0_flags: 0,
@@ -269,6 +478,7 @@ impl ApicRoutingProviderStatus {
             flags,
             local_apic: configuration.local_apic(),
             ioapic: configuration.ioapic(),
+            redirection_plan: IoApicRedirectionPlan::from_configuration(configuration),
             legacy_irq_route_count: configuration.legacy_irq_route_count(),
             legacy_irq0_global_system_interrupt: configuration
                 .global_system_interrupt_for_legacy_irq(0),
@@ -303,6 +513,11 @@ impl ApicRoutingProviderStatus {
     /// Return the configured IOAPIC record.
     pub const fn ioapic(self) -> IoApicConfiguration {
         self.ioapic
+    }
+
+    /// Return the planned IOAPIC redirection entries.
+    pub const fn redirection_plan(self) -> IoApicRedirectionPlan {
+        self.redirection_plan
     }
 
     /// Return the number of retained legacy IRQ override routes.
@@ -380,6 +595,39 @@ pub fn get_apic_routing_provider_status() -> ApicRoutingProviderStatus {
     } else {
         ApicRoutingProviderStatus::unavailable()
     }
+}
+
+fn redirection_entry_for_legacy_irq(
+    configuration: &ApicRoutingConfiguration,
+    legacy_irq: u8,
+    vector: u8,
+    destination_apic_id: u32,
+) -> Option<IoApicRedirectionEntry> {
+    let ioapic = configuration.ioapic();
+    let global_system_interrupt = configuration.global_system_interrupt_for_legacy_irq(legacy_irq);
+    let table_index = global_system_interrupt.checked_sub(ioapic.global_system_interrupt_base())?;
+    let low_register =
+        IOAPIC_REDIRECTION_TABLE_BASE_REGISTER.checked_add(table_index.checked_mul(2)?)?;
+    let flags = configuration
+        .legacy_irq_route_for_irq(legacy_irq)
+        .map_or(0, LegacyIrqRoute::flags);
+    let mut low_value = u32::from(vector) & IOAPIC_REDIRECTION_VECTOR_MASK;
+    if flags & ACPI_INTERRUPT_POLARITY_MASK == ACPI_INTERRUPT_ACTIVE_LOW {
+        low_value |= IOAPIC_REDIRECTION_ACTIVE_LOW_BIT;
+    }
+    if flags & ACPI_INTERRUPT_TRIGGER_MASK == ACPI_INTERRUPT_LEVEL_TRIGGERED {
+        low_value |= IOAPIC_REDIRECTION_LEVEL_TRIGGERED_BIT;
+    }
+    let high_value = (destination_apic_id & 0xff) << IOAPIC_DESTINATION_SHIFT;
+    Some(IoApicRedirectionEntry::new(
+        legacy_irq,
+        global_system_interrupt,
+        vector,
+        table_index,
+        low_register,
+        low_value,
+        high_value,
+    ))
 }
 
 /// Initialize the legacy interrupt controller backend used by the current boot path.
