@@ -299,10 +299,12 @@ and recoverable.
 ### Commit Message Format
 
 - Use English only.
-- Use a concise imperative subject line, for example
-  `Polish documentation templates`.
-- Conventional Commit prefixes are optional. Use them only when they make the
-  change type clearer, for example `docs: ...`, `fix: ...`, or `refactor: ...`.
+- Use the `type(scope): summary` subject format, for example
+  `docs(process): define execve lifecycle contract`.
+- Use a lowercase change type such as `feat`, `fix`, `docs`, `refactor`,
+  `test`, `chore`, or `build`.
+- Use a short lowercase scope that names the touched subsystem, document group,
+  or workflow area, such as `process`, `memory`, `storage`, `agents`, or `ci`.
 - Keep the subject focused on the change, not on the tool or agent that made it.
 - For non-trivial changes, include a short body with the reason and validation
   commands.
