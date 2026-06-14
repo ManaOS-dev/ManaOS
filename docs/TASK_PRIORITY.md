@@ -12,6 +12,7 @@ not on product value.
    - Enable IOAPIC routing.
    - Replace legacy PIC routing.
    - Harden the legacy PIC fallback boundary.
+   - Add masked Local APIC timer calibration diagnostics.
    - Calibrate and switch scheduling ticks to the Local APIC timer.
    - Reason: this changes early boot discovery, interrupt topology, timer
      ownership, and architecture/kernel wiring at the same time.
@@ -55,6 +56,7 @@ RSDT/XSDT validation, MADT validation, bounded MADT topology diagnostics,
 architecture-owned APIC routing provider configuration, dry-run IOAPIC
 redirection entries, masked IOAPIC MMIO staging, Local APIC EOI-provider
 diagnostics, unified EOI dispatch, active IOAPIC routing, post-activation APIC
-EOI counters, and legacy PIC fallback masking are now proven by storage smoke.
-The next slice should move scheduling ticks from the PIT to the Local APIC
-timer while preserving the `arch/` to `kernel/` dependency boundary.
+EOI counters, legacy PIC fallback masking, and masked Local APIC timer
+calibration are now proven by storage smoke. The next slice should use the
+calibration sample to replace PIT scheduling ticks with Local APIC timer ticks
+while preserving the `arch/` to `kernel/` dependency boundary.

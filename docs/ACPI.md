@@ -50,6 +50,8 @@ The current foundation validates:
   legacy PIC masked and fallback-disabled before CPU interrupts are enabled.
 - Local APIC EOI counter diagnostics proving timer interrupts are acknowledged
   through APIC EOI after IOAPIC routing activation.
+- Masked Local APIC timer calibration diagnostics that arm the timer without
+  unmasking its interrupt and compare the count delta against PIT ticks.
 
 The boot smoke logs the validated root table, MADT diagnostics, retained
 interrupt topology, APIC routing provider configuration, and dry-run IOAPIC
@@ -58,10 +60,12 @@ It also verifies Local APIC and IOAPIC MMIO mapping, Local APIC EOI-provider
 diagnostics, masked IOAPIC redirection readback, IOAPIC route activation, and
 post-activation APIC EOI counts. Normal APIC boots also assert that the legacy
 PIC backend remains masked with fallback delivery disabled before interrupts are
-enabled.
+enabled. The smoke path now also proves that a masked Local APIC timer sample
+decrements while PIT scheduling ticks continue to run.
 
 ## Next Steps
 
-1. Calibrate and move scheduling ticks to the Local APIC timer.
+1. Use the Local APIC timer calibration sample to program an unmasked timer tick
+   route and replace PIT scheduling ticks.
 2. Add broader interrupt-controller diagnostics for spurious or unexpected
    vectors before expanding hardware coverage.
