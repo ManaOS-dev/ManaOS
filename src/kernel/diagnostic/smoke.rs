@@ -36,6 +36,7 @@ pub fn run_user_smoke_demo(
 
     let user_stack_pages = 4;
     let user_elf_path = "/disk/bin/smoke_demo";
+    verify_spawn_path_errno_smoke(frame_allocator, user_stack_pages);
     let user_task_ids = [
         spawn_user_smoke_task(frame_allocator, user_elf_path, user_stack_pages),
         spawn_user_smoke_task(frame_allocator, user_elf_path, user_stack_pages),
@@ -106,6 +107,72 @@ pub fn run_user_smoke_demo(
         user_task_ids.len()
     );
     crate::kernel::task::set_preemption_enabled(true);
+}
+
+fn verify_spawn_path_errno_smoke(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    user_stack_pages: u64,
+) {
+    let missing_result = verify_spawn_error(
+        frame_allocator,
+        "/disk/bin/missing_spawn",
+        user_stack_pages,
+        crate::kernel::process::UserProgramSpawnError::NotFound,
+    );
+    let relative_result = verify_spawn_error(
+        frame_allocator,
+        "disk/bin/smoke_demo",
+        user_stack_pages,
+        crate::kernel::process::UserProgramSpawnError::InvalidPath,
+    );
+    let directory_result = verify_spawn_error(
+        frame_allocator,
+        "/disk",
+        user_stack_pages,
+        crate::kernel::process::UserProgramSpawnError::DirectoryTarget,
+    );
+    let device_result = verify_spawn_error(
+        frame_allocator,
+        "/dev/null",
+        user_stack_pages,
+        crate::kernel::process::UserProgramSpawnError::UnsupportedTarget,
+    );
+    let invalid_image_result = verify_spawn_error(
+        frame_allocator,
+        "/disk/hello.txt",
+        user_stack_pages,
+        crate::kernel::process::UserProgramSpawnError::InvalidImage,
+    );
+    crate::log_info!(
+        "task",
+        "User program spawn path errno smoke passed: missing={} relative={} directory={} device={} invalid_image={}",
+        missing_result,
+        relative_result,
+        directory_result,
+        device_result,
+        invalid_image_result
+    );
+}
+
+fn verify_spawn_error(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    path: &str,
+    user_stack_pages: u64,
+    expected_error: crate::kernel::process::UserProgramSpawnError,
+) -> isize {
+    let entry_arguments = [];
+    let entry_environment = [];
+    let entry_vectors =
+        crate::kernel::process::UserProgramEntryVectors::new(&entry_arguments, &entry_environment);
+    let request =
+        crate::kernel::process::UserProgramSpawnRequest::new(path, entry_vectors, user_stack_pages);
+    let error = crate::kernel::process::spawn_user_program(frame_allocator, request)
+        .expect_err("invalid user spawn smoke path must fail before task creation");
+    assert_eq!(
+        error, expected_error,
+        "spawn path failure must classify the expected error"
+    );
+    error.as_syscall_result()
 }
 
 fn verify_bootstrap_child_exit_collection(user_task_ids: [u64; 2]) {

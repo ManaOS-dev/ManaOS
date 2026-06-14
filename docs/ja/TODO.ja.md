@@ -52,7 +52,7 @@ path、parent-child lifecycle state documentation、scheduler-owned child exit r
 zombie/reaped diagnostics、`tasks` command の per-task lifecycle output、already-exited child の
 scheduler-backed `waitpid` reap、filesystem path から user task を作る kernel-internal spawn helper
 と spawned process origin diagnostics、2つの concurrently spawned user program smoke、spawn 前の
-argv/envp entry vector 表現まで完了済みです。
+argv/envp entry vector 表現、spawn path lookup failure の errno mapping まで完了済みです。
 `execve` は close-on-exec metadata / close behavior まで完了済みなので、残りは current
 directory と replacement-state diagnostics です。次は user-visible `waitpid` behavior と
 reaping state を小さい branch に分けて進めます。

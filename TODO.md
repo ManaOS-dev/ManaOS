@@ -32,7 +32,6 @@ reviewable unit before implementing it.
 - [ ] Define how inherited file descriptors are selected for spawned processes.
 - [ ] Define how current working directory is inherited by spawned processes.
 - [ ] Add a userland runtime helper for launching a child program.
-- [ ] Add errno mappings for spawn path lookup failures.
 - [ ] Add errno mappings for spawn memory allocation failures.
 - [ ] Add a smoke case for parent exit while child remains alive.
 - [ ] Add docs that compare the selected model with POSIX `fork` expectations.

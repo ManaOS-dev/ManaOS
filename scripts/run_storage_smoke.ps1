@@ -91,6 +91,7 @@ $expectedPatterns = @(
     "Dynamic kernel mapping lifecycle self-check passed: map=true unmap=true virtual_reuse=true physical_reuse=true",
     "User address-space template self-check passed: kernel_shared=true user_window_empty=true",
     "User address-space reclaim self-check passed: user_pages=1 page_table_pages=4",
+    "User program spawn path errno smoke passed: missing=-2 relative=-22 directory=-21 device=-95 invalid_image=-22",
     "Loading user ELF from filesystem: path=/disk/bin/smoke_demo",
     "User address space prepared: pml4=",
     "ELF segment mapped: .*perms=R-X",

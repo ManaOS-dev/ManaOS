@@ -25,7 +25,8 @@ documentation、scheduler-owned child exit record model、double-reap prevention
 assertions、zombie/reaped diagnostics、`tasks` command の per-task lifecycle output、
 already-exited child の scheduler-backed `waitpid` reap、kernel-internal spawn helper、
 spawned process origin diagnostics、2つの concurrently spawned user program smoke、
-spawn 前の argv/envp entry vector 表現が完了済みです。正本は英語版の
+spawn 前の argv/envp entry vector 表現、spawn path lookup failure の errno mapping が
+完了済みです。正本は英語版の
 `TODO_COMPLETED.md` と [`PROCESS_LIFECYCLE.md`](../PROCESS_LIFECYCLE.md) です。
 
 ### Immediate Priorities

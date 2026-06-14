@@ -31,6 +31,9 @@ initial user task record までの boot-visible path を所有します。一方
 mapping、address-space construction、scheduler metadata は既存 module の所有のままです。
 `kernel::process::UserProgramEntryVectors` は、spawned program が使う borrowed `argv` / `envp`
 slice を user stack construction 前に表す named representation です。
+spawn helper は、将来 user-visible な spawn syscall を追加する前段階として、missing、relative、
+directory、device、invalid ELF target の executable path lookup failure を stable な
+errno-facing result に分類します。
 scheduler diagnostics は spawned origin path を current image path と別に保持するため、後続の
 successful `execve` で `path=` が変わっても、`origin=` は task record を作った program を示し続けます。
 
@@ -252,6 +255,8 @@ unmarked descriptor は default で descriptor number と offset を保持し、
   filesystem path loading、ELF mapping、initial argv/envp stack construction、scheduler task creation が
   1つの path を共有することを検証します。
 - storage smoke は、helper が initial user stack を構築する前に staged entry vector count を assert します。
+- storage smoke は successful spawn task creation の前に、missing、relative、directory、device、
+  non-ELF target の stable な spawn path errno mapping を assert します。
 - storage smoke は、同じ filesystem path から distinct な user task を2つ spawn し、両方をまとめて
   active set に入れる前提を assert します。
 - storage smoke は、同じ task が `execve` で current image を置き換えた後も、`tasks` output が

@@ -18,7 +18,7 @@
 
 use crate::kernel::{
     elf::{self, LoadedElf},
-    filesystem::{self, FileDescriptor, FileType},
+    filesystem::{self, FileDescriptor, FileSystemError, FileType},
     memory::{
         address::UserVirtualAddress,
         address_space::{self, UserAddressSpace},
@@ -28,6 +28,15 @@ use crate::kernel::{
     task::{self, UserEntryArguments},
 };
 use alloc::vec::Vec;
+
+/// Linux-compatible not-found errno for executable targets.
+const ERROR_NOT_FOUND: isize = -2;
+/// Linux-compatible is-directory errno for executable targets.
+const ERROR_IS_DIRECTORY: isize = -21;
+/// Linux-compatible invalid-argument errno for executable targets.
+const ERROR_INVALID_ARGUMENT: isize = -22;
+/// Linux-compatible operation-not-supported errno for executable targets.
+const ERROR_NOT_SUPPORTED: isize = -95;
 
 /// Parameters for spawning a user program from a filesystem path.
 #[derive(Clone, Copy)]
@@ -100,12 +109,30 @@ impl<'a> UserProgramEntryVectors<'a> {
 /// User program spawn failure reason.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UserProgramSpawnError {
-    /// The executable path could not be read from the filesystem.
+    /// The executable path does not exist.
+    NotFound,
+    /// The executable path is not valid for the spawn model.
+    InvalidPath,
+    /// The executable path resolved to a directory.
+    DirectoryTarget,
+    /// The executable path resolved to an unsupported non-regular target.
+    UnsupportedTarget,
+    /// The executable contents could not be read after path lookup.
     ReadFailed,
-    /// The executable path resolved to a non-regular file.
-    NotRegularFile,
     /// The executable image is not a supported user ELF.
     InvalidImage,
+}
+
+impl UserProgramSpawnError {
+    /// Return the negative syscall-style errno result for this spawn failure.
+    pub const fn as_syscall_result(self) -> isize {
+        match self {
+            Self::NotFound => ERROR_NOT_FOUND,
+            Self::InvalidPath | Self::ReadFailed | Self::InvalidImage => ERROR_INVALID_ARGUMENT,
+            Self::DirectoryTarget => ERROR_IS_DIRECTORY,
+            Self::UnsupportedTarget => ERROR_NOT_SUPPORTED,
+        }
+    }
 }
 
 /// Spawn a user program from a filesystem path.
@@ -311,12 +338,18 @@ fn spawn_prepared_user_task(
 }
 
 fn read_program_image(path: &str) -> Result<Vec<u8>, UserProgramSpawnError> {
-    let metadata = filesystem::metadata(path).map_err(|_| UserProgramSpawnError::ReadFailed)?;
-    if metadata.file_type != FileType::Regular {
-        return Err(UserProgramSpawnError::NotRegularFile);
+    if !path.starts_with('/') {
+        return Err(UserProgramSpawnError::InvalidPath);
     }
 
-    let descriptor = filesystem::open(path).map_err(|_| UserProgramSpawnError::ReadFailed)?;
+    let metadata = filesystem::metadata(path).map_err(map_filesystem_spawn_error)?;
+    match metadata.file_type {
+        FileType::Regular => {}
+        FileType::Directory => return Err(UserProgramSpawnError::DirectoryTarget),
+        FileType::Device => return Err(UserProgramSpawnError::UnsupportedTarget),
+    }
+
+    let descriptor = filesystem::open(path).map_err(map_filesystem_spawn_error)?;
     let mut contents = Vec::new();
     contents
         .try_reserve_exact(metadata.size)
@@ -328,6 +361,21 @@ fn read_program_image(path: &str) -> Result<Vec<u8>, UserProgramSpawnError> {
     read_result?;
     close_result.map_err(|_| UserProgramSpawnError::ReadFailed)?;
     Ok(contents)
+}
+
+fn map_filesystem_spawn_error(error: FileSystemError) -> UserProgramSpawnError {
+    match error {
+        FileSystemError::NotFound => UserProgramSpawnError::NotFound,
+        FileSystemError::InvalidPath | FileSystemError::InvalidArgument => {
+            UserProgramSpawnError::InvalidPath
+        }
+        FileSystemError::IsDirectory => UserProgramSpawnError::DirectoryTarget,
+        FileSystemError::UnsupportedOperation => UserProgramSpawnError::UnsupportedTarget,
+        FileSystemError::InvalidFileDescriptor
+        | FileSystemError::TooManyOpenFiles
+        | FileSystemError::AlreadyInitialized
+        | FileSystemError::NotDirectory => UserProgramSpawnError::ReadFailed,
+    }
 }
 
 fn read_exact_program_image(
