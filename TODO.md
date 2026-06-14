@@ -11,10 +11,6 @@ reviewable unit before implementing it.
 
 ### `execve` And Image Replacement
 
-- [ ] Resolve executable paths through the current process filesystem namespace.
-- [ ] Reject directory targets with a stable errno value.
-- [ ] Reject non-ELF targets with a stable errno value.
-- [ ] Reuse the existing ELF validation path for `execve` images.
 - [ ] Replace the current user address space without leaking old user frames.
 - [ ] Preserve process ID across successful `execve`.
 - [ ] Preserve parent-child relationship across successful `execve`.
@@ -26,8 +22,6 @@ reviewable unit before implementing it.
 - [ ] Replace the user stack with a freshly built argv/envp stack image.
 - [ ] Add `execve` diagnostics to the `tasks` console command.
 - [ ] Add a boot smoke case that `execve`s a second user program from `/disk`.
-- [ ] Add a failure smoke case for `execve` on a missing path.
-- [ ] Add a failure smoke case for `execve` on a directory path.
 
 ### `waitpid`, Exit Status, And Reaping
 

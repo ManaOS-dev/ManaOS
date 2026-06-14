@@ -80,6 +80,8 @@ pub const ERROR_BAD_FILE_DESCRIPTOR: isize = -9;
 pub const ERROR_BAD_ADDRESS: isize = -14;
 /// Linux-compatible file exists error as a signed syscall result.
 pub const ERROR_FILE_EXISTS: isize = -17;
+/// Linux-compatible is-directory error as a signed syscall result.
+pub const ERROR_IS_DIRECTORY: isize = -21;
 /// Linux-compatible invalid argument error as a signed syscall result.
 pub const ERROR_INVALID_ARGUMENT: isize = -22;
 /// Linux-compatible not implemented error as a signed syscall result.

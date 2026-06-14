@@ -79,6 +79,8 @@ pub const ERROR_BAD_FILE_DESCRIPTOR: isize = contract::ERROR_BAD_FILE_DESCRIPTOR
 pub const ERROR_BAD_ADDRESS: isize = contract::ERROR_BAD_ADDRESS;
 /// Linux-compatible file exists error as a signed syscall result.
 pub const ERROR_FILE_EXISTS: isize = contract::ERROR_FILE_EXISTS;
+/// Linux-compatible is-directory error as a signed syscall result.
+pub const ERROR_IS_DIRECTORY: isize = contract::ERROR_IS_DIRECTORY;
 /// Linux-compatible invalid argument error as a signed syscall result.
 pub const ERROR_INVALID_ARGUMENT: isize = contract::ERROR_INVALID_ARGUMENT;
 /// Linux-compatible not implemented error as a signed syscall result.

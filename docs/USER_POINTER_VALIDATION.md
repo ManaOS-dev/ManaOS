@@ -50,8 +50,9 @@ The implementation entry point is `kernel::memory::user_pointer`.
 The storage smoke user program verifies representative syscall errno paths:
 missing paths, bad file descriptors, unsupported `openat`, invalid
 `getdents64`, invalid `mmap`/`munmap`, invalid `nanosleep`, and unmapped
-`nanosleep` pointers. It also verifies `execve` staging for valid
-`argv`/`envp`, bad pointer arrays, and argument-count overflow.
+`nanosleep` pointers. It also verifies `execve` validation for valid
+`argv`/`envp`, bad pointer arrays, argument-count overflow, missing paths,
+directory targets, and non-ELF files.
 
 ## Current Enforcement Gaps
 

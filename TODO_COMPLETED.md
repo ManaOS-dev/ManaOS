@@ -13,6 +13,13 @@ active roadmap can list only unfinished work.
 - [x] Copy `argv` strings through the existing user pointer validation policy.
 - [x] Copy `envp` strings through the existing user pointer validation policy.
 - [x] Bound total argument and environment bytes with a documented limit.
+- [x] Resolve executable paths through the current process filesystem namespace.
+- [x] Reject directory targets with a stable errno value.
+- [x] Reject non-ELF targets with a stable errno value.
+- [x] Reuse the existing ELF validation path for `execve` images.
+- [x] Add a failure smoke case for `execve` on a missing path.
+- [x] Add a failure smoke case for `execve` on a directory path.
+- [x] Add a failure smoke case for `execve` on a non-ELF file.
 - [x] Document `execve` ownership and cleanup invariants in the process lifecycle docs.
 
 ## Immediate Priorities

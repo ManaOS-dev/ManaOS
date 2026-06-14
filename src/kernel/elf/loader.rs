@@ -55,6 +55,31 @@ pub fn load_user_program(
     loaded
 }
 
+/// Validate a user ELF image without mapping it into an address space.
+pub fn validate_user_program_image(image: &[u8], source_path: &str) -> bool {
+    match load_user_elf_metadata(image) {
+        Ok(loaded) => {
+            crate::log_info!(
+                "elf",
+                "User ELF image validated: path={} entry={:#x} heap_start={:#x}",
+                source_path,
+                loaded.entry_point().as_u64(),
+                loaded.heap_start().as_u64()
+            );
+            true
+        }
+        Err(error) => {
+            crate::log_warn!(
+                "elf",
+                "User ELF image rejected: path={} reason={}",
+                source_path,
+                error.message()
+            );
+            false
+        }
+    }
+}
+
 /// Verify that representative malformed ELF images are rejected.
 pub fn verify_invalid_elf_rejections() -> bool {
     let mut passed = 0_usize;

@@ -10,7 +10,7 @@ const DIRECTORY_BUFFER_BYTES: usize = core::mem::size_of::<syscall::UserDirector
 const ENTRY_ARGUMENT_MESSAGE: &[u8] = b"user entry arguments ok\n";
 const PROCESS_ID_MESSAGE: &[u8] = b"user process ids ok\n";
 const SYSCALL_ERROR_MESSAGE: &[u8] = b"user syscall errors ok\n";
-const EXECVE_STAGING_MESSAGE: &[u8] = b"user execve staging ok\n";
+const EXECVE_VALIDATION_MESSAGE: &[u8] = b"user execve validation ok\n";
 const SLEEP_MESSAGE: &[u8] = b"user sleep ok\n";
 const BSS_MESSAGE: &[u8] = b"user bss ok\n";
 const HEAP_MESSAGE: &[u8] = b"user heap ok\n";
@@ -135,7 +135,7 @@ fn verify_syscall_error_paths() {
 }
 
 fn verify_execve_unsupported() {
-    let executable_path = b"/disk/bin/file_demo\0";
+    let executable_path = b"/disk/bin/smoke_demo\0";
     let arguments = [executable_path.as_ptr(), core::ptr::null()];
     let environment = [core::ptr::null()];
     let bad_user_pointer = 0x0000_4000_0000_2000_usize;
@@ -144,6 +144,27 @@ fn verify_execve_unsupported() {
         != syscall::ERROR_NOT_IMPLEMENTED
     {
         syscall::exit(71);
+    }
+
+    let missing_path = b"/disk/bin/missing_exec\0";
+    if syscall::execve(missing_path, arguments.as_ptr(), environment.as_ptr())
+        != syscall::ERROR_NOT_FOUND
+    {
+        syscall::exit(75);
+    }
+
+    let directory_path = b"/disk\0";
+    if syscall::execve(directory_path, arguments.as_ptr(), environment.as_ptr())
+        != syscall::ERROR_IS_DIRECTORY
+    {
+        syscall::exit(76);
+    }
+
+    let non_elf_path = b"/disk/hello.txt\0";
+    if syscall::execve(non_elf_path, arguments.as_ptr(), environment.as_ptr())
+        != syscall::ERROR_INVALID_ARGUMENT
+    {
+        syscall::exit(77);
     }
 
     if syscall::syscall3(
@@ -176,7 +197,7 @@ fn verify_execve_unsupported() {
         syscall::exit(74);
     }
 
-    let _ = syscall::write(STDOUT, EXECVE_STAGING_MESSAGE);
+    let _ = syscall::write(STDOUT, EXECVE_VALIDATION_MESSAGE);
 }
 
 fn verify_user_sleep() {

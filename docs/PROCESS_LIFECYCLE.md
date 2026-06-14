@@ -45,8 +45,9 @@ The syscall ABI slice should use the normal ManaOS syscall register convention:
 
 The shared syscall number and no-std userland wrapper are reserved now. The
 kernel also stages the executable path, `argv`, and `envp` through user pointer
-validation before returning the current unsupported runtime result. The image
-replacement path remains pending.
+validation, resolves the executable through the current filesystem namespace,
+and validates ELF metadata before returning the current unsupported runtime
+result. The image replacement path remains pending.
 
 The kernel-side contract is:
 
@@ -108,6 +109,11 @@ Current staging uses the existing 256-byte path cap, 8 `argv` entries, 8 `envp`
 entries, and 4096 total copied argument/environment string bytes including NUL
 terminators. Invalid user pointers return `-EFAULT`; count or byte limit
 overflow returns `-E2BIG`.
+
+Current path validation accepts only absolute executable paths, reads regular
+file contents through a temporary descriptor, rejects missing paths with
+`-ENOENT`, rejects directories with `-EISDIR`, rejects device nodes with
+`-EOPNOTSUPP`, and rejects invalid ELF metadata with `-EINVAL`.
 
 ## Address-Space Publication And Rollback
 

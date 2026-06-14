@@ -543,11 +543,19 @@ fn sys_execve(
         Ok(staging) => staging,
         Err(error) => return error,
     };
+    let executable_image = match read_execve_candidate_image(&staging.path) {
+        Ok(image) => image,
+        Err(error) => return error,
+    };
+    if !crate::kernel::elf::validate_user_program_image(&executable_image, &staging.path) {
+        return ERROR_INVALID_ARGUMENT;
+    }
 
     crate::log_debug!(
         "syscall",
-        "execve(path={}, argc={}, envc={}, bytes={}) is not implemented",
+        "execve(path={}, image_bytes={}, argc={}, envc={}, bytes={}) is not implemented",
         staging.path,
+        executable_image.len(),
         staging.argument_values.len(),
         staging.environment_values.len(),
         staging.copied_string_bytes
@@ -590,6 +598,49 @@ fn copy_execve_staging(
         environment_values,
         copied_string_bytes,
     })
+}
+
+fn read_execve_candidate_image(path: &str) -> Result<Vec<u8>, u64> {
+    if !path.starts_with('/') {
+        return Err(ERROR_INVALID_ARGUMENT);
+    }
+
+    let metadata = crate::kernel::filesystem::metadata(path).map_err(filesystem_error_to_linux)?;
+    match metadata.file_type {
+        crate::kernel::filesystem::FileType::Regular => {}
+        crate::kernel::filesystem::FileType::Directory => return Err(ERROR_IS_DIRECTORY),
+        crate::kernel::filesystem::FileType::Device => return Err(ERROR_NOT_SUPPORTED),
+    }
+
+    let descriptor = crate::kernel::filesystem::open(path).map_err(filesystem_error_to_linux)?;
+    let result = read_execve_descriptor_image(descriptor, metadata.size);
+    if let Err(error) = crate::kernel::filesystem::close(descriptor) {
+        panic!("failed to close execve image descriptor for {path}: {error:?}");
+    }
+
+    result
+}
+
+fn read_execve_descriptor_image(file_descriptor: usize, byte_len: usize) -> Result<Vec<u8>, u64> {
+    let mut image = Vec::new();
+    image
+        .try_reserve_exact(byte_len)
+        .map_err(|_| ERROR_OUT_OF_MEMORY)?;
+    image.resize(byte_len, 0);
+
+    let mut bytes_read = 0_usize;
+    while bytes_read < byte_len {
+        let read_now = crate::kernel::filesystem::read(file_descriptor, &mut image[bytes_read..])
+            .map_err(filesystem_error_to_linux)?;
+        if read_now == 0 {
+            return Err(ERROR_INVALID_ARGUMENT);
+        }
+        bytes_read = bytes_read
+            .checked_add(read_now)
+            .ok_or(ERROR_INVALID_ARGUMENT)?;
+    }
+
+    Ok(image)
 }
 
 fn copy_execve_string_vector(
