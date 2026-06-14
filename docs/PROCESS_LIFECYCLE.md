@@ -44,16 +44,15 @@ The syscall ABI slice should use the normal ManaOS syscall register convention:
 - `rdx`: user pointer to a NUL-terminated `envp` pointer array.
 
 The shared syscall number and no-std userland wrapper are reserved now. The
-kernel runtime implementation remains pending, so `SYS_EXECVE` currently
-returns an unsupported syscall result until the lifecycle replacement path is
-added.
+kernel also stages the executable path, `argv`, and `envp` through user pointer
+validation before returning the current unsupported runtime result. The image
+replacement path remains pending.
 
 The kernel-side contract is:
 
 - Copy the executable path before opening or mutating process state.
 - Copy `argv` and `envp` arrays through the user pointer validation helpers.
-- Treat `argv == NULL` as an empty argument vector only if the implementation
-  documents that compatibility choice in the syscall policy table.
+- Treat `argv == NULL` as an empty argument vector.
 - Treat `envp == NULL` as an empty environment vector.
 - Cap path bytes, argument count, environment count, and total copied
   argument/environment bytes with named constants before allocation or stack
@@ -104,6 +103,11 @@ The first implementation should keep limits close to the existing initial-entry
 stack support: a small fixed argument count, a small fixed environment count,
 and one-page total copied string storage. Increasing those limits later should
 be a deliberate ABI and smoke-test change.
+
+Current staging uses the existing 256-byte path cap, 8 `argv` entries, 8 `envp`
+entries, and 4096 total copied argument/environment string bytes including NUL
+terminators. Invalid user pointers return `-EFAULT`; count or byte limit
+overflow returns `-E2BIG`.
 
 ## Address-Space Publication And Rollback
 

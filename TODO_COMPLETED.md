@@ -10,6 +10,9 @@ active roadmap can list only unfinished work.
 - [x] Define the kernel-side `execve` contract for path, argv, envp, and file descriptor inheritance.
 - [x] Add the shared syscall number and ABI constants for `execve`.
 - [x] Add a no-std userland wrapper for `execve`.
+- [x] Copy `argv` strings through the existing user pointer validation policy.
+- [x] Copy `envp` strings through the existing user pointer validation policy.
+- [x] Bound total argument and environment bytes with a documented limit.
 - [x] Document `execve` ownership and cleanup invariants in the process lifecycle docs.
 
 ## Immediate Priorities

@@ -11,9 +11,6 @@ reviewable unit before implementing it.
 
 ### `execve` And Image Replacement
 
-- [ ] Copy `argv` strings through the existing user pointer validation policy.
-- [ ] Copy `envp` strings through the existing user pointer validation policy.
-- [ ] Bound total argument and environment bytes with a documented limit.
 - [ ] Resolve executable paths through the current process filesystem namespace.
 - [ ] Reject directory targets with a stable errno value.
 - [ ] Reject non-ELF targets with a stable errno value.

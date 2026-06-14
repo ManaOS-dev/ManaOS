@@ -15,6 +15,8 @@ The implementation entry point is `kernel::memory::user_pointer`.
   user-accessible, non-executable mapping.
 - NUL-terminated path strings must use `copy_cstr_from_user` with a syscall
   specific maximum length.
+- NUL-terminated pointer arrays must copy each pointer slot with
+  `copy_from_user` before scanning the pointed-to strings.
 - Non-zero syscall pointer arguments are converted from raw `u64` ABI values to
   `UserVirtualRange`, then wrapped as `UserReadableRange` or
   `UserWritableRange` before the copy helpers run.
@@ -39,6 +41,7 @@ The implementation entry point is `kernel::memory::user_pointer`.
 | `mmap(addr, len, prot, flags, fd, offset)` | none | none | none | Private mappings only; automatic anonymous mappings use `addr = 0`, fixed mappings require a page-aligned non-zero address, `MAP_FIXED_NOREPLACE` rejects overlaps, `MAP_FIXED` replaces private mapping records, file-private mappings require a regular file descriptor and page-aligned offset, and executable mappings are rejected. |
 | `munmap(addr, len)` | none | none | none | Private mapping range unmap only; `addr` must be page-aligned, the range must stay inside tracked private mapping records, and no user buffer is copied. |
 | `nanosleep(req, rem)` | `req`, optional `rem` | user to kernel, kernel to user | `copy_from_user`, `copy_to_user` | `req` is exactly `UserTimespec`; non-zero `rem` is exactly `UserTimespec` and is zero-filled because signal interruption is not implemented. |
+| `execve(path, argv, envp)` | `path`, `argv`, `envp` | user to kernel | `copy_cstr_from_user`, `copy_from_user` | Path is capped by `MAX_USER_STRING_LENGTH`. `argv == NULL` and `envp == NULL` are accepted as empty vectors. Argument and environment vectors are capped at 8 entries each and 4096 total copied string bytes including NUL terminators. Invalid pointers return `-EFAULT`; limit overflow returns `-E2BIG`. Runtime image replacement is still unsupported. |
 | `exit(code)` / `exit_group(code)` | none | none | none | No user pointer validation. |
 | `getpid()` / `getppid()` | none | none | none | No user pointer validation. |
 
@@ -47,7 +50,8 @@ The implementation entry point is `kernel::memory::user_pointer`.
 The storage smoke user program verifies representative syscall errno paths:
 missing paths, bad file descriptors, unsupported `openat`, invalid
 `getdents64`, invalid `mmap`/`munmap`, invalid `nanosleep`, and unmapped
-`nanosleep` pointers.
+`nanosleep` pointers. It also verifies `execve` staging for valid
+`argv`/`envp`, bad pointer arrays, and argument-count overflow.
 
 ## Current Enforcement Gaps
 

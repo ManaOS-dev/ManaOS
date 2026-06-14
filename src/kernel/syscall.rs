@@ -35,6 +35,8 @@
 //! - [`SYS_GETPPID`] - Linux-compatible get-parent-process-identifier syscall number
 //! - [`SYS_OPENAT`] - Linux-compatible open-at syscall number
 
+use alloc::{string::String, vec::Vec};
+
 use crate::kernel::memory::{
     address::{UserCString, UserReadableRange, UserVirtualRange, UserWritableRange},
     user_pointer,
@@ -54,6 +56,7 @@ pub use contract::{
 };
 
 const ERROR_NOT_FOUND: u64 = linux_error(2);
+const ERROR_ARGUMENT_LIST_TOO_LONG: u64 = linux_error(7);
 const ERROR_BAD_FILE_DESCRIPTOR: u64 = linux_error(9);
 const ERROR_OUT_OF_MEMORY: u64 = linux_error(12);
 const ERROR_BAD_ADDRESS: u64 = linux_error(14);
@@ -67,7 +70,11 @@ const ERROR_NOT_SUPPORTED: u64 = linux_error(95);
 const USER_FILE_STAT_BYTES: usize = core::mem::size_of::<contract::UserFileStat>();
 const USER_DIRECTORY_ENTRY_BYTES: usize = core::mem::size_of::<contract::UserDirectoryEntry>();
 const USER_TIMESPEC_BYTES: usize = core::mem::size_of::<contract::UserTimespec>();
+const USER_POINTER_BYTES_U64: u64 = core::mem::size_of::<u64>() as u64;
 const MAX_USER_STRING_LENGTH: usize = 256;
+const MAX_EXECVE_ARGUMENT_COUNT: usize = 8;
+const MAX_EXECVE_ENVIRONMENT_COUNT: usize = 8;
+const MAX_EXECVE_COPIED_STRING_BYTES: usize = 4096;
 const PAGE_SIZE: u64 = 4096;
 const NANOSECONDS_PER_SECOND: u64 = 1_000_000_000;
 const NANOSECONDS_PER_TIMER_TICK: u64 =
@@ -528,15 +535,140 @@ fn sys_execve(
     user_argument_values_pointer: u64,
     user_environment_values_pointer: u64,
 ) -> u64 {
-    crate::log_debug!(
-        "syscall",
-        "execve(path={:#018x}, argv={:#018x}, envp={:#018x}) is not implemented",
+    let staging = match copy_execve_staging(
         user_path_pointer,
         user_argument_values_pointer,
-        user_environment_values_pointer
+        user_environment_values_pointer,
+    ) {
+        Ok(staging) => staging,
+        Err(error) => return error,
+    };
+
+    crate::log_debug!(
+        "syscall",
+        "execve(path={}, argc={}, envc={}, bytes={}) is not implemented",
+        staging.path,
+        staging.argument_values.len(),
+        staging.environment_values.len(),
+        staging.copied_string_bytes
     );
 
     ERROR_NOT_IMPLEMENTED
+}
+
+struct ExecveStaging {
+    path: String,
+    argument_values: Vec<Vec<u8>>,
+    environment_values: Vec<Vec<u8>>,
+    copied_string_bytes: usize,
+}
+
+fn copy_execve_staging(
+    user_path_pointer: u64,
+    user_argument_values_pointer: u64,
+    user_environment_values_pointer: u64,
+) -> Result<ExecveStaging, u64> {
+    let Some(path) = copy_path_argument(user_path_pointer) else {
+        return Err(ERROR_BAD_ADDRESS);
+    };
+
+    let mut copied_string_bytes = 0;
+    let argument_values = copy_execve_string_vector(
+        user_argument_values_pointer,
+        MAX_EXECVE_ARGUMENT_COUNT,
+        &mut copied_string_bytes,
+    )?;
+    let environment_values = copy_execve_string_vector(
+        user_environment_values_pointer,
+        MAX_EXECVE_ENVIRONMENT_COUNT,
+        &mut copied_string_bytes,
+    )?;
+
+    Ok(ExecveStaging {
+        path,
+        argument_values,
+        environment_values,
+        copied_string_bytes,
+    })
+}
+
+fn copy_execve_string_vector(
+    user_pointer_array: u64,
+    max_values: usize,
+    copied_string_bytes: &mut usize,
+) -> Result<Vec<Vec<u8>>, u64> {
+    if user_pointer_array == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut values = Vec::new();
+    for index in 0..=max_values {
+        let string_pointer = copy_execve_pointer_array_slot(user_pointer_array, index)?;
+        if string_pointer == 0 {
+            return Ok(values);
+        }
+        if index == max_values {
+            return Err(ERROR_ARGUMENT_LIST_TOO_LONG);
+        }
+
+        values.push(copy_execve_string_value(
+            string_pointer,
+            copied_string_bytes,
+        )?);
+    }
+
+    Ok(values)
+}
+
+fn copy_execve_pointer_array_slot(user_pointer_array: u64, index: usize) -> Result<u64, u64> {
+    let offset = u64::try_from(index)
+        .ok()
+        .and_then(|index| index.checked_mul(USER_POINTER_BYTES_U64))
+        .ok_or(ERROR_BAD_ADDRESS)?;
+    let slot_pointer = user_pointer_array
+        .checked_add(offset)
+        .ok_or(ERROR_BAD_ADDRESS)?;
+    let Some(buffer) = copy_input_buffer(slot_pointer, USER_POINTER_BYTES_U64) else {
+        return Err(ERROR_BAD_ADDRESS);
+    };
+
+    Ok(read_user_u64(buffer, 0))
+}
+
+fn copy_execve_string_value(
+    user_string_pointer: u64,
+    copied_string_bytes: &mut usize,
+) -> Result<Vec<u8>, u64> {
+    let range = UserVirtualRange::from_syscall_arguments(
+        user_string_pointer,
+        u64::try_from(MAX_EXECVE_COPIED_STRING_BYTES)
+            .expect("max execve string bytes must fit in u64"),
+    )
+    .ok_or(ERROR_BAD_ADDRESS)?;
+    let Some(bytes) = user_pointer::copy_from_user(UserReadableRange::new(range)) else {
+        return Err(ERROR_BAD_ADDRESS);
+    };
+
+    let mut value = Vec::new();
+    for byte in bytes {
+        if *byte == 0 {
+            let next_string_bytes = value
+                .len()
+                .checked_add(1)
+                .and_then(|length| copied_string_bytes.checked_add(length))
+                .ok_or(ERROR_ARGUMENT_LIST_TOO_LONG)?;
+            if next_string_bytes > MAX_EXECVE_COPIED_STRING_BYTES {
+                return Err(ERROR_ARGUMENT_LIST_TOO_LONG);
+            }
+
+            *copied_string_bytes = next_string_bytes;
+            return Ok(value);
+        }
+
+        value.push(*byte);
+    }
+
+    Err(ERROR_BAD_ADDRESS)
 }
 
 fn copy_input_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static [u8]> {

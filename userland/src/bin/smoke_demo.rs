@@ -10,7 +10,7 @@ const DIRECTORY_BUFFER_BYTES: usize = core::mem::size_of::<syscall::UserDirector
 const ENTRY_ARGUMENT_MESSAGE: &[u8] = b"user entry arguments ok\n";
 const PROCESS_ID_MESSAGE: &[u8] = b"user process ids ok\n";
 const SYSCALL_ERROR_MESSAGE: &[u8] = b"user syscall errors ok\n";
-const EXECVE_ABI_MESSAGE: &[u8] = b"user execve abi ok\n";
+const EXECVE_STAGING_MESSAGE: &[u8] = b"user execve staging ok\n";
 const SLEEP_MESSAGE: &[u8] = b"user sleep ok\n";
 const BSS_MESSAGE: &[u8] = b"user bss ok\n";
 const HEAP_MESSAGE: &[u8] = b"user heap ok\n";
@@ -138,6 +138,7 @@ fn verify_execve_unsupported() {
     let executable_path = b"/disk/bin/file_demo\0";
     let arguments = [executable_path.as_ptr(), core::ptr::null()];
     let environment = [core::ptr::null()];
+    let bad_user_pointer = 0x0000_4000_0000_2000_usize;
 
     if syscall::execve(executable_path, arguments.as_ptr(), environment.as_ptr())
         != syscall::ERROR_NOT_IMPLEMENTED
@@ -145,7 +146,37 @@ fn verify_execve_unsupported() {
         syscall::exit(71);
     }
 
-    let _ = syscall::write(STDOUT, EXECVE_ABI_MESSAGE);
+    if syscall::syscall3(
+        syscall::SYS_EXECVE,
+        executable_path.as_ptr() as usize,
+        bad_user_pointer,
+        environment.as_ptr() as usize,
+    ) != syscall::ERROR_BAD_ADDRESS
+    {
+        syscall::exit(72);
+    }
+
+    if syscall::syscall3(
+        syscall::SYS_EXECVE,
+        executable_path.as_ptr() as usize,
+        arguments.as_ptr() as usize,
+        bad_user_pointer,
+    ) != syscall::ERROR_BAD_ADDRESS
+    {
+        syscall::exit(73);
+    }
+
+    let too_many_arguments = [executable_path.as_ptr(); 9];
+    if syscall::execve(
+        executable_path,
+        too_many_arguments.as_ptr(),
+        environment.as_ptr(),
+    ) != syscall::ERROR_ARGUMENT_LIST_TOO_LONG
+    {
+        syscall::exit(74);
+    }
+
+    let _ = syscall::write(STDOUT, EXECVE_STAGING_MESSAGE);
 }
 
 fn verify_user_sleep() {

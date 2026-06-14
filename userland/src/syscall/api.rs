@@ -71,6 +71,8 @@ pub const FILE_TYPE_DIRECTORY: u64 = contract::FILE_TYPE_DIRECTORY;
 pub const FILE_TYPE_DEVICE: u64 = contract::FILE_TYPE_DEVICE;
 /// Linux-compatible not found error as a signed syscall result.
 pub const ERROR_NOT_FOUND: isize = contract::ERROR_NOT_FOUND;
+/// Linux-compatible argument-list-too-long error as a signed syscall result.
+pub const ERROR_ARGUMENT_LIST_TOO_LONG: isize = contract::ERROR_ARGUMENT_LIST_TOO_LONG;
 /// Linux-compatible bad file descriptor error as a signed syscall result.
 pub const ERROR_BAD_FILE_DESCRIPTOR: isize = contract::ERROR_BAD_FILE_DESCRIPTOR;
 /// Bad address error return value as a signed syscall result.
@@ -244,8 +246,7 @@ pub fn getppid() -> isize {
 /// Replace the current process image with a new executable.
 ///
 /// `path` must point to a NUL-terminated path. `arguments` and `environment`
-/// must point to NUL-terminated pointer arrays, or be null when the kernel
-/// supports the documented empty-vector policy.
+/// must point to NUL-terminated pointer arrays, or be null for an empty vector.
 #[inline(always)]
 pub fn execve(path: &[u8], arguments: *const *const u8, environment: *const *const u8) -> isize {
     syscall3(

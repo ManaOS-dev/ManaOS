@@ -129,7 +129,7 @@ $expectedPatterns = @(
     "User file_private mapping unmapped: .*pages=1 records=0 active_pages=0",
     "getppid -> parent=0",
     "user process ids ok",
-    "user execve abi ok",
+    "user execve staging ok",
     "user syscall errors ok",
     "user entry arguments ok",
     "user sleep ok",

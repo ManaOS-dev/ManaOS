@@ -72,6 +72,8 @@ pub const DIRECTORY_ENTRY_NAME_BYTES: usize = 56;
 
 /// Linux-compatible not found error as a signed syscall result.
 pub const ERROR_NOT_FOUND: isize = -2;
+/// Linux-compatible argument-list-too-long error as a signed syscall result.
+pub const ERROR_ARGUMENT_LIST_TOO_LONG: isize = -7;
 /// Linux-compatible bad file descriptor error as a signed syscall result.
 pub const ERROR_BAD_FILE_DESCRIPTOR: isize = -9;
 /// Bad address error return value as a signed syscall result.
