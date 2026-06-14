@@ -259,6 +259,13 @@ fn verify_bootstrap_child_exit_collection(user_task_ids: [u64; 2]) {
     );
     crate::log_info!(
         "task",
+        "Wait lifecycle smoke passed: parent={} retained_children={} collected_children={} double_reap_prevented=true",
+        parent_task_id,
+        user_task_ids.len(),
+        collected.len()
+    );
+    crate::log_info!(
+        "task",
         "Bootstrap child wait collection verified: parent={} children={}",
         parent_task_id,
         user_task_ids.len()

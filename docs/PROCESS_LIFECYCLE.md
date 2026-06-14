@@ -279,6 +279,8 @@ Current runtime diagnostics cover the first successful replacement path:
   task has no child and when a positive process identifier is not its child.
 - Storage smoke asserts the scheduler log line that retains a parent-keyed
   child exit record and the later line that collects that record once.
+- Storage smoke asserts a stable wait lifecycle summary showing retained child
+  count, collected child count, and double-reap prevention.
 - The `tasks` console command shows each user task's current image generation,
   retained image path, and last successful old-image reclaim counts.
 

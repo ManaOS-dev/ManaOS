@@ -244,6 +244,8 @@ unmarked descriptor は default で descriptor number と offset を保持し、
   `waitpid` が `-ECHILD` を返すことを検証します。
 - storage smoke は、parent-keyed child exit record を保持する scheduler log line と、その record を一度だけ
   collect する log line を assert します。
+- storage smoke は retained child count、collected child count、double-reap prevention を示す stable な
+  wait lifecycle summary も assert します。
 - `tasks` console command は、user task ごとの current image generation、retained image path、last successful
   old-image reclaim count を表示します。
 

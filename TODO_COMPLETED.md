@@ -51,6 +51,7 @@ active roadmap can list only unfinished work.
 - [x] Add scheduler-owned child exit records keyed by parent process ID.
 - [x] Preserve exit status until the parent reaps the child.
 - [x] Prevent double-reaping of the same child exit record.
+- [x] Add serial assertions for the wait lifecycle smoke path.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 
