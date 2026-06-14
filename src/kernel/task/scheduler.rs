@@ -661,6 +661,10 @@ impl Scheduler {
             task.metadata.get_parent_identifier(),
             Some(parent_identifier)
         );
+        debug_assert_eq!(
+            task.metadata.current_working_directory(),
+            parent_current_working_directory
+        );
         self.tasks.push(task);
         crate::log_info!(
             "task",
@@ -674,6 +678,13 @@ impl Scheduler {
             kernel_stack_virtual_top,
             kernel_stack_reserved_pages,
             kernel_stack_writable_pages
+        );
+        crate::log_info!(
+            "task",
+            "User task current directory inherited: parent={} child={} cwd={}",
+            parent_identifier.as_u64(),
+            task_identifier.as_u64(),
+            parent_current_working_directory
         );
         task_identifier.as_u64()
     }

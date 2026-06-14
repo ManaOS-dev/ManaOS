@@ -44,13 +44,15 @@ General user-created process lifecycle is not complete yet. Current working
 directories are now task metadata, relative paths resolve through the current
 task's directory, and successful `execve` preserves that directory across image
 replacement. The `chdir` and `getcwd` syscall wrappers expose that task-owned
-directory to no-std userland code. User-visible child creation and the
-scheduler-backed `waitpid` wait/reap state machine are still future work.
-Descriptor close-on-exec metadata and successful-`execve` close behavior exist
-for the current global descriptor table. The `waitpid` syscall number, option
-constants, no-std userland wrapper, selector validation, no-child `ECHILD` path,
-and scheduler-owned child exit records keyed by parent task identifier are in
-place now so later child-exit work has a stable ABI target.
+directory to no-std userland code. Scheduler-spawned child tasks copy the
+parent's current working directory at task creation. User-visible child
+creation and the scheduler-backed `waitpid` wait/reap state machine are still
+future work. Descriptor close-on-exec metadata and successful-`execve` close
+behavior exist for the current global descriptor table. The `waitpid` syscall
+number, option constants, no-std userland wrapper, selector validation,
+no-child `ECHILD` path, and scheduler-owned child exit records keyed by parent
+task identifier are in place now so later child-exit work has a stable ABI
+target.
 
 ## `waitpid` Syscall Contract
 
@@ -301,6 +303,8 @@ Current runtime diagnostics cover the first successful replacement path:
 - Storage smoke starts user programs through the kernel-internal
   `spawn_user_program` helper so filesystem path loading, ELF mapping, initial
   argv/envp stack construction, and scheduler task creation share one path.
+- Storage smoke verifies that scheduler-spawned user tasks inherit the parent
+  current working directory recorded at task creation.
 - Storage smoke asserts the staged entry vector counts before the helper builds
   the initial user stack.
 - Storage smoke asserts stable spawn path errno mappings for missing, relative,

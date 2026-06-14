@@ -64,6 +64,7 @@ active roadmap can list only unfinished work.
 - [x] Add a smoke case for two concurrently spawned user programs.
 - [x] Define how argv and envp are represented before user stack construction.
 - [x] Add errno mappings for spawn path lookup failures.
+- [x] Define how current working directory is inherited by spawned processes.
 - [x] Add a no-std `getcwd` wrapper for task-owned current directory checks.
 
 ### User Process Scheduling

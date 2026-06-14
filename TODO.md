@@ -29,7 +29,6 @@ reviewable unit before implementing it.
 - [ ] Document why copy-on-write `fork` is deferred if `spawn` is selected.
 - [ ] Move user file descriptor tables from global filesystem state to process-owned metadata before general spawn.
 - [ ] Define how inherited file descriptors are selected for spawned processes.
-- [ ] Define how current working directory is inherited by spawned processes.
 - [ ] Add a userland runtime helper for launching a child program.
 - [ ] Add errno mappings for spawn memory allocation failures.
 - [ ] Add a smoke case for parent exit while child remains alive.

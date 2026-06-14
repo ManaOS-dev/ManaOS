@@ -100,6 +100,7 @@ $expectedPatterns = @(
     "User stack mapping verified: pages=4 .*guard_unmapped=true",
     "User program entry vectors staged: argument_count=2 environment_count=1",
     "User task spawned\. task_id=.* address_space=",
+    "User task current directory inherited: parent=0 child=.* cwd=/",
     "User program spawned from filesystem: task=.* path=/disk/bin/smoke_demo argc=2",
     "Installed user task kernel stack: task=.* address_space=",
     "User entry arguments prepared: argc=2",
