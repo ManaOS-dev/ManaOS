@@ -11,6 +11,7 @@ not on product value.
    - Parse MADT entries.
    - Enable IOAPIC routing.
    - Replace legacy PIC routing.
+   - Harden the legacy PIC fallback boundary.
    - Calibrate and switch scheduling ticks to the Local APIC timer.
    - Reason: this changes early boot discovery, interrupt topology, timer
      ownership, and architecture/kernel wiring at the same time.
@@ -53,8 +54,7 @@ The active task is ACPI and APIC interrupt migration. ACPI root discovery,
 RSDT/XSDT validation, MADT validation, bounded MADT topology diagnostics,
 architecture-owned APIC routing provider configuration, dry-run IOAPIC
 redirection entries, masked IOAPIC MMIO staging, Local APIC EOI-provider
-diagnostics, unified EOI dispatch, active IOAPIC routing, and post-activation
-APIC EOI counters are now proven by storage smoke. The next slice should harden
-the legacy PIC fallback boundary and then move scheduling ticks from the PIT to
-the Local APIC timer while preserving the `arch/` to `kernel/` dependency
-boundary.
+diagnostics, unified EOI dispatch, active IOAPIC routing, post-activation APIC
+EOI counters, and legacy PIC fallback masking are now proven by storage smoke.
+The next slice should move scheduling ticks from the PIT to the Local APIC
+timer while preserving the `arch/` to `kernel/` dependency boundary.

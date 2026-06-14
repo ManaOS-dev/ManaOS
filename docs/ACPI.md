@@ -46,6 +46,8 @@ The current foundation validates:
   until IOAPIC routing is explicitly activated.
 - IOAPIC route activation for timer, keyboard, and mouse interrupts with
   unmasked redirection readback diagnostics.
+- Legacy PIC fallback boundary diagnostics proving normal APIC boots leave the
+  legacy PIC masked and fallback-disabled before CPU interrupts are enabled.
 - Local APIC EOI counter diagnostics proving timer interrupts are acknowledged
   through APIC EOI after IOAPIC routing activation.
 
@@ -54,13 +56,12 @@ interrupt topology, APIC routing provider configuration, and dry-run IOAPIC
 redirection plan before staging the planned entries as masked IOAPIC routes.
 It also verifies Local APIC and IOAPIC MMIO mapping, Local APIC EOI-provider
 diagnostics, masked IOAPIC redirection readback, IOAPIC route activation, and
-post-activation APIC EOI counts.
+post-activation APIC EOI counts. Normal APIC boots also assert that the legacy
+PIC backend remains masked with fallback delivery disabled before interrupts are
+enabled.
 
 ## Next Steps
 
-1. Harden the legacy PIC fallback boundary now that IOAPIC routing is active.
-2. Replace legacy PIC initialization after IOAPIC validation no longer needs the
-   fallback backend during normal boot.
-3. Calibrate and move scheduling ticks to the Local APIC timer.
-4. Add broader interrupt-controller diagnostics for spurious or unexpected
+1. Calibrate and move scheduling ticks to the Local APIC timer.
+2. Add broader interrupt-controller diagnostics for spurious or unexpected
    vectors before expanding hardware coverage.

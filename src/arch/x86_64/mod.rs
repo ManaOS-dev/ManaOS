@@ -55,9 +55,17 @@ pub fn init(system_call_handler: u64) {
     );
     // SAFETY: The interrupt controllers are initialized while interrupts are
     // disabled during early architecture setup.
-    unsafe {
-        interrupt_controller::initialize_legacy();
-    }
+    let legacy_pic_status =
+        unsafe { interrupt_controller::initialize_interrupt_controller_backend() };
+    crate::log_info!(
+        "arch",
+        "Interrupt controller backend initialized: legacy_pic_initialized={} legacy_fallback_enabled={} legacy_pic_masked_for_apic={} master_mask={:#x} slave_mask={:#x}",
+        legacy_pic_status.is_initialized(),
+        legacy_pic_status.is_fallback_enabled(),
+        legacy_pic_status.is_masked_for_apic_routing(),
+        legacy_pic_status.master_mask(),
+        legacy_pic_status.slave_mask()
+    );
 
     crate::log_info!(
         "arch",
