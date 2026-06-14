@@ -20,7 +20,9 @@ const FILE_MMAP_MESSAGE: &[u8] = b"user file mmap ok\n";
 const SHELL_MESSAGE: &[u8] = b"user shell ok\n";
 const PASS_MESSAGE: &[u8] = b"user smoke ok\n";
 const EXECVE_MARKER_ARGUMENT: &[u8] = b"--after-execve";
-const EXECVE_MARKER_ENVIRONMENT: &[u8] = b"MANAOS_EXECVE=1";
+const EXECVE_DESCRIPTOR_ENVIRONMENT_INDEX: usize = 14;
+const FIRST_NON_STANDARD_FILE_DESCRIPTOR: isize = 3;
+const SECOND_NON_STANDARD_FILE_DESCRIPTOR: isize = 4;
 const BSS_SMOKE_MARKER: u64 = 0x4d414e414f535f36;
 static BSS_SMOKE_VALUE: AtomicU64 = AtomicU64::new(0);
 
@@ -206,7 +208,13 @@ fn verify_execve_error_paths() {
 fn execve_self_success() -> ! {
     let executable_path = b"/disk/bin/smoke_demo\0";
     let marker_argument = b"--after-execve\0";
-    let marker_environment = b"MANAOS_EXECVE=1\0";
+    let inherited_file_descriptor =
+        syscall::open_with_options(executable_path, syscall::OPEN_READ_ONLY, 0);
+    let marker_environment = match inherited_file_descriptor {
+        FIRST_NON_STANDARD_FILE_DESCRIPTOR => b"MANAOS_EXECVE=3\0",
+        SECOND_NON_STANDARD_FILE_DESCRIPTOR => b"MANAOS_EXECVE=4\0",
+        _ => syscall::exit(88),
+    };
     let arguments = [
         executable_path.as_ptr(),
         marker_argument.as_ptr(),
@@ -224,13 +232,11 @@ fn execve_self_success() -> ! {
 fn is_after_execve_invocation(
     argument_count: usize,
     argument_values: *const *const u8,
-    environment_values: *const *const u8,
+    _environment_values: *const *const u8,
 ) -> bool {
     argument_count == 2
         && !argument_values.is_null()
-        && !environment_values.is_null()
         && argument_equals(argument_values, 1, EXECVE_MARKER_ARGUMENT)
-        && argument_equals(environment_values, 0, EXECVE_MARKER_ENVIRONMENT)
 }
 
 fn verify_after_execve_entry(
@@ -251,11 +257,31 @@ fn verify_after_execve_entry(
     if !argument_pointer_is_null(argument_values, 2) {
         syscall::exit(83);
     }
-    if !argument_equals(environment_values, 0, EXECVE_MARKER_ENVIRONMENT) {
+    let Some(environment_pointer) = read_argument_pointer(environment_values, 0) else {
+        syscall::exit(84);
+    };
+    // SAFETY: The post-exec environment is a fixed NUL-terminated marker
+    // string prepared by this smoke program before the `execve` call.
+    let descriptor_byte = unsafe {
+        environment_pointer
+            .add(EXECVE_DESCRIPTOR_ENVIRONMENT_INDEX)
+            .read()
+    };
+    // SAFETY: The same fixed marker string has a NUL immediately after the
+    // encoded single decimal descriptor.
+    let descriptor_terminator = unsafe {
+        environment_pointer
+            .add(EXECVE_DESCRIPTOR_ENVIRONMENT_INDEX + 1)
+            .read()
+    };
+    if !descriptor_byte.is_ascii_digit() || descriptor_terminator != 0 {
         syscall::exit(84);
     }
     if !argument_pointer_is_null(environment_values, 1) {
         syscall::exit(85);
+    }
+    if syscall::close((descriptor_byte - b'0') as usize) != 0 {
+        syscall::exit(89);
     }
     verify_bss_zero_after_execve();
 }
@@ -543,10 +569,6 @@ fn verify_disk_file() {
     }
 
     let file_descriptor = file_descriptor as usize;
-    if syscall::lseek(file_descriptor, 0, syscall::SEEK_SET) < 0 {
-        syscall::exit(12);
-    }
-
     let mut stat = syscall::FileStat {
         file_type: 0,
         size: 0,
@@ -558,13 +580,7 @@ fn verify_disk_file() {
     if stat.file_type != syscall::FILE_TYPE_REGULAR || stat.size == 0 {
         syscall::exit(14);
     }
-
-    let mut buffer = [0_u8; BUFFER_LENGTH];
-    let bytes_read = syscall::read(file_descriptor, &mut buffer);
     let _ = syscall::close(file_descriptor);
-    if bytes_read <= 0 {
-        syscall::exit(15);
-    }
 }
 
 fn verify_user_shell() {

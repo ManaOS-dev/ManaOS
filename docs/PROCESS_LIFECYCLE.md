@@ -165,9 +165,13 @@ On success, the scheduler lifecycle transition owns the swap:
 ## Descriptor Inheritance
 
 Descriptors are inherited across successful `execve` unless the descriptor is
-marked close-on-exec. The close-on-exec flag is not present yet, so the first
-descriptor implementation step must add metadata without changing existing
-descriptor numbers or offsets.
+marked close-on-exec. Storage smoke now opens the executable file in the old
+image as the first non-standard descriptor and verifies that the new image can
+close the same descriptor number.
+
+The close-on-exec flag is not present yet, so the next descriptor metadata step
+must keep existing descriptor numbers and offsets stable by default and close
+only descriptors explicitly marked close-on-exec.
 
 When close-on-exec exists, closing must happen only after the new image is
 ready to publish. If closing a descriptor fails internally, the kernel should
@@ -180,6 +184,8 @@ Current runtime diagnostics cover the first successful replacement path:
 
 - Storage smoke proves a successful self-replacement from `/disk/bin/smoke_demo`
   and verifies that the old image does not resume.
+- Storage smoke verifies that an unmarked descriptor inherited through
+  successful self-`execve` remains usable in the new image.
 - Serial logs record `User image replaced by execve` and
   `execve image published` with old-image reclaim counts.
 - Scheduler smoke verifies that `execve` resets heap and private mapping

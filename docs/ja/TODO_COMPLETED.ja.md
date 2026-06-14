@@ -17,7 +17,8 @@
 `execve` の kernel-side contract、shared syscall number、no-std userland wrapper、argv/envp copy-in、
 bounded staging、filesystem path validation、image replacement 時の ownership / cleanup invariant の
 文書化、unpublished image candidate の build/rollback smoke、successful image publish、old image reclaim、
-no-return self-`execve` smoke、`tasks` command の current image diagnostics が完了済みです。正本は英語版の `TODO_COMPLETED.md` と
+no-return self-`execve` smoke、`tasks` command の current image diagnostics、open descriptor
+inheritance smoke が完了済みです。正本は英語版の `TODO_COMPLETED.md` と
 [`PROCESS_LIFECYCLE.md`](../PROCESS_LIFECYCLE.md) です。
 
 ### Immediate Priorities

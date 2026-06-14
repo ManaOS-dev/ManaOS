@@ -12,7 +12,6 @@ reviewable unit before implementing it.
 ### `execve` And Image Replacement
 
 - [ ] Preserve current working directory across successful `execve`.
-- [ ] Preserve open file descriptors that do not have close-on-exec semantics.
 - [ ] Add close-on-exec metadata to file descriptors.
 - [ ] Close descriptors marked close-on-exec during successful `execve`.
 - [ ] Add `execve` replacement-state diagnostics to the `tasks` console command once fallible candidate states exist.
