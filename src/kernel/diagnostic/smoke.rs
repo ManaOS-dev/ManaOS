@@ -222,14 +222,17 @@ fn verify_spawn_path_errno_smoke(
         user_stack_pages,
         crate::kernel::process::UserProgramSpawnError::InvalidImage,
     );
+    let out_of_memory_result =
+        crate::kernel::process::UserProgramSpawnError::OutOfMemory.as_syscall_result();
     crate::log_info!(
         "task",
-        "User program spawn path errno smoke passed: missing={} relative={} directory={} device={} invalid_image={}",
+        "User program spawn errno smoke passed: missing={} relative={} directory={} device={} invalid_image={} oom={}",
         missing_result,
         relative_result,
         directory_result,
         device_result,
-        invalid_image_result
+        invalid_image_result,
+        out_of_memory_result
     );
 }
 

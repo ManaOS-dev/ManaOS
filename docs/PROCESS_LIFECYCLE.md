@@ -33,9 +33,9 @@ while filesystem lookup, ELF mapping, address-space construction, and scheduler
 metadata remain owned by their existing modules.
 `kernel::process::UserProgramEntryVectors` is the named pre-stack
 representation for borrowed `argv` and `envp` slices used by spawned programs.
-The spawn helper now classifies executable path lookup failures with stable
-errno-facing results for missing, relative, directory, device, and invalid ELF
-targets before a future user-visible spawn syscall is added.
+The spawn helper now classifies executable path lookup failures and image-buffer
+allocation failures with stable errno-facing results before a future
+user-visible spawn syscall is added.
 Scheduler diagnostics retain the spawned origin path separately from the current
 image path, so a later successful `execve` can change `path=` while `origin=`
 still identifies the program that created the task record.
@@ -336,8 +336,9 @@ Current runtime diagnostics cover the first successful replacement path:
   current working directory recorded at task creation.
 - Storage smoke asserts the staged entry vector counts before the helper builds
   the initial user stack.
-- Storage smoke asserts stable spawn path errno mappings for missing, relative,
-  directory, device, and non-ELF targets before successful spawn task creation.
+- Storage smoke asserts stable spawn errno mappings for missing, relative,
+  directory, device, non-ELF, and image-buffer allocation failures before
+  successful spawn task creation.
 - Storage smoke asserts three distinct user tasks spawned from the same
   filesystem path before all are activated together.
 - Storage smoke asserts that `tasks` output retains the original spawn path as

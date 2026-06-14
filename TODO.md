@@ -28,7 +28,6 @@ reviewable unit before implementing it.
 - [ ] Move user file descriptor tables from global filesystem state to process-owned metadata before general spawn.
 - [ ] Define how inherited file descriptors are selected for spawned processes.
 - [ ] Add a userland runtime helper for launching a child program.
-- [ ] Add errno mappings for spawn memory allocation failures.
 - [ ] Add a smoke case for parent exit while child remains alive.
 
 ### Minimal User Shell

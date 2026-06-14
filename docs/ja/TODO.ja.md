@@ -53,7 +53,8 @@ path、parent-child lifecycle state documentation、scheduler-owned child exit r
 zombie/reaped diagnostics、`tasks` command の per-task lifecycle output、already-exited child の
 scheduler-backed `waitpid` reap、filesystem path から user task を作る kernel-internal spawn helper
 と spawned process origin diagnostics、2つの concurrently spawned user program smoke、spawn 前の
-argv/envp entry vector 表現、spawn path lookup failure の errno mapping まで完了済みです。
+argv/envp entry vector 表現、spawn path lookup failure と memory allocation failure の errno
+mapping まで完了済みです。
 spawned process の current working directory inheritance も完了済みです。
 最初の stable process model は `spawn + execve` として決定済みで、minimal `fork` は Phase 2 の
 address-space copy plan ができるまで defer します。

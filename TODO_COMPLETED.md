@@ -70,6 +70,7 @@ active roadmap can list only unfinished work.
 - [x] Add a no-std `getcwd` wrapper for task-owned current directory checks.
 - [x] Add docs that compare the selected model with POSIX `fork` expectations.
 - [x] Add TODO links from deferred `fork` work to the address-space copy plan.
+- [x] Add errno mappings for spawn memory allocation failures.
 
 ### User Process Scheduling
 

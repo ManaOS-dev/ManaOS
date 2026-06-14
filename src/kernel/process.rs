@@ -35,6 +35,8 @@ const ERROR_NOT_FOUND: isize = -2;
 const ERROR_IS_DIRECTORY: isize = -21;
 /// Linux-compatible invalid-argument errno for executable targets.
 const ERROR_INVALID_ARGUMENT: isize = -22;
+/// Linux-compatible out-of-memory errno for executable targets.
+const ERROR_OUT_OF_MEMORY: isize = -12;
 /// Linux-compatible operation-not-supported errno for executable targets.
 const ERROR_NOT_SUPPORTED: isize = -95;
 
@@ -119,6 +121,8 @@ pub enum UserProgramSpawnError {
     UnsupportedTarget,
     /// The executable contents could not be read after path lookup.
     ReadFailed,
+    /// The executable image buffer could not be allocated.
+    OutOfMemory,
     /// The executable image is not a supported user ELF.
     InvalidImage,
 }
@@ -129,6 +133,7 @@ impl UserProgramSpawnError {
         match self {
             Self::NotFound => ERROR_NOT_FOUND,
             Self::InvalidPath | Self::ReadFailed | Self::InvalidImage => ERROR_INVALID_ARGUMENT,
+            Self::OutOfMemory => ERROR_OUT_OF_MEMORY,
             Self::DirectoryTarget => ERROR_IS_DIRECTORY,
             Self::UnsupportedTarget => ERROR_NOT_SUPPORTED,
         }
@@ -140,8 +145,7 @@ impl UserProgramSpawnError {
 /// # Panics
 ///
 /// Panics if the scheduler has not been initialized, user address-space setup
-/// fails, task kernel stack allocation fails, or kernel heap allocation for the
-/// executable image buffer fails.
+/// fails, or task kernel stack allocation fails.
 pub fn spawn_user_program(
     frame_allocator: &mut PhysicalFrameAllocator,
     request: UserProgramSpawnRequest<'_>,
@@ -353,7 +357,7 @@ fn read_program_image(path: &str) -> Result<Vec<u8>, UserProgramSpawnError> {
     let mut contents = Vec::new();
     contents
         .try_reserve_exact(metadata.size)
-        .expect("OOM: failed to reserve user program image buffer");
+        .map_err(|_| UserProgramSpawnError::OutOfMemory)?;
     contents.resize(metadata.size, 0);
 
     let read_result = read_exact_program_image(descriptor, &mut contents);

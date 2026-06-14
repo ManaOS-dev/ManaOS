@@ -90,6 +90,8 @@ pub const ERROR_ARGUMENT_LIST_TOO_LONG: isize = -7;
 pub const ERROR_BAD_FILE_DESCRIPTOR: isize = -9;
 /// Linux-compatible no-child-process error as a signed syscall result.
 pub const ERROR_NO_CHILD: isize = -10;
+/// Linux-compatible out-of-memory error as a signed syscall result.
+pub const ERROR_OUT_OF_MEMORY: isize = -12;
 /// Bad address error return value as a signed syscall result.
 pub const ERROR_BAD_ADDRESS: isize = -14;
 /// Linux-compatible file exists error as a signed syscall result.
