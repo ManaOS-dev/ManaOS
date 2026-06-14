@@ -5,6 +5,11 @@ use spin::Mutex;
 
 const INTERRUPT_CONTROLLER_1_OFFSET: u8 = 32;
 const INTERRUPT_CONTROLLER_2_OFFSET: u8 = INTERRUPT_CONTROLLER_1_OFFSET + 8;
+const LEGACY_IRQ_ROUTE_CAPACITY: usize = 16;
+const APIC_PROVIDER_CONFIGURED_FLAG: u8 = 1;
+const APIC_PROVIDER_ROUTING_ACTIVE_FLAG: u8 = 1 << 1;
+const APIC_PROVIDER_LOCAL_APIC_SUPPORTED_FLAG: u8 = 1 << 2;
+const APIC_PROVIDER_TRUNCATED_FLAG: u8 = 1 << 3;
 
 pub(super) static LEGACY_INTERRUPT_CONTROLLERS: Mutex<ChainedPics> =
     // SAFETY: The offsets reserve CPU exception vectors and match the configured
@@ -12,6 +17,9 @@ pub(super) static LEGACY_INTERRUPT_CONTROLLERS: Mutex<ChainedPics> =
     Mutex::new(unsafe {
         ChainedPics::new(INTERRUPT_CONTROLLER_1_OFFSET, INTERRUPT_CONTROLLER_2_OFFSET)
     });
+
+static APIC_ROUTING_PROVIDER: Mutex<ApicRoutingProviderState> =
+    Mutex::new(ApicRoutingProviderState::new());
 
 /// Available interrupt controller backends.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -22,12 +30,355 @@ pub enum InterruptControllerKind {
     LocalApicIoApic,
 }
 
+/// Local APIC configuration supplied by the kernel composition root.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct LocalApicConfiguration {
+    physical_address: u64,
+    apic_id: u32,
+    enabled: bool,
+    online_capable: bool,
+}
+
+impl LocalApicConfiguration {
+    const EMPTY: Self = Self::new(0, 0, false, false);
+
+    /// Create a Local APIC configuration record.
+    pub const fn new(
+        physical_address: u64,
+        apic_id: u32,
+        enabled: bool,
+        online_capable: bool,
+    ) -> Self {
+        Self {
+            physical_address,
+            apic_id,
+            enabled,
+            online_capable,
+        }
+    }
+
+    /// Return the Local APIC MMIO physical address.
+    pub const fn physical_address(self) -> u64 {
+        self.physical_address
+    }
+
+    /// Return the Local APIC identifier.
+    pub const fn apic_id(self) -> u32 {
+        self.apic_id
+    }
+
+    /// Return whether this Local APIC is enabled.
+    pub const fn is_enabled(self) -> bool {
+        self.enabled
+    }
+
+    /// Return whether this Local APIC can be brought online later.
+    pub const fn is_online_capable(self) -> bool {
+        self.online_capable
+    }
+}
+
+/// IOAPIC configuration supplied by the kernel composition root.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct IoApicConfiguration {
+    id: u8,
+    physical_address: u64,
+    global_system_interrupt_base: u32,
+}
+
+impl IoApicConfiguration {
+    const EMPTY: Self = Self::new(0, 0, 0);
+
+    /// Create an IOAPIC configuration record.
+    pub const fn new(id: u8, physical_address: u64, global_system_interrupt_base: u32) -> Self {
+        Self {
+            id,
+            physical_address,
+            global_system_interrupt_base,
+        }
+    }
+
+    /// Return the IOAPIC identifier.
+    pub const fn id(self) -> u8 {
+        self.id
+    }
+
+    /// Return the IOAPIC MMIO physical address.
+    pub const fn physical_address(self) -> u64 {
+        self.physical_address
+    }
+
+    /// Return the first global system interrupt handled by this IOAPIC.
+    pub const fn global_system_interrupt_base(self) -> u32 {
+        self.global_system_interrupt_base
+    }
+}
+
+/// Legacy IRQ to global-system-interrupt route.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct LegacyIrqRoute {
+    legacy_irq: u8,
+    global_system_interrupt: u32,
+    flags: u16,
+}
+
+impl LegacyIrqRoute {
+    const EMPTY: Self = Self::new(0, 0, 0);
+
+    /// Create a legacy IRQ routing record.
+    pub const fn new(legacy_irq: u8, global_system_interrupt: u32, flags: u16) -> Self {
+        Self {
+            legacy_irq,
+            global_system_interrupt,
+            flags,
+        }
+    }
+
+    /// Return the legacy IRQ source line.
+    pub const fn legacy_irq(self) -> u8 {
+        self.legacy_irq
+    }
+
+    /// Return the global system interrupt used for this IRQ source line.
+    pub const fn global_system_interrupt(self) -> u32 {
+        self.global_system_interrupt
+    }
+
+    /// Return the raw ACPI polarity and trigger-mode flags.
+    pub const fn flags(self) -> u16 {
+        self.flags
+    }
+}
+
+/// Architecture-owned APIC routing configuration derived by `main.rs`.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ApicRoutingConfiguration {
+    local_apic: LocalApicConfiguration,
+    ioapic: IoApicConfiguration,
+    legacy_irq_routes: [LegacyIrqRoute; LEGACY_IRQ_ROUTE_CAPACITY],
+    legacy_irq_route_count: usize,
+    truncated: bool,
+}
+
+impl ApicRoutingConfiguration {
+    const EMPTY: Self = Self::new(LocalApicConfiguration::EMPTY, IoApicConfiguration::EMPTY);
+
+    /// Create an APIC routing configuration with no legacy IRQ overrides.
+    pub const fn new(local_apic: LocalApicConfiguration, ioapic: IoApicConfiguration) -> Self {
+        Self {
+            local_apic,
+            ioapic,
+            legacy_irq_routes: [LegacyIrqRoute::EMPTY; LEGACY_IRQ_ROUTE_CAPACITY],
+            legacy_irq_route_count: 0,
+            truncated: false,
+        }
+    }
+
+    /// Return the configured Local APIC record.
+    pub const fn local_apic(self) -> LocalApicConfiguration {
+        self.local_apic
+    }
+
+    /// Return the configured IOAPIC record.
+    pub const fn ioapic(self) -> IoApicConfiguration {
+        self.ioapic
+    }
+
+    /// Return the number of retained legacy IRQ override routes.
+    pub const fn legacy_irq_route_count(self) -> usize {
+        self.legacy_irq_route_count
+    }
+
+    /// Return whether legacy IRQ route records exceeded the retained capacity.
+    pub const fn is_truncated(self) -> bool {
+        self.truncated
+    }
+
+    /// Add one legacy IRQ override route.
+    pub fn push_legacy_irq_route(&mut self, route: LegacyIrqRoute) {
+        if self.legacy_irq_route_count < LEGACY_IRQ_ROUTE_CAPACITY {
+            self.legacy_irq_routes[self.legacy_irq_route_count] = route;
+            self.legacy_irq_route_count += 1;
+        } else {
+            self.truncated = true;
+        }
+    }
+
+    /// Return a legacy IRQ override route for one source line.
+    pub fn legacy_irq_route_for_irq(self, legacy_irq: u8) -> Option<LegacyIrqRoute> {
+        let mut index = 0;
+        while index < self.legacy_irq_route_count {
+            let route = self.legacy_irq_routes[index];
+            if route.legacy_irq() == legacy_irq {
+                return Some(route);
+            }
+            index += 1;
+        }
+        None
+    }
+
+    /// Return the global system interrupt for a legacy IRQ source line.
+    pub fn global_system_interrupt_for_legacy_irq(self, legacy_irq: u8) -> u32 {
+        self.legacy_irq_route_for_irq(legacy_irq).map_or(
+            u32::from(legacy_irq),
+            LegacyIrqRoute::global_system_interrupt,
+        )
+    }
+}
+
+/// APIC routing provider status used for boot diagnostics.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ApicRoutingProviderStatus {
+    flags: u8,
+    local_apic: LocalApicConfiguration,
+    ioapic: IoApicConfiguration,
+    legacy_irq_route_count: usize,
+    legacy_irq0_global_system_interrupt: u32,
+    legacy_irq0_flags: u16,
+    legacy_irq1_global_system_interrupt: u32,
+    legacy_irq12_global_system_interrupt: u32,
+}
+
+impl ApicRoutingProviderStatus {
+    const fn unavailable() -> Self {
+        Self {
+            flags: 0,
+            local_apic: LocalApicConfiguration::EMPTY,
+            ioapic: IoApicConfiguration::EMPTY,
+            legacy_irq_route_count: 0,
+            legacy_irq0_global_system_interrupt: 0,
+            legacy_irq0_flags: 0,
+            legacy_irq1_global_system_interrupt: 1,
+            legacy_irq12_global_system_interrupt: 12,
+        }
+    }
+
+    fn from_configuration(configuration: &ApicRoutingConfiguration) -> Self {
+        let legacy_irq0_route = configuration.legacy_irq_route_for_irq(0);
+        let mut flags = APIC_PROVIDER_CONFIGURED_FLAG;
+        if has_ioapic_routing() {
+            flags |= APIC_PROVIDER_ROUTING_ACTIVE_FLAG;
+        }
+        if has_local_apic() {
+            flags |= APIC_PROVIDER_LOCAL_APIC_SUPPORTED_FLAG;
+        }
+        if configuration.is_truncated() {
+            flags |= APIC_PROVIDER_TRUNCATED_FLAG;
+        }
+        Self {
+            flags,
+            local_apic: configuration.local_apic(),
+            ioapic: configuration.ioapic(),
+            legacy_irq_route_count: configuration.legacy_irq_route_count(),
+            legacy_irq0_global_system_interrupt: configuration
+                .global_system_interrupt_for_legacy_irq(0),
+            legacy_irq0_flags: legacy_irq0_route.map_or(0, LegacyIrqRoute::flags),
+            legacy_irq1_global_system_interrupt: configuration
+                .global_system_interrupt_for_legacy_irq(1),
+            legacy_irq12_global_system_interrupt: configuration
+                .global_system_interrupt_for_legacy_irq(12),
+        }
+    }
+
+    /// Return whether APIC routing provider data has been configured.
+    pub const fn is_configured(self) -> bool {
+        self.flags & APIC_PROVIDER_CONFIGURED_FLAG != 0
+    }
+
+    /// Return whether IOAPIC routing is active for hardware interrupts.
+    pub const fn is_routing_active(self) -> bool {
+        self.flags & APIC_PROVIDER_ROUTING_ACTIVE_FLAG != 0
+    }
+
+    /// Return whether this CPU reports Local APIC support.
+    pub const fn has_local_apic_support(self) -> bool {
+        self.flags & APIC_PROVIDER_LOCAL_APIC_SUPPORTED_FLAG != 0
+    }
+
+    /// Return the configured Local APIC record.
+    pub const fn local_apic(self) -> LocalApicConfiguration {
+        self.local_apic
+    }
+
+    /// Return the configured IOAPIC record.
+    pub const fn ioapic(self) -> IoApicConfiguration {
+        self.ioapic
+    }
+
+    /// Return the number of retained legacy IRQ override routes.
+    pub const fn legacy_irq_route_count(self) -> usize {
+        self.legacy_irq_route_count
+    }
+
+    /// Return the resolved global system interrupt for legacy IRQ0.
+    pub const fn legacy_irq0_global_system_interrupt(self) -> u32 {
+        self.legacy_irq0_global_system_interrupt
+    }
+
+    /// Return the raw ACPI flags for legacy IRQ0 when overridden.
+    pub const fn legacy_irq0_flags(self) -> u16 {
+        self.legacy_irq0_flags
+    }
+
+    /// Return the resolved global system interrupt for legacy IRQ1.
+    pub const fn legacy_irq1_global_system_interrupt(self) -> u32 {
+        self.legacy_irq1_global_system_interrupt
+    }
+
+    /// Return the resolved global system interrupt for legacy IRQ12.
+    pub const fn legacy_irq12_global_system_interrupt(self) -> u32 {
+        self.legacy_irq12_global_system_interrupt
+    }
+
+    /// Return whether provider route records exceeded retained capacity.
+    pub const fn is_truncated(self) -> bool {
+        self.flags & APIC_PROVIDER_TRUNCATED_FLAG != 0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct ApicRoutingProviderState {
+    configured: bool,
+    configuration: ApicRoutingConfiguration,
+}
+
+impl ApicRoutingProviderState {
+    const fn new() -> Self {
+        Self {
+            configured: false,
+            configuration: ApicRoutingConfiguration::EMPTY,
+        }
+    }
+}
+
 /// Return the interrupt controller backend preferred by CPU capability.
 pub fn get_preferred_kind() -> InterruptControllerKind {
     if super::has_apic() {
         InterruptControllerKind::LocalApicIoApic
     } else {
         InterruptControllerKind::Legacy8259
+    }
+}
+
+/// Configure the architecture-owned APIC routing provider data.
+pub fn configure_apic_routing_provider(configuration: &ApicRoutingConfiguration) {
+    let mut provider = APIC_ROUTING_PROVIDER.lock();
+    provider.configured = true;
+    provider.configuration = *configuration;
+}
+
+/// Return whether APIC routing provider data has been configured.
+pub fn is_apic_routing_provider_configured() -> bool {
+    APIC_ROUTING_PROVIDER.lock().configured
+}
+
+/// Return the APIC routing provider status for diagnostics.
+pub fn get_apic_routing_provider_status() -> ApicRoutingProviderStatus {
+    let provider = APIC_ROUTING_PROVIDER.lock();
+    if provider.configured {
+        ApicRoutingProviderStatus::from_configuration(&provider.configuration)
+    } else {
+        ApicRoutingProviderStatus::unavailable()
     }
 }
 
@@ -64,8 +415,9 @@ pub fn has_local_apic() -> bool {
 
 /// Return whether IOAPIC routing is available to use.
 ///
-/// `ManaOS` currently detects APIC-capable CPUs but still routes interrupts
-/// through the legacy controllers until ACPI MADT parsing is added.
+/// `ManaOS` currently configures APIC routing provider data but still routes
+/// interrupts through the legacy controllers until IOAPIC redirection entries
+/// and EOI handling are wired.
 pub fn has_ioapic_routing() -> bool {
     false
 }

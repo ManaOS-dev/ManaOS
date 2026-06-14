@@ -138,7 +138,7 @@ items have been removed so the file stays useful for deciding the next task.
 
 - [x] Parse ACPI RSDP and XSDT/RSDT.
 - [x] Parse ACPI MADT.
-- [ ] Enable IOAPIC routing; MADT-derived topology diagnostics now expose the first IOAPIC and legacy IRQ GSI mapping.
+- [ ] Enable IOAPIC routing; APIC routing provider data is now configured from MADT topology, but IOAPIC redirection programming is still pending.
 - [ ] Replace legacy PIC routing after IOAPIC is stable.
 - [ ] Calibrate and use the Local APIC timer.
 - [ ] Replace PIT scheduling ticks after Local APIC timer validation.

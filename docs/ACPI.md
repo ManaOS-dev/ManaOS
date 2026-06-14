@@ -30,13 +30,18 @@ The current foundation validates:
   source override, Local APIC NMI, and Processor Local x2APIC entries.
 - Legacy IRQ to global system interrupt resolution derived from MADT interrupt
   source override entries.
+- Architecture-owned APIC routing provider configuration translated by
+  `main.rs` from kernel-owned ACPI topology records.
 
-The boot smoke logs the validated root table, MADT diagnostics, and retained
-interrupt topology before any APIC migration work depends on them.
+The boot smoke logs the validated root table, MADT diagnostics, retained
+interrupt topology, and APIC routing provider configuration before any IOAPIC
+redirection programming depends on them.
 
 ## Next Steps
 
-1. Wire IOAPIC and Local APIC providers through `main.rs`.
-2. Enable IOAPIC routing while keeping `arch/` independent from `kernel/`.
+1. Program IOAPIC redirection entries from the architecture-owned provider
+   configuration.
+2. Switch hardware interrupt EOI handling from legacy PIC to APIC when routing
+   is active.
 3. Replace legacy PIC routing after IOAPIC validation.
 4. Calibrate and move scheduling ticks to the Local APIC timer.

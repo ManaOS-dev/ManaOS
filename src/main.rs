@@ -521,6 +521,72 @@ fn verify_acpi_root_table(root_pointer: Option<kernel::acpi::RootPointer>) {
         x2apic.is_some_and(kernel::acpi::MadtX2Apic::is_enabled),
         x2apic.is_some_and(kernel::acpi::MadtX2Apic::is_online_capable)
     );
+    configure_apic_routing_provider(&madt, &topology, local_apic, ioapic);
+}
+
+fn configure_apic_routing_provider(
+    madt: &kernel::acpi::MadtDiagnostics,
+    topology: &kernel::acpi::MadtInterruptTopology,
+    local_apic: kernel::acpi::MadtLocalApic,
+    ioapic: kernel::acpi::MadtIoApic,
+) {
+    let local_apic_configuration = arch::x86_64::interrupt_controller::LocalApicConfiguration::new(
+        madt.local_apic_address(),
+        u32::from(local_apic.apic_id()),
+        local_apic.is_enabled(),
+        local_apic.is_online_capable(),
+    );
+    let ioapic_configuration = arch::x86_64::interrupt_controller::IoApicConfiguration::new(
+        ioapic.id(),
+        ioapic.physical_address(),
+        ioapic.global_system_interrupt_base(),
+    );
+    let mut routing_configuration =
+        arch::x86_64::interrupt_controller::ApicRoutingConfiguration::new(
+            local_apic_configuration,
+            ioapic_configuration,
+        );
+
+    let mut source_override_index = 0;
+    while source_override_index < topology.retained_interrupt_source_override_count() {
+        if let Some(source_override) = topology.interrupt_source_override(source_override_index) {
+            if source_override.bus() == 0 {
+                routing_configuration.push_legacy_irq_route(
+                    arch::x86_64::interrupt_controller::LegacyIrqRoute::new(
+                        source_override.source_irq(),
+                        source_override.global_system_interrupt(),
+                        source_override.flags(),
+                    ),
+                );
+            }
+        }
+        source_override_index += 1;
+    }
+
+    arch::x86_64::interrupt_controller::configure_apic_routing_provider(&routing_configuration);
+    let status = arch::x86_64::interrupt_controller::get_apic_routing_provider_status();
+    let configured_local_apic = status.local_apic();
+    let configured_ioapic = status.ioapic();
+    crate::log_info!(
+        "arch",
+        "APIC routing provider configured: configured={} routing_active={} local_apic_supported={} local_apic_address={:#x} local_apic_id={} local_apic_enabled={} local_apic_online_capable={} ioapic_id={} ioapic_address={:#x} ioapic_gsi_base={} legacy_irq_routes={} legacy_irq0_gsi={} legacy_irq0_flags={:#x} legacy_irq1_gsi={} legacy_irq12_gsi={} route_truncated={}",
+        status.is_configured(),
+        status.is_routing_active(),
+        status.has_local_apic_support(),
+        configured_local_apic.physical_address(),
+        configured_local_apic.apic_id(),
+        configured_local_apic.is_enabled(),
+        configured_local_apic.is_online_capable(),
+        configured_ioapic.id(),
+        configured_ioapic.physical_address(),
+        configured_ioapic.global_system_interrupt_base(),
+        status.legacy_irq_route_count(),
+        status.legacy_irq0_global_system_interrupt(),
+        status.legacy_irq0_flags(),
+        status.legacy_irq1_global_system_interrupt(),
+        status.legacy_irq12_global_system_interrupt(),
+        status.is_truncated()
+    );
 }
 
 fn verify_mounted_disk_file(path: &str) {

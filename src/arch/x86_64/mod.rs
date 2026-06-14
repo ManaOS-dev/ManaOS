@@ -48,9 +48,10 @@ pub fn init(system_call_handler: u64) {
     init_syscall(system_call_handler);
     crate::log_info!(
         "arch",
-        "Preferred interrupt controller: {:?}, IOAPIC routing: {}",
+        "Preferred interrupt controller: {:?}, IOAPIC routing: {} apic_provider_configured={}",
         interrupt_controller::get_preferred_kind(),
-        interrupt_controller::has_ioapic_routing()
+        interrupt_controller::has_ioapic_routing(),
+        interrupt_controller::is_apic_routing_provider_configured()
     );
     // SAFETY: The interrupt controllers are initialized while interrupts are
     // disabled during early architecture setup.
