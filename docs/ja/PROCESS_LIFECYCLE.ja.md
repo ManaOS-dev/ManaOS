@@ -88,6 +88,11 @@ behavior change は明示的に変わります。
 - Reclaimed child resources: current smoke lifecycle が child を再開しなくなった後で、scheduler-owned
   cleanup path が finished child の user address space と kernel stack を解放済みです。
 
+scheduler diagnostics は、exit status がまだ waitable な finished child を
+`zombie_user_tasks` として、記録済み parent が collection 済みの child exit record を
+`reaped_user_tasks` として公開します。既存の waitable/collected exit status counter は、
+既存 smoke log との互換性のために残します。
+
 将来の general process model では、次の invariant を維持します。
 
 - child は、parent exit 後の reparenting policy が文書化されるまでは、記録済み parent に対してのみ

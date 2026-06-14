@@ -97,6 +97,11 @@ The current lifecycle states are:
   finished child's user address space and kernel stack after the current smoke
   lifecycle no longer needs to resume the child.
 
+Scheduler diagnostics expose `zombie_user_tasks` for finished children whose
+exit status is still waitable and `reaped_user_tasks` for child exit records
+already collected by their recorded parent. The older waitable/collected exit
+status counters remain available for compatibility with existing smoke logs.
+
 The future general process model must keep these invariants:
 
 - A child is waitable only to its recorded parent, except for a documented

@@ -22,7 +22,7 @@ inheritance smoke、second program smoke、close-on-exec metadata と successful
 完了済みです。`waitpid` は syscall contract、shared number/constants、no-std userland wrapper、
 selector validation、no-child `ECHILD` path、non-child negative smoke、parent-child lifecycle state
 documentation、scheduler-owned child exit record model、double-reap prevention、wait lifecycle serial
-assertions が完了済みです。正本は英語版の
+assertions、zombie/reaped diagnostics が完了済みです。正本は英語版の
 `TODO_COMPLETED.md` と [`PROCESS_LIFECYCLE.md`](../PROCESS_LIFECYCLE.md) です。
 
 ### Immediate Priorities

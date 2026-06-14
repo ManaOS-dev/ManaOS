@@ -48,10 +48,10 @@ bounded staging、filesystem path validation、cleanup invariant、successful im
 reclaim、no-return self-`execve` smoke、open descriptor inheritance smoke、second program smoke は
 [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。`waitpid` は syscall ABI
 contract、shared number/constants、no-std wrapper、selector validation、no-child `ECHILD`
-path、parent-child lifecycle state documentation、scheduler-owned child exit record model まで
-完了済みです。`execve` は close-on-exec metadata / close behavior まで完了済みなので、残りは
-current directory と replacement-state diagnostics です。次は user-visible `waitpid` behavior と
-reaping state を小さい branch に分けて進めます。
+path、parent-child lifecycle state documentation、scheduler-owned child exit record model、
+zombie/reaped diagnostics まで完了済みです。`execve` は close-on-exec metadata / close behavior
+まで完了済みなので、残りは current directory と replacement-state diagnostics です。次は
+user-visible `waitpid` behavior と reaping state を小さい branch に分けて進めます。
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

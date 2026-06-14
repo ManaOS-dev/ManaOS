@@ -49,6 +49,16 @@ fn verify_scheduler_task_counts(
         "finished user task exit statuses must be marked collected"
     );
     assert_eq!(
+        diagnostics.zombie_user_tasks(),
+        0,
+        "bootstrap parent must leave no zombie user children after wait collection"
+    );
+    assert_eq!(
+        diagnostics.reaped_user_tasks(),
+        expected_user_tasks,
+        "bootstrap parent must reap every user smoke child"
+    );
+    assert_eq!(
         states.finished(),
         expected_user_tasks,
         "all user smoke tasks must be finished"
@@ -221,6 +231,14 @@ fn log_scheduler_task_diagnostics(
             LogField::new(
                 "collected_user_exit_statuses",
                 format_args!("{}", diagnostics.collected_user_exit_statuses()),
+            ),
+            LogField::new(
+                "zombie_user_tasks",
+                format_args!("{}", diagnostics.zombie_user_tasks()),
+            ),
+            LogField::new(
+                "reaped_user_tasks",
+                format_args!("{}", diagnostics.reaped_user_tasks()),
             ),
             LogField::new(
                 "preemption_state",

@@ -22,6 +22,8 @@ impl Scheduler {
         let mut retained_user_exit_statuses = 0_u64;
         let mut waitable_user_exit_statuses = 0_u64;
         let mut collected_user_exit_statuses = 0_u64;
+        let mut zombie_user_tasks = 0_u64;
+        let mut reaped_user_tasks = 0_u64;
 
         for task in &self.tasks {
             match task.state {
@@ -42,10 +44,12 @@ impl Scheduler {
                     }
                     if task.metadata.is_waitable() {
                         waitable_user_exit_statuses = waitable_user_exit_statuses.saturating_add(1);
+                        zombie_user_tasks = zombie_user_tasks.saturating_add(1);
                     }
                     if task.metadata.wait_collected() {
                         collected_user_exit_statuses =
                             collected_user_exit_statuses.saturating_add(1);
+                        reaped_user_tasks = reaped_user_tasks.saturating_add(1);
                     }
                 }
             }
@@ -78,6 +82,8 @@ impl Scheduler {
             retained_user_exit_statuses,
             waitable_user_exit_statuses,
             collected_user_exit_statuses,
+            zombie_user_tasks,
+            reaped_user_tasks,
             preemption_state: current_preemption_state(),
             user_return_preemption_window_closes: USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT
                 .load(Ordering::Acquire),

@@ -524,6 +524,8 @@ pub struct SchedulerDiagnostics {
     pub(super) retained_user_exit_statuses: u64,
     pub(super) waitable_user_exit_statuses: u64,
     pub(super) collected_user_exit_statuses: u64,
+    pub(super) zombie_user_tasks: u64,
+    pub(super) reaped_user_tasks: u64,
     pub(super) preemption_state: PreemptionStateDiagnostics,
     pub(super) user_return_preemption_window_closes: u64,
     pub(super) user_return_stack_sets: u64,
@@ -631,6 +633,16 @@ impl SchedulerDiagnostics {
     /// Return the number of retained user exits already collected by a parent wait.
     pub const fn collected_user_exit_statuses(self) -> u64 {
         self.collected_user_exit_statuses
+    }
+
+    /// Return the number of finished user child tasks waiting for parent reap.
+    pub const fn zombie_user_tasks(self) -> u64 {
+        self.zombie_user_tasks
+    }
+
+    /// Return the number of user child tasks already reaped by their parent.
+    pub const fn reaped_user_tasks(self) -> u64 {
+        self.reaped_user_tasks
     }
 
     /// Return whether timer-driven task switching is currently enabled.

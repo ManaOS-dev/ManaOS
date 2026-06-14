@@ -71,10 +71,12 @@ pub(super) fn run(
         diagnostics.user_return_stack_takes()
     ));
     output.push(format!(
-        "process_lifecycle: retained_user_exit_statuses={} waitable_user_exit_statuses={} collected_user_exit_statuses={}",
+        "process_lifecycle: retained_user_exit_statuses={} waitable_user_exit_statuses={} collected_user_exit_statuses={} zombie_user_tasks={} reaped_user_tasks={}",
         diagnostics.retained_user_exit_statuses(),
         diagnostics.waitable_user_exit_statuses(),
-        diagnostics.collected_user_exit_statuses()
+        diagnostics.collected_user_exit_statuses(),
+        diagnostics.zombie_user_tasks(),
+        diagnostics.reaped_user_tasks()
     ));
     output.push(format!(
         "user_vm_layout: program_base={:#x} heap_end={:#x} mmap_start={:#x} mmap_end={:#x} stack_start={:#x} stack_slot_bytes={}",
