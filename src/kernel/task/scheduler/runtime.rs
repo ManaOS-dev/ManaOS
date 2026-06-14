@@ -167,6 +167,35 @@ impl Scheduler {
         None
     }
 
+    pub(in crate::kernel::task) fn current_user_task_has_child(
+        &self,
+        child_task_id: Option<u64>,
+    ) -> Option<bool> {
+        let parent_task_id = self.tasks[self.current_index].get_id();
+        if !matches!(&self.tasks[self.current_index].kind, TaskKind::User(_)) {
+            return None;
+        }
+
+        Some(self.tasks.iter().any(|task| {
+            if task
+                .metadata
+                .get_parent_identifier()
+                .map(TaskIdentifier::as_u64)
+                != Some(parent_task_id)
+            {
+                return false;
+            }
+            if !matches!(&task.kind, TaskKind::User(_)) {
+                return false;
+            }
+
+            match child_task_id {
+                Some(child_task_id) => task.get_id() == child_task_id,
+                None => true,
+            }
+        }))
+    }
+
     pub(in crate::kernel::task) fn prepare_current_user_sleep(
         &mut self,
         wake_tick: u64,

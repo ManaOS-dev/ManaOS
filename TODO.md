@@ -18,8 +18,6 @@ reviewable unit before implementing it.
 
 - [ ] Add scheduler-owned child exit records keyed by parent process ID.
 - [ ] Preserve exit status until the parent reaps the child.
-- [ ] Return `ECHILD` when the caller has no matching child.
-- [ ] Return `EINTR` only after an interrupt policy exists, or document that it is unsupported.
 - [ ] Support blocking wait for any child.
 - [ ] Support nonblocking wait with a minimal `WNOHANG` equivalent.
 - [ ] Prevent double-reaping of the same child exit record.
@@ -30,7 +28,6 @@ reviewable unit before implementing it.
 - [ ] Add `tasks` output for waiting, zombie, and reaped states.
 - [ ] Add a userland smoke program that spawns a child and waits for exit.
 - [ ] Add a userland smoke program that verifies a nonzero child exit status.
-- [ ] Add a negative smoke case for waiting on a non-child PID.
 - [ ] Document parent-child lifecycle state transitions.
 - [ ] Add serial assertions for the wait lifecycle smoke path.
 

@@ -143,6 +143,14 @@ pub fn collect_waitable_child_exit(parent_task_id: u64) -> Option<UserTaskExit> 
         .and_then(|scheduler| scheduler.collect_waitable_child_exit(parent_task_id))
 }
 
+/// Return whether the current user task owns a matching child task.
+pub fn current_user_task_has_child(child_task_id: Option<u64>) -> Option<bool> {
+    let scheduler = SCHEDULER.lock();
+    scheduler
+        .as_ref()
+        .and_then(|scheduler| scheduler.current_user_task_has_child(child_task_id))
+}
+
 /// Process a `brk` request for the currently running user task.
 pub fn process_current_user_break(
     frame_allocator: &mut PhysicalFrameAllocator,

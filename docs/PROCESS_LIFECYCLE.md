@@ -32,9 +32,9 @@ General user-created process lifecycle is not complete yet. Current-directory
 ownership, user-visible child creation, and the scheduler-backed `waitpid`
 wait/reap state machine are still future work. Descriptor close-on-exec
 metadata and successful-`execve` close behavior exist for the current global
-descriptor table. The `waitpid` syscall number, option constants, and no-std
-userland wrapper are reserved now so later child-exit work has a stable ABI
-target.
+descriptor table. The `waitpid` syscall number, option constants, no-std
+userland wrapper, selector validation, and no-child `ECHILD` path are in place
+now so later child-exit work has a stable ABI target.
 
 ## `waitpid` Syscall Contract
 
@@ -54,20 +54,23 @@ The syscall ABI slice uses the normal ManaOS syscall register convention:
   when no matching child has exited. Any other option bit should return
   `-EINVAL`.
 
-Current kernel dispatch returns `-ENOSYS` for `waitpid` until scheduler-owned
-child exit records are implemented. Storage smoke covers that unsupported
-result through the no-std userland wrapper so later behavior changes are
-explicit.
+Current kernel dispatch accepts `WAIT_ANY` and positive child process
+identifiers, rejects unsupported option bits and process-group selectors with
+`-EINVAL`, and returns `-ECHILD` when the current user task has no matching
+child. If a matching child exists, the syscall still returns `-ENOSYS` until
+blocking, nonblocking, and reap behavior is wired through the scheduler-owned
+exit records. The syscall does not return `-EINTR` because ManaOS has no
+documented user interrupt policy yet. Storage smoke covers the no-child and
+explicit non-child selector paths through the no-std userland wrapper so later
+behavior changes are explicit.
 
-The future scheduler-backed contract is:
+The remaining scheduler-backed contract is:
 
 - Return the reaped child process identifier on success.
 - Store normal process exit status as `(exit_code & 0xff) << 8` when the status
   pointer is non-null.
 - Return `0` for `WNOHANG` when the caller has a matching child but no matching
   exited child is ready to reap.
-- Return `-ECHILD` when the caller has no matching child process.
-- Do not return `-EINTR` until ManaOS has a documented user interrupt policy.
 - Preserve each child exit status until exactly one successful reap consumes it.
 - Reclaim address-space and kernel-stack resources only after the exit record is
   safe according to the scheduler-owned lifecycle policy.
@@ -235,6 +238,8 @@ Current runtime diagnostics cover the first successful replacement path:
   `execve image published` with old-image reclaim counts.
 - Scheduler smoke verifies that `execve` resets heap and private mapping
   bookkeeping before the post-exec image exits.
+- Storage smoke verifies that `waitpid` returns `-ECHILD` when the current user
+  task has no child and when a positive process identifier is not its child.
 - The `tasks` console command shows each user task's current image generation,
   retained image path, and last successful old-image reclaim counts.
 

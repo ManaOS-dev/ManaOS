@@ -59,6 +59,7 @@ pub use contract::{
 const ERROR_NOT_FOUND: u64 = linux_error(2);
 const ERROR_ARGUMENT_LIST_TOO_LONG: u64 = linux_error(7);
 const ERROR_BAD_FILE_DESCRIPTOR: u64 = linux_error(9);
+const ERROR_NO_CHILD: u64 = linux_error(10);
 const ERROR_OUT_OF_MEMORY: u64 = linux_error(12);
 const ERROR_BAD_ADDRESS: u64 = linux_error(14);
 const ERROR_FILE_EXISTS: u64 = linux_error(17);
@@ -68,6 +69,7 @@ const ERROR_INVALID_ARGUMENT: u64 = linux_error(22);
 const ERROR_TOO_MANY_OPEN_FILES: u64 = linux_error(24);
 const ERROR_NOT_IMPLEMENTED: u64 = linux_error(38);
 const ERROR_NOT_SUPPORTED: u64 = linux_error(95);
+const WAIT_ANY_PROCESS_IDENTIFIER: i64 = contract::WAIT_ANY as i64;
 const USER_FILE_STAT_BYTES: usize = core::mem::size_of::<contract::UserFileStat>();
 const USER_DIRECTORY_ENTRY_BYTES: usize = core::mem::size_of::<contract::UserDirectoryEntry>();
 const USER_TIMESPEC_BYTES: usize = core::mem::size_of::<contract::UserTimespec>();
@@ -225,7 +227,48 @@ fn dispatch_syscall(syscall_number: u64, arguments: [u64; 6]) -> u64 {
     }
 }
 
-fn sys_waitpid(_process_identifier: u64, _status_pointer: u64, _options: u64) -> u64 {
+#[derive(Clone, Copy)]
+enum WaitProcessSelector {
+    AnyChild,
+    ChildIdentifier(u64),
+}
+
+impl WaitProcessSelector {
+    fn from_syscall_argument(process_identifier: u64) -> Option<Self> {
+        match i64::from_ne_bytes(process_identifier.to_ne_bytes()) {
+            WAIT_ANY_PROCESS_IDENTIFIER => Some(Self::AnyChild),
+            process_identifier if process_identifier > 0 => u64::try_from(process_identifier)
+                .ok()
+                .map(Self::ChildIdentifier),
+            _ => None,
+        }
+    }
+
+    const fn child_task_id(self) -> Option<u64> {
+        match self {
+            Self::AnyChild => None,
+            Self::ChildIdentifier(child_task_id) => Some(child_task_id),
+        }
+    }
+}
+
+fn sys_waitpid(process_identifier: u64, _status_pointer: u64, options: u64) -> u64 {
+    if options & !contract::WNOHANG != 0 {
+        return ERROR_INVALID_ARGUMENT;
+    }
+
+    let Some(selector) = WaitProcessSelector::from_syscall_argument(process_identifier) else {
+        return ERROR_INVALID_ARGUMENT;
+    };
+    let Some(has_matching_child) =
+        crate::kernel::task::current_user_task_has_child(selector.child_task_id())
+    else {
+        return ERROR_NOT_IMPLEMENTED;
+    };
+    if !has_matching_child {
+        return ERROR_NO_CHILD;
+    }
+
     ERROR_NOT_IMPLEMENTED
 }
 

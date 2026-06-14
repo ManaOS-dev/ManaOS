@@ -601,12 +601,12 @@ mod user_memory;
 pub(super) use facade::install_user_task_kernel_stack;
 pub use facade::{
     activate_user_task, block_current_user_after_syscall, close_user_return_preemption_window,
-    collect_waitable_child_exit, finish_current_task, get_current_parent_task_id,
-    get_current_task_id, get_current_user_address_space, get_kernel_stack_guard_fault,
-    get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
-    get_scheduler_task_snapshots, initialize, prepare_current_user_sleep,
-    process_current_user_break, process_current_user_mapping, process_current_user_unmapping,
-    process_timer_tick, record_current_user_execve_reclaim,
+    collect_waitable_child_exit, current_user_task_has_child, finish_current_task,
+    get_current_parent_task_id, get_current_task_id, get_current_user_address_space,
+    get_kernel_stack_guard_fault, get_kernel_stack_guard_fault_diagnostic_sample,
+    get_scheduler_diagnostics, get_scheduler_task_snapshots, initialize,
+    prepare_current_user_sleep, process_current_user_break, process_current_user_mapping,
+    process_current_user_unmapping, process_timer_tick, record_current_user_execve_reclaim,
     record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
     replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
     run_user_task_once, set_preemption_enabled, spawn, spawn_user_task,

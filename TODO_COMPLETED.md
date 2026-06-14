@@ -44,6 +44,9 @@ active roadmap can list only unfinished work.
 - [x] Define the `waitpid` syscall contract and supported option subset.
 - [x] Add the shared syscall number and ABI constants for `waitpid`.
 - [x] Add a no-std userland wrapper for `waitpid`.
+- [x] Return `ECHILD` when the caller has no matching child.
+- [x] Return `EINTR` only after an interrupt policy exists, or document that it is unsupported.
+- [x] Add a negative smoke case for waiting on a non-child PID.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

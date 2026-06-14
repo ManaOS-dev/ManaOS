@@ -145,7 +145,7 @@ $expectedPatterns = @(
     "close-on-exec descriptors closed: count=[1-9][0-9]*",
     "execve image published -> task=.* path=/disk/bin/file_demo .*argc=1 old_user_pages=9 old_page_table_pages=7",
     "user execve success ok",
-    "user waitpid unsupported ok",
+    "user waitpid no child ok",
     "APIC EOI diagnostics verified: routing_active=true apic_eoi_count=[1-9][0-9]* legacy_eoi_count=0",
     "Interrupt vector diagnostics verified: spurious_vector=255 spurious_count=0 unexpected_external_count=0",
     "Local APIC timer calibration verified: configured=true armed=true masked=true decremented=true expired=false address=0x[0-9a-f]+ vector=32 divide=16 start_ticks=[0-9]+ current_ticks=[1-9][0-9]* elapsed_ticks=[1-9][0-9]* initial_count=[1-9][0-9]* current_count=[0-9]+ elapsed_counts=[1-9][0-9]* counts_per_tick=[1-9][0-9]* lvt_timer=0x[0-9a-f]+ divide_config=0x3",
