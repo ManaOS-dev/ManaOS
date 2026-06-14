@@ -14,10 +14,19 @@ impl Log for UefiLogger {
     fn log(&self, record: &Record) {
         if BOOT_LOGGING_ENABLED.load(Ordering::Acquire) {
             uefi::system::with_stdout(|stdout| {
-                let _ = writeln!(stdout, "[{:5}] {}", record.level(), record.args());
+                let _ = writeln!(
+                    stdout,
+                    "+0000.000ms  uefi.{:<7} {}",
+                    level_label(record.level()),
+                    record.args()
+                );
             });
         } else {
-            crate::serial_println!("[{:5}] {}", record.level(), record.args());
+            crate::serial_println!(
+                "+0000.000ms  uefi.{:<7} {}",
+                level_label(record.level()),
+                record.args()
+            );
         }
     }
 
@@ -27,6 +36,16 @@ impl Log for UefiLogger {
 static LOGGER: UefiLogger = UefiLogger;
 
 static BOOT_LOGGING_ENABLED: AtomicBool = AtomicBool::new(false);
+
+fn level_label(level: log::Level) -> &'static str {
+    match level {
+        log::Level::Error => "error",
+        log::Level::Warn => "warn",
+        log::Level::Info => "info",
+        log::Level::Debug => "debug",
+        log::Level::Trace => "trace",
+    }
+}
 
 /// Initialize the logger. Call at the very beginning of main.
 pub fn init() {

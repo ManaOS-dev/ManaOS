@@ -105,6 +105,7 @@ pub fn calibrate_tsc() {
     };
 
     TSC_FREQUENCY.store(frequency, Ordering::Relaxed);
+    crate::kernel::diagnostic::log::upgrade_clock_to_tsc(frequency);
 
     crate::kernel::task::set_preemption_enabled(true);
 
