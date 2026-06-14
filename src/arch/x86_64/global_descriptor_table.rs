@@ -13,7 +13,33 @@ pub const USER_DATA_SELECTOR: u16 = 0x1b;
 /// Ring 3 code segment selector.
 pub const USER_CODE_SELECTOR: u16 = 0x23;
 
+const DEFAULT_STACK_SIZE: usize = 4096 * 5;
+
 static TSS: LazyLock<MutableTaskStateSegment> = LazyLock::new(MutableTaskStateSegment::new);
+static DEFAULT_PRIVILEGE_STACK: BootStack = BootStack::new();
+static DEFAULT_DOUBLE_FAULT_STACK: BootStack = BootStack::new();
+
+struct BootStack {
+    bytes: UnsafeCell<[u8; DEFAULT_STACK_SIZE]>,
+}
+
+// SAFETY: ManaOS currently runs on one CPU during GDT/TSS setup, and each
+// BootStack has a single architecture-owned stack role.
+unsafe impl Sync for BootStack {}
+
+impl BootStack {
+    #[allow(clippy::large_stack_arrays)]
+    const fn new() -> Self {
+        Self {
+            bytes: UnsafeCell::new([0; DEFAULT_STACK_SIZE]),
+        }
+    }
+
+    fn top(&'static self) -> VirtAddr {
+        let stack_start = VirtAddr::from_ptr(self.bytes.get().cast_const().cast::<u8>());
+        stack_start + DEFAULT_STACK_SIZE as u64
+    }
+}
 
 struct MutableTaskStateSegment {
     segment: UnsafeCell<TaskStateSegment>,
@@ -52,19 +78,11 @@ impl MutableTaskStateSegment {
 }
 
 fn default_privilege_stack_top() -> VirtAddr {
-    const STACK_SIZE: usize = 4096 * 5;
-    static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
-
-    let stack_start = VirtAddr::from_ptr(&raw const STACK);
-    stack_start + STACK_SIZE as u64
+    DEFAULT_PRIVILEGE_STACK.top()
 }
 
 fn default_double_fault_stack_top() -> VirtAddr {
-    const STACK_SIZE: usize = 4096 * 5;
-    static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
-
-    let stack_start = VirtAddr::from_ptr(&raw const STACK);
-    stack_start + STACK_SIZE as u64
+    DEFAULT_DOUBLE_FAULT_STACK.top()
 }
 
 struct Selectors {

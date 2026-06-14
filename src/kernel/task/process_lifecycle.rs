@@ -59,14 +59,14 @@ fn run_user_task_until_kernel_return(
     task_id: u64,
 ) -> Option<()> {
     let user_task = {
-        let mut scheduler = super::SCHEDULER.lock();
+        let mut scheduler = super::scheduler::SCHEDULER.lock();
         scheduler
             .as_mut()
             .expect("scheduler must be initialized before running user tasks")
             .prepare_one_shot_user_task(task_id)?
     };
     crate::kernel::memory::address_space::switch_to_user_address_space(user_task.address_space);
-    super::install_user_task_kernel_stack(user_task.kernel_stack_top);
+    super::scheduler::install_user_task_kernel_stack(user_task.kernel_stack_top);
     crate::log_info!(
         "task",
         "Installed user task kernel stack: task={} address_space={:#x} top={:#x}",
@@ -89,14 +89,14 @@ fn run_user_task_until_kernel_return(
     crate::kernel::memory::runtime_allocator::register_user_runtime_frame_allocator(
         frame_allocator,
     );
-    super::set_preemption_enabled(true);
+    super::scheduler::set_preemption_enabled(true);
     // SAFETY: The trap frame was derived from mapped user code and stack
     // addresses, and this restore path returns only through user stop syscalls
     // that consume the registered return stack.
     unsafe {
         super::architecture::enter_user_mode_once(user_task.trap_frame.as_pointer());
     }
-    super::set_preemption_enabled(false);
+    super::scheduler::set_preemption_enabled(false);
     crate::kernel::memory::runtime_allocator::clear_user_runtime_frame_allocator();
     crate::kernel::memory::address_space::switch_to_kernel_address_space();
     assert_user_return_window_consumed();
@@ -109,7 +109,7 @@ fn reclaim_one_finished_user_task(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
 ) -> Option<UserTaskExit> {
     let (exit, resource_reclaim) = {
-        let mut scheduler = super::SCHEDULER.lock();
+        let mut scheduler = super::scheduler::SCHEDULER.lock();
         let scheduler = scheduler
             .as_mut()
             .expect("scheduler must be initialized before reclaiming finished user task resources");
@@ -153,7 +153,7 @@ fn reclaim_one_finished_user_task(
 fn wait_for_next_active_user_task() -> Option<u64> {
     loop {
         {
-            let scheduler = super::SCHEDULER.lock();
+            let scheduler = super::scheduler::SCHEDULER.lock();
             let scheduler = scheduler
                 .as_ref()
                 .expect("scheduler must be initialized before waiting for active user tasks");
@@ -171,7 +171,7 @@ fn wait_for_next_active_user_task() -> Option<u64> {
 
 /// Mark the currently running user task as finished.
 pub fn finish_current_task(exit_code: u64) -> Option<u64> {
-    let exit = super::SCHEDULER
+    let exit = super::scheduler::SCHEDULER
         .lock()
         .as_mut()
         .and_then(|scheduler| scheduler.finish_current_task(exit_code))?;
