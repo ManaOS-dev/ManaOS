@@ -54,6 +54,7 @@ active roadmap can list only unfinished work.
 - [x] Add serial assertions for the wait lifecycle smoke path.
 - [x] Expose zombie and reaped counts in scheduler diagnostics.
 - [x] Add `tasks` output for waiting, zombie, and reaped states.
+- [x] Reap an already-exited child through scheduler-backed `waitpid`.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

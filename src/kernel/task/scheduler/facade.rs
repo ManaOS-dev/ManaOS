@@ -136,11 +136,14 @@ pub fn finish_current_task(exit_code: u64) -> Option<u64> {
 }
 
 /// Collect one retained child exit status for `parent_task_id`.
-pub fn collect_waitable_child_exit(parent_task_id: u64) -> Option<UserTaskExit> {
+pub fn collect_waitable_child_exit(
+    parent_task_id: u64,
+    child_task_id: Option<u64>,
+) -> Option<UserTaskExit> {
     let mut scheduler = SCHEDULER.lock();
     scheduler
         .as_mut()
-        .and_then(|scheduler| scheduler.collect_waitable_child_exit(parent_task_id))
+        .and_then(|scheduler| scheduler.collect_waitable_child_exit(parent_task_id, child_task_id))
 }
 
 /// Return whether the current user task owns a matching child task.

@@ -423,8 +423,15 @@ impl ChildExitRecord {
         }
     }
 
-    const fn waitable_for_parent(self, parent_task_id: u64) -> bool {
-        self.parent_task_id == parent_task_id && !self.collected
+    const fn waitable_for_parent(self, parent_task_id: u64, child_task_id: Option<u64>) -> bool {
+        if self.parent_task_id != parent_task_id || self.collected {
+            return false;
+        }
+
+        match child_task_id {
+            Some(child_task_id) => self.child_task_id == child_task_id,
+            None => true,
+        }
     }
 
     fn mark_collected(&mut self) {

@@ -29,6 +29,12 @@ impl UserTaskExit {
     pub fn exit_code(&self) -> u64 {
         self.exit_code
     }
+
+    /// Return the normal-process wait status word for this exit.
+    pub fn wait_status(&self) -> u32 {
+        u32::try_from((self.exit_code & 0xff) << 8)
+            .expect("normal wait status word must fit in u32")
+    }
 }
 
 /// Run active user-space tasks until one exits through `SYS_EXIT`.

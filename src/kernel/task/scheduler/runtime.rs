@@ -149,11 +149,12 @@ impl Scheduler {
     pub(in crate::kernel::task) fn collect_waitable_child_exit(
         &mut self,
         parent_task_id: u64,
+        child_task_id: Option<u64>,
     ) -> Option<UserTaskExit> {
         let record_index = self
             .child_exit_records
             .iter()
-            .position(|record| record.waitable_for_parent(parent_task_id))?;
+            .position(|record| record.waitable_for_parent(parent_task_id, child_task_id))?;
         let child_task_id = self.child_exit_records[record_index].child_task_id;
         let exit_code = self.child_exit_records[record_index].exit_code;
         let task_index = self

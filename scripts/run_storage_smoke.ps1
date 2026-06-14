@@ -163,6 +163,8 @@ $expectedPatterns = @(
     "User task resources reclaimed: task=.* address_space=true kernel_stack=true",
     "Active user lifecycle drained: exits=2",
     "Waitable child exit collected: parent=0 child=.* code=0",
+    "Selected child wait collection verified: parent=0 child=.* status=0",
+    "Wait status verified: parent=0 child=.* code=0 status=0",
     "Wait lifecycle smoke passed: parent=0 retained_children=2 collected_children=2 double_reap_prevented=true",
     "Bootstrap child wait collection verified: parent=0 children=2",
     "Multi-user preemption smoke passed: tasks=2",

@@ -58,12 +58,16 @@ The syscall ABI slice uses the normal ManaOS syscall register convention:
 Current kernel dispatch accepts `WAIT_ANY` and positive child process
 identifiers, rejects unsupported option bits and process-group selectors with
 `-EINVAL`, and returns `-ECHILD` when the current user task has no matching
-child. If a matching child exists, the syscall still returns `-ENOSYS` until
-blocking, nonblocking, and reap behavior is wired through the scheduler-owned
-exit records. The syscall does not return `-EINTR` because ManaOS has no
-documented user interrupt policy yet. Storage smoke covers the no-child and
-explicit non-child selector paths through the no-std userland wrapper so later
-behavior changes are explicit.
+child. If a matching child already has a waitable exit record, the syscall
+collects that record, returns the child process identifier, and stores the
+normal wait status word when the status pointer is non-null. `WNOHANG` returns
+`0` when a matching child exists but no matching child exit is waitable yet.
+Blocking wait still returns `-ENOSYS` until waiting parents can sleep and wake
+through the scheduler. The syscall does not return `-EINTR` because ManaOS has
+no documented user interrupt policy yet. Storage smoke covers the no-child and
+explicit non-child selector paths through the no-std userland wrapper, plus the
+scheduler-owned selected-child reap path, so later behavior changes are
+explicit.
 
 The remaining scheduler-backed contract is:
 
@@ -287,6 +291,8 @@ Current runtime diagnostics cover the first successful replacement path:
   task has no child and when a positive process identifier is not its child.
 - Storage smoke asserts the scheduler log line that retains a parent-keyed
   child exit record and the later line that collects that record once.
+- Storage smoke asserts selected-child wait collection and zero-exit wait
+  status encoding through the scheduler-owned child exit records.
 - Storage smoke asserts a stable wait lifecycle summary showing retained child
   count, collected child count, and double-reap prevention.
 - The `tasks` console command shows each user task's current image generation,

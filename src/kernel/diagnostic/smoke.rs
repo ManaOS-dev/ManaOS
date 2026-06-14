@@ -231,30 +231,42 @@ pub fn run_user_smoke_demo(
 fn verify_bootstrap_child_exit_collection(user_task_ids: [u64; 2]) {
     let parent_task_id = crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64();
     let mut collected = [false; 2];
-    for _ in 0..user_task_ids.len() {
-        let exit = crate::kernel::task::collect_waitable_child_exit(parent_task_id)
-            .expect("bootstrap parent must have a waitable user child exit");
-        assert_eq!(
-            exit.exit_code(),
-            0,
-            "user smoke child exit status must retain code zero"
-        );
-        let child_index = user_task_ids
-            .iter()
-            .position(|task_id| *task_id == exit.task_id())
-            .expect("waited child must belong to the user smoke task set");
-        assert!(
-            !collected[child_index],
-            "waited child exit status must be collected once"
-        );
-        collected[child_index] = true;
-    }
+    let selected_exit =
+        crate::kernel::task::collect_waitable_child_exit(parent_task_id, Some(user_task_ids[0]))
+            .expect("bootstrap parent must collect the selected user child exit");
+    assert_eq!(
+        selected_exit.task_id(),
+        user_task_ids[0],
+        "selected child wait collection must return the requested child"
+    );
+    verify_user_child_exit(parent_task_id, &mut collected, user_task_ids, selected_exit);
+    assert!(
+        crate::kernel::task::collect_waitable_child_exit(parent_task_id, Some(user_task_ids[0]))
+            .is_none(),
+        "selected child exit status must not be collected twice"
+    );
+    crate::log_info!(
+        "task",
+        "Selected child wait collection verified: parent={} child={} status={}",
+        parent_task_id,
+        selected_exit.task_id(),
+        selected_exit.wait_status()
+    );
+
+    let remaining_exit = crate::kernel::task::collect_waitable_child_exit(parent_task_id, None)
+        .expect("bootstrap parent must have a remaining waitable user child exit");
+    verify_user_child_exit(
+        parent_task_id,
+        &mut collected,
+        user_task_ids,
+        remaining_exit,
+    );
     assert!(
         collected.iter().all(|is_collected| *is_collected),
         "bootstrap wait collection must cover every user smoke child"
     );
     assert!(
-        crate::kernel::task::collect_waitable_child_exit(parent_task_id).is_none(),
+        crate::kernel::task::collect_waitable_child_exit(parent_task_id, None).is_none(),
         "bootstrap parent must not collect the same child exit twice"
     );
     crate::log_info!(
@@ -269,6 +281,41 @@ fn verify_bootstrap_child_exit_collection(user_task_ids: [u64; 2]) {
         "Bootstrap child wait collection verified: parent={} children={}",
         parent_task_id,
         user_task_ids.len()
+    );
+}
+
+fn verify_user_child_exit(
+    parent_task_id: u64,
+    collected: &mut [bool; 2],
+    user_task_ids: [u64; 2],
+    exit: crate::kernel::task::UserTaskExit,
+) {
+    assert_eq!(
+        exit.exit_code(),
+        0,
+        "user smoke child exit status must retain code zero"
+    );
+    assert_eq!(
+        exit.wait_status(),
+        0,
+        "normal zero child exit must encode a zero wait status"
+    );
+    let child_index = user_task_ids
+        .iter()
+        .position(|task_id| *task_id == exit.task_id())
+        .expect("waited child must belong to the user smoke task set");
+    assert!(
+        !collected[child_index],
+        "waited child exit status must be collected once"
+    );
+    collected[child_index] = true;
+    crate::log_info!(
+        "task",
+        "Wait status verified: parent={} child={} code={} status={}",
+        parent_task_id,
+        exit.task_id(),
+        exit.exit_code(),
+        exit.wait_status()
     );
 }
 

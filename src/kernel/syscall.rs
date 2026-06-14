@@ -73,6 +73,7 @@ const WAIT_ANY_PROCESS_IDENTIFIER: i64 = contract::WAIT_ANY as i64;
 const USER_FILE_STAT_BYTES: usize = core::mem::size_of::<contract::UserFileStat>();
 const USER_DIRECTORY_ENTRY_BYTES: usize = core::mem::size_of::<contract::UserDirectoryEntry>();
 const USER_TIMESPEC_BYTES: usize = core::mem::size_of::<contract::UserTimespec>();
+const USER_WAIT_STATUS_BYTES: u64 = core::mem::size_of::<i32>() as u64;
 const USER_POINTER_BYTES_U64: u64 = core::mem::size_of::<u64>() as u64;
 const MAX_USER_STRING_LENGTH: usize = 256;
 const MAX_EXECVE_ARGUMENT_COUNT: usize = 8;
@@ -252,13 +253,16 @@ impl WaitProcessSelector {
     }
 }
 
-fn sys_waitpid(process_identifier: u64, _status_pointer: u64, options: u64) -> u64 {
+fn sys_waitpid(process_identifier: u64, status_pointer: u64, options: u64) -> u64 {
     if options & !contract::WNOHANG != 0 {
         return ERROR_INVALID_ARGUMENT;
     }
 
     let Some(selector) = WaitProcessSelector::from_syscall_argument(process_identifier) else {
         return ERROR_INVALID_ARGUMENT;
+    };
+    let Some(parent_task_id) = crate::kernel::task::get_current_task_id() else {
+        return ERROR_NOT_IMPLEMENTED;
     };
     let Some(has_matching_child) =
         crate::kernel::task::current_user_task_has_child(selector.child_task_id())
@@ -267,6 +271,28 @@ fn sys_waitpid(process_identifier: u64, _status_pointer: u64, options: u64) -> u
     };
     if !has_matching_child {
         return ERROR_NO_CHILD;
+    }
+
+    let status_buffer = if status_pointer == 0 {
+        None
+    } else {
+        let Some(buffer) = copy_output_buffer(status_pointer, USER_WAIT_STATUS_BYTES) else {
+            return ERROR_BAD_ADDRESS;
+        };
+        Some(buffer)
+    };
+
+    if let Some(exit) =
+        crate::kernel::task::collect_waitable_child_exit(parent_task_id, selector.child_task_id())
+    {
+        if let Some(buffer) = status_buffer {
+            write_user_u32(buffer, 0, exit.wait_status());
+        }
+        return exit.task_id();
+    }
+
+    if options & contract::WNOHANG != 0 {
+        return 0;
     }
 
     ERROR_NOT_IMPLEMENTED
@@ -995,6 +1021,10 @@ fn write_user_file_stat(buffer: &mut [u8], metadata: crate::kernel::filesystem::
 
 fn write_user_u64(buffer: &mut [u8], offset: usize, value: u64) {
     buffer[offset..offset + core::mem::size_of::<u64>()].copy_from_slice(&value.to_ne_bytes());
+}
+
+fn write_user_u32(buffer: &mut [u8], offset: usize, value: u32) {
+    buffer[offset..offset + core::mem::size_of::<u32>()].copy_from_slice(&value.to_ne_bytes());
 }
 
 fn read_user_u64(buffer: &[u8], offset: usize) -> u64 {

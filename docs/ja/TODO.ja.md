@@ -49,7 +49,8 @@ reclaim、no-return self-`execve` smoke、open descriptor inheritance smoke、se
 [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。`waitpid` は syscall ABI
 contract、shared number/constants、no-std wrapper、selector validation、no-child `ECHILD`
 path、parent-child lifecycle state documentation、scheduler-owned child exit record model、
-zombie/reaped diagnostics、`tasks` command の per-task lifecycle output まで完了済みです。
+zombie/reaped diagnostics、`tasks` command の per-task lifecycle output、already-exited child の
+scheduler-backed `waitpid` reap まで完了済みです。
 `execve` は close-on-exec metadata / close behavior まで完了済みなので、残りは current
 directory と replacement-state diagnostics です。次は user-visible `waitpid` behavior と
 reaping state を小さい branch に分けて進めます。
