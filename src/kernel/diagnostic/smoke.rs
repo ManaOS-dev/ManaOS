@@ -662,7 +662,7 @@ pub fn record_memory_diagnostics_snapshot(
 }
 
 /// Verify the scheduler diagnostics console command.
-pub fn verify_scheduler_console_command() {
+pub fn verify_scheduler_console_command() -> bool {
     match crate::kernel::console::verify_command_smoke_contains(
         "tasks",
         &[
@@ -676,29 +676,41 @@ pub fn verify_scheduler_console_command() {
             "task_mmap_lifecycle:",
         ],
     ) {
-        Some(output_lines) if output_lines >= 15 => crate::log_info!(
-            "console",
-            "Tasks command smoke passed: command=\"tasks\" output_lines={}",
-            output_lines
-        ),
-        _ => crate::log_warn!("console", "Tasks command smoke failed: command=\"tasks\""),
+        Some(output_lines) if output_lines >= 15 => {
+            crate::log_info!(
+                "console",
+                "Tasks command smoke passed: command=\"tasks\" output_lines={}",
+                output_lines
+            );
+            true
+        }
+        _ => {
+            crate::log_warn!("console", "Tasks command smoke failed: command=\"tasks\"");
+            false
+        }
     }
 }
 
 /// Verify the memory diagnostics console command.
-pub fn verify_memory_console_command() {
+pub fn verify_memory_console_command() -> bool {
     match crate::kernel::console::verify_command_smoke("memory") {
-        Some(output_lines) if output_lines >= 3 => crate::log_info!(
-            "console",
-            "Memory command smoke passed: command=\"memory\" output_lines={}",
-            output_lines
-        ),
-        _ => crate::log_warn!("console", "Memory command smoke failed: command=\"memory\""),
+        Some(output_lines) if output_lines >= 3 => {
+            crate::log_info!(
+                "console",
+                "Memory command smoke passed: command=\"memory\" output_lines={}",
+                output_lines
+            );
+            true
+        }
+        _ => {
+            crate::log_warn!("console", "Memory command smoke failed: command=\"memory\"");
+            false
+        }
     }
 }
 
 /// Verify syscall trace console command controls.
-pub fn verify_syscall_trace_console_command() {
+pub fn verify_syscall_trace_console_command() -> bool {
     crate::kernel::syscall::set_trace_enabled(false);
     crate::kernel::syscall::reset_trace();
     let reset_ok = crate::kernel::console::verify_command_smoke_contains(
@@ -736,19 +748,23 @@ pub fn verify_syscall_trace_console_command() {
             "console",
             "Syscall trace controls smoke passed: command=\"syscalls trace\" records=1"
         );
+        true
     } else {
         crate::log_warn!(
             "console",
             "Syscall trace controls smoke failed: command=\"syscalls trace\""
         );
+        false
     }
 }
 
 /// Verify console status strip rendering diagnostics.
-pub fn verify_console_status_strip() {
+pub fn verify_console_status_strip() -> bool {
     if crate::kernel::console::verify_status_strip_smoke() {
         crate::log_info!("console", "Console status strip smoke passed.");
+        true
     } else {
         crate::log_warn!("console", "Console status strip smoke failed.");
+        false
     }
 }

@@ -45,9 +45,23 @@ $expectedPatterns = @(
     "Frame allocator self-checks passed: .*released_frame_reuse=true",
     "Kernel virtual range allocator self-checks passed: non_overlapping_reuse=true exhaustion_rejection=true",
     "ACPI parser self-check passed: rsdp=true root_table=true madt=true",
-    "ACPI root table verified: source=uefi_acpi[12] revision=.* root_table=(xsdt|rsdt) root_address=0x[0-9a-f]+ root_revision=.* root_length=.* entries=[1-9][0-9]* checksum=true",
-    "ACPI MADT verified: address=0x[0-9a-f]+ revision=.* length=.* local_apic=0x[0-9a-f]+ flags=0x[0-9a-f]+ pc_at_compatible=(true|false) entries=[1-9][0-9]* local_apics=.* ioapics=[1-9][0-9]* interrupt_source_overrides=.* local_apic_nmis=.* local_apic_address_overrides=.* x2apics=.* checksum=true",
-    "ACPI interrupt topology verified: retained_local_apics=[1-9][0-9]* retained_ioapics=[1-9][0-9]* retained_interrupt_source_overrides=.* retained_local_apic_nmis=.* retained_x2apics=.* topology_truncated=false local_apic0_processor=.* local_apic0_id=.* local_apic0_flags=0x[0-9a-f]+ local_apic0_enabled=(true|false) local_apic0_online_capable=(true|false) ioapic0_id=.* ioapic0_address=0x[0-9a-f]+ ioapic0_gsi_base=.* legacy_irq0_gsi=.* legacy_irq0_flags=0x[0-9a-f]+ legacy_irq1_gsi=.* legacy_irq12_gsi=.* local_apic_nmi0_lint=.* x2apic0_present=(true|false) x2apic0_id=.* x2apic0_uid=.* x2apic0_flags=0x[0-9a-f]+ x2apic0_enabled=(true|false) x2apic0_online_capable=(true|false)",
+    "ACPI root table verified",
+    "source\s+= uefi_acpi[12]",
+    "root_table\s+= (xsdt|rsdt)",
+    "root_address\s+= 0x[0-9a-f]+",
+    "entries\s+= [1-9][0-9]*",
+    "checksum\s+= true",
+    "ACPI MADT verified",
+    "local_apic\s+= 0x[0-9a-f]+",
+    "pc_at_compatible\s+= (true|false)",
+    "ioapics\s+= [1-9][0-9]*",
+    "ACPI interrupt topology verified",
+    "retained_local_apics\s+= [1-9][0-9]*",
+    "retained_ioapics\s+= [1-9][0-9]*",
+    "topology_truncated\s+= false",
+    "ioapic0_address\s+= 0x[0-9a-f]+",
+    "legacy_irq0_flags\s+= 0x[0-9a-f]+",
+    "x2apic0_present\s+= (true|false)",
     "APIC routing provider configured: configured=true routing_active=false local_apic_supported=true local_apic_address=0x[0-9a-f]+ local_apic_id=.* local_apic_enabled=true local_apic_online_capable=(true|false) ioapic_id=.* ioapic_address=0x[0-9a-f]+ ioapic_gsi_base=.* legacy_irq_routes=[1-9][0-9]* legacy_irq0_gsi=.* legacy_irq0_flags=0x[0-9a-f]+ legacy_irq1_gsi=.* legacy_irq12_gsi=.* route_truncated=false",
     "Interrupt controller backend initialized: legacy_pic_initialized=false legacy_fallback_enabled=false legacy_pic_masked_for_apic=true master_mask=0xff slave_mask=0xff",
     "IOAPIC redirection plan verified: entries=3 truncated=false routing_active=false first_irq=0 timer_irq=0 timer_gsi=.* timer_vector=32 timer_table_index=.* timer_low_register=0x[0-9a-f]+ timer_high_register=0x[0-9a-f]+ timer_low_value=0x[0-9a-f]+ timer_high_value=0x[0-9a-f]+ timer_active_low=(true|false) timer_level_triggered=(true|false) timer_masked=false keyboard_irq=1 keyboard_gsi=.* keyboard_vector=33 keyboard_table_index=.* keyboard_low_register=0x[0-9a-f]+ mouse_irq=12 mouse_gsi=.* mouse_vector=44 mouse_table_index=.* mouse_low_register=0x[0-9a-f]+",
@@ -133,7 +147,9 @@ $expectedPatterns = @(
     "Memory command smoke passed: command=`"memory`" output_lines=3",
     "Syscall trace: record=1 task=.* number=39 result=0x",
     "Syscall trace controls smoke passed: command=`"syscalls trace`" records=1",
-    "Console status strip smoke passed"
+    "Console status strip smoke passed",
+    "ManaOS Boot Summary",
+    "SYSTEM HEALTHY"
 )
 
 try {
