@@ -32,6 +32,8 @@ pub const SYS_EXECVE: usize = contract::SYS_EXECVE as usize;
 pub const SYS_EXIT: usize = contract::SYS_EXIT as usize;
 /// Linux-compatible wait4 syscall number reserved for the `ManaOS` `waitpid` subset.
 pub const SYS_WAITPID: usize = contract::SYS_WAITPID as usize;
+/// Linux-compatible get-current-working-directory syscall number.
+pub const SYS_GETCWD: usize = contract::SYS_GETCWD as usize;
 /// Linux-compatible change-directory syscall number.
 pub const SYS_CHDIR: usize = contract::SYS_CHDIR as usize;
 /// Linux-compatible get-parent-process-identifier syscall number.
@@ -97,6 +99,8 @@ pub const ERROR_NOT_DIRECTORY: isize = contract::ERROR_NOT_DIRECTORY;
 pub const ERROR_IS_DIRECTORY: isize = contract::ERROR_IS_DIRECTORY;
 /// Linux-compatible invalid argument error as a signed syscall result.
 pub const ERROR_INVALID_ARGUMENT: isize = contract::ERROR_INVALID_ARGUMENT;
+/// Linux-compatible range error as a signed syscall result.
+pub const ERROR_RANGE: isize = contract::ERROR_RANGE;
 /// Linux-compatible not implemented error as a signed syscall result.
 pub const ERROR_NOT_IMPLEMENTED: isize = contract::ERROR_NOT_IMPLEMENTED;
 
@@ -150,6 +154,12 @@ pub fn openat(directory_file_descriptor: usize, path: &[u8], flags: usize, mode:
 #[inline(always)]
 pub fn chdir(path: &[u8]) -> isize {
     syscall1(SYS_CHDIR, path.as_ptr() as usize)
+}
+
+/// Copy the current process working directory into `buffer`.
+#[inline(always)]
+pub fn getcwd(buffer: &mut [u8]) -> isize {
+    syscall2(SYS_GETCWD, buffer.as_mut_ptr() as usize, buffer.len())
 }
 
 /// Close an open file descriptor.

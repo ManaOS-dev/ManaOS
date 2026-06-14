@@ -43,13 +43,14 @@ still identifies the program that created the task record.
 General user-created process lifecycle is not complete yet. Current working
 directories are now task metadata, relative paths resolve through the current
 task's directory, and successful `execve` preserves that directory across image
-replacement. User-visible child creation and the scheduler-backed `waitpid`
-wait/reap state machine are still future work. Descriptor close-on-exec metadata
-and successful-`execve` close behavior exist for the current global descriptor
-table. The `waitpid` syscall number, option constants, no-std userland wrapper,
-selector validation, no-child `ECHILD` path, and scheduler-owned child exit
-records keyed by parent task identifier are in place now so later child-exit
-work has a stable ABI target.
+replacement. The `chdir` and `getcwd` syscall wrappers expose that task-owned
+directory to no-std userland code. User-visible child creation and the
+scheduler-backed `waitpid` wait/reap state machine are still future work.
+Descriptor close-on-exec metadata and successful-`execve` close behavior exist
+for the current global descriptor table. The `waitpid` syscall number, option
+constants, no-std userland wrapper, selector validation, no-child `ECHILD` path,
+and scheduler-owned child exit records keyed by parent task identifier are in
+place now so later child-exit work has a stable ABI target.
 
 ## `waitpid` Syscall Contract
 
@@ -294,6 +295,9 @@ Current runtime diagnostics cover the first successful replacement path:
 - Storage smoke changes the user task's current working directory to `/disk`,
   then proves relative self-`execve` and relative post-exec `file_demo`
   replacement resolve through that preserved directory.
+- Storage smoke verifies that `getcwd` reports the task-owned `/disk`
+  directory after `chdir`, including `ERANGE` handling for too-small user
+  buffers.
 - Storage smoke starts user programs through the kernel-internal
   `spawn_user_program` helper so filesystem path loading, ELF mapping, initial
   argv/envp stack construction, and scheduler task creation share one path.

@@ -58,6 +58,7 @@ user process scheduling は、3つの active user process を同時に扱う sto
 per-task の last preemption / last resume diagnostics と、preempted process の exit 後も別の
 active process が継続する storage smoke も完了済みです。
 `execve` は current working directory preservation と close-on-exec behavior まで完了済みなので、
+no-std userland から current working directory を読む `getcwd` wrapper も入っています。
 残りは replacement-state diagnostics です。次は user-visible `waitpid` behavior と
 reaping state を小さい branch に分けて進めます。
 

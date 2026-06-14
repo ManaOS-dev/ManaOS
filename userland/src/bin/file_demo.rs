@@ -14,6 +14,7 @@ extern "C" fn _start() -> ! {
         syscall::exit(4);
     }
     verify_waitpid_no_child();
+    verify_current_working_directory();
 
     let path = b"/disk/hello.txt\0";
     let file_descriptor = syscall::open_with_options(path, syscall::OPEN_READ_ONLY, 0);
@@ -72,4 +73,17 @@ fn verify_waitpid_no_child() {
     }
 
     let _ = syscall::write(STDOUT, WAITPID_MESSAGE);
+}
+
+fn verify_current_working_directory() {
+    let mut directory = [0_u8; 8];
+    if syscall::getcwd(&mut directory[..5]) != syscall::ERROR_RANGE {
+        syscall::exit(11);
+    }
+    if syscall::getcwd(&mut directory) != 6 {
+        syscall::exit(12);
+    }
+    if &directory[..6] != b"/disk\0" {
+        syscall::exit(13);
+    }
 }

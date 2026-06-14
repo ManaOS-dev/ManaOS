@@ -28,6 +28,8 @@ pub const SYS_EXECVE: u64 = 59;
 pub const SYS_EXIT: u64 = 60;
 /// Linux-compatible wait4 syscall number reserved for the `ManaOS` `waitpid` subset.
 pub const SYS_WAITPID: u64 = 61;
+/// Linux-compatible get-current-working-directory syscall number.
+pub const SYS_GETCWD: u64 = 79;
 /// Linux-compatible change-directory syscall number.
 pub const SYS_CHDIR: u64 = 80;
 /// Linux-compatible get-parent-process-identifier syscall number.
@@ -98,6 +100,8 @@ pub const ERROR_NOT_DIRECTORY: isize = -20;
 pub const ERROR_IS_DIRECTORY: isize = -21;
 /// Linux-compatible invalid argument error as a signed syscall result.
 pub const ERROR_INVALID_ARGUMENT: isize = -22;
+/// Linux-compatible range error as a signed syscall result.
+pub const ERROR_RANGE: isize = -34;
 /// Linux-compatible not implemented error as a signed syscall result.
 pub const ERROR_NOT_IMPLEMENTED: isize = -38;
 

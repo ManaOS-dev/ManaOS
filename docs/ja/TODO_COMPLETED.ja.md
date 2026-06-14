@@ -26,7 +26,8 @@ documentation、scheduler-owned child exit record model、double-reap prevention
 assertions、zombie/reaped diagnostics、`tasks` command の per-task lifecycle output、
 already-exited child の scheduler-backed `waitpid` reap、kernel-internal spawn helper、
 spawned process origin diagnostics、2つの concurrently spawned user program smoke、
-spawn 前の argv/envp entry vector 表現、spawn path lookup failure の errno mapping が
+spawn 前の argv/envp entry vector 表現、spawn path lookup failure の errno mapping、
+task-owned current directory を読む no-std `getcwd` wrapper が
 完了済みです。user process scheduling は、3つの active user process を同時に扱う storage smoke まで
 完了済みです。さらに、per-task の last preemption / last resume diagnostics と、preempted
 process の exit 後も別の active process が継続する storage smoke も完了済みです。正本は英語版の
@@ -59,7 +60,7 @@ filesystem-based user program loading、PID/parent-child metadata、file demo sm
 
 syscall surface では shared ABI、`lseek`、`stat`、`getdents64`、`brk`、anonymous
 `mmap`/`munmap`、partial `munmap`、fixed mapping、file-private mapping、replacement
-`MAP_FIXED`、`nanosleep`、syscall tracing controls が完了済みです。
+`MAP_FIXED`、`nanosleep`、`getcwd`、syscall tracing controls が完了済みです。
 
 userland runtime では panic exit、fd wrapper、argument parser、fixed-buffer command
 module、multi-binary build、smoke runner が完了済みです。

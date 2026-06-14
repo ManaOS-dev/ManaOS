@@ -30,6 +30,7 @@
 //! - [`SYS_EXECVE`] - Linux-compatible execute-program syscall number
 //! - [`SYS_EXIT`] - Linux-compatible exit syscall number
 //! - [`SYS_WAITPID`] - Linux-compatible wait4 syscall number reserved for `waitpid`
+//! - [`SYS_GETCWD`] - Linux-compatible get-current-working-directory syscall number
 //! - [`SYS_GETDENTS64`] - Linux-compatible get-directory-entries syscall number
 //! - [`SYS_EXIT_GROUP`] - Linux-compatible process exit syscall number
 //! - [`SYS_GETPID`] - Linux-compatible get-process-identifier syscall number
@@ -52,9 +53,9 @@ mod contract;
 mod memory;
 
 pub use contract::{
-    SYS_BRK, SYS_CHDIR, SYS_CLOSE, SYS_EXECVE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64,
-    SYS_GETPID, SYS_GETPPID, SYS_LSEEK, SYS_MMAP, SYS_MUNMAP, SYS_NANOSLEEP, SYS_OPEN, SYS_OPENAT,
-    SYS_READ, SYS_WAITPID, SYS_WRITE,
+    SYS_BRK, SYS_CHDIR, SYS_CLOSE, SYS_EXECVE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETCWD,
+    SYS_GETDENTS64, SYS_GETPID, SYS_GETPPID, SYS_LSEEK, SYS_MMAP, SYS_MUNMAP, SYS_NANOSLEEP,
+    SYS_OPEN, SYS_OPENAT, SYS_READ, SYS_WAITPID, SYS_WRITE,
 };
 
 const ERROR_NOT_FOUND: u64 = linux_error(2);
@@ -68,6 +69,7 @@ const ERROR_NOT_DIRECTORY: u64 = linux_error(20);
 const ERROR_IS_DIRECTORY: u64 = linux_error(21);
 const ERROR_INVALID_ARGUMENT: u64 = linux_error(22);
 const ERROR_TOO_MANY_OPEN_FILES: u64 = linux_error(24);
+const ERROR_RANGE: u64 = linux_error(34);
 const ERROR_NOT_IMPLEMENTED: u64 = linux_error(38);
 const ERROR_NOT_SUPPORTED: u64 = linux_error(95);
 const WAIT_ANY_PROCESS_IDENTIFIER: i64 = contract::WAIT_ANY as i64;
@@ -223,6 +225,7 @@ fn dispatch_syscall(syscall_number: u64, arguments: [u64; 6]) -> u64 {
         SYS_WAITPID => sys_waitpid(first_argument, second_argument, third_argument),
         SYS_READ => sys_read(first_argument, second_argument, third_argument),
         SYS_GETDENTS64 => sys_getdents64(first_argument, second_argument, third_argument),
+        SYS_GETCWD => sys_getcwd(first_argument, second_argument),
         SYS_GETPID => sys_getpid(),
         SYS_GETPPID => sys_getppid(),
         SYS_CHDIR => sys_chdir(first_argument),
@@ -507,6 +510,36 @@ fn sys_chdir(user_path_pointer: u64) -> u64 {
         Ok(_) => ERROR_NOT_DIRECTORY,
         Err(error) => filesystem_error_to_linux(error),
     }
+}
+
+fn sys_getcwd(user_buffer_pointer: u64, buffer_length: u64) -> u64 {
+    let Some(current_working_directory) = crate::kernel::task::get_current_working_directory()
+    else {
+        return ERROR_NOT_IMPLEMENTED;
+    };
+    let Some(required_length) = current_working_directory.len().checked_add(1) else {
+        return ERROR_RANGE;
+    };
+    let Ok(required_length_u64) = u64::try_from(required_length) else {
+        return ERROR_RANGE;
+    };
+    if buffer_length < required_length_u64 {
+        return ERROR_RANGE;
+    }
+
+    let Some(buffer) = copy_output_buffer(user_buffer_pointer, required_length_u64) else {
+        return ERROR_BAD_ADDRESS;
+    };
+    let path_bytes = current_working_directory.as_bytes();
+    buffer[..path_bytes.len()].copy_from_slice(path_bytes);
+    buffer[path_bytes.len()] = 0;
+    crate::log_info!(
+        "syscall",
+        "getcwd -> path={} bytes={}",
+        current_working_directory,
+        required_length_u64
+    );
+    required_length_u64
 }
 
 fn sys_close(file_descriptor: u64) -> u64 {
