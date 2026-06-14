@@ -38,8 +38,8 @@ const MAX_LEVEL: LogLevel = if cfg!(feature = "log-trace") {
 } else {
     LogLevel::Info
 };
-const COMPONENT_LEVEL_WIDTH: usize = 18;
-const DETAIL_INDENT: &str = "                                 ";
+const COMPONENT_LEVEL_WIDTH: usize = 22;
+const DETAIL_INDENT: &str = "                                     ";
 const FIELD_KEY_WIDTH: usize = 35;
 const MICROS_PER_SECOND: u64 = 1_000_000;
 const MICROS_PER_MILLI: u64 = 1_000;
@@ -49,6 +49,7 @@ const CLOCK_SOURCE_TIMER: u8 = 1;
 const CLOCK_SOURCE_TSC: u8 = 2;
 
 static LAST_TIMESTAMP_MICROS: AtomicU64 = AtomicU64::new(0);
+static EARLY_TIMESTAMP_MICROS: AtomicU64 = AtomicU64::new(0);
 static CLOCK_SOURCE: AtomicU8 = AtomicU8::new(CLOCK_SOURCE_BOOT);
 static TSC_UPGRADE_LOGGED: AtomicBool = AtomicBool::new(false);
 static TSC_BASE_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -186,7 +187,12 @@ fn candidate_timestamp_micros() -> (u64, u8) {
         );
     }
 
-    (0, CLOCK_SOURCE_BOOT)
+    (
+        EARLY_TIMESTAMP_MICROS
+            .fetch_add(1, Ordering::AcqRel)
+            .saturating_add(1),
+        CLOCK_SOURCE_BOOT,
+    )
 }
 
 fn timestamp_counter_delta_to_micros(delta_cycles: u64, frequency: u64) -> u64 {

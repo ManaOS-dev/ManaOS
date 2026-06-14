@@ -12,9 +12,15 @@
 //!
 //! ## Public API
 //! - [`log`] - Structured kernel log output
+//! - [`acpi`] - ACPI boot diagnostics and structured log output
+//! - [`boot_smoke`] - Kernel boot smoke checks and summary state collection
 //! - [`smoke`] - Boot-time kernel smoke diagnostics
 //! - [`summary`] - Human-readable boot summary output
 
+/// ACPI boot diagnostics and structured log output.
+pub mod acpi;
+/// Kernel boot smoke checks and summary state collection.
+pub mod boot_smoke;
 pub mod log;
 /// Boot-time kernel smoke diagnostics.
 pub mod smoke;
