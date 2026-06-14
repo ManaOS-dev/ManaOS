@@ -236,9 +236,10 @@ pub unsafe extern "C" fn push_timer_interrupt_frame(frame: *const u64) {
     // frame it populated on the current kernel stack.
     let raw_frame = unsafe { &*raw_frame };
     TICKS.fetch_add(1, Ordering::Relaxed);
-    // SAFETY: Notify EOI to the PIC to allow future interrupts.
+    // SAFETY: Notify EOI to the configured interrupt controller backend to
+    // allow future interrupts.
     unsafe {
-        crate::arch::x86_64::interrupt_controller::notify_legacy_end_of_interrupt(
+        crate::arch::x86_64::interrupt_controller::notify_end_of_interrupt(
             InterruptIndex::Timer.as_u8(),
         );
     }
@@ -275,9 +276,10 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
         let scancode = unsafe { Port::<u8>::new(0x60).read() };
         call_keyboard_byte_processor(scancode);
     }
-    // SAFETY: Notify EOI to the PIC to allow future interrupts.
+    // SAFETY: Notify EOI to the configured interrupt controller backend to
+    // allow future interrupts.
     unsafe {
-        crate::arch::x86_64::interrupt_controller::notify_legacy_end_of_interrupt(
+        crate::arch::x86_64::interrupt_controller::notify_end_of_interrupt(
             InterruptIndex::Keyboard.as_u8(),
         );
     }
@@ -290,9 +292,10 @@ extern "x86-interrupt" fn mouse_interrupt_handler(_stack_frame: InterruptStackFr
         let packet = unsafe { Port::<u8>::new(0x60).read() };
         call_mouse_byte_processor(packet);
     }
-    // SAFETY: Notify EOI to the PIC to allow future interrupts.
+    // SAFETY: Notify EOI to the configured interrupt controller backend to
+    // allow future interrupts.
     unsafe {
-        crate::arch::x86_64::interrupt_controller::notify_legacy_end_of_interrupt(
+        crate::arch::x86_64::interrupt_controller::notify_end_of_interrupt(
             InterruptIndex::Mouse.as_u8(),
         );
     }

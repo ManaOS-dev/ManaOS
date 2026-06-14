@@ -1,5 +1,6 @@
 //! Interrupt controller selection and initialization.
 
+use core::sync::atomic::{AtomicUsize, Ordering};
 use pic8259::ChainedPics;
 use spin::Mutex;
 
@@ -11,6 +12,19 @@ const APIC_PROVIDER_CONFIGURED_FLAG: u8 = 1;
 const APIC_PROVIDER_ROUTING_ACTIVE_FLAG: u8 = 1 << 1;
 const APIC_PROVIDER_LOCAL_APIC_SUPPORTED_FLAG: u8 = 1 << 2;
 const APIC_PROVIDER_TRUNCATED_FLAG: u8 = 1 << 3;
+const LOCAL_APIC_EOI_PROVIDER_CONFIGURED_FLAG: u8 = 1;
+const LOCAL_APIC_EOI_PROVIDER_ROUTING_ACTIVE_FLAG: u8 = 1 << 1;
+const LOCAL_APIC_EOI_PROVIDER_SOFTWARE_ENABLED_FLAG: u8 = 1 << 2;
+const LOCAL_APIC_ID_REGISTER: usize = 0x20;
+const LOCAL_APIC_VERSION_REGISTER: usize = 0x30;
+const LOCAL_APIC_EOI_REGISTER: usize = 0xb0;
+const LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_REGISTER: usize = 0xf0;
+const LOCAL_APIC_EOI_VALUE: u32 = 0;
+const LOCAL_APIC_ID_SHIFT: u32 = 24;
+const LOCAL_APIC_ID_MASK: u32 = 0xff;
+const LOCAL_APIC_VERSION_MAX_LVT_ENTRY_SHIFT: u32 = 16;
+const LOCAL_APIC_VERSION_MAX_LVT_ENTRY_MASK: u32 = 0xff;
+const LOCAL_APIC_SOFTWARE_ENABLE_BIT: u32 = 1 << 8;
 const IOAPIC_STAGING_READBACK_MATCHED_FLAG: u8 = 1;
 const IOAPIC_STAGING_ALL_MASKED_FLAG: u8 = 1 << 1;
 const IOAPIC_REGISTER_SELECT_OFFSET: usize = 0x00;
@@ -52,6 +66,7 @@ pub(super) static LEGACY_INTERRUPT_CONTROLLERS: Mutex<ChainedPics> =
 
 static APIC_ROUTING_PROVIDER: Mutex<ApicRoutingProviderState> =
     Mutex::new(ApicRoutingProviderState::new());
+static LOCAL_APIC_EOI_BASE_ADDRESS: AtomicUsize = AtomicUsize::new(0);
 
 /// Available interrupt controller backends.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -706,6 +721,77 @@ impl IoApicRedirectionStagingStatus {
     }
 }
 
+/// Local APIC EOI provider diagnostics.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct LocalApicEoiProviderStatus {
+    flags: u8,
+    physical_address: u64,
+    apic_id: u32,
+    version: u32,
+    maximum_lvt_entry: u32,
+    spurious_interrupt_vector: u32,
+}
+
+impl LocalApicEoiProviderStatus {
+    const fn new(
+        flags: u8,
+        physical_address: u64,
+        apic_id: u32,
+        version: u32,
+        maximum_lvt_entry: u32,
+        spurious_interrupt_vector: u32,
+    ) -> Self {
+        Self {
+            flags,
+            physical_address,
+            apic_id,
+            version,
+            maximum_lvt_entry,
+            spurious_interrupt_vector,
+        }
+    }
+
+    /// Return whether the Local APIC EOI provider has a configured MMIO base.
+    pub const fn is_configured(self) -> bool {
+        self.flags & LOCAL_APIC_EOI_PROVIDER_CONFIGURED_FLAG != 0
+    }
+
+    /// Return whether hardware interrupt routing currently uses APIC EOI.
+    pub const fn is_routing_active(self) -> bool {
+        self.flags & LOCAL_APIC_EOI_PROVIDER_ROUTING_ACTIVE_FLAG != 0
+    }
+
+    /// Return whether the Local APIC software-enable bit is set.
+    pub const fn is_software_enabled(self) -> bool {
+        self.flags & LOCAL_APIC_EOI_PROVIDER_SOFTWARE_ENABLED_FLAG != 0
+    }
+
+    /// Return the Local APIC MMIO physical address.
+    pub const fn physical_address(self) -> u64 {
+        self.physical_address
+    }
+
+    /// Return the Local APIC identifier from the APIC ID register.
+    pub const fn apic_id(self) -> u32 {
+        self.apic_id
+    }
+
+    /// Return the raw Local APIC version register.
+    pub const fn version(self) -> u32 {
+        self.version
+    }
+
+    /// Return the maximum Local APIC LVT entry index reported by hardware.
+    pub const fn maximum_lvt_entry(self) -> u32 {
+        self.maximum_lvt_entry
+    }
+
+    /// Return the raw Local APIC spurious interrupt vector register.
+    pub const fn spurious_interrupt_vector(self) -> u32 {
+        self.spurious_interrupt_vector
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct ApicRoutingProviderState {
     configured: bool,
@@ -735,6 +821,9 @@ pub fn configure_apic_routing_provider(configuration: &ApicRoutingConfiguration)
     let mut provider = APIC_ROUTING_PROVIDER.lock();
     provider.configured = true;
     provider.configuration = *configuration;
+    let local_apic_address = usize::try_from(configuration.local_apic().physical_address())
+        .expect("Local APIC MMIO address must fit in usize");
+    LOCAL_APIC_EOI_BASE_ADDRESS.store(local_apic_address, Ordering::Release);
 }
 
 /// Return whether APIC routing provider data has been configured.
@@ -814,6 +903,47 @@ pub unsafe fn stage_masked_ioapic_redirection_entries() -> Option<IoApicRedirect
     Some(status)
 }
 
+/// Inspect Local APIC registers needed before APIC EOI can replace PIC EOI.
+///
+/// # Safety
+///
+/// The configured Local APIC MMIO physical page must be identity-mapped as
+/// readable kernel memory.
+pub unsafe fn inspect_local_apic_eoi_provider() -> Option<LocalApicEoiProviderStatus> {
+    let base_address = LOCAL_APIC_EOI_BASE_ADDRESS.load(Ordering::Acquire);
+    if base_address == 0 {
+        return None;
+    }
+
+    let registers = LocalApicRegisters::new(base_address);
+    // SAFETY: The caller guarantees the Local APIC MMIO page is mapped, and the
+    // APIC ID register is a readable architectural Local APIC register.
+    let id_register = unsafe { registers.read(LOCAL_APIC_ID_REGISTER) };
+    // SAFETY: The caller guarantees the Local APIC MMIO page is mapped, and the
+    // APIC version register is a readable architectural Local APIC register.
+    let version = unsafe { registers.read(LOCAL_APIC_VERSION_REGISTER) };
+    // SAFETY: The caller guarantees the Local APIC MMIO page is mapped, and the
+    // spurious vector register is readable for diagnostics.
+    let spurious_interrupt_vector =
+        unsafe { registers.read(LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_REGISTER) };
+    let mut flags = LOCAL_APIC_EOI_PROVIDER_CONFIGURED_FLAG;
+    if has_ioapic_routing() {
+        flags |= LOCAL_APIC_EOI_PROVIDER_ROUTING_ACTIVE_FLAG;
+    }
+    if spurious_interrupt_vector & LOCAL_APIC_SOFTWARE_ENABLE_BIT != 0 {
+        flags |= LOCAL_APIC_EOI_PROVIDER_SOFTWARE_ENABLED_FLAG;
+    }
+
+    Some(LocalApicEoiProviderStatus::new(
+        flags,
+        u64::try_from(base_address).expect("Local APIC MMIO address must fit in u64"),
+        local_apic_id_from_register(id_register),
+        version,
+        maximum_lvt_entry_from_version(version),
+        spurious_interrupt_vector,
+    ))
+}
+
 fn redirection_entry_for_legacy_irq(
     configuration: &ApicRoutingConfiguration,
     legacy_irq: u8,
@@ -845,6 +975,38 @@ fn redirection_entry_for_legacy_irq(
         low_value,
         high_value,
     ))
+}
+
+struct LocalApicRegisters {
+    base_address: usize,
+}
+
+impl LocalApicRegisters {
+    const fn new(base_address: usize) -> Self {
+        Self { base_address }
+    }
+
+    unsafe fn read(&self, register: usize) -> u32 {
+        let register_pointer = self.register_pointer(register);
+        // SAFETY: register_pointer points into mapped Local APIC MMIO space.
+        // Volatile access is required for MMIO.
+        unsafe { core::ptr::read_volatile(register_pointer) }
+    }
+
+    unsafe fn write(&self, register: usize, value: u32) {
+        let register_pointer = self.register_pointer(register);
+        // SAFETY: register_pointer points into mapped Local APIC MMIO space.
+        // Volatile access is required for MMIO.
+        unsafe {
+            core::ptr::write_volatile(register_pointer, value);
+        }
+    }
+
+    fn register_pointer(&self, register: usize) -> *mut u32 {
+        self.base_address
+            .checked_add(register)
+            .expect("Local APIC register address overflowed") as *mut u32
+    }
 }
 
 struct IoApicRegisters {
@@ -909,6 +1071,14 @@ const fn maximum_redirection_entry_from_version(version: u32) -> u32 {
         & IOAPIC_VERSION_MAX_REDIRECTION_ENTRY_MASK
 }
 
+const fn local_apic_id_from_register(id_register: u32) -> u32 {
+    (id_register >> LOCAL_APIC_ID_SHIFT) & LOCAL_APIC_ID_MASK
+}
+
+const fn maximum_lvt_entry_from_version(version: u32) -> u32 {
+    (version >> LOCAL_APIC_VERSION_MAX_LVT_ENTRY_SHIFT) & LOCAL_APIC_VERSION_MAX_LVT_ENTRY_MASK
+}
+
 /// Initialize the legacy interrupt controller backend used by the current boot path.
 ///
 /// # Safety
@@ -933,6 +1103,34 @@ pub unsafe fn notify_legacy_end_of_interrupt(interrupt_index: u8) {
     LEGACY_INTERRUPT_CONTROLLERS
         .lock()
         .notify_end_of_interrupt(interrupt_index);
+}
+
+/// Notify the configured interrupt controller that one interrupt completed.
+///
+/// # Safety
+///
+/// Must be called exactly once after servicing a hardware interrupt delivered
+/// by the currently active interrupt controller backend.
+pub unsafe fn notify_end_of_interrupt(interrupt_index: u8) {
+    if has_ioapic_routing() {
+        let base_address = LOCAL_APIC_EOI_BASE_ADDRESS.load(Ordering::Acquire);
+        assert!(
+            base_address != 0,
+            "Local APIC EOI provider must be configured before APIC routing"
+        );
+        let registers = LocalApicRegisters::new(base_address);
+        // SAFETY: APIC routing is active only after the Local APIC MMIO page has
+        // been mapped and the EOI provider has been configured.
+        unsafe {
+            registers.write(LOCAL_APIC_EOI_REGISTER, LOCAL_APIC_EOI_VALUE);
+        }
+    } else {
+        // SAFETY: The legacy PIC backend remains active while IOAPIC routing is
+        // disabled, so the interrupt must be acknowledged through the PIC.
+        unsafe {
+            notify_legacy_end_of_interrupt(interrupt_index);
+        }
+    }
 }
 
 /// Return whether Local APIC support is available on this CPU.
