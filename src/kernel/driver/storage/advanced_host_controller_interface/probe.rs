@@ -106,6 +106,22 @@ pub(super) fn inspect_initial_storage(
     } else {
         crate::log_warn!("storage", "FAT32 user ELF not found: path=/bin/smoke_demo");
     }
+
+    if let Some(file_demo_entry) = file_allocation_table::find_entry_by_path(
+        &mut partition_device,
+        volume,
+        "bin/file_demo",
+        data_address,
+    ) {
+        register_detected_file(
+            partition,
+            volume,
+            file_demo_entry,
+            String::from("/disk/bin/file_demo"),
+        );
+    } else {
+        crate::log_warn!("storage", "FAT32 user ELF not found: path=/bin/file_demo");
+    }
 }
 
 fn register_detected_file(

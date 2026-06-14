@@ -1,6 +1,7 @@
 param(
     [string]$Path = "disk.img",
     [UInt64]$SizeBytes = 67108864,
+    [string]$FileDemoElfPath = "target\userland\x86_64-unknown-none\debug\file_demo",
     [string]$SmokeDemoElfPath = "target\userland\x86_64-unknown-none\debug\smoke_demo"
 )
 
@@ -201,9 +202,13 @@ function Write-TestPartitionEntry {
 
 function Write-FileAllocationTable32BootSector {
     param([byte[]]$Image)
+    if (-not (Test-Path -LiteralPath $FileDemoElfPath)) {
+        throw "file_demo ELF not found at $FileDemoElfPath; run cargo build first"
+    }
     if (-not (Test-Path -LiteralPath $SmokeDemoElfPath)) {
         throw "smoke_demo ELF not found at $SmokeDemoElfPath; run cargo build first"
     }
+    $fileDemoElf = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $FileDemoElfPath))
     $smokeDemoElf = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $SmokeDemoElfPath))
 
     $partitionSectors = $lastPartitionLba - $firstPartitionLba + 1
@@ -255,18 +260,24 @@ function Write-FileAllocationTable32BootSector {
 
     $firstFileAllocationTableOffset = [int](($firstPartitionLba + $reservedSectorCount) * $sectorSize)
     $secondFileAllocationTableOffset = [int](($firstPartitionLba + $reservedSectorCount + $fileAllocationTableSize) * $sectorSize)
+    $fileDemoClusterCount = [UInt32][Math]::Ceiling($fileDemoElf.Length / [double]$sectorSize)
+    if ($fileDemoClusterCount -eq 0) {
+        throw "file_demo ELF must not be empty"
+    }
     $smokeDemoClusterCount = [UInt32][Math]::Ceiling($smokeDemoElf.Length / [double]$sectorSize)
     if ($smokeDemoClusterCount -eq 0) {
         throw "smoke_demo ELF must not be empty"
     }
     $smokeDemoFirstCluster = [UInt32]5
     $smokeDemoLastCluster = [UInt32]($smokeDemoFirstCluster + $smokeDemoClusterCount - 1)
-    $usedDataClusters = [UInt32](3 + $smokeDemoClusterCount)
+    $fileDemoFirstCluster = [UInt32]($smokeDemoLastCluster + 1)
+    $fileDemoLastCluster = [UInt32]($fileDemoFirstCluster + $fileDemoClusterCount - 1)
+    $usedDataClusters = [UInt32](3 + $smokeDemoClusterCount + $fileDemoClusterCount)
     $dataClusterCount = [UInt32](($partitionSectors - $metadataSectors) / [UInt64]$sectorsPerCluster)
     if ($usedDataClusters -ge $dataClusterCount) {
         throw "test FAT32 partition does not have enough data clusters"
     }
-    $nextFreeCluster = [UInt32]($smokeDemoLastCluster + 1)
+    $nextFreeCluster = [UInt32]($fileDemoLastCluster + 1)
     $freeClusterCount = [UInt32]($dataClusterCount - $usedDataClusters)
 
     foreach ($offset in @($firstFileAllocationTableOffset, $secondFileAllocationTableOffset)) {
@@ -278,6 +289,14 @@ function Write-FileAllocationTable32BootSector {
         for ($cluster = $smokeDemoFirstCluster; $cluster -le $smokeDemoLastCluster; $cluster++) {
             $entryOffset = $offset + ([int]$cluster * 4)
             if ($cluster -eq $smokeDemoLastCluster) {
+                Write-LeUInt32 $Image $entryOffset 0x0FFFFFFF
+            } else {
+                Write-LeUInt32 $Image $entryOffset ([UInt32]($cluster + 1))
+            }
+        }
+        for ($cluster = $fileDemoFirstCluster; $cluster -le $fileDemoLastCluster; $cluster++) {
+            $entryOffset = $offset + ([int]$cluster * 4)
+            if ($cluster -eq $fileDemoLastCluster) {
                 Write-LeUInt32 $Image $entryOffset 0x0FFFFFFF
             } else {
                 Write-LeUInt32 $Image $entryOffset ([UInt32]($cluster + 1))
@@ -296,9 +315,13 @@ function Write-FileAllocationTable32BootSector {
     $binDirectoryOffset = [int](($firstPartitionLba + $metadataSectors + 2) * $sectorSize)
     Write-LongFileNameEntry $Image $binDirectoryOffset "smoke_demo"
     Write-DirectoryEntry $Image ($binDirectoryOffset + 32) "SMOKED~1   " 0x20 $smokeDemoFirstCluster ([UInt32]$smokeDemoElf.Length)
+    Write-LongFileNameEntry $Image ($binDirectoryOffset + 64) "file_demo"
+    Write-DirectoryEntry $Image ($binDirectoryOffset + 96) "FILEDE~1   " 0x20 $fileDemoFirstCluster ([UInt32]$fileDemoElf.Length)
 
     $smokeDemoDataOffset = [int](($firstPartitionLba + $metadataSectors + 3) * $sectorSize)
     [Array]::Copy($smokeDemoElf, 0, $Image, $smokeDemoDataOffset, $smokeDemoElf.Length)
+    $fileDemoDataOffset = [int](($firstPartitionLba + $metadataSectors + ([UInt64]$fileDemoFirstCluster - 2)) * $sectorSize)
+    [Array]::Copy($fileDemoElf, 0, $Image, $fileDemoDataOffset, $fileDemoElf.Length)
 
     [Array]::Copy($bootSector, 0, $Image, [int](($firstPartitionLba + 6) * $sectorSize), $sectorSize)
     Write-FileSystemInformationSector `

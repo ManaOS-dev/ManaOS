@@ -59,10 +59,10 @@ fn verify_scheduler_reclaim_diagnostics(
     diagnostics: &crate::kernel::task::SchedulerDiagnostics,
     expected_user_tasks: u64,
 ) {
-    // The final post-exec smoke image reclaims five ELF pages and four user
-    // stack pages. The old heap and private mappings are reclaimed during
-    // execve publication, before the task exits.
-    const SMOKE_RECLAIMED_USER_PAGES_PER_TASK: u64 = 9;
+    // The final file_demo image reclaims two ELF pages and four user stack
+    // pages. The old heap and private mappings are reclaimed during execve
+    // publication, before the task exits.
+    const SMOKE_RECLAIMED_USER_PAGES_PER_TASK: u64 = 6;
     // The post-exec image touches only the program and stack windows, leaving
     // seven page-table frames to reclaim with the PML4.
     const SMOKE_RECLAIMED_PAGE_TABLE_PAGES_PER_TASK: u64 = 7;
@@ -577,23 +577,23 @@ fn verify_user_task_image_snapshot(snapshot: &crate::kernel::task::SchedulerTask
         .expect("user task snapshots must include image diagnostics");
     assert_eq!(
         user_image.generation(),
-        1,
-        "user smoke tasks must record one successful execve generation"
+        2,
+        "user smoke tasks must record two successful execve generations"
     );
     let path_bytes = user_image.path_bytes();
     assert_eq!(
         &path_bytes[..user_image.path_len()],
-        b"/disk/bin/smoke_demo",
+        b"/disk/bin/file_demo",
         "user smoke tasks must record the post-exec image path"
     );
     assert_eq!(
         user_image.last_execve_old_user_pages(),
-        11,
+        9,
         "execve diagnostics must record old user page reclaim count"
     );
     assert_eq!(
         user_image.last_execve_old_page_table_pages(),
-        10,
+        7,
         "execve diagnostics must record old page-table reclaim count"
     );
 }

@@ -186,6 +186,8 @@ Current runtime diagnostics cover the first successful replacement path:
   and verifies that the old image does not resume.
 - Storage smoke verifies that an unmarked descriptor inherited through
   successful self-`execve` remains usable in the new image.
+- Storage smoke verifies that replacement is not limited to self-`execve` by
+  replacing the post-exec smoke image with `/disk/bin/file_demo`.
 - Serial logs record `User image replaced by execve` and
   `execve image published` with old-image reclaim counts.
 - Scheduler smoke verifies that `execve` resets heap and private mapping
@@ -199,8 +201,6 @@ Remaining runtime diagnostics should cover broader behavior:
   candidate construction has fallible post-build failure points.
 - Failure smoke should prove any future post-candidate failure returns all
   candidate frames and keeps the old image runnable.
-- A second user program smoke should prove replacement is not limited to
-  self-`execve`.
 
 These diagnostics should use stable serial log lines so future CI smoke can
 assert the process lifecycle without parsing interactive console output.

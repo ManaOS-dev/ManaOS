@@ -7,8 +7,7 @@ not on product value.
 ## Remaining High-Risk Order
 
 1. Full user process lifecycle
-   - Finish the remaining `execve` current-directory, descriptor inheritance,
-     close-on-exec, and second-program smoke gaps.
+   - Finish the remaining `execve` current-directory and close-on-exec gaps.
    - Add user-visible `wait` or `waitpid`.
    - Add a minimal user shell process.
    - Extend preemptive scheduling across general process lifecycle paths.
@@ -61,8 +60,8 @@ current image diagnostics are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. close the remaining `execve` current-directory, descriptor inheritance,
-   close-on-exec, and second-program smoke gaps;
+1. close the remaining `execve` current-directory, close-on-exec, and
+   replacement-state diagnostics gaps;
 2. define the scheduler-owned child exit record model needed for `waitpid`;
 3. extend smoke coverage for multiple spawned user processes before introducing
    a broader user shell;

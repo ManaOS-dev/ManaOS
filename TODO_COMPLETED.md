@@ -35,6 +35,7 @@ active roadmap can list only unfinished work.
 - [x] Add a no-return userland smoke path for successful self-`execve` without recursive re-exec.
 - [x] Add current `execve` image generation, path, and old-image reclaim diagnostics to the `tasks` console command.
 - [x] Preserve open file descriptors that do not have close-on-exec semantics.
+- [x] Add a boot smoke case that `execve`s a second user program from `/disk`.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

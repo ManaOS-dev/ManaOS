@@ -160,6 +160,8 @@ context 付き panic として扱います。
   検証します。
 - storage smoke は successful self-`execve` で継承された unmarked descriptor が new image でも使えることを
   検証します。
+- storage smoke は post-exec smoke image を `/disk/bin/file_demo` へ置き換えることで、replacement が
+  self-`execve` に限定されないことを検証します。
 - serial log は `User image replaced by execve` と `execve image published` を old-image reclaim count 付きで
   記録します。
 - scheduler smoke は、post-exec image が exit する前に `execve` が heap と private mapping bookkeeping を
@@ -173,7 +175,6 @@ context 付き panic として扱います。
   replacement building / failed state を表示します。
 - future post-candidate failure smoke は candidate frame をすべて返し、old image を runnable のまま保つことを
   証明します。
-- second user program smoke は replacement が self-`execve` に限定されないことを証明します。
 
 これらの diagnostics は、将来の CI smoke が interactive console output を parse せず検証できるよう、
 stable serial log line を使います。

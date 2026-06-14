@@ -35,7 +35,7 @@ extern "C" fn _start(
     if is_after_execve_invocation(argument_count, argument_values, environment_values) {
         verify_after_execve_entry(argument_count, argument_values, environment_values);
         let _ = syscall::write(STDOUT, EXECVE_SUCCESS_MESSAGE);
-        syscall::exit(0);
+        execve_file_demo_success();
     }
 
     verify_process_identifiers();
@@ -227,6 +227,17 @@ fn execve_self_success() -> ! {
         syscall::exit(78);
     }
     syscall::exit(79);
+}
+
+fn execve_file_demo_success() -> ! {
+    let executable_path = b"/disk/bin/file_demo\0";
+    let arguments = [executable_path.as_ptr(), core::ptr::null()];
+    let environment = [core::ptr::null()];
+
+    if syscall::execve(executable_path, arguments.as_ptr(), environment.as_ptr()) < 0 {
+        syscall::exit(90);
+    }
+    syscall::exit(91);
 }
 
 fn is_after_execve_invocation(
