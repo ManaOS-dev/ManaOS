@@ -52,6 +52,8 @@ The current foundation validates:
   through APIC EOI after IOAPIC routing activation.
 - Masked Local APIC timer calibration diagnostics that arm the timer without
   unmasking its interrupt and compare the count delta against PIT ticks.
+- Periodic Local APIC timer activation that masks the IOAPIC PIT timer route and
+  keeps scheduler ticks on the existing vector 32 interrupt path.
 
 The boot smoke logs the validated root table, MADT diagnostics, retained
 interrupt topology, APIC routing provider configuration, and dry-run IOAPIC
@@ -61,11 +63,12 @@ diagnostics, masked IOAPIC redirection readback, IOAPIC route activation, and
 post-activation APIC EOI counts. Normal APIC boots also assert that the legacy
 PIC backend remains masked with fallback delivery disabled before interrupts are
 enabled. The smoke path now also proves that a masked Local APIC timer sample
-decrements while PIT scheduling ticks continue to run.
+decrements, the IOAPIC PIT timer route is masked, and periodic Local APIC timer
+ticks continue to drive scheduler progress.
 
 ## Next Steps
 
-1. Use the Local APIC timer calibration sample to program an unmasked timer tick
-   route and replace PIT scheduling ticks.
-2. Add broader interrupt-controller diagnostics for spurious or unexpected
+1. Add broader interrupt-controller diagnostics for spurious or unexpected
    vectors before expanding hardware coverage.
+2. Continue full process lifecycle work now that timer-driven user preemption no
+   longer depends on the PIT route.

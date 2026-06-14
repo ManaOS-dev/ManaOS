@@ -14,6 +14,7 @@
 //! ## Public API
 //! - [`init`] - Initialize `x86_64` architecture state
 //! - [`enable_interrupts`] - Enable CPU interrupts after wiring
+//! - [`disable_interrupts`] - Disable CPU interrupts during backend switching
 //! - [`switch_context`] - Switch between saved task contexts
 //! - [`switch_to_user_mode_context`] - Save a task context and enter Ring 3
 
@@ -117,6 +118,11 @@ pub fn init_syscall(handler: u64) {
 /// Enable CPU interrupts after architecture and driver initialization.
 pub fn enable_interrupts() {
     x86_64::instructions::interrupts::enable();
+}
+
+/// Disable CPU interrupts during architecture backend switching.
+pub fn disable_interrupts() {
+    x86_64::instructions::interrupts::disable();
 }
 
 /// Read the current `x86_64` timestamp counter value.

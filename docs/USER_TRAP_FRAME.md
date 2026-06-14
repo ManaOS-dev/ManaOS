@@ -68,9 +68,9 @@ The timer interrupt must not schedule away from a user task until all of these
 fields are captured in the owning task's `UserTrapFrame`.
 The timer path now enters through an assembly stub that saves this full
 general-purpose register set before calling the Rust architecture hook. The
-architecture hook acknowledges the PIC and passes a shared timer frame to
-`kernel::interrupt`, which records Ring 3 timer frames in task metadata without
-making `arch/` depend on `kernel/`.
+architecture hook acknowledges the active interrupt-controller backend and
+passes a shared timer frame to `kernel::interrupt`, which records Ring 3 timer
+frames in task metadata without making `arch/` depend on `kernel/`.
 
 After the frame is recorded, `kernel::task` may switch away from the user task.
 The switch stores the interrupted task's kernel-side timer context in its
@@ -106,7 +106,7 @@ User task preemption stays disabled until all of the following are true:
 - User-mode interrupt and syscall entries save a complete `UserTrapFrame`.
 - User task metadata owns the saved trap frame and exposes it only through task
   lifecycle helpers. This is complete for returning syscalls and the current
-  PIT timer interrupt path.
+  Local APIC timer interrupt path.
 - Per-task kernel stacks exist and are installed before entering or resuming a
   user task. This is complete for first entry, syscall entry, and timer-context
   resume on the current scheduler path.
@@ -114,7 +114,7 @@ User task preemption stays disabled until all of the following are true:
   complete for the current one-shot smoke path.
 - Timer interrupt routing can distinguish user-mode frames from kernel-mode
   frames without depending on `kernel::task` from `arch/`. This is complete for
-  the current PIT timer path.
+  the current Local APIC timer path.
 - Page-fault diagnostics can report whether a fault happened in user or kernel
   mode.
 - The scheduler can transition a user task from `Running` to `Ready` only after
@@ -128,10 +128,11 @@ User task preemption stays disabled until all of the following are true:
 - The console overlay status strip now keeps the scheduler and preemption
   counters visible even before a command is submitted.
 - `just storage-smoke` still proves the one-shot user path and now asserts that
-  timer interrupts can enter another active user task, preempt and resume user
-  code across two user task records, and finish tasks that own separate stack
-  slots, separate address spaces, and lifecycle diagnostics. Finished user
-  exits are now reported through a scheduler-owned exit queue instead of a
+  periodic Local APIC timer interrupts can enter another active user task,
+  preempt and resume user code across two user task records, and finish tasks
+  that own separate stack slots, separate address spaces, and lifecycle
+  diagnostics. Finished user exits are now reported through a scheduler-owned
+  exit queue instead of a
   global single-result latch, so lifecycle cleanup can drain task-specific exit
   records before asking the scheduler for one aggregate resource-reclaim pass
   across address spaces and kernel stacks. The returnable user entry stack is

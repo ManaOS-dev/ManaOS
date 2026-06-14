@@ -140,9 +140,9 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Parse ACPI MADT.
 - [x] Enable IOAPIC routing; APIC routing provider data now produces dry-run IOAPIC redirection entries, masked MMIO staging with readback diagnostics, Local APIC EOI-provider diagnostics, unified EOI dispatch, active route unmasking, and APIC EOI count diagnostics.
 - [x] Replace legacy PIC routing after IOAPIC is stable; normal APIC boots now keep the legacy PIC masked and fallback-disabled, while the legacy PIC path remains for boots without APIC routing provider data.
-- [ ] Calibrate and use the Local APIC timer; masked Local APIC timer calibration now records a PIT-referenced count delta, but scheduling ticks still use the PIT.
-- [ ] Replace PIT scheduling ticks after Local APIC timer validation.
-- [ ] Save and restore a full user trap frame on interrupt and syscall paths; one-shot user entry restores an initial full trap frame, SYSCALL entry captures runtime user frames on the task kernel stack, and the x86_64 PIT timer entry now captures, records, preempts, and resumes Ring 3 timer contexts. Broader multi-process lifecycle coverage remains.
+- [x] Calibrate and use the Local APIC timer; boot now calibrates from a masked sample, masks the IOAPIC PIT timer route, and runs scheduler ticks from a periodic Local APIC timer.
+- [x] Replace PIT scheduling ticks after Local APIC timer validation.
+- [ ] Save and restore a full user trap frame on interrupt and syscall paths; one-shot user entry restores an initial full trap frame, SYSCALL entry captures runtime user frames on the task kernel stack, and the x86_64 timer interrupt entry now captures, records, preempts, and resumes Ring 3 timer contexts. Broader multi-process lifecycle coverage remains.
 - [x] Design the full user trap frame register layout.
 - [x] Document the interrupt and syscall register sets that must be saved.
 - [x] Make preemptive scheduling safe for the current one-shot user task path.

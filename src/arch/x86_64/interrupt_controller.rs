@@ -27,6 +27,9 @@ const IOAPIC_ACTIVATION_ALL_UNMASKED_FLAG: u8 = 1 << 1;
 const IOAPIC_ACTIVATION_LOCAL_APIC_SOFTWARE_ENABLED_FLAG: u8 = 1 << 2;
 const IOAPIC_ACTIVATION_LEGACY_PIC_MASKED_FLAG: u8 = 1 << 3;
 const IOAPIC_ACTIVATION_ROUTING_ACTIVE_FLAG: u8 = 1 << 4;
+const IOAPIC_TIMER_MASK_READBACK_MATCHED_FLAG: u8 = 1;
+const IOAPIC_TIMER_MASK_MASKED_FLAG: u8 = 1 << 1;
+const IOAPIC_TIMER_MASK_ROUTING_ACTIVE_FLAG: u8 = 1 << 2;
 const LOCAL_APIC_ID_REGISTER: usize = 0x20;
 const LOCAL_APIC_VERSION_REGISTER: usize = 0x30;
 const LOCAL_APIC_EOI_REGISTER: usize = 0xb0;
@@ -963,6 +966,91 @@ impl IoApicRoutingActivationStatus {
     }
 }
 
+/// Result of masking the IOAPIC timer route after Local APIC timer activation.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct IoApicTimerRouteMaskStatus {
+    flags: u8,
+    global_system_interrupt: u32,
+    table_index: u32,
+    low_register: u32,
+    high_register: u32,
+    low_readback: u32,
+    high_readback: u32,
+}
+
+impl IoApicTimerRouteMaskStatus {
+    fn new(entry: IoApicRedirectionEntry, low_readback: u32, high_readback: u32) -> Self {
+        let expected_low_value = entry.low_value() | IOAPIC_REDIRECTION_MASKED_BIT;
+        let mut flags = 0;
+        if (low_readback & IOAPIC_REDIRECTION_LOW_READBACK_MASK) == expected_low_value
+            && high_readback == entry.high_value()
+        {
+            flags |= IOAPIC_TIMER_MASK_READBACK_MATCHED_FLAG;
+        }
+        if low_readback & IOAPIC_REDIRECTION_MASKED_BIT != 0 {
+            flags |= IOAPIC_TIMER_MASK_MASKED_FLAG;
+        }
+        if has_ioapic_routing() {
+            flags |= IOAPIC_TIMER_MASK_ROUTING_ACTIVE_FLAG;
+        }
+
+        Self {
+            flags,
+            global_system_interrupt: entry.global_system_interrupt(),
+            table_index: entry.table_index(),
+            low_register: entry.low_register(),
+            high_register: entry.high_register(),
+            low_readback,
+            high_readback,
+        }
+    }
+
+    /// Return whether the masked timer route matched readback expectations.
+    pub const fn readback_matches(self) -> bool {
+        self.flags & IOAPIC_TIMER_MASK_READBACK_MATCHED_FLAG != 0
+    }
+
+    /// Return whether the IOAPIC timer route is masked.
+    pub const fn is_masked(self) -> bool {
+        self.flags & IOAPIC_TIMER_MASK_MASKED_FLAG != 0
+    }
+
+    /// Return whether IOAPIC routing remained active for other routes.
+    pub const fn is_routing_active(self) -> bool {
+        self.flags & IOAPIC_TIMER_MASK_ROUTING_ACTIVE_FLAG != 0
+    }
+
+    /// Return the timer global system interrupt.
+    pub const fn global_system_interrupt(self) -> u32 {
+        self.global_system_interrupt
+    }
+
+    /// Return the IOAPIC redirection table index for the timer route.
+    pub const fn table_index(self) -> u32 {
+        self.table_index
+    }
+
+    /// Return the IOAPIC low redirection register index for the timer route.
+    pub const fn low_register(self) -> u32 {
+        self.low_register
+    }
+
+    /// Return the IOAPIC high redirection register index for the timer route.
+    pub const fn high_register(self) -> u32 {
+        self.high_register
+    }
+
+    /// Return the timer low redirection dword readback.
+    pub const fn low_readback(self) -> u32 {
+        self.low_readback
+    }
+
+    /// Return the timer high redirection dword readback.
+    pub const fn high_readback(self) -> u32 {
+        self.high_readback
+    }
+}
+
 /// Interrupt-controller EOI diagnostics.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct EndOfInterruptStatus {
@@ -1267,6 +1355,62 @@ pub unsafe fn activate_ioapic_routing() -> Option<IoApicRoutingActivationStatus>
     IOAPIC_ROUTING_ACTIVE.store(true, Ordering::Release);
     status.mark_routing_active();
     Some(status)
+}
+
+/// Mask the IOAPIC timer route after Local APIC timer ticks are available.
+///
+/// Keyboard and mouse IOAPIC routes remain active. This removes the PIT timer
+/// from the scheduler tick path while preserving APIC EOI dispatch for all
+/// active interrupt sources.
+///
+/// # Safety
+///
+/// Interrupts must be disabled. IOAPIC routing must already be active, the
+/// IOAPIC MMIO page must remain mapped as writable kernel memory, and no other
+/// code may concurrently program IOAPIC redirection entries.
+pub unsafe fn mask_ioapic_timer_route_for_local_apic_timer() -> Option<IoApicTimerRouteMaskStatus> {
+    if !has_ioapic_routing() {
+        return None;
+    }
+    let configuration = {
+        let provider = APIC_ROUTING_PROVIDER.lock();
+        if !provider.configured {
+            return None;
+        }
+        provider.configuration
+    };
+
+    let plan = IoApicRedirectionPlan::from_configuration(&configuration);
+    let entry = plan.entry_for_legacy_irq(LEGACY_TIMER_IRQ)?;
+    let registers = IoApicRegisters::new(configuration.ioapic().physical_address());
+    // SAFETY: The caller guarantees IOAPIC MMIO is mapped and exclusively
+    // programmed while interrupts are disabled.
+    let version = unsafe { registers.read(IOAPIC_VERSION_REGISTER) };
+    let maximum_redirection_entry = maximum_redirection_entry_from_version(version);
+    assert!(
+        entry.table_index() <= maximum_redirection_entry,
+        "IOAPIC timer redirection entry must be in range before masking"
+    );
+
+    let low_value = entry.low_value() | IOAPIC_REDIRECTION_MASKED_BIT;
+    let high_value = entry.high_value();
+    // SAFETY: The timer redirection entry was range-checked against the IOAPIC
+    // version register, and the caller guarantees exclusive MMIO access.
+    unsafe {
+        registers.write(entry.high_register(), high_value);
+        registers.write(entry.low_register(), low_value);
+    }
+    // SAFETY: The same range-checked timer redirection registers were just
+    // programmed and can be read back through the mapped IOAPIC window.
+    let high_readback = unsafe { registers.read(entry.high_register()) };
+    // SAFETY: The same range-checked timer redirection registers were just
+    // programmed and can be read back through the mapped IOAPIC window.
+    let low_readback = unsafe { registers.read(entry.low_register()) };
+    Some(IoApicTimerRouteMaskStatus::new(
+        entry,
+        low_readback,
+        high_readback,
+    ))
 }
 
 /// Return interrupt-controller EOI counters.

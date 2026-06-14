@@ -66,10 +66,9 @@ task architecture provider.
 
 ## Current Known Design Debt
 
-- IOAPIC routing and Local APIC EOI are active on APIC-capable boots. The boot
-  path still uses the legacy programmable interval timer for scheduling ticks
-  until the masked Local APIC timer calibration sample is promoted to the
-  active timer backend.
+- IOAPIC routing, Local APIC EOI, and periodic Local APIC timer ticks are active
+  on APIC-capable boots. The PIT is still initialized briefly as the calibration
+  reference before the IOAPIC PIT timer route is masked.
 - Ring 3 has selector registration, the initial `iretq` transition path, a
   fixed user stack mapping, and minimal `SYSCALL`/`SYSRET` MSR setup. Real
   syscall dispatch, ELF loading, and per-process address spaces are still Phase
