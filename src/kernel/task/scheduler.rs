@@ -5,9 +5,10 @@ use super::context::{TaskContext, TaskEntry, UserEntryArguments, UserTaskContext
 use super::diagnostics::{
     PreemptionStateDiagnostics, SchedulerDiagnostics, SchedulerTaskSnapshot,
     TaskExitStatusDiagnostics, TaskRuntimeDiagnosticsSnapshot, TaskStateDiagnostics,
-    UserHeapDiagnosticsSnapshot, UserImageDiagnosticsSnapshot,
+    TaskStatusDiagnosticsSnapshot, UserHeapDiagnosticsSnapshot, UserImageDiagnosticsSnapshot,
     UserMappingActiveDiagnosticsSnapshot, UserMappingLifecycleDiagnosticsSnapshot,
-    UserVirtualMemorySnapshot, USER_IMAGE_PATH_DIAGNOSTIC_BYTES,
+    UserPreemptionReasonDiagnostics, UserResumePathDiagnostics, UserVirtualMemorySnapshot,
+    USER_IMAGE_PATH_DIAGNOSTIC_BYTES,
 };
 use super::metadata::{TaskIdentifier, TaskMetadata};
 use super::process_lifecycle::{self, UserTaskExit};
@@ -172,6 +173,8 @@ struct UserTaskRuntime {
     sleep_wake_tick: Option<u64>,
     syscall_frame_recorded: bool,
     interrupt_frame_recorded: bool,
+    last_preemption_reason: UserPreemptionReasonDiagnostics,
+    last_resume_path: UserResumePathDiagnostics,
 }
 
 impl UserTaskRuntime {
@@ -195,6 +198,8 @@ impl UserTaskRuntime {
             sleep_wake_tick: None,
             syscall_frame_recorded: false,
             interrupt_frame_recorded: false,
+            last_preemption_reason: UserPreemptionReasonDiagnostics::None,
+            last_resume_path: UserResumePathDiagnostics::None,
         }
     }
 }
@@ -685,7 +690,7 @@ pub use facade::{
     collect_waitable_child_exit, current_user_task_has_child, finish_current_task,
     get_current_parent_task_id, get_current_task_id, get_current_user_address_space,
     get_kernel_stack_guard_fault, get_kernel_stack_guard_fault_diagnostic_sample,
-    get_scheduler_diagnostics, get_scheduler_task_snapshots, initialize,
+    get_scheduler_diagnostics, get_scheduler_task_snapshots, has_active_user_tasks, initialize,
     prepare_current_user_sleep, process_current_user_break, process_current_user_mapping,
     process_current_user_unmapping, process_timer_tick, record_current_user_execve_reclaim,
     record_current_user_interrupt_trap_frame, record_current_user_trap_frame,

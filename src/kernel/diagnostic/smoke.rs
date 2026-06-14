@@ -73,7 +73,7 @@ pub fn run_user_smoke_demo(
         user_task_ids.len()
     );
 
-    let exits = crate::kernel::task::run_active_user_tasks_until_empty(frame_allocator);
+    let exits = drain_user_smoke_tasks(frame_allocator, user_task_ids);
     assert_eq!(
         exits.len(),
         user_task_ids.len(),
@@ -110,6 +110,71 @@ pub fn run_user_smoke_demo(
         user_task_ids.len()
     );
     crate::kernel::task::set_preemption_enabled(true);
+}
+
+fn drain_user_smoke_tasks(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    user_task_ids: [u64; USER_SMOKE_TASK_COUNT],
+) -> alloc::vec::Vec<crate::kernel::task::UserTaskExit> {
+    let mut exits = alloc::vec::Vec::new();
+    while let Some(exit) = crate::kernel::task::run_next_user_task_once(frame_allocator) {
+        if exits.is_empty() {
+            verify_preempted_exit_continuation_smoke(exit, user_task_ids);
+        }
+        exits.push(exit);
+    }
+    crate::log_info!(
+        "task",
+        "Active user lifecycle drained: exits={}",
+        exits.len()
+    );
+    exits
+}
+
+fn verify_preempted_exit_continuation_smoke(
+    exit: crate::kernel::task::UserTaskExit,
+    user_task_ids: [u64; USER_SMOKE_TASK_COUNT],
+) {
+    assert!(
+        user_task_ids
+            .iter()
+            .any(|user_task_id| *user_task_id == exit.task_id()),
+        "first exited user task must belong to the multi-user smoke set"
+    );
+    assert!(
+        crate::kernel::task::has_active_user_tasks(),
+        "at least one active user task must remain after the first user task exits"
+    );
+    let diagnostics = crate::kernel::task::get_scheduler_diagnostics()
+        .expect("scheduler diagnostics must be available after the first user exit");
+    assert!(
+        diagnostics.timer_preemptions() > 0,
+        "first user exit continuation smoke must include timer preemption"
+    );
+    let snapshots = crate::kernel::task::get_scheduler_task_snapshots()
+        .expect("scheduler task snapshots must be available after the first user exit");
+    let first_exit_snapshot = snapshots
+        .iter()
+        .find(|snapshot| snapshot.task_id() == exit.task_id())
+        .expect("first exited user task must have a retained scheduler snapshot");
+    assert_eq!(
+        first_exit_snapshot.last_preemption_reason(),
+        crate::kernel::task::UserPreemptionReasonDiagnostics::Timer,
+        "first exited user task must retain its timer preemption reason"
+    );
+    assert_ne!(
+        first_exit_snapshot.last_resume_path(),
+        crate::kernel::task::UserResumePathDiagnostics::None,
+        "first exited user task must retain the last user resume path"
+    );
+    crate::log_info!(
+        "task",
+        "Preempted user exit continuation smoke passed: first_exit={} remaining_active=true timer_preemptions={} last_preemption_reason={} last_resume_path={}",
+        exit.task_id(),
+        diagnostics.timer_preemptions(),
+        first_exit_snapshot.last_preemption_reason().as_str(),
+        first_exit_snapshot.last_resume_path().as_str()
+    );
 }
 
 fn assert_distinct_user_task_ids(user_task_ids: [u64; USER_SMOKE_TASK_COUNT]) {
@@ -305,6 +370,8 @@ pub fn verify_scheduler_console_command() -> bool {
             "last_execve_old_user_pages=9",
             "task_vm:",
             "task_mmap_lifecycle:",
+            "last_preemption_reason=",
+            "last_resume_path=",
         ],
     ) {
         Some(output_lines) if output_lines >= 17 => {

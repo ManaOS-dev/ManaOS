@@ -146,6 +146,52 @@ impl PreemptionStateDiagnostics {
     }
 }
 
+/// Last scheduler preemption reason recorded for one user task.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum UserPreemptionReasonDiagnostics {
+    /// The task has not been preempted by the scheduler.
+    #[default]
+    None,
+    /// The task was last preempted by a timer interrupt.
+    Timer,
+}
+
+impl UserPreemptionReasonDiagnostics {
+    /// Return a stable label for console diagnostics.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Timer => "timer",
+        }
+    }
+}
+
+/// Last scheduler path that entered or resumed one user task.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum UserResumePathDiagnostics {
+    /// The task has not entered user mode.
+    #[default]
+    None,
+    /// The task entered through the lifecycle return path.
+    LifecycleEntry,
+    /// The task first entered user mode from timer scheduling.
+    TimerEntry,
+    /// The task resumed a saved timer context.
+    TimerResume,
+}
+
+impl UserResumePathDiagnostics {
+    /// Return a stable label for console diagnostics.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::LifecycleEntry => "lifecycle_entry",
+            Self::TimerEntry => "timer_entry",
+            Self::TimerResume => "timer_resume",
+        }
+    }
+}
+
 /// Snapshot of one user task's current image diagnostics.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserImageDiagnosticsSnapshot {
@@ -380,8 +426,7 @@ pub struct SchedulerTaskSnapshot {
     parent_task_id: Option<u64>,
     kind: TaskKindDiagnostics,
     state: TaskState,
-    runtime: TaskRuntimeDiagnosticsSnapshot,
-    exit_status: TaskExitStatusDiagnostics,
+    status: TaskStatusDiagnosticsSnapshot,
     user_image: Option<UserImageDiagnosticsSnapshot>,
     user_virtual_memory: Option<UserVirtualMemorySnapshot>,
 }
@@ -450,22 +495,46 @@ impl TaskExitStatusDiagnostics {
     }
 }
 
+/// Snapshot of runtime ownership, exit status, and scheduler path state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct TaskStatusDiagnosticsSnapshot {
+    runtime: TaskRuntimeDiagnosticsSnapshot,
+    exit_status: TaskExitStatusDiagnostics,
+    last_preemption_reason: UserPreemptionReasonDiagnostics,
+    last_resume_path: UserResumePathDiagnostics,
+}
+
+impl TaskStatusDiagnosticsSnapshot {
+    /// Create combined task status diagnostics.
+    pub(super) const fn new(
+        runtime: TaskRuntimeDiagnosticsSnapshot,
+        exit_status: TaskExitStatusDiagnostics,
+        last_preemption_reason: UserPreemptionReasonDiagnostics,
+        last_resume_path: UserResumePathDiagnostics,
+    ) -> Self {
+        Self {
+            runtime,
+            exit_status,
+            last_preemption_reason,
+            last_resume_path,
+        }
+    }
+}
+
 impl SchedulerTaskSnapshot {
     /// Create a kernel task snapshot from scheduler-owned task metadata.
     pub(super) const fn new_kernel(
         task_id: u64,
         parent_task_id: Option<u64>,
         state: TaskState,
-        runtime: TaskRuntimeDiagnosticsSnapshot,
-        exit_status: TaskExitStatusDiagnostics,
+        status: TaskStatusDiagnosticsSnapshot,
     ) -> Self {
         Self {
             task_id,
             parent_task_id,
             kind: TaskKindDiagnostics::Kernel,
             state,
-            runtime,
-            exit_status,
+            status,
             user_image: None,
             user_virtual_memory: None,
         }
@@ -476,8 +545,7 @@ impl SchedulerTaskSnapshot {
         task_id: u64,
         parent_task_id: Option<u64>,
         state: TaskState,
-        runtime: TaskRuntimeDiagnosticsSnapshot,
-        exit_status: TaskExitStatusDiagnostics,
+        status: TaskStatusDiagnosticsSnapshot,
         user_image: &UserImageDiagnosticsSnapshot,
         user_virtual_memory: UserVirtualMemorySnapshot,
     ) -> Self {
@@ -486,8 +554,7 @@ impl SchedulerTaskSnapshot {
             parent_task_id,
             kind: TaskKindDiagnostics::User,
             state,
-            runtime,
-            exit_status,
+            status,
             user_image: Some(*user_image),
             user_virtual_memory: Some(user_virtual_memory),
         }
@@ -515,7 +582,7 @@ impl SchedulerTaskSnapshot {
 
     /// Return the process-facing lifecycle state for console diagnostics.
     pub const fn process_lifecycle(&self) -> TaskProcessLifecycleDiagnostics {
-        match self.exit_status {
+        match self.status.exit_status {
             TaskExitStatusDiagnostics::Waitable(_) => TaskProcessLifecycleDiagnostics::Zombie,
             TaskExitStatusDiagnostics::Collected(_) => TaskProcessLifecycleDiagnostics::Reaped,
             TaskExitStatusDiagnostics::None => match self.state {
@@ -529,27 +596,37 @@ impl SchedulerTaskSnapshot {
 
     /// Return whether this user task is in the active scheduling set.
     pub const fn active(&self) -> bool {
-        self.runtime.active
+        self.status.runtime.active
     }
 
     /// Return whether this task still owns a user address space.
     pub const fn address_space_owned(&self) -> bool {
-        self.runtime.address_space_owned
+        self.status.runtime.address_space_owned
     }
 
     /// Return whether this task still owns a scheduler-managed kernel stack.
     pub const fn kernel_stack_owned(&self) -> bool {
-        self.runtime.kernel_stack_owned
+        self.status.runtime.kernel_stack_owned
     }
 
     /// Return the retained exit code for finished task records.
     pub const fn exit_code(&self) -> Option<u64> {
-        self.exit_status.exit_code()
+        self.status.exit_status.exit_code()
     }
 
     /// Return whether the retained exit code has been collected by the parent.
     pub const fn wait_collected(&self) -> bool {
-        self.exit_status.wait_collected()
+        self.status.exit_status.wait_collected()
+    }
+
+    /// Return the last scheduler preemption reason recorded for this task.
+    pub const fn last_preemption_reason(&self) -> UserPreemptionReasonDiagnostics {
+        self.status.last_preemption_reason
+    }
+
+    /// Return the last scheduler path that entered or resumed this task.
+    pub const fn last_resume_path(&self) -> UserResumePathDiagnostics {
+        self.status.last_resume_path
     }
 
     /// Return user image diagnostics for user task records.

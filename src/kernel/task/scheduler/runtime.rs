@@ -3,7 +3,8 @@
 use super::{
     address_space, FinishedUserTaskReclaim, KernelStackReclaim, OneShotUserTask,
     PhysicalFrameAllocator, Scheduler, SwitchAction, TaskIdentifier, TaskKind, TaskState,
-    UserAddressSpace, UserAddressSpaceReclaim, UserHeap, UserMappings, UserTaskExit, UserTrapFrame,
+    UserAddressSpace, UserAddressSpaceReclaim, UserHeap, UserMappings,
+    UserPreemptionReasonDiagnostics, UserResumePathDiagnostics, UserTaskExit, UserTrapFrame,
     UserTrapFrameSource, UserVirtualAddress, USER_TASK_PREEMPTION_ENABLED,
 };
 impl Scheduler {
@@ -79,6 +80,9 @@ impl Scheduler {
         self.activate_user_task(task_id);
         self.user_entry_count = self.user_entry_count.saturating_add(1);
         self.one_shot_user_entry_count = self.one_shot_user_entry_count.saturating_add(1);
+        if let TaskKind::User(user_runtime) = &mut self.tasks[task_index].kind {
+            user_runtime.last_resume_path = UserResumePathDiagnostics::LifecycleEntry;
+        }
         Some(OneShotUserTask {
             trap_frame,
             kernel_stack_top,
@@ -564,6 +568,9 @@ impl Scheduler {
         let next_task_id = self.tasks[next_index].get_id();
         if matches!(self.tasks[current_index].kind, TaskKind::User(_)) {
             self.timer_preemption_count = self.timer_preemption_count.saturating_add(1);
+            if let TaskKind::User(user_runtime) = &mut self.tasks[current_index].kind {
+                user_runtime.last_preemption_reason = UserPreemptionReasonDiagnostics::Timer;
+            }
             if !self.preemption_switch_logged {
                 crate::log_info!(
                     "task",
@@ -578,10 +585,15 @@ impl Scheduler {
         let current_context = self.tasks[current_index].context.as_mut_pointer();
         let next_user_kernel_stack_top = self.user_kernel_stack_top(next_index);
         let next_user_address_space = self.user_address_space(next_index);
-        if let TaskKind::User(user_runtime) = &self.tasks[next_index].kind {
-            if self.tasks[next_index].context.is_empty() {
+        let next_context_is_empty = self.tasks[next_index].context.is_empty();
+        if matches!(self.tasks[next_index].kind, TaskKind::User(_)) {
+            if next_context_is_empty {
                 self.user_entry_count = self.user_entry_count.saturating_add(1);
                 self.timer_user_entry_count = self.timer_user_entry_count.saturating_add(1);
+                let TaskKind::User(user_runtime) = &mut self.tasks[next_index].kind else {
+                    unreachable!("user task kind checked before timer entry");
+                };
+                user_runtime.last_resume_path = UserResumePathDiagnostics::TimerEntry;
                 return Some(SwitchAction::EnterUser {
                     current_context,
                     task_id: next_task_id,
@@ -592,6 +604,10 @@ impl Scheduler {
                         .expect("user tasks must own an address space before entry"),
                 });
             }
+            let TaskKind::User(user_runtime) = &mut self.tasks[next_index].kind else {
+                unreachable!("user task kind checked before timer resume");
+            };
+            user_runtime.last_resume_path = UserResumePathDiagnostics::TimerResume;
             if !self.user_resume_logged {
                 crate::log_info!(
                     "task",

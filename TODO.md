@@ -67,9 +67,6 @@ reviewable unit before implementing it.
 - [ ] Verify that each user task resumes with its own kernel stack.
 - [ ] Prevent scheduling a task while its address space is being reclaimed.
 - [ ] Add scheduler assertions for impossible active, finished, and reclaiming transitions.
-- [ ] Add diagnostics for last preemption reason per task.
-- [ ] Add diagnostics for last resume path per task.
-- [ ] Add a storage smoke case where one preempted process exits while another continues.
 - [ ] Document scheduler invariants for active, waiting, zombie, and reaped tasks.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening

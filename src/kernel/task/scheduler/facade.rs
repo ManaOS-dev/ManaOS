@@ -82,6 +82,14 @@ pub fn activate_user_task(task_id: u64) -> bool {
         .is_some_and(|scheduler| scheduler.activate_user_task(task_id))
 }
 
+/// Return whether any active user task records remain schedulable or blocked.
+pub fn has_active_user_tasks() -> bool {
+    let scheduler = SCHEDULER.lock();
+    scheduler
+        .as_ref()
+        .is_some_and(Scheduler::has_active_user_tasks)
+}
+
 /// Run active user-space tasks until one exits through `SYS_EXIT`.
 ///
 /// Starts with `task_id` and returns the exit reported by the active user task
@@ -122,6 +130,7 @@ pub fn run_next_user_task_once(
 /// # Panics
 ///
 /// Panics if the scheduler has not been initialized.
+#[allow(dead_code)]
 pub fn run_active_user_tasks_until_empty(
     frame_allocator: &mut PhysicalFrameAllocator,
 ) -> Vec<UserTaskExit> {

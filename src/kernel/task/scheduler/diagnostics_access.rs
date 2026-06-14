@@ -4,8 +4,9 @@ use super::{
     current_preemption_state, process_lifecycle, KernelStackGuardFault, Scheduler,
     SchedulerDiagnostics, SchedulerTaskSnapshot, Task, TaskExitStatusDiagnostics, TaskIdentifier,
     TaskKind, TaskRuntimeDiagnosticsSnapshot, TaskState, TaskStateDiagnostics,
-    UserHeapDiagnosticsSnapshot, UserMappingActiveDiagnosticsSnapshot,
-    UserMappingLifecycleDiagnosticsSnapshot, UserVirtualMemorySnapshot,
+    TaskStatusDiagnosticsSnapshot, UserHeapDiagnosticsSnapshot,
+    UserMappingActiveDiagnosticsSnapshot, UserMappingLifecycleDiagnosticsSnapshot,
+    UserPreemptionReasonDiagnostics, UserResumePathDiagnostics, UserVirtualMemorySnapshot,
     USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
 use alloc::vec::Vec;
@@ -118,12 +119,16 @@ impl Scheduler {
                         task_id,
                         parent_task_id,
                         task.state,
-                        TaskRuntimeDiagnosticsSnapshot::new(
-                            active,
-                            false,
-                            task.kernel_stack.is_some(),
+                        TaskStatusDiagnosticsSnapshot::new(
+                            TaskRuntimeDiagnosticsSnapshot::new(
+                                active,
+                                false,
+                                task.kernel_stack.is_some(),
+                            ),
+                            task_exit_status_diagnostics(task),
+                            UserPreemptionReasonDiagnostics::None,
+                            UserResumePathDiagnostics::None,
                         ),
-                        task_exit_status_diagnostics(task),
                     ),
                     TaskKind::User(user_runtime) => {
                         let user_image = user_runtime.image.snapshot();
@@ -151,12 +156,16 @@ impl Scheduler {
                             task_id,
                             parent_task_id,
                             task.state,
-                            TaskRuntimeDiagnosticsSnapshot::new(
-                                active,
-                                user_runtime.address_space.is_some(),
-                                task.kernel_stack.is_some(),
+                            TaskStatusDiagnosticsSnapshot::new(
+                                TaskRuntimeDiagnosticsSnapshot::new(
+                                    active,
+                                    user_runtime.address_space.is_some(),
+                                    task.kernel_stack.is_some(),
+                                ),
+                                task_exit_status_diagnostics(task),
+                                user_runtime.last_preemption_reason,
+                                user_runtime.last_resume_path,
                             ),
-                            task_exit_status_diagnostics(task),
                             &user_image,
                             user_virtual_memory,
                         )

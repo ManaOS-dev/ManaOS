@@ -99,7 +99,7 @@ pub(super) fn run(
 
 fn push_task_snapshot(output: &mut CommandOutput, snapshot: &SchedulerTaskSnapshot) {
     output.push(format!(
-        "task: id={} parent={} kind={} state={} lifecycle={} active={} address_space_owned={} kernel_stack_owned={} exit_code={} wait_collected={}",
+        "task: id={} parent={} kind={} state={} lifecycle={} active={} address_space_owned={} kernel_stack_owned={} exit_code={} wait_collected={} last_preemption_reason={} last_resume_path={}",
         snapshot.task_id(),
         snapshot
             .parent_task_id()
@@ -113,7 +113,9 @@ fn push_task_snapshot(output: &mut CommandOutput, snapshot: &SchedulerTaskSnapsh
         snapshot
             .exit_code()
             .map_or_else(|| "-".to_string(), |exit_code| exit_code.to_string()),
-        snapshot.wait_collected()
+        snapshot.wait_collected(),
+        snapshot.last_preemption_reason().as_str(),
+        snapshot.last_resume_path().as_str()
     ));
     if let Some(user_image) = snapshot.user_image() {
         push_user_image(output, snapshot.task_id(), user_image);

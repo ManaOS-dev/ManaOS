@@ -372,6 +372,8 @@ struct SchedulerTaskSnapshotCounters {
     bootstrap_child_user_tasks: u64,
     collected_user_exit_snapshots: u64,
     reaped_user_task_snapshots: u64,
+    preempted_user_task_snapshots: u64,
+    resumed_user_task_snapshots: u64,
 }
 
 impl SchedulerTaskSnapshotCounters {
@@ -385,6 +387,8 @@ impl SchedulerTaskSnapshotCounters {
             bootstrap_child_user_tasks: 0,
             collected_user_exit_snapshots: 0,
             reaped_user_task_snapshots: 0,
+            preempted_user_task_snapshots: 0,
+            resumed_user_task_snapshots: 0,
         }
     }
 }
@@ -458,6 +462,18 @@ fn record_scheduler_user_task_snapshot(
     counters.reaped_user_task_snapshots = counters.reaped_user_task_snapshots.saturating_add(1);
     counters.bootstrap_child_user_tasks = counters.bootstrap_child_user_tasks.saturating_add(1);
     counters.finished_user_tasks = counters.finished_user_tasks.saturating_add(1);
+    if snapshot.last_preemption_reason()
+        == crate::kernel::task::UserPreemptionReasonDiagnostics::Timer
+    {
+        counters.preempted_user_task_snapshots =
+            counters.preempted_user_task_snapshots.saturating_add(1);
+    }
+    assert_ne!(
+        snapshot.last_resume_path(),
+        crate::kernel::task::UserResumePathDiagnostics::None,
+        "finished user task snapshots must retain their last user resume path"
+    );
+    counters.resumed_user_task_snapshots = counters.resumed_user_task_snapshots.saturating_add(1);
     verify_user_task_image_snapshot(snapshot);
     counters.user_image_snapshots = counters.user_image_snapshots.saturating_add(1);
     let verification = verify_user_task_snapshot(snapshot);
@@ -508,6 +524,14 @@ fn verify_scheduler_task_snapshot_counts(
         counters.reaped_user_task_snapshots, expected_user_tasks,
         "scheduler snapshots must show reaped user process lifecycle states"
     );
+    assert!(
+        counters.preempted_user_task_snapshots > 0,
+        "scheduler snapshots must show at least one timer-preempted user task"
+    );
+    assert_eq!(
+        counters.resumed_user_task_snapshots, expected_user_tasks,
+        "scheduler snapshots must show every user task was entered or resumed"
+    );
 }
 
 fn log_scheduler_task_snapshot_counters(
@@ -535,6 +559,14 @@ fn log_scheduler_task_snapshot_counters(
             LogField::new(
                 "reaped_user_task_snapshots",
                 format_args!("{}", counters.reaped_user_task_snapshots),
+            ),
+            LogField::new(
+                "preempted_user_task_snapshots",
+                format_args!("{}", counters.preempted_user_task_snapshots),
+            ),
+            LogField::new(
+                "resumed_user_task_snapshots",
+                format_args!("{}", counters.resumed_user_task_snapshots),
             ),
             LogField::new(
                 "fully_reclaimed_user_tasks",

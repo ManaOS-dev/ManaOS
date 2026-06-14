@@ -33,6 +33,7 @@
 //! - [`get_scheduler_diagnostics`] - Read scheduler accounting diagnostics
 //! - [`get_scheduler_task_snapshots`] - Read retained task rows for diagnostics
 //! - [`activate_user_task`] - Add a user task to the active scheduling set
+//! - [`has_active_user_tasks`] - Check whether active user task records remain
 //! - [`set_preemption_enabled`] - Enable or disable timer-driven task switching
 //! - [`close_user_return_preemption_window`] - Disable preemption after a user stop syscall
 //! - [`record_current_user_trap_frame`] - Save a captured user trap frame
@@ -57,7 +58,7 @@ pub use context::UserEntryArguments;
 pub use diagnostics::{
     PreemptionStateDiagnostics, SchedulerDiagnostics, SchedulerTaskSnapshot, TaskKindDiagnostics,
     TaskProcessLifecycleDiagnostics, TaskStateDiagnostics, UserImageDiagnosticsSnapshot,
-    UserVirtualMemorySnapshot,
+    UserPreemptionReasonDiagnostics, UserResumePathDiagnostics, UserVirtualMemorySnapshot,
 };
 #[allow(unused_imports)]
 pub use metadata::{TaskIdentifier, TaskMetadata};
@@ -69,7 +70,7 @@ pub use scheduler::{
     collect_waitable_child_exit, current_user_task_has_child, finish_current_task,
     get_current_parent_task_id, get_current_task_id, get_current_user_address_space,
     get_kernel_stack_guard_fault, get_kernel_stack_guard_fault_diagnostic_sample,
-    get_scheduler_diagnostics, get_scheduler_task_snapshots, initialize,
+    get_scheduler_diagnostics, get_scheduler_task_snapshots, has_active_user_tasks, initialize,
     prepare_current_user_sleep, process_current_user_break, process_current_user_mapping,
     process_current_user_unmapping, process_timer_tick, record_current_user_execve_reclaim,
     record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
