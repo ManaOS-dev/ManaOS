@@ -6,7 +6,7 @@ ManaOS プロジェクトへの参加を歓迎します！ManaOS は「開発者
 
 外部コントリビュータはプルリクエストのワークフローを使用してください。
 対象変更に外部コントリビュータが関与していない場合、メンテナおよびプロジェクト所有の自動化は、ローカル検証後に `AGENTS.md`
-で定義された直接ブランチ運用を使用できます。
+で必須化され、[`MAINTAINER_WORKFLOW.ja.md`](MAINTAINER_WORKFLOW.ja.md) に記載された直接ブランチ運用を使用できます。
 
 1. **フォーク (Fork)**: リポジトリを自分のアカウントにフォークします。
 2. **ブランチ作成**: 機能追加や修正のためのブランチを作成します: `git checkout -b feature/your-awesome-feature` または `git checkout -b fix/your-bug`

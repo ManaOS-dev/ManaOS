@@ -220,6 +220,6 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Add syscall ABI tests for success and errno paths.
 - [ ] Add userland build checks to CI for every committed user program.
 - [x] Add architecture boundary checks that reject `arch` to `kernel` imports.
-- [ ] Add docs for the direct maintainer branch workflow.
+- [x] Add docs for the direct maintainer branch workflow.
 - [ ] Add docs for manual QEMU validation commands.
 - [ ] Add a contributor-facing architecture map generated from the current module tree.

@@ -6,8 +6,9 @@ Welcome! ManaOS is an "OS for Developers," and we value your contributions. This
 
 External contributors should use a pull request workflow. When there are no
 external contributors involved in the change, maintainers and project-owned
-automation may use the direct branch workflow documented in `AGENTS.md` after
-local verification.
+automation may use the direct branch workflow required by `AGENTS.md` and
+documented in [`docs/MAINTAINER_WORKFLOW.md`](docs/MAINTAINER_WORKFLOW.md)
+after local verification.
 
 1. **Fork** the repository.
 2. **Create a branch** for your feature or bug fix: `git checkout -b feature/your-awesome-feature` or `git checkout -b fix/your-bug`.
