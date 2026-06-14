@@ -276,11 +276,14 @@ pub fn verify_scheduler_console_command() -> bool {
             "one_shot_user_entries=",
             "timer_user_entries=",
             "user_vm_layout:",
+            "task_image:",
+            "path=/disk/bin/smoke_demo",
+            "last_execve_old_user_pages=11",
             "task_vm:",
             "task_mmap_lifecycle:",
         ],
     ) {
-        Some(output_lines) if output_lines >= 15 => {
+        Some(output_lines) if output_lines >= 17 => {
             crate::log_info!(
                 "console",
                 "Tasks command smoke passed: command=\"tasks\" output_lines={}",

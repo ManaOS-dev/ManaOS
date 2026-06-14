@@ -15,7 +15,7 @@ reviewable unit before implementing it.
 - [ ] Preserve open file descriptors that do not have close-on-exec semantics.
 - [ ] Add close-on-exec metadata to file descriptors.
 - [ ] Close descriptors marked close-on-exec during successful `execve`.
-- [ ] Add `execve` diagnostics to the `tasks` console command.
+- [ ] Add `execve` replacement-state diagnostics to the `tasks` console command once fallible candidate states exist.
 - [ ] Add a boot smoke case that `execve`s a second user program from `/disk`.
 
 ### `waitpid`, Exit Status, And Reaping

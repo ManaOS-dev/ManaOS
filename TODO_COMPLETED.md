@@ -33,6 +33,7 @@ active roadmap can list only unfinished work.
 - [x] Replace the user stack with a freshly built argv/envp stack image.
 - [x] Reclaim the old user image only after the new image can no longer return to the old instruction pointer.
 - [x] Add a no-return userland smoke path for successful self-`execve` without recursive re-exec.
+- [x] Add current `execve` image generation, path, and old-image reclaim diagnostics to the `tasks` console command.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

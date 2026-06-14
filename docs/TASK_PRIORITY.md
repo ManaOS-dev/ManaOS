@@ -7,7 +7,8 @@ not on product value.
 ## Remaining High-Risk Order
 
 1. Full user process lifecycle
-   - Add `execve`.
+   - Finish the remaining `execve` current-directory, descriptor inheritance,
+     close-on-exec, and second-program smoke gaps.
    - Add user-visible `wait` or `waitpid`.
    - Add a minimal user shell process.
    - Extend preemptive scheduling across general process lifecycle paths.
@@ -55,12 +56,13 @@ timer calibration, periodic Local APIC scheduler ticks, and spurious/unexpected
 external vector diagnostics are proven by storage smoke.
 
 The active selection is now full user process lifecycle work. The kernel-side
-`execve` contract and cleanup invariants are documented in
+`execve` contract, cleanup invariants, successful self-replacement path, and
+current image diagnostics are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. publish successful `execve` image replacement through one scheduler-owned
-   transition;
+1. close the remaining `execve` current-directory, descriptor inheritance,
+   close-on-exec, and second-program smoke gaps;
 2. define the scheduler-owned child exit record model needed for `waitpid`;
 3. extend smoke coverage for multiple spawned user processes before introducing
    a broader user shell;

@@ -37,6 +37,7 @@
 //! - [`record_current_user_trap_frame`] - Save a captured user trap frame
 //! - [`record_current_user_interrupt_trap_frame`] - Save a timer interrupt user trap frame
 //! - [`replace_current_user_image`] - Replace the current user task image during `execve`
+//! - [`record_current_user_execve_reclaim`] - Save `execve` old-image reclaim diagnostics
 //! - [`get_kernel_stack_guard_fault`] - Classify a kernel stack guard fault
 //! - [`get_kernel_stack_guard_fault_diagnostic_sample`] - Probe guard-fault diagnostics
 
@@ -54,7 +55,7 @@ pub mod user_mode;
 pub use context::UserEntryArguments;
 pub use diagnostics::{
     PreemptionStateDiagnostics, SchedulerDiagnostics, SchedulerTaskSnapshot, TaskKindDiagnostics,
-    TaskStateDiagnostics, UserVirtualMemorySnapshot,
+    TaskStateDiagnostics, UserImageDiagnosticsSnapshot, UserVirtualMemorySnapshot,
 };
 #[allow(unused_imports)]
 pub use metadata::{TaskIdentifier, TaskMetadata};
@@ -68,7 +69,8 @@ pub use scheduler::{
     get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
     get_scheduler_task_snapshots, initialize, prepare_current_user_sleep,
     process_current_user_break, process_current_user_mapping, process_current_user_unmapping,
-    process_timer_tick, record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
+    process_timer_tick, record_current_user_execve_reclaim,
+    record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
     replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
     run_user_task_once, set_preemption_enabled, spawn, spawn_user_task, Task, UserMappingRequest,
 };

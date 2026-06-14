@@ -159,11 +159,13 @@ context 付き panic として扱います。
   記録します。
 - scheduler smoke は、post-exec image が exit する前に `execve` が heap と private mapping bookkeeping を
   reset することを検証します。
+- `tasks` console command は、user task ごとの current image generation、retained image path、last successful
+  old-image reclaim count を表示します。
 
 残りの runtime diagnostics では、より広い behavior を扱います。
 
-- `tasks` output は last successful image path、current image generation、`execve` replacement が
-  building / active / failed のどれかを表示します。
+- `tasks` output は、candidate construction に fallible post-build failure point が入った後で、
+  replacement building / failed state を表示します。
 - future post-candidate failure smoke は candidate frame をすべて返し、old image を runnable のまま保つことを
   証明します。
 - second user program smoke は replacement が self-`execve` に限定されないことを証明します。

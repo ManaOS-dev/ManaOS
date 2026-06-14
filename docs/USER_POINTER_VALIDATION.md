@@ -41,7 +41,7 @@ The implementation entry point is `kernel::memory::user_pointer`.
 | `mmap(addr, len, prot, flags, fd, offset)` | none | none | none | Private mappings only; automatic anonymous mappings use `addr = 0`, fixed mappings require a page-aligned non-zero address, `MAP_FIXED_NOREPLACE` rejects overlaps, `MAP_FIXED` replaces private mapping records, file-private mappings require a regular file descriptor and page-aligned offset, and executable mappings are rejected. |
 | `munmap(addr, len)` | none | none | none | Private mapping range unmap only; `addr` must be page-aligned, the range must stay inside tracked private mapping records, and no user buffer is copied. |
 | `nanosleep(req, rem)` | `req`, optional `rem` | user to kernel, kernel to user | `copy_from_user`, `copy_to_user` | `req` is exactly `UserTimespec`; non-zero `rem` is exactly `UserTimespec` and is zero-filled because signal interruption is not implemented. |
-| `execve(path, argv, envp)` | `path`, `argv`, `envp` | user to kernel | `copy_cstr_from_user`, `copy_from_user` | Path is capped by `MAX_USER_STRING_LENGTH`. `argv == NULL` and `envp == NULL` are accepted as empty vectors. Argument and environment vectors are capped at 8 entries each and 4096 total copied string bytes including NUL terminators. Invalid pointers return `-EFAULT`; limit overflow returns `-E2BIG`. Runtime image replacement is still unsupported. |
+| `execve(path, argv, envp)` | `path`, `argv`, `envp` | user to kernel | `copy_cstr_from_user`, `copy_from_user` | Path is capped by `MAX_USER_STRING_LENGTH`. `argv == NULL` and `envp == NULL` are accepted as empty vectors. Argument and environment vectors are capped at 8 entries each and 4096 total copied string bytes including NUL terminators. Invalid pointers return `-EFAULT`; limit overflow returns `-E2BIG`. A valid ELF image replaces the current user image and does not return to the old instruction pointer. |
 | `exit(code)` / `exit_group(code)` | none | none | none | No user pointer validation. |
 | `getpid()` / `getppid()` | none | none | none | No user pointer validation. |
 
@@ -52,7 +52,7 @@ missing paths, bad file descriptors, unsupported `openat`, invalid
 `getdents64`, invalid `mmap`/`munmap`, invalid `nanosleep`, and unmapped
 `nanosleep` pointers. It also verifies `execve` validation for valid
 `argv`/`envp`, bad pointer arrays, argument-count overflow, missing paths,
-directory targets, and non-ELF files.
+directory targets, non-ELF files, and a no-return successful self-`execve`.
 
 ## Current Enforcement Gaps
 

@@ -4,7 +4,9 @@ use super::output::{CommandEffect, CommandError, CommandOutput};
 use alloc::format;
 use alloc::string::ToString;
 
-use crate::kernel::task::{SchedulerTaskSnapshot, UserVirtualMemorySnapshot};
+use crate::kernel::task::{
+    SchedulerTaskSnapshot, UserImageDiagnosticsSnapshot, UserVirtualMemorySnapshot,
+};
 
 pub(super) fn run(
     arguments: &str,
@@ -88,12 +90,12 @@ pub(super) fn run(
         return Ok(CommandEffect::Output(output));
     };
     for snapshot in snapshots {
-        push_task_snapshot(&mut output, snapshot);
+        push_task_snapshot(&mut output, &snapshot);
     }
     Ok(CommandEffect::Output(output))
 }
 
-fn push_task_snapshot(output: &mut CommandOutput, snapshot: SchedulerTaskSnapshot) {
+fn push_task_snapshot(output: &mut CommandOutput, snapshot: &SchedulerTaskSnapshot) {
     output.push(format!(
         "task: id={} parent={} kind={} state={} active={} address_space_owned={} kernel_stack_owned={} exit_code={} wait_collected={}",
         snapshot.task_id(),
@@ -110,9 +112,34 @@ fn push_task_snapshot(output: &mut CommandOutput, snapshot: SchedulerTaskSnapsho
             .map_or_else(|| "-".to_string(), |exit_code| exit_code.to_string()),
         snapshot.wait_collected()
     ));
+    if let Some(user_image) = snapshot.user_image() {
+        push_user_image(output, snapshot.task_id(), user_image);
+    }
     if let Some(user_virtual_memory) = snapshot.user_virtual_memory() {
         push_user_virtual_memory(output, snapshot.task_id(), user_virtual_memory);
     }
+}
+
+fn push_user_image(
+    output: &mut CommandOutput,
+    task_id: u64,
+    user_image: &UserImageDiagnosticsSnapshot,
+) {
+    let path_bytes = user_image.path_bytes();
+    let path_len = user_image.path_len();
+    let image_path = if path_len == 0 {
+        "-"
+    } else {
+        core::str::from_utf8(&path_bytes[..path_len]).unwrap_or("<invalid>")
+    };
+    output.push(format!(
+        "task_image: id={} generation={} path={} last_execve_old_user_pages={} last_execve_old_page_table_pages={}",
+        task_id,
+        user_image.generation(),
+        image_path,
+        user_image.last_execve_old_user_pages(),
+        user_image.last_execve_old_page_table_pages()
+    ));
 }
 
 fn push_user_virtual_memory(

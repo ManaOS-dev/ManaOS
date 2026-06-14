@@ -2,6 +2,9 @@
 
 use super::state::TaskState;
 
+/// Maximum bytes retained for a task image path diagnostic.
+pub(super) const USER_IMAGE_PATH_DIAGNOSTIC_BYTES: usize = 256;
+
 /// Number of tasks currently in each lifecycle state.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct TaskStateDiagnostics {
@@ -109,6 +112,60 @@ impl PreemptionStateDiagnostics {
         } else {
             Self::Disabled
         }
+    }
+}
+
+/// Snapshot of one user task's current image diagnostics.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserImageDiagnosticsSnapshot {
+    generation: u64,
+    path_len: usize,
+    path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
+    last_execve_old_user_pages: u64,
+    last_execve_old_page_table_pages: u64,
+}
+
+impl UserImageDiagnosticsSnapshot {
+    /// Create a user image diagnostics snapshot.
+    pub(super) const fn new(
+        generation: u64,
+        path_len: usize,
+        path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
+        last_execve_old_user_pages: u64,
+        last_execve_old_page_table_pages: u64,
+    ) -> Self {
+        Self {
+            generation,
+            path_len,
+            path_bytes,
+            last_execve_old_user_pages,
+            last_execve_old_page_table_pages,
+        }
+    }
+
+    /// Return the current image generation.
+    pub const fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Return the number of valid bytes in the retained image path.
+    pub const fn path_len(&self) -> usize {
+        self.path_len
+    }
+
+    /// Return the retained image path bytes.
+    pub const fn path_bytes(&self) -> &[u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES] {
+        &self.path_bytes
+    }
+
+    /// Return the old user pages reclaimed by the last successful `execve`.
+    pub const fn last_execve_old_user_pages(&self) -> u64 {
+        self.last_execve_old_user_pages
+    }
+
+    /// Return the old page-table pages reclaimed by the last successful `execve`.
+    pub const fn last_execve_old_page_table_pages(&self) -> u64 {
+        self.last_execve_old_page_table_pages
     }
 }
 
@@ -278,6 +335,7 @@ pub struct SchedulerTaskSnapshot {
     state: TaskState,
     runtime: TaskRuntimeDiagnosticsSnapshot,
     exit_status: TaskExitStatusDiagnostics,
+    user_image: Option<UserImageDiagnosticsSnapshot>,
     user_virtual_memory: Option<UserVirtualMemorySnapshot>,
 }
 
@@ -361,6 +419,7 @@ impl SchedulerTaskSnapshot {
             state,
             runtime,
             exit_status,
+            user_image: None,
             user_virtual_memory: None,
         }
     }
@@ -372,6 +431,7 @@ impl SchedulerTaskSnapshot {
         state: TaskState,
         runtime: TaskRuntimeDiagnosticsSnapshot,
         exit_status: TaskExitStatusDiagnostics,
+        user_image: &UserImageDiagnosticsSnapshot,
         user_virtual_memory: UserVirtualMemorySnapshot,
     ) -> Self {
         Self {
@@ -381,57 +441,63 @@ impl SchedulerTaskSnapshot {
             state,
             runtime,
             exit_status,
+            user_image: Some(*user_image),
             user_virtual_memory: Some(user_virtual_memory),
         }
     }
 
     /// Return the scheduler-local task identifier.
-    pub const fn task_id(self) -> u64 {
+    pub const fn task_id(&self) -> u64 {
         self.task_id
     }
 
     /// Return the parent task identifier if the task was spawned by another task.
-    pub const fn parent_task_id(self) -> Option<u64> {
+    pub const fn parent_task_id(&self) -> Option<u64> {
         self.parent_task_id
     }
 
     /// Return the scheduler task kind.
-    pub const fn kind(self) -> TaskKindDiagnostics {
+    pub const fn kind(&self) -> TaskKindDiagnostics {
         self.kind
     }
 
     /// Return the current scheduler lifecycle state.
-    pub const fn state(self) -> TaskState {
+    pub const fn state(&self) -> TaskState {
         self.state
     }
 
     /// Return whether this user task is in the active scheduling set.
-    pub const fn active(self) -> bool {
+    pub const fn active(&self) -> bool {
         self.runtime.active
     }
 
     /// Return whether this task still owns a user address space.
-    pub const fn address_space_owned(self) -> bool {
+    pub const fn address_space_owned(&self) -> bool {
         self.runtime.address_space_owned
     }
 
     /// Return whether this task still owns a scheduler-managed kernel stack.
-    pub const fn kernel_stack_owned(self) -> bool {
+    pub const fn kernel_stack_owned(&self) -> bool {
         self.runtime.kernel_stack_owned
     }
 
     /// Return the retained exit code for finished task records.
-    pub const fn exit_code(self) -> Option<u64> {
+    pub const fn exit_code(&self) -> Option<u64> {
         self.exit_status.exit_code()
     }
 
     /// Return whether the retained exit code has been collected by the parent.
-    pub const fn wait_collected(self) -> bool {
+    pub const fn wait_collected(&self) -> bool {
         self.exit_status.wait_collected()
     }
 
+    /// Return user image diagnostics for user task records.
+    pub fn user_image(&self) -> Option<&UserImageDiagnosticsSnapshot> {
+        self.user_image.as_ref()
+    }
+
     /// Return user virtual memory bookkeeping for user task records.
-    pub const fn user_virtual_memory(self) -> Option<UserVirtualMemorySnapshot> {
+    pub const fn user_virtual_memory(&self) -> Option<UserVirtualMemorySnapshot> {
         self.user_virtual_memory
     }
 }

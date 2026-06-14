@@ -5,8 +5,9 @@ use super::context::{TaskContext, TaskEntry, UserEntryArguments, UserTaskContext
 use super::diagnostics::{
     PreemptionStateDiagnostics, SchedulerDiagnostics, SchedulerTaskSnapshot,
     TaskExitStatusDiagnostics, TaskRuntimeDiagnosticsSnapshot, TaskStateDiagnostics,
-    UserHeapDiagnosticsSnapshot, UserMappingActiveDiagnosticsSnapshot,
-    UserMappingLifecycleDiagnosticsSnapshot, UserVirtualMemorySnapshot,
+    UserHeapDiagnosticsSnapshot, UserImageDiagnosticsSnapshot,
+    UserMappingActiveDiagnosticsSnapshot, UserMappingLifecycleDiagnosticsSnapshot,
+    UserVirtualMemorySnapshot, USER_IMAGE_PATH_DIAGNOSTIC_BYTES,
 };
 use super::metadata::{TaskIdentifier, TaskMetadata};
 use super::process_lifecycle::{self, UserTaskExit};
@@ -128,6 +129,7 @@ impl TaskKind {
 struct UserTaskRuntime {
     address_space: Option<UserAddressSpace>,
     saved_frame: UserTrapFrame,
+    image: UserImageRuntime,
     heap: UserHeap,
     mappings: UserMappings,
     mapping_total_mapped_pages: u64,
@@ -149,6 +151,7 @@ impl UserTaskRuntime {
         Self {
             address_space: Some(address_space),
             saved_frame: entry_context.to_trap_frame(),
+            image: UserImageRuntime::new(),
             heap: UserHeap::new(heap_start),
             mappings: UserMappings::new(),
             mapping_total_mapped_pages: 0,
@@ -161,6 +164,60 @@ impl UserTaskRuntime {
             interrupt_frame_recorded: false,
         }
     }
+}
+
+#[derive(Debug)]
+struct UserImageRuntime {
+    generation: u64,
+    path_len: usize,
+    path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
+    last_execve_old_user_pages: u64,
+    last_execve_old_page_table_pages: u64,
+}
+
+impl UserImageRuntime {
+    const fn new() -> Self {
+        Self {
+            generation: 0,
+            path_len: 0,
+            path_bytes: [0; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
+            last_execve_old_user_pages: 0,
+            last_execve_old_page_table_pages: 0,
+        }
+    }
+
+    fn replace_with_path(&mut self, path: &str) {
+        self.generation = self.generation.saturating_add(1);
+        self.path_bytes.fill(0);
+        let path_len = truncated_path_len(path);
+        self.path_bytes[..path_len].copy_from_slice(&path.as_bytes()[..path_len]);
+        self.path_len = path_len;
+        self.last_execve_old_user_pages = 0;
+        self.last_execve_old_page_table_pages = 0;
+    }
+
+    const fn snapshot(&self) -> UserImageDiagnosticsSnapshot {
+        UserImageDiagnosticsSnapshot::new(
+            self.generation,
+            self.path_len,
+            self.path_bytes,
+            self.last_execve_old_user_pages,
+            self.last_execve_old_page_table_pages,
+        )
+    }
+
+    fn record_last_execve_reclaim(&mut self, reclaim: UserAddressSpaceReclaim) {
+        self.last_execve_old_user_pages = reclaim.user_pages();
+        self.last_execve_old_page_table_pages = reclaim.page_table_pages();
+    }
+}
+
+fn truncated_path_len(path: &str) -> usize {
+    let mut path_len = path.len().min(USER_IMAGE_PATH_DIAGNOSTIC_BYTES);
+    while !path.is_char_boundary(path_len) {
+        path_len = path_len.saturating_sub(1);
+    }
+    path_len
 }
 
 #[derive(Clone, Copy)]
@@ -549,7 +606,8 @@ pub use facade::{
     get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
     get_scheduler_task_snapshots, initialize, prepare_current_user_sleep,
     process_current_user_break, process_current_user_mapping, process_current_user_unmapping,
-    process_timer_tick, record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
+    process_timer_tick, record_current_user_execve_reclaim,
+    record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
     replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
     run_user_task_once, set_preemption_enabled, spawn, spawn_user_task,
 };

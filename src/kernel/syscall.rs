@@ -634,6 +634,7 @@ fn build_and_publish_execve_candidate(
         candidate.address_space,
         candidate.trap_frame,
         candidate.heap_start,
+        &staging.path,
     ) else {
         let reclaim = crate::kernel::memory::address_space::destroy_user_address_space(
             frame_allocator,
@@ -657,6 +658,10 @@ fn build_and_publish_execve_candidate(
     let reclaim = crate::kernel::memory::address_space::destroy_user_address_space(
         frame_allocator,
         old_address_space,
+    );
+    assert!(
+        crate::kernel::task::record_current_user_execve_reclaim(task_id, reclaim),
+        "published execve task must retain reclaim diagnostics"
     );
     crate::kernel::memory::address_space::switch_to_user_address_space(candidate.address_space);
 

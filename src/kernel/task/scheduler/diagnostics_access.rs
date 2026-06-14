@@ -120,6 +120,7 @@ impl Scheduler {
                         task_exit_status_diagnostics(task),
                     ),
                     TaskKind::User(user_runtime) => {
+                        let user_image = user_runtime.image.snapshot();
                         let user_virtual_memory = UserVirtualMemorySnapshot::new(
                             UserHeapDiagnosticsSnapshot::new(
                                 user_runtime.heap.base().as_u64(),
@@ -150,6 +151,7 @@ impl Scheduler {
                                 task.kernel_stack.is_some(),
                             ),
                             task_exit_status_diagnostics(task),
+                            &user_image,
                             user_virtual_memory,
                         )
                     }

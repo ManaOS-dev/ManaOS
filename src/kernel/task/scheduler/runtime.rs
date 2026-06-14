@@ -383,6 +383,7 @@ impl Scheduler {
         address_space: UserAddressSpace,
         trap_frame: UserTrapFrame,
         heap_start: UserVirtualAddress,
+        image_path: &str,
     ) -> Option<(u64, UserAddressSpace)> {
         let current_task = &mut self.tasks[self.current_index];
         let task_id = current_task.get_id();
@@ -396,6 +397,7 @@ impl Scheduler {
         user_runtime.address_space = Some(address_space);
 
         user_runtime.saved_frame = trap_frame;
+        user_runtime.image.replace_with_path(image_path);
         user_runtime.heap = UserHeap::new(heap_start);
         user_runtime.mappings = UserMappings::new();
         user_runtime.mapping_total_mapped_pages = 0;
@@ -420,6 +422,21 @@ impl Scheduler {
         );
 
         Some((task_id, old_address_space))
+    }
+
+    pub(in crate::kernel::task) fn record_current_user_execve_reclaim(
+        &mut self,
+        task_id: u64,
+        reclaim: UserAddressSpaceReclaim,
+    ) -> bool {
+        let Some(task_index) = self.get_task_index(task_id) else {
+            return false;
+        };
+        let TaskKind::User(user_runtime) = &mut self.tasks[task_index].kind else {
+            return false;
+        };
+        user_runtime.image.record_last_execve_reclaim(reclaim);
+        true
     }
 
     pub(in crate::kernel::task) fn can_schedule_task(

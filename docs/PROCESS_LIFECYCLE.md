@@ -184,12 +184,13 @@ Current runtime diagnostics cover the first successful replacement path:
   `execve image published` with old-image reclaim counts.
 - Scheduler smoke verifies that `execve` resets heap and private mapping
   bookkeeping before the post-exec image exits.
+- The `tasks` console command shows each user task's current image generation,
+  retained image path, and last successful old-image reclaim counts.
 
 Remaining runtime diagnostics should cover broader behavior:
 
-- `tasks` output should show the last successful image path, current image
-  generation, and whether an `execve` replacement is building, active, or
-  failed.
+- `tasks` output should show replacement building and failed states once
+  candidate construction has fallible post-build failure points.
 - Failure smoke should prove any future post-candidate failure returns all
   candidate frames and keeps the old image runnable.
 - A second user program smoke should prove replacement is not limited to

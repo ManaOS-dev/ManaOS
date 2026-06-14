@@ -349,6 +349,7 @@ struct SchedulerTaskSnapshotCounters {
     finished_user_tasks: u64,
     fully_reclaimed_user_tasks: u64,
     user_vm_snapshots: u64,
+    user_image_snapshots: u64,
     anonymous_mapping_release_snapshots: u64,
     bootstrap_child_user_tasks: u64,
     collected_user_exit_snapshots: u64,
@@ -360,6 +361,7 @@ impl SchedulerTaskSnapshotCounters {
             finished_user_tasks: 0,
             fully_reclaimed_user_tasks: 0,
             user_vm_snapshots: 0,
+            user_image_snapshots: 0,
             anonymous_mapping_release_snapshots: 0,
             bootstrap_child_user_tasks: 0,
             collected_user_exit_snapshots: 0,
@@ -394,13 +396,13 @@ fn verify_scheduler_task_snapshot_rows(
         if snapshot.kind() != crate::kernel::task::TaskKindDiagnostics::User {
             continue;
         }
-        record_scheduler_user_task_snapshot(snapshot, &mut counters);
+        record_scheduler_user_task_snapshot(&snapshot, &mut counters);
     }
     counters
 }
 
 fn record_scheduler_user_task_snapshot(
-    snapshot: crate::kernel::task::SchedulerTaskSnapshot,
+    snapshot: &crate::kernel::task::SchedulerTaskSnapshot,
     counters: &mut SchedulerTaskSnapshotCounters,
 ) {
     assert!(
@@ -430,6 +432,8 @@ fn record_scheduler_user_task_snapshot(
         counters.collected_user_exit_snapshots.saturating_add(1);
     counters.bootstrap_child_user_tasks = counters.bootstrap_child_user_tasks.saturating_add(1);
     counters.finished_user_tasks = counters.finished_user_tasks.saturating_add(1);
+    verify_user_task_image_snapshot(snapshot);
+    counters.user_image_snapshots = counters.user_image_snapshots.saturating_add(1);
     let verification = verify_user_task_snapshot(snapshot);
     counters.user_vm_snapshots = counters.user_vm_snapshots.saturating_add(1);
     if verification.released_mappings {
@@ -457,6 +461,10 @@ fn verify_scheduler_task_snapshot_counts(
     assert_eq!(
         counters.user_vm_snapshots, expected_user_tasks,
         "scheduler snapshots must include virtual memory bookkeeping for every user task"
+    );
+    assert_eq!(
+        counters.user_image_snapshots, expected_user_tasks,
+        "scheduler snapshots must include execve image diagnostics for every user task"
     );
     assert_eq!(
         counters.anonymous_mapping_release_snapshots, expected_user_tasks,
@@ -503,6 +511,10 @@ fn log_scheduler_task_snapshot_counters(
                 format_args!("{}", counters.user_vm_snapshots),
             ),
             LogField::new(
+                "user_image_snapshots",
+                format_args!("{}", counters.user_image_snapshots),
+            ),
+            LogField::new(
                 "released_mmap_snapshots",
                 format_args!("{}", counters.anonymous_mapping_release_snapshots),
             ),
@@ -511,7 +523,7 @@ fn log_scheduler_task_snapshot_counters(
 }
 
 fn verify_user_task_snapshot(
-    snapshot: crate::kernel::task::SchedulerTaskSnapshot,
+    snapshot: &crate::kernel::task::SchedulerTaskSnapshot,
 ) -> UserTaskSnapshotVerification {
     let user_virtual_memory = snapshot
         .user_virtual_memory()
@@ -557,6 +569,33 @@ fn verify_user_task_snapshot(
             && user_virtual_memory.mapping_active_records() == 0,
         fully_reclaimed: !snapshot.address_space_owned() && !snapshot.kernel_stack_owned(),
     }
+}
+
+fn verify_user_task_image_snapshot(snapshot: &crate::kernel::task::SchedulerTaskSnapshot) {
+    let user_image = snapshot
+        .user_image()
+        .expect("user task snapshots must include image diagnostics");
+    assert_eq!(
+        user_image.generation(),
+        1,
+        "user smoke tasks must record one successful execve generation"
+    );
+    let path_bytes = user_image.path_bytes();
+    assert_eq!(
+        &path_bytes[..user_image.path_len()],
+        b"/disk/bin/smoke_demo",
+        "user smoke tasks must record the post-exec image path"
+    );
+    assert_eq!(
+        user_image.last_execve_old_user_pages(),
+        11,
+        "execve diagnostics must record old user page reclaim count"
+    );
+    assert_eq!(
+        user_image.last_execve_old_page_table_pages(),
+        10,
+        "execve diagnostics must record old page-table reclaim count"
+    );
 }
 
 /// Record and log a frame allocator diagnostics snapshot.

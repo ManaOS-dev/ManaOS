@@ -4,9 +4,9 @@ use super::{
     address_space, architecture, current_preemption_state, process_lifecycle,
     KernelStackGuardFault, PhysicalFrameAllocator, PreemptionStateDiagnostics, Scheduler,
     SchedulerDiagnostics, SchedulerTaskSnapshot, SwitchAction, TaskEntry, UserAddressSpace,
-    UserEntryArguments, UserMappingError, UserMappingRequest, UserTaskExit, UserTrapFrame,
-    UserTrapFrameSource, UserVirtualAddress, PREEMPTION_STATE, SCHEDULER,
-    USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
+    UserAddressSpaceReclaim, UserEntryArguments, UserMappingError, UserMappingRequest,
+    UserTaskExit, UserTrapFrame, UserTrapFrameSource, UserVirtualAddress, PREEMPTION_STATE,
+    SCHEDULER, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
 use alloc::vec::Vec;
 use core::sync::atomic::Ordering;
@@ -345,11 +345,20 @@ pub fn replace_current_user_image(
     address_space: UserAddressSpace,
     trap_frame: UserTrapFrame,
     heap_start: UserVirtualAddress,
+    image_path: &str,
 ) -> Option<(u64, UserAddressSpace)> {
     let mut scheduler = SCHEDULER.lock();
     scheduler.as_mut().and_then(|scheduler| {
-        scheduler.replace_current_user_image(address_space, trap_frame, heap_start)
+        scheduler.replace_current_user_image(address_space, trap_frame, heap_start, image_path)
     })
+}
+
+/// Record the old image reclaim result for a successful `execve`.
+pub fn record_current_user_execve_reclaim(task_id: u64, reclaim: UserAddressSpaceReclaim) -> bool {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .is_some_and(|scheduler| scheduler.record_current_user_execve_reclaim(task_id, reclaim))
 }
 
 /// Return scheduler task counts and lifecycle accounting diagnostics.
