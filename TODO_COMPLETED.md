@@ -53,6 +53,7 @@ active roadmap can list only unfinished work.
 - [x] Prevent double-reaping of the same child exit record.
 - [x] Add serial assertions for the wait lifecycle smoke path.
 - [x] Expose zombie and reaped counts in scheduler diagnostics.
+- [x] Add `tasks` output for waiting, zombie, and reaped states.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

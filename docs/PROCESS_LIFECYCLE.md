@@ -101,6 +101,9 @@ Scheduler diagnostics expose `zombie_user_tasks` for finished children whose
 exit status is still waitable and `reaped_user_tasks` for child exit records
 already collected by their recorded parent. The older waitable/collected exit
 status counters remain available for compatibility with existing smoke logs.
+The `tasks` console command also prints a per-task `lifecycle` label, using
+`waiting` for blocked tasks, `zombie` for uncollected child-exit records, and
+`reaped` for collected child-exit records.
 
 The future general process model must keep these invariants:
 

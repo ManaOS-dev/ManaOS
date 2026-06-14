@@ -371,6 +371,7 @@ struct SchedulerTaskSnapshotCounters {
     anonymous_mapping_release_snapshots: u64,
     bootstrap_child_user_tasks: u64,
     collected_user_exit_snapshots: u64,
+    reaped_user_task_snapshots: u64,
 }
 
 impl SchedulerTaskSnapshotCounters {
@@ -383,6 +384,7 @@ impl SchedulerTaskSnapshotCounters {
             anonymous_mapping_release_snapshots: 0,
             bootstrap_child_user_tasks: 0,
             collected_user_exit_snapshots: 0,
+            reaped_user_task_snapshots: 0,
         }
     }
 }
@@ -446,8 +448,14 @@ fn record_scheduler_user_task_snapshot(
         snapshot.wait_collected(),
         "finished user task snapshots must show collected wait status"
     );
+    assert_eq!(
+        snapshot.process_lifecycle(),
+        crate::kernel::task::TaskProcessLifecycleDiagnostics::Reaped,
+        "finished user task snapshots must expose reaped process lifecycle state"
+    );
     counters.collected_user_exit_snapshots =
         counters.collected_user_exit_snapshots.saturating_add(1);
+    counters.reaped_user_task_snapshots = counters.reaped_user_task_snapshots.saturating_add(1);
     counters.bootstrap_child_user_tasks = counters.bootstrap_child_user_tasks.saturating_add(1);
     counters.finished_user_tasks = counters.finished_user_tasks.saturating_add(1);
     verify_user_task_image_snapshot(snapshot);
@@ -496,6 +504,10 @@ fn verify_scheduler_task_snapshot_counts(
         counters.collected_user_exit_snapshots, expected_user_tasks,
         "scheduler snapshots must show collected user exit statuses"
     );
+    assert_eq!(
+        counters.reaped_user_task_snapshots, expected_user_tasks,
+        "scheduler snapshots must show reaped user process lifecycle states"
+    );
 }
 
 fn log_scheduler_task_snapshot_counters(
@@ -519,6 +531,10 @@ fn log_scheduler_task_snapshot_counters(
             LogField::new(
                 "collected_user_exit_snapshots",
                 format_args!("{}", counters.collected_user_exit_snapshots),
+            ),
+            LogField::new(
+                "reaped_user_task_snapshots",
+                format_args!("{}", counters.reaped_user_task_snapshots),
             ),
             LogField::new(
                 "fully_reclaimed_user_tasks",

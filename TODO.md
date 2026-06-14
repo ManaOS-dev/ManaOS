@@ -21,7 +21,6 @@ reviewable unit before implementing it.
 - [ ] Reparent orphaned children to a documented initial process policy.
 - [ ] Reclaim finished child address spaces after the exit record is safe.
 - [ ] Reclaim finished child kernel stacks after the exit record is safe.
-- [ ] Add `tasks` output for waiting, zombie, and reaped states.
 - [ ] Add a userland smoke program that spawns a child and waits for exit.
 - [ ] Add a userland smoke program that verifies a nonzero child exit status.
 

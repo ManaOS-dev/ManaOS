@@ -65,6 +65,37 @@ impl TaskKindDiagnostics {
     }
 }
 
+/// Process-facing lifecycle state reported by scheduler task snapshots.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TaskProcessLifecycleDiagnostics {
+    /// The task is ready to run.
+    Ready,
+    /// The task is currently running.
+    Running,
+    /// The task is blocked while waiting for an event.
+    Waiting,
+    /// The task finished without a retained child-exit status.
+    Finished,
+    /// The task finished and has a child-exit status waiting for parent reap.
+    Zombie,
+    /// The task finished and its child-exit status was reaped by its parent.
+    Reaped,
+}
+
+impl TaskProcessLifecycleDiagnostics {
+    /// Return a stable label for console diagnostics.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ready => "ready",
+            Self::Running => "running",
+            Self::Waiting => "waiting",
+            Self::Finished => "finished",
+            Self::Zombie => "zombie",
+            Self::Reaped => "reaped",
+        }
+    }
+}
+
 /// Timer-driven scheduler preemption state.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum PreemptionStateDiagnostics {
@@ -464,6 +495,20 @@ impl SchedulerTaskSnapshot {
     /// Return the current scheduler lifecycle state.
     pub const fn state(&self) -> TaskState {
         self.state
+    }
+
+    /// Return the process-facing lifecycle state for console diagnostics.
+    pub const fn process_lifecycle(&self) -> TaskProcessLifecycleDiagnostics {
+        match self.exit_status {
+            TaskExitStatusDiagnostics::Waitable(_) => TaskProcessLifecycleDiagnostics::Zombie,
+            TaskExitStatusDiagnostics::Collected(_) => TaskProcessLifecycleDiagnostics::Reaped,
+            TaskExitStatusDiagnostics::None => match self.state {
+                TaskState::Ready => TaskProcessLifecycleDiagnostics::Ready,
+                TaskState::Running => TaskProcessLifecycleDiagnostics::Running,
+                TaskState::Blocked => TaskProcessLifecycleDiagnostics::Waiting,
+                TaskState::Finished => TaskProcessLifecycleDiagnostics::Finished,
+            },
+        }
     }
 
     /// Return whether this user task is in the active scheduling set.

@@ -56,7 +56,8 @@ pub mod user_mode;
 pub use context::UserEntryArguments;
 pub use diagnostics::{
     PreemptionStateDiagnostics, SchedulerDiagnostics, SchedulerTaskSnapshot, TaskKindDiagnostics,
-    TaskStateDiagnostics, UserImageDiagnosticsSnapshot, UserVirtualMemorySnapshot,
+    TaskProcessLifecycleDiagnostics, TaskStateDiagnostics, UserImageDiagnosticsSnapshot,
+    UserVirtualMemorySnapshot,
 };
 #[allow(unused_imports)]
 pub use metadata::{TaskIdentifier, TaskMetadata};

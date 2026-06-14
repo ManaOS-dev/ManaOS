@@ -99,13 +99,14 @@ pub(super) fn run(
 
 fn push_task_snapshot(output: &mut CommandOutput, snapshot: &SchedulerTaskSnapshot) {
     output.push(format!(
-        "task: id={} parent={} kind={} state={} active={} address_space_owned={} kernel_stack_owned={} exit_code={} wait_collected={}",
+        "task: id={} parent={} kind={} state={} lifecycle={} active={} address_space_owned={} kernel_stack_owned={} exit_code={} wait_collected={}",
         snapshot.task_id(),
         snapshot
             .parent_task_id()
             .map_or_else(|| "-".to_string(), |task_id| task_id.to_string()),
         snapshot.kind().as_str(),
         snapshot.state().as_str(),
+        snapshot.process_lifecycle().as_str(),
         snapshot.active(),
         snapshot.address_space_owned(),
         snapshot.kernel_stack_owned(),

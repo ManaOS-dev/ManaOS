@@ -282,6 +282,7 @@ pub fn verify_scheduler_console_command() -> bool {
             "collected_user_exit_statuses=",
             "zombie_user_tasks=",
             "reaped_user_tasks=",
+            "lifecycle=reaped",
             "one_shot_user_entries=",
             "timer_user_entries=",
             "user_vm_layout:",
