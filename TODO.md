@@ -140,7 +140,7 @@ items have been removed so the file stays useful for deciding the next task.
 - [x] Parse ACPI MADT.
 - [x] Enable IOAPIC routing; APIC routing provider data now produces dry-run IOAPIC redirection entries, masked MMIO staging with readback diagnostics, Local APIC EOI-provider diagnostics, unified EOI dispatch, active route unmasking, and APIC EOI count diagnostics.
 - [x] Replace legacy PIC routing after IOAPIC is stable; normal APIC boots now keep the legacy PIC masked and fallback-disabled, while the legacy PIC path remains for boots without APIC routing provider data.
-- [ ] Calibrate and use the Local APIC timer.
+- [ ] Calibrate and use the Local APIC timer; masked Local APIC timer calibration now records a PIT-referenced count delta, but scheduling ticks still use the PIT.
 - [ ] Replace PIT scheduling ticks after Local APIC timer validation.
 - [ ] Save and restore a full user trap frame on interrupt and syscall paths; one-shot user entry restores an initial full trap frame, SYSCALL entry captures runtime user frames on the task kernel stack, and the x86_64 PIT timer entry now captures, records, preempts, and resumes Ring 3 timer contexts. Broader multi-process lifecycle coverage remains.
 - [x] Design the full user trap frame register layout.

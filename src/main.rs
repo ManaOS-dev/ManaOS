@@ -254,6 +254,7 @@ fn initialize_architecture_and_drivers() {
     crate::log_info!("driver", "Mouse initialized.");
 
     activate_ioapic_interrupt_routing();
+    start_local_apic_timer_calibration();
     arch::x86_64::enable_interrupts();
 }
 
@@ -789,6 +790,87 @@ fn verify_apic_eoi_diagnostics() {
         eoi_status.is_ioapic_routing_active(),
         eoi_status.apic_count(),
         eoi_status.legacy_count()
+    );
+}
+
+fn start_local_apic_timer_calibration() {
+    let start_ticks = kernel::time::get_timer_ticks();
+    // SAFETY: The Local APIC MMIO page was identity-mapped during ACPI
+    // verification, and the timer remains masked during this calibration
+    // sample.
+    let status = unsafe {
+        arch::x86_64::interval_timer::start_masked_local_apic_timer_calibration(start_ticks)
+    }
+    .expect("Local APIC timer calibration requires APIC provider data");
+    crate::log_info!(
+        "arch",
+        "Local APIC timer calibration started: configured={} armed={} masked={} address={:#x} vector={} divide={} lvt_timer={:#x} divide_config={:#x} initial_count={} current_count={} start_ticks={}",
+        status.is_configured(),
+        status.is_armed(),
+        status.is_masked(),
+        status.physical_address(),
+        status.vector(),
+        status.divide_denominator(),
+        status.lvt_timer(),
+        status.divide_configuration(),
+        status.initial_count(),
+        status.current_count(),
+        status.start_ticks()
+    );
+}
+
+fn verify_local_apic_timer_calibration() {
+    let current_ticks = kernel::time::get_timer_ticks();
+    // SAFETY: The Local APIC MMIO page remains identity-mapped for the kernel
+    // after boot-time APIC setup.
+    let status = unsafe {
+        arch::x86_64::interval_timer::inspect_masked_local_apic_timer_calibration(current_ticks)
+    }
+    .expect("Local APIC timer calibration sample must be armed before verification");
+    assert!(
+        status.is_configured() && status.is_armed(),
+        "Local APIC timer calibration sample must stay configured and armed"
+    );
+    assert!(
+        status.is_masked(),
+        "Local APIC timer calibration must not unmask the timer interrupt"
+    );
+    assert!(
+        status.elapsed_ticks() > 0,
+        "PIT ticks must advance before Local APIC timer calibration verification"
+    );
+    assert!(
+        status.has_decremented(),
+        "Local APIC timer current count must decrease during calibration"
+    );
+    assert!(
+        !status.has_expired(),
+        "Local APIC timer calibration sample must not expire before verification"
+    );
+    assert!(
+        status.counts_per_tick() > 0,
+        "Local APIC timer calibration must observe counts per PIT tick"
+    );
+    crate::log_info!(
+        "arch",
+        "Local APIC timer calibration verified: configured={} armed={} masked={} decremented={} expired={} address={:#x} vector={} divide={} start_ticks={} current_ticks={} elapsed_ticks={} initial_count={} current_count={} elapsed_counts={} counts_per_tick={} lvt_timer={:#x} divide_config={:#x}",
+        status.is_configured(),
+        status.is_armed(),
+        status.is_masked(),
+        status.has_decremented(),
+        status.has_expired(),
+        status.physical_address(),
+        status.vector(),
+        status.divide_denominator(),
+        status.start_ticks(),
+        status.current_ticks(),
+        status.elapsed_ticks(),
+        status.initial_count(),
+        status.current_count(),
+        status.elapsed_counts(),
+        status.counts_per_tick(),
+        status.lvt_timer(),
+        status.divide_configuration()
     );
 }
 
@@ -1692,6 +1774,7 @@ fn main() -> Status {
 
     run_user_smoke_demo(&mut frame_allocator);
     verify_apic_eoi_diagnostics();
+    verify_local_apic_timer_calibration();
     verify_scheduler_task_diagnostics(2);
     verify_scheduler_task_snapshots(2);
     record_memory_diagnostics_snapshot(&frame_allocator);
