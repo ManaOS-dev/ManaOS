@@ -1,6 +1,6 @@
 //! Interval timer selection and initialization.
 
-use core::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 
 const INTERRUPT_CONTROLLER_1_OFFSET: u8 = 32;
 const LOCAL_APIC_LVT_TIMER_REGISTER: usize = 0x320;
@@ -8,6 +8,7 @@ const LOCAL_APIC_TIMER_INITIAL_COUNT_REGISTER: usize = 0x380;
 const LOCAL_APIC_TIMER_CURRENT_COUNT_REGISTER: usize = 0x390;
 const LOCAL_APIC_TIMER_DIVIDE_CONFIGURATION_REGISTER: usize = 0x3e0;
 const LOCAL_APIC_LVT_TIMER_MASKED_BIT: u32 = 1 << 16;
+const LOCAL_APIC_LVT_TIMER_PERIODIC_BIT: u32 = 1 << 17;
 const LOCAL_APIC_TIMER_DIVIDE_BY_16_VALUE: u32 = 0b0011;
 const LOCAL_APIC_TIMER_DIVIDE_BY_16_DENOMINATOR: u32 = 16;
 const LOCAL_APIC_TIMER_CALIBRATION_INITIAL_COUNT: u32 = u32::MAX;
@@ -16,10 +17,18 @@ const LOCAL_APIC_TIMER_CALIBRATION_ARMED_FLAG: u8 = 1 << 1;
 const LOCAL_APIC_TIMER_CALIBRATION_MASKED_FLAG: u8 = 1 << 2;
 const LOCAL_APIC_TIMER_CALIBRATION_DECREMENTED_FLAG: u8 = 1 << 3;
 const LOCAL_APIC_TIMER_CALIBRATION_EXPIRED_FLAG: u8 = 1 << 4;
+const LOCAL_APIC_TIMER_ACTIVE_CONFIGURED_FLAG: u8 = 1;
+const LOCAL_APIC_TIMER_ACTIVE_RUNNING_FLAG: u8 = 1 << 1;
+const LOCAL_APIC_TIMER_ACTIVE_MASKED_FLAG: u8 = 1 << 2;
+const LOCAL_APIC_TIMER_ACTIVE_PERIODIC_FLAG: u8 = 1 << 3;
 
 static LOCAL_APIC_TIMER_CALIBRATION_BASE_ADDRESS: AtomicUsize = AtomicUsize::new(0);
 static LOCAL_APIC_TIMER_CALIBRATION_START_TICKS: AtomicU64 = AtomicU64::new(0);
 static LOCAL_APIC_TIMER_CALIBRATION_INITIAL_COUNT_READBACK: AtomicU32 = AtomicU32::new(0);
+static LOCAL_APIC_TIMER_ACTIVE: AtomicBool = AtomicBool::new(false);
+static LOCAL_APIC_TIMER_ACTIVE_BASE_ADDRESS: AtomicUsize = AtomicUsize::new(0);
+static LOCAL_APIC_TIMER_ACTIVE_START_TICKS: AtomicU64 = AtomicU64::new(0);
+static LOCAL_APIC_TIMER_ACTIVE_INITIAL_COUNT: AtomicU32 = AtomicU32::new(0);
 
 /// Available interval timer backends.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -130,6 +139,98 @@ impl LocalApicTimerCalibrationStatus {
         u64::from(self.elapsed_counts())
             .checked_div(self.elapsed_ticks())
             .unwrap_or(0)
+    }
+}
+
+/// Active Local APIC timer diagnostics.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct LocalApicTimerActiveStatus {
+    flags: u8,
+    physical_address: u64,
+    activation_ticks: u64,
+    current_ticks: u64,
+    lvt_timer: u32,
+    divide_configuration: u32,
+    divide_denominator: u32,
+    initial_count: u32,
+    current_count: u32,
+    calibration_counts_per_tick: u64,
+}
+
+impl LocalApicTimerActiveStatus {
+    /// Return whether the active Local APIC timer state is configured.
+    pub const fn is_configured(self) -> bool {
+        self.flags & LOCAL_APIC_TIMER_ACTIVE_CONFIGURED_FLAG != 0
+    }
+
+    /// Return whether the Local APIC timer is the active scheduler timer.
+    pub const fn is_running(self) -> bool {
+        self.flags & LOCAL_APIC_TIMER_ACTIVE_RUNNING_FLAG != 0
+    }
+
+    /// Return whether the Local APIC timer interrupt is masked.
+    pub const fn is_masked(self) -> bool {
+        self.flags & LOCAL_APIC_TIMER_ACTIVE_MASKED_FLAG != 0
+    }
+
+    /// Return whether the Local APIC timer is programmed in periodic mode.
+    pub const fn is_periodic(self) -> bool {
+        self.flags & LOCAL_APIC_TIMER_ACTIVE_PERIODIC_FLAG != 0
+    }
+
+    /// Return the Local APIC MMIO physical address.
+    pub const fn physical_address(self) -> u64 {
+        self.physical_address
+    }
+
+    /// Return the PIT tick value captured when the Local APIC timer was activated.
+    pub const fn activation_ticks(self) -> u64 {
+        self.activation_ticks
+    }
+
+    /// Return the current scheduler tick value captured during inspection.
+    pub const fn current_ticks(self) -> u64 {
+        self.current_ticks
+    }
+
+    /// Return the scheduler ticks elapsed since Local APIC timer activation.
+    pub const fn elapsed_ticks(self) -> u64 {
+        self.current_ticks.saturating_sub(self.activation_ticks)
+    }
+
+    /// Return the raw Local APIC LVT timer register.
+    pub const fn lvt_timer(self) -> u32 {
+        self.lvt_timer
+    }
+
+    /// Return the interrupt vector programmed into the LVT timer register.
+    pub const fn vector(self) -> u8 {
+        (self.lvt_timer & 0xff) as u8
+    }
+
+    /// Return the raw Local APIC timer divide configuration register.
+    pub const fn divide_configuration(self) -> u32 {
+        self.divide_configuration
+    }
+
+    /// Return the timer divide denominator represented by the configuration.
+    pub const fn divide_denominator(self) -> u32 {
+        self.divide_denominator
+    }
+
+    /// Return the Local APIC timer reload count.
+    pub const fn initial_count(self) -> u32 {
+        self.initial_count
+    }
+
+    /// Return the Local APIC timer current count.
+    pub const fn current_count(self) -> u32 {
+        self.current_count
+    }
+
+    /// Return the calibration-derived Local APIC timer counts per scheduler tick.
+    pub const fn calibration_counts_per_tick(self) -> u64 {
+        self.calibration_counts_per_tick
     }
 }
 
@@ -262,6 +363,113 @@ pub unsafe fn inspect_masked_local_apic_timer_calibration(
         divide_denominator: LOCAL_APIC_TIMER_DIVIDE_BY_16_DENOMINATOR,
         initial_count,
         current_count,
+    })
+}
+
+/// Activate periodic Local APIC timer ticks from a calibration sample.
+///
+/// # Panics
+///
+/// Panics if the calibration did not observe a positive timer count per tick.
+///
+/// # Safety
+///
+/// Interrupts must be disabled. The Local APIC MMIO page captured by the
+/// calibration sample must remain mapped as writable kernel memory, and no
+/// other code may program Local APIC timer registers concurrently.
+pub unsafe fn activate_local_apic_timer_from_calibration(
+    calibration: LocalApicTimerCalibrationStatus,
+    activation_ticks: u64,
+) -> LocalApicTimerActiveStatus {
+    assert!(
+        calibration.is_configured() && calibration.is_armed() && calibration.has_decremented(),
+        "Local APIC timer activation requires a valid calibration sample"
+    );
+    let reload_count = u32::try_from(calibration.counts_per_tick())
+        .expect("Local APIC timer calibration count must fit in u32");
+    assert!(
+        reload_count != 0,
+        "Local APIC timer reload count must be non-zero"
+    );
+    let base_address = usize::try_from(calibration.physical_address())
+        .expect("Local APIC timer MMIO address must fit in usize");
+    let registers = LocalApicTimerRegisters::new(base_address);
+    // SAFETY: The caller guarantees that interrupts are disabled and the Local
+    // APIC timer registers are exclusively programmed during activation.
+    unsafe {
+        registers.write(LOCAL_APIC_TIMER_INITIAL_COUNT_REGISTER, 0);
+        registers.write(
+            LOCAL_APIC_TIMER_DIVIDE_CONFIGURATION_REGISTER,
+            LOCAL_APIC_TIMER_DIVIDE_BY_16_VALUE,
+        );
+        registers.write(
+            LOCAL_APIC_LVT_TIMER_REGISTER,
+            u32::from(INTERRUPT_CONTROLLER_1_OFFSET) | LOCAL_APIC_LVT_TIMER_PERIODIC_BIT,
+        );
+        registers.write(LOCAL_APIC_TIMER_INITIAL_COUNT_REGISTER, reload_count);
+    }
+
+    LOCAL_APIC_TIMER_ACTIVE_BASE_ADDRESS.store(base_address, Ordering::Release);
+    LOCAL_APIC_TIMER_ACTIVE_START_TICKS.store(activation_ticks, Ordering::Release);
+    LOCAL_APIC_TIMER_ACTIVE_INITIAL_COUNT.store(reload_count, Ordering::Release);
+    LOCAL_APIC_TIMER_ACTIVE.store(true, Ordering::Release);
+    // SAFETY: The Local APIC timer was just activated through the same mapped
+    // register page and can be read back for diagnostics.
+    unsafe { inspect_active_local_apic_timer(activation_ticks) }
+        .expect("Local APIC timer status must be available after activation")
+}
+
+/// Inspect active Local APIC timer diagnostics.
+///
+/// # Safety
+///
+/// The active Local APIC timer MMIO page must remain mapped as readable kernel
+/// memory.
+pub unsafe fn inspect_active_local_apic_timer(
+    current_ticks: u64,
+) -> Option<LocalApicTimerActiveStatus> {
+    let base_address = LOCAL_APIC_TIMER_ACTIVE_BASE_ADDRESS.load(Ordering::Acquire);
+    if base_address == 0 {
+        return None;
+    }
+
+    let registers = LocalApicTimerRegisters::new(base_address);
+    // SAFETY: The caller guarantees that the active Local APIC timer MMIO page
+    // remains mapped and readable for diagnostics.
+    let lvt_timer = unsafe { registers.read(LOCAL_APIC_LVT_TIMER_REGISTER) };
+    // SAFETY: The caller guarantees that the active Local APIC timer MMIO page
+    // remains mapped and readable for diagnostics.
+    let divide_configuration =
+        unsafe { registers.read(LOCAL_APIC_TIMER_DIVIDE_CONFIGURATION_REGISTER) };
+    // SAFETY: The caller guarantees that the active Local APIC timer MMIO page
+    // remains mapped and readable for diagnostics.
+    let current_count = unsafe { registers.read(LOCAL_APIC_TIMER_CURRENT_COUNT_REGISTER) };
+    let initial_count = LOCAL_APIC_TIMER_ACTIVE_INITIAL_COUNT.load(Ordering::Acquire);
+    let activation_ticks = LOCAL_APIC_TIMER_ACTIVE_START_TICKS.load(Ordering::Acquire);
+    let active = LOCAL_APIC_TIMER_ACTIVE.load(Ordering::Acquire);
+    let mut flags = LOCAL_APIC_TIMER_ACTIVE_CONFIGURED_FLAG;
+    if active && initial_count != 0 {
+        flags |= LOCAL_APIC_TIMER_ACTIVE_RUNNING_FLAG;
+    }
+    if lvt_timer & LOCAL_APIC_LVT_TIMER_MASKED_BIT != 0 {
+        flags |= LOCAL_APIC_TIMER_ACTIVE_MASKED_FLAG;
+    }
+    if lvt_timer & LOCAL_APIC_LVT_TIMER_PERIODIC_BIT != 0 {
+        flags |= LOCAL_APIC_TIMER_ACTIVE_PERIODIC_FLAG;
+    }
+
+    Some(LocalApicTimerActiveStatus {
+        flags,
+        physical_address: u64::try_from(base_address)
+            .expect("Local APIC timer MMIO address must fit in u64"),
+        activation_ticks,
+        current_ticks,
+        lvt_timer,
+        divide_configuration,
+        divide_denominator: LOCAL_APIC_TIMER_DIVIDE_BY_16_DENOMINATOR,
+        initial_count,
+        current_count,
+        calibration_counts_per_tick: u64::from(initial_count),
     })
 }
 

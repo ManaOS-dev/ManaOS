@@ -51,7 +51,7 @@ architecture 側は `InterruptProcessors` 構造体と `register_processors(...)
 
 ## 現在の既知の設計負債
 
-- APIC 対応 boot では IOAPIC routing と Local APIC EOI が有効です。scheduling tick は、masked Local APIC timer calibration sample を active timer backend に昇格するまで legacy programmable interval timer を使います。
+- APIC 対応 boot では IOAPIC routing、Local APIC EOI、periodic Local APIC timer tick が有効です。PIT は calibration reference として短時間だけ初期化し、その後 IOAPIC PIT timer route を mask します。
 - Ring 3 selector、初回の `iretq` transition path、固定 user stack mapping、最小の `SYSCALL`/`SYSRET` MSR setup は入っています。実際の syscall dispatch、ELF loading、process ごとの address space は Phase 6 の作業です。
 - cursor rendering は display 側の責務になりましたが、cursor shape はまだ単純な placeholder rectangle です。
 

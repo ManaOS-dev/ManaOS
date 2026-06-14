@@ -56,7 +56,8 @@ RSDT/XSDT validation, MADT validation, bounded MADT topology diagnostics,
 architecture-owned APIC routing provider configuration, dry-run IOAPIC
 redirection entries, masked IOAPIC MMIO staging, Local APIC EOI-provider
 diagnostics, unified EOI dispatch, active IOAPIC routing, post-activation APIC
-EOI counters, legacy PIC fallback masking, and masked Local APIC timer
-calibration are now proven by storage smoke. The next slice should use the
-calibration sample to replace PIT scheduling ticks with Local APIC timer ticks
-while preserving the `arch/` to `kernel/` dependency boundary.
+EOI counters, legacy PIC fallback masking, masked Local APIC timer calibration,
+and periodic Local APIC scheduler ticks are now proven by storage smoke. The
+next slice should either add broader interrupt-controller diagnostics for
+unexpected vectors or continue full user process lifecycle work now that timer
+preemption no longer depends on the PIT route.

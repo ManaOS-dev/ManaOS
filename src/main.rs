@@ -28,6 +28,9 @@ use uefi::{
 
 const LOCAL_APIC_MMIO_MAPPING_SIZE: u64 = 4096;
 const IOAPIC_MMIO_MAPPING_SIZE: u64 = 4096;
+const LOCAL_APIC_TIMER_CALIBRATION_TICKS: u64 = 100;
+const LOCAL_APIC_TIMER_POST_ACTIVATION_TICKS: u64 = 5;
+const TIMER_SWITCH_SPIN_LIMIT: u64 = 10_000_000;
 
 extern "C" fn idle_task() -> ! {
     loop {
@@ -256,6 +259,7 @@ fn initialize_architecture_and_drivers() {
     activate_ioapic_interrupt_routing();
     start_local_apic_timer_calibration();
     arch::x86_64::enable_interrupts();
+    activate_local_apic_timer_ticks();
 }
 
 fn verify_kernel_filesystem() {
@@ -819,8 +823,99 @@ fn start_local_apic_timer_calibration() {
     );
 }
 
-fn verify_local_apic_timer_calibration() {
+fn activate_local_apic_timer_ticks() {
+    let calibration_ticks = wait_for_timer_ticks(LOCAL_APIC_TIMER_CALIBRATION_TICKS);
+    let calibration_status = verify_local_apic_timer_calibration(calibration_ticks);
+    arch::x86_64::disable_interrupts();
+
+    // SAFETY: Interrupts are disabled during timer-source switching. IOAPIC
+    // routing is active, and the IOAPIC MMIO page was identity-mapped during
+    // ACPI verification.
+    let timer_route_status = unsafe {
+        arch::x86_64::interrupt_controller::mask_ioapic_timer_route_for_local_apic_timer()
+    }
+    .expect("IOAPIC timer route must be available before Local APIC timer activation");
+    assert!(
+        timer_route_status.readback_matches() && timer_route_status.is_masked(),
+        "IOAPIC timer route must be masked before Local APIC timer activation"
+    );
+    assert!(
+        timer_route_status.is_routing_active(),
+        "IOAPIC routing must remain active for keyboard and mouse routes"
+    );
+    crate::log_info!(
+        "arch",
+        "IOAPIC timer route masked for Local APIC timer: routing_active={} readback_matches={} masked={} timer_gsi={} table_index={} low_register={:#x} high_register={:#x} low_readback={:#x} high_readback={:#x}",
+        timer_route_status.is_routing_active(),
+        timer_route_status.readback_matches(),
+        timer_route_status.is_masked(),
+        timer_route_status.global_system_interrupt(),
+        timer_route_status.table_index(),
+        timer_route_status.low_register(),
+        timer_route_status.high_register(),
+        timer_route_status.low_readback(),
+        timer_route_status.high_readback()
+    );
+
+    // SAFETY: Interrupts are disabled during timer-source switching, and the
+    // Local APIC MMIO page remains identity-mapped after ACPI verification.
+    let active_status = unsafe {
+        arch::x86_64::interval_timer::activate_local_apic_timer_from_calibration(
+            calibration_status,
+            calibration_ticks,
+        )
+    };
+    assert!(
+        active_status.is_configured()
+            && active_status.is_running()
+            && active_status.is_periodic()
+            && !active_status.is_masked(),
+        "Local APIC timer must be active, periodic, and unmasked"
+    );
+    crate::log_info!(
+        "arch",
+        "Local APIC timer activated: configured={} running={} masked={} periodic={} address={:#x} vector={} divide={} activation_ticks={} current_ticks={} initial_count={} current_count={} calibration_counts_per_tick={} lvt_timer={:#x} divide_config={:#x}",
+        active_status.is_configured(),
+        active_status.is_running(),
+        active_status.is_masked(),
+        active_status.is_periodic(),
+        active_status.physical_address(),
+        active_status.vector(),
+        active_status.divide_denominator(),
+        active_status.activation_ticks(),
+        active_status.current_ticks(),
+        active_status.initial_count(),
+        active_status.current_count(),
+        active_status.calibration_counts_per_tick(),
+        active_status.lvt_timer(),
+        active_status.divide_configuration()
+    );
+
+    arch::x86_64::enable_interrupts();
+    verify_local_apic_timer_tick_source(LOCAL_APIC_TIMER_POST_ACTIVATION_TICKS);
+}
+
+fn wait_for_timer_ticks(required_ticks: u64) -> u64 {
+    let start_ticks = kernel::time::get_timer_ticks();
+    let target_ticks = start_ticks
+        .checked_add(required_ticks)
+        .expect("timer tick wait target overflowed");
+    let mut spin_count = 0;
+    while kernel::time::get_timer_ticks() < target_ticks && spin_count < TIMER_SWITCH_SPIN_LIMIT {
+        x86_64::instructions::hlt();
+        spin_count += 1;
+    }
     let current_ticks = kernel::time::get_timer_ticks();
+    assert!(
+        current_ticks >= target_ticks,
+        "timer ticks did not advance enough during backend switching"
+    );
+    current_ticks
+}
+
+fn verify_local_apic_timer_calibration(
+    current_ticks: u64,
+) -> arch::x86_64::interval_timer::LocalApicTimerCalibrationStatus {
     // SAFETY: The Local APIC MMIO page remains identity-mapped for the kernel
     // after boot-time APIC setup.
     let status = unsafe {
@@ -869,6 +964,66 @@ fn verify_local_apic_timer_calibration() {
         status.current_count(),
         status.elapsed_counts(),
         status.counts_per_tick(),
+        status.lvt_timer(),
+        status.divide_configuration()
+    );
+    status
+}
+
+fn verify_local_apic_timer_tick_source(required_ticks: u64) {
+    let current_ticks = wait_for_timer_ticks(required_ticks);
+    let status = verify_active_local_apic_timer(current_ticks);
+    log_active_local_apic_timer_status("Local APIC timer tick source verified", status);
+}
+
+fn verify_local_apic_timer_post_smoke() {
+    let status = verify_active_local_apic_timer(kernel::time::get_timer_ticks());
+    log_active_local_apic_timer_status("Local APIC timer post-smoke verified", status);
+}
+
+fn verify_active_local_apic_timer(
+    current_ticks: u64,
+) -> arch::x86_64::interval_timer::LocalApicTimerActiveStatus {
+    // SAFETY: The Local APIC MMIO page remains identity-mapped for the kernel
+    // after boot-time APIC setup.
+    let status =
+        unsafe { arch::x86_64::interval_timer::inspect_active_local_apic_timer(current_ticks) }
+            .expect("Local APIC timer must be active before inspection");
+    assert!(
+        status.is_configured()
+            && status.is_running()
+            && status.is_periodic()
+            && !status.is_masked(),
+        "Local APIC timer must remain active, periodic, and unmasked"
+    );
+    assert!(
+        status.elapsed_ticks() > 0,
+        "Local APIC timer must advance scheduler ticks after activation"
+    );
+    status
+}
+
+fn log_active_local_apic_timer_status(
+    message: &str,
+    status: arch::x86_64::interval_timer::LocalApicTimerActiveStatus,
+) {
+    crate::log_info!(
+        "arch",
+        "{}: configured={} running={} masked={} periodic={} address={:#x} vector={} divide={} activation_ticks={} current_ticks={} elapsed_ticks={} initial_count={} current_count={} calibration_counts_per_tick={} lvt_timer={:#x} divide_config={:#x}",
+        message,
+        status.is_configured(),
+        status.is_running(),
+        status.is_masked(),
+        status.is_periodic(),
+        status.physical_address(),
+        status.vector(),
+        status.divide_denominator(),
+        status.activation_ticks(),
+        status.current_ticks(),
+        status.elapsed_ticks(),
+        status.initial_count(),
+        status.current_count(),
+        status.calibration_counts_per_tick(),
         status.lvt_timer(),
         status.divide_configuration()
     );
@@ -1774,7 +1929,7 @@ fn main() -> Status {
 
     run_user_smoke_demo(&mut frame_allocator);
     verify_apic_eoi_diagnostics();
-    verify_local_apic_timer_calibration();
+    verify_local_apic_timer_post_smoke();
     verify_scheduler_task_diagnostics(2);
     verify_scheduler_task_snapshots(2);
     record_memory_diagnostics_snapshot(&frame_allocator);
