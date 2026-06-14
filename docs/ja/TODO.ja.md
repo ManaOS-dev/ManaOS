@@ -53,6 +53,7 @@ zombie/reaped diagnostics、`tasks` command の per-task lifecycle output、alre
 scheduler-backed `waitpid` reap、filesystem path から user task を作る kernel-internal spawn helper
 と spawned process origin diagnostics、2つの concurrently spawned user program smoke、spawn 前の
 argv/envp entry vector 表現、spawn path lookup failure の errno mapping まで完了済みです。
+user process scheduling は、3つの active user process を同時に扱う storage smoke まで完了済みです。
 `execve` は close-on-exec metadata / close behavior まで完了済みなので、残りは current
 directory と replacement-state diagnostics です。次は user-visible `waitpid` behavior と
 reaping state を小さい branch に分けて進めます。

@@ -296,8 +296,8 @@ Current runtime diagnostics cover the first successful replacement path:
   the initial user stack.
 - Storage smoke asserts stable spawn path errno mappings for missing, relative,
   directory, device, and non-ELF targets before successful spawn task creation.
-- Storage smoke asserts two distinct user tasks spawned from the same
-  filesystem path before both are activated together.
+- Storage smoke asserts three distinct user tasks spawned from the same
+  filesystem path before all are activated together.
 - Storage smoke asserts that `tasks` output retains the original spawn path as
   `origin=` after the same task successfully replaces its current image through
   `execve`.

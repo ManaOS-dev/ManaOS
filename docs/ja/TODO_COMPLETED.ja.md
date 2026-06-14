@@ -26,6 +26,7 @@ assertions、zombie/reaped diagnostics、`tasks` command の per-task lifecycle 
 already-exited child の scheduler-backed `waitpid` reap、kernel-internal spawn helper、
 spawned process origin diagnostics、2つの concurrently spawned user program smoke、
 spawn 前の argv/envp entry vector 表現、spawn path lookup failure の errno mapping が
+完了済みです。user process scheduling は、3つの active user process を同時に扱う storage smoke まで
 完了済みです。正本は英語版の
 `TODO_COMPLETED.md` と [`PROCESS_LIFECYCLE.md`](../PROCESS_LIFECYCLE.md) です。
 

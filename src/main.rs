@@ -116,8 +116,10 @@ fn run_post_userspace_diagnostics(
         boot_summary.timer = Some("Local APIC periodic");
     }
 
-    kernel::diagnostic::smoke::verify_scheduler_task_diagnostics(2);
-    kernel::diagnostic::smoke::verify_scheduler_task_snapshots(2);
+    let expected_user_smoke_tasks = u64::try_from(kernel::diagnostic::smoke::USER_SMOKE_TASK_COUNT)
+        .expect("user smoke task count must fit in u64");
+    kernel::diagnostic::smoke::verify_scheduler_task_diagnostics(expected_user_smoke_tasks);
+    kernel::diagnostic::smoke::verify_scheduler_task_snapshots(expected_user_smoke_tasks);
     kernel::diagnostic::boot_smoke::record_scheduler_boot_summary(boot_summary);
     kernel::diagnostic::smoke::record_memory_diagnostics_snapshot(frame_allocator);
     boot_summary.free_frames = Some(frame_allocator.statistics().free);

@@ -69,7 +69,6 @@ reviewable unit before implementing it.
 - [ ] Add scheduler assertions for impossible active, finished, and reclaiming transitions.
 - [ ] Add diagnostics for last preemption reason per task.
 - [ ] Add diagnostics for last resume path per task.
-- [ ] Add a storage smoke case with three active user processes.
 - [ ] Add a storage smoke case where one preempted process exits while another continues.
 - [ ] Document scheduler invariants for active, waiting, zombie, and reaped tasks.
 

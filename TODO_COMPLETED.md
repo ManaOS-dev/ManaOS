@@ -64,6 +64,10 @@ active roadmap can list only unfinished work.
 - [x] Define how argv and envp are represented before user stack construction.
 - [x] Add errno mappings for spawn path lookup failures.
 
+### User Process Scheduling
+
+- [x] Add a storage smoke case with three active user processes.
+
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 
 ### Address Space Lifecycle

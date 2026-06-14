@@ -7,6 +7,9 @@ pub use scheduler_diagnostics::{
     verify_scheduler_task_snapshots,
 };
 
+/// Number of active user processes spawned by the storage smoke lifecycle.
+pub const USER_SMOKE_TASK_COUNT: usize = 3;
+
 fn spawn_user_smoke_task(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
     user_elf_path: &str,
@@ -40,23 +43,23 @@ pub fn run_user_smoke_demo(
     let user_task_ids = [
         spawn_user_smoke_task(frame_allocator, user_elf_path, user_stack_pages),
         spawn_user_smoke_task(frame_allocator, user_elf_path, user_stack_pages),
+        spawn_user_smoke_task(frame_allocator, user_elf_path, user_stack_pages),
     ];
     crate::log_info!(
         "task",
-        "Multi-user smoke tasks spawned: first={} second={}",
+        "Multi-user smoke tasks spawned: first={} second={} third={}",
         user_task_ids[0],
-        user_task_ids[1]
+        user_task_ids[1],
+        user_task_ids[2]
     );
-    assert_ne!(
-        user_task_ids[0], user_task_ids[1],
-        "concurrent user spawn smoke tasks must be distinct"
-    );
+    assert_distinct_user_task_ids(user_task_ids);
     crate::log_info!(
         "task",
-        "Concurrent user program spawn smoke passed: tasks={} first={} second={}",
+        "Concurrent user program spawn smoke passed: tasks={} first={} second={} third={}",
         user_task_ids.len(),
         user_task_ids[0],
-        user_task_ids[1]
+        user_task_ids[1],
+        user_task_ids[2]
     );
     for user_task_id in &user_task_ids {
         assert!(
@@ -77,7 +80,7 @@ pub fn run_user_smoke_demo(
         "active user lifecycle drain must return every smoke task exit"
     );
 
-    let mut finished = [false; 2];
+    let mut finished = [false; USER_SMOKE_TASK_COUNT];
     for exit in exits {
         crate::log_info!(
             "task",
@@ -107,6 +110,17 @@ pub fn run_user_smoke_demo(
         user_task_ids.len()
     );
     crate::kernel::task::set_preemption_enabled(true);
+}
+
+fn assert_distinct_user_task_ids(user_task_ids: [u64; USER_SMOKE_TASK_COUNT]) {
+    for (current_index, current_task_id) in user_task_ids.iter().enumerate() {
+        for next_task_id in user_task_ids.iter().skip(current_index + 1) {
+            assert_ne!(
+                *current_task_id, *next_task_id,
+                "concurrent user spawn smoke tasks must be distinct"
+            );
+        }
+    }
 }
 
 fn verify_spawn_path_errno_smoke(
@@ -175,9 +189,9 @@ fn verify_spawn_error(
     error.as_syscall_result()
 }
 
-fn verify_bootstrap_child_exit_collection(user_task_ids: [u64; 2]) {
+fn verify_bootstrap_child_exit_collection(user_task_ids: [u64; USER_SMOKE_TASK_COUNT]) {
     let parent_task_id = crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64();
-    let mut collected = [false; 2];
+    let mut collected = [false; USER_SMOKE_TASK_COUNT];
     let selected_exit =
         crate::kernel::task::collect_waitable_child_exit(parent_task_id, Some(user_task_ids[0]))
             .expect("bootstrap parent must collect the selected user child exit");
@@ -200,14 +214,7 @@ fn verify_bootstrap_child_exit_collection(user_task_ids: [u64; 2]) {
         selected_exit.wait_status()
     );
 
-    let remaining_exit = crate::kernel::task::collect_waitable_child_exit(parent_task_id, None)
-        .expect("bootstrap parent must have a remaining waitable user child exit");
-    verify_user_child_exit(
-        parent_task_id,
-        &mut collected,
-        user_task_ids,
-        remaining_exit,
-    );
+    collect_remaining_bootstrap_child_exits(parent_task_id, &mut collected, user_task_ids);
     assert!(
         collected.iter().all(|is_collected| *is_collected),
         "bootstrap wait collection must cover every user smoke child"
@@ -231,10 +238,22 @@ fn verify_bootstrap_child_exit_collection(user_task_ids: [u64; 2]) {
     );
 }
 
+fn collect_remaining_bootstrap_child_exits(
+    parent_task_id: u64,
+    collected: &mut [bool; USER_SMOKE_TASK_COUNT],
+    user_task_ids: [u64; USER_SMOKE_TASK_COUNT],
+) {
+    while !collected.iter().all(|is_collected| *is_collected) {
+        let remaining_exit = crate::kernel::task::collect_waitable_child_exit(parent_task_id, None)
+            .expect("bootstrap parent must have a remaining waitable user child exit");
+        verify_user_child_exit(parent_task_id, collected, user_task_ids, remaining_exit);
+    }
+}
+
 fn verify_user_child_exit(
     parent_task_id: u64,
-    collected: &mut [bool; 2],
-    user_task_ids: [u64; 2],
+    collected: &mut [bool; USER_SMOKE_TASK_COUNT],
+    user_task_ids: [u64; USER_SMOKE_TASK_COUNT],
     exit: crate::kernel::task::UserTaskExit,
 ) {
     assert_eq!(

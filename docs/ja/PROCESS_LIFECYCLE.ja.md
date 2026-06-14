@@ -257,7 +257,7 @@ unmarked descriptor は default で descriptor number と offset を保持し、
 - storage smoke は、helper が initial user stack を構築する前に staged entry vector count を assert します。
 - storage smoke は successful spawn task creation の前に、missing、relative、directory、device、
   non-ELF target の stable な spawn path errno mapping を assert します。
-- storage smoke は、同じ filesystem path から distinct な user task を2つ spawn し、両方をまとめて
+- storage smoke は、同じ filesystem path から distinct な user task を3つ spawn し、すべてをまとめて
   active set に入れる前提を assert します。
 - storage smoke は、同じ task が `execve` で current image を置き換えた後も、`tasks` output が
   original spawn path を `origin=` として保持することを assert します。
