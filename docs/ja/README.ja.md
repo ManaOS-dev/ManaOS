@@ -79,6 +79,7 @@ boundary をまたぐ変更では、同じ branch で documentation も更新し
 | --- | --- |
 | agent または automated change | [../../AGENTS.md](../../AGENTS.md), then [../../CONTRIBUTING.md](../../CONTRIBUTING.md) |
 | architecture、interrupt、syscall entry | [../ARCHITECTURE.md](../ARCHITECTURE.md), [../USER_TRAP_FRAME.md](../USER_TRAP_FRAME.md) |
+| process lifecycle、`execve`、`waitpid`、user image replacement | [../PROCESS_LIFECYCLE.md](../PROCESS_LIFECYCLE.md), [../USER_POINTER_VALIDATION.md](../USER_POINTER_VALIDATION.md), [../USER_TRAP_FRAME.md](../USER_TRAP_FRAME.md) |
 | ACPI、APIC、IOAPIC、PIC、timer | [../ACPI.md](../ACPI.md), [../ARCHITECTURE.md](../ARCHITECTURE.md) |
 | memory、paging、stack、address ownership | [../MEMORY_MANAGEMENT.md](../MEMORY_MANAGEMENT.md), [../ADDRESS_BOUNDARIES.md](../ADDRESS_BOUNDARIES.md), [../KERNEL_STACKS.md](../KERNEL_STACKS.md) |
 | syscall pointer validation | [../USER_POINTER_VALIDATION.md](../USER_POINTER_VALIDATION.md), [../USER_TRAP_FRAME.md](../USER_TRAP_FRAME.md) |
@@ -97,6 +98,7 @@ boundary をまたぐ変更では、同じ branch で documentation も更新し
 | Maintainer workflow | [../MAINTAINER_WORKFLOW.md](../MAINTAINER_WORKFLOW.md) | [MAINTAINER_WORKFLOW.ja.md](MAINTAINER_WORKFLOW.ja.md) |
 | Architecture | [../ARCHITECTURE.md](../ARCHITECTURE.md) | [ARCHITECTURE.ja.md](ARCHITECTURE.ja.md) |
 | ACPI and APIC | [../ACPI.md](../ACPI.md) | [ACPI.ja.md](ACPI.ja.md) |
+| Process lifecycle | [../PROCESS_LIFECYCLE.md](../PROCESS_LIFECYCLE.md) | [PROCESS_LIFECYCLE.ja.md](PROCESS_LIFECYCLE.ja.md) |
 | Address boundaries | [../ADDRESS_BOUNDARIES.md](../ADDRESS_BOUNDARIES.md) | [ADDRESS_BOUNDARIES.ja.md](ADDRESS_BOUNDARIES.ja.md) |
 | Memory management | [../MEMORY_MANAGEMENT.md](../MEMORY_MANAGEMENT.md) | [MEMORY_MANAGEMENT.ja.md](MEMORY_MANAGEMENT.ja.md) |
 | Kernel stacks | [../KERNEL_STACKS.md](../KERNEL_STACKS.md) | [KERNEL_STACKS.ja.md](KERNEL_STACKS.ja.md) |

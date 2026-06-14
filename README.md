@@ -83,6 +83,7 @@ documentation in the same branch.
 | --- | --- |
 | New agent or automated change | [AGENTS.md](AGENTS.md), then [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Architecture, interrupt, or syscall entry work | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/USER_TRAP_FRAME.md](docs/USER_TRAP_FRAME.md) |
+| Process lifecycle, `execve`, `waitpid`, or user image replacement | [docs/PROCESS_LIFECYCLE.md](docs/PROCESS_LIFECYCLE.md), [docs/USER_POINTER_VALIDATION.md](docs/USER_POINTER_VALIDATION.md), [docs/USER_TRAP_FRAME.md](docs/USER_TRAP_FRAME.md) |
 | ACPI, APIC, IOAPIC, PIC, or timer work | [docs/ACPI.md](docs/ACPI.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Memory, paging, stacks, or address ownership | [docs/MEMORY_MANAGEMENT.md](docs/MEMORY_MANAGEMENT.md), [docs/ADDRESS_BOUNDARIES.md](docs/ADDRESS_BOUNDARIES.md), [docs/KERNEL_STACKS.md](docs/KERNEL_STACKS.md) |
 | Syscall pointer validation | [docs/USER_POINTER_VALIDATION.md](docs/USER_POINTER_VALIDATION.md), [docs/USER_TRAP_FRAME.md](docs/USER_TRAP_FRAME.md) |
@@ -102,6 +103,7 @@ for smoother discussion and onboarding.
 | Maintainer workflow | [docs/MAINTAINER_WORKFLOW.md](docs/MAINTAINER_WORKFLOW.md) | [docs/ja/MAINTAINER_WORKFLOW.ja.md](docs/ja/MAINTAINER_WORKFLOW.ja.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | [docs/ja/ARCHITECTURE.ja.md](docs/ja/ARCHITECTURE.ja.md) |
 | ACPI and APIC | [docs/ACPI.md](docs/ACPI.md) | [docs/ja/ACPI.ja.md](docs/ja/ACPI.ja.md) |
+| Process lifecycle | [docs/PROCESS_LIFECYCLE.md](docs/PROCESS_LIFECYCLE.md) | [docs/ja/PROCESS_LIFECYCLE.ja.md](docs/ja/PROCESS_LIFECYCLE.ja.md) |
 | Address boundaries | [docs/ADDRESS_BOUNDARIES.md](docs/ADDRESS_BOUNDARIES.md) | [docs/ja/ADDRESS_BOUNDARIES.ja.md](docs/ja/ADDRESS_BOUNDARIES.ja.md) |
 | Memory management | [docs/MEMORY_MANAGEMENT.md](docs/MEMORY_MANAGEMENT.md) | [docs/ja/MEMORY_MANAGEMENT.ja.md](docs/ja/MEMORY_MANAGEMENT.ja.md) |
 | Kernel stacks | [docs/KERNEL_STACKS.md](docs/KERNEL_STACKS.md) | [docs/ja/KERNEL_STACKS.ja.md](docs/ja/KERNEL_STACKS.ja.md) |

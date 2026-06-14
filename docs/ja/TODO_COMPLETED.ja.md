@@ -12,6 +12,12 @@
 
 ## 完了済みとして退避済みの主な領域
 
+### Process Lifecycle And User Program Execution
+
+`execve` の kernel-side contract と、image replacement 時の ownership / cleanup invariant の
+文書化が完了済みです。正本は英語版の `TODO_COMPLETED.md` と
+[`PROCESS_LIFECYCLE.md`](../PROCESS_LIFECYCLE.md) です。
+
 ### Immediate Priorities
 
 初期の優先タスクとして、NX permission、font face cache、display command queue、

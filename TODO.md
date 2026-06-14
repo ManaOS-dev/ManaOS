@@ -11,7 +11,6 @@ reviewable unit before implementing it.
 
 ### `execve` And Image Replacement
 
-- [ ] Define the kernel-side `execve` contract for path, argv, envp, and file descriptor inheritance.
 - [ ] Add the shared syscall number and ABI constants for `execve`.
 - [ ] Add a no-std userland wrapper for `execve`.
 - [ ] Copy `argv` strings through the existing user pointer validation policy.
@@ -34,7 +33,6 @@ reviewable unit before implementing it.
 - [ ] Add a boot smoke case that `execve`s a second user program from `/disk`.
 - [ ] Add a failure smoke case for `execve` on a missing path.
 - [ ] Add a failure smoke case for `execve` on a directory path.
-- [ ] Document `execve` ownership and cleanup invariants in the process lifecycle docs.
 
 ### `waitpid`, Exit Status, And Reaping
 

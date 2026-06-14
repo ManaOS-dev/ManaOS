@@ -54,10 +54,12 @@ configuration, IOAPIC route activation, legacy PIC fallback masking, Local APIC
 timer calibration, periodic Local APIC scheduler ticks, and spurious/unexpected
 external vector diagnostics are proven by storage smoke.
 
-The active selection is now full user process lifecycle work. Start with small
-contract slices:
+The active selection is now full user process lifecycle work. The kernel-side
+`execve` contract and cleanup invariants are documented in
+[`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
+slices:
 
-1. document and implement the `execve` path, argv/envp copying limits, and
+1. implement the documented `execve` path, argv/envp copying limits, and
    failure rollback rules;
 2. define the scheduler-owned child exit record model needed for `waitpid`;
 3. extend smoke coverage for multiple spawned user processes before introducing

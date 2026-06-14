@@ -3,6 +3,13 @@
 Completed items were moved out of [`TODO.md`](TODO.md) on 2026-06-14 so the
 active roadmap can list only unfinished work.
 
+## Phase 1: Process Lifecycle And User Program Execution
+
+### `execve` And Image Replacement
+
+- [x] Define the kernel-side `execve` contract for path, argv, envp, and file descriptor inheritance.
+- [x] Document `execve` ownership and cleanup invariants in the process lifecycle docs.
+
 ## Immediate Priorities
 
 - [x] Set `NO_EXECUTE` on non-executable kernel and user mappings where appropriate.

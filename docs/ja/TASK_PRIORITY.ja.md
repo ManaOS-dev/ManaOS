@@ -50,9 +50,11 @@ activation、legacy PIC fallback masking、Local APIC timer calibration、period
 scheduler tick、spurious/unexpected external vector diagnostics は storage smoke で証明済みです。
 
 そのため次の大きな流れは、PIT route に依存しなくなった timer preemption の上で、
-full user process lifecycle を進めることです。最初は小さい contract slice から始めます。
+full user process lifecycle を進めることです。`execve` の kernel-side contract と cleanup
+invariant は [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。ここからは
+小さい runtime slice で進めます。
 
-1. `execve` path、argv/envp copying limit、failure rollback rule を文書化して実装する。
+1. 文書化済みの `execve` path、argv/envp copying limit、failure rollback rule を実装する。
 2. `waitpid` に必要な scheduler-owned child exit record model を定義する。
 3. broader user shell の前に、複数 spawned user process の smoke coverage を拡張する。
 4. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
