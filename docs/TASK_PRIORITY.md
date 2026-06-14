@@ -7,7 +7,7 @@ not on product value.
 ## Remaining High-Risk Order
 
 1. Full user process lifecycle
-   - Finish the remaining `execve` current-directory gap.
+   - Finish the remaining `execve` replacement-state diagnostics gap.
    - Add user-visible `wait` or `waitpid`.
    - Add a minimal user shell process.
    - Extend preemptive scheduling across general process lifecycle paths.
@@ -56,12 +56,11 @@ external vector diagnostics are proven by storage smoke.
 
 The active selection is now full user process lifecycle work. The kernel-side
 `execve` contract, cleanup invariants, successful self-replacement path, and
-current image diagnostics are documented in
+current-directory preservation are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. close the remaining `execve` current-directory and replacement-state
-   diagnostics gaps;
+1. close the remaining `execve` replacement-state diagnostics gap;
 2. wire user-visible `waitpid` behavior to the scheduler-owned child exit
    records;
 3. extend smoke coverage for multiple spawned user processes before introducing
