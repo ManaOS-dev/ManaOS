@@ -49,8 +49,8 @@ not on product value.
 
 ## Current Selection
 
-The first active task is ACPI and APIC interrupt migration. The initial slice is
-ACPI root discovery: UEFI configuration table discovery in `main.rs`,
-kernel-owned RSDP validation, and RSDT/XSDT diagnostics proven by storage smoke.
-MADT parsing should build on the validated root table rather than rediscovering
-firmware tables independently.
+The active task is ACPI and APIC interrupt migration. ACPI root discovery,
+RSDT/XSDT validation, MADT validation, and bounded MADT topology diagnostics are
+now proven by storage smoke. The next slice should wire IOAPIC and Local APIC
+providers through `main.rs`, then enable IOAPIC routing while preserving the
+`arch/` to `kernel/` dependency boundary.

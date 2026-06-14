@@ -30,6 +30,13 @@ const MADT_INTERRUPT_SOURCE_OVERRIDE_ENTRY_LENGTH: usize = 10;
 const MADT_LOCAL_APIC_NMI_ENTRY_LENGTH: usize = 6;
 const MADT_LOCAL_APIC_ADDRESS_OVERRIDE_ENTRY_LENGTH: usize = 12;
 const MADT_X2APIC_ENTRY_LENGTH: usize = 16;
+const MAX_MADT_LOCAL_APICS: usize = 32;
+const MAX_MADT_IOAPICS: usize = 8;
+const MAX_MADT_INTERRUPT_SOURCE_OVERRIDES: usize = 16;
+const MAX_MADT_LOCAL_APIC_NMIS: usize = 16;
+const MAX_MADT_X2APICS: usize = 32;
+const MADT_LOCAL_APIC_ENABLED_FLAG: u32 = 1;
+const MADT_LOCAL_APIC_ONLINE_CAPABLE_FLAG: u32 = 2;
 
 /// UEFI configuration table that supplied an ACPI root pointer.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -163,6 +170,390 @@ impl RootTableDiagnostics {
     }
 }
 
+/// Processor Local APIC information from the MADT.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MadtLocalApic {
+    processor_id: u8,
+    apic_id: u8,
+    flags: u32,
+}
+
+impl MadtLocalApic {
+    const EMPTY: Self = Self::new(0, 0, 0);
+
+    const fn new(processor_id: u8, apic_id: u8, flags: u32) -> Self {
+        Self {
+            processor_id,
+            apic_id,
+            flags,
+        }
+    }
+
+    /// Return the ACPI processor identifier.
+    pub const fn processor_id(self) -> u8 {
+        self.processor_id
+    }
+
+    /// Return the Local APIC identifier.
+    pub const fn apic_id(self) -> u8 {
+        self.apic_id
+    }
+
+    /// Return the raw Local APIC flags.
+    pub const fn flags(self) -> u32 {
+        self.flags
+    }
+
+    /// Return whether this Local APIC is enabled.
+    pub const fn is_enabled(self) -> bool {
+        self.flags & MADT_LOCAL_APIC_ENABLED_FLAG != 0
+    }
+
+    /// Return whether this Local APIC can be brought online later.
+    pub const fn is_online_capable(self) -> bool {
+        self.flags & MADT_LOCAL_APIC_ONLINE_CAPABLE_FLAG != 0
+    }
+}
+
+/// IOAPIC information from the MADT.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MadtIoApic {
+    id: u8,
+    physical_address: u64,
+    global_system_interrupt_base: u32,
+}
+
+impl MadtIoApic {
+    const EMPTY: Self = Self::new(0, 0, 0);
+
+    const fn new(id: u8, physical_address: u64, global_system_interrupt_base: u32) -> Self {
+        Self {
+            id,
+            physical_address,
+            global_system_interrupt_base,
+        }
+    }
+
+    /// Return the IOAPIC identifier.
+    pub const fn id(self) -> u8 {
+        self.id
+    }
+
+    /// Return the IOAPIC MMIO physical address.
+    pub const fn physical_address(self) -> u64 {
+        self.physical_address
+    }
+
+    /// Return the first global system interrupt handled by this IOAPIC.
+    pub const fn global_system_interrupt_base(self) -> u32 {
+        self.global_system_interrupt_base
+    }
+}
+
+/// Legacy IRQ source override information from the MADT.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MadtInterruptSourceOverride {
+    bus: u8,
+    source_irq: u8,
+    global_system_interrupt: u32,
+    flags: u16,
+}
+
+impl MadtInterruptSourceOverride {
+    const EMPTY: Self = Self::new(0, 0, 0, 0);
+
+    const fn new(bus: u8, source_irq: u8, global_system_interrupt: u32, flags: u16) -> Self {
+        Self {
+            bus,
+            source_irq,
+            global_system_interrupt,
+            flags,
+        }
+    }
+
+    /// Return the source bus identifier.
+    pub const fn bus(self) -> u8 {
+        self.bus
+    }
+
+    /// Return the legacy IRQ source line.
+    pub const fn source_irq(self) -> u8 {
+        self.source_irq
+    }
+
+    /// Return the global system interrupt used for this source line.
+    pub const fn global_system_interrupt(self) -> u32 {
+        self.global_system_interrupt
+    }
+
+    /// Return the raw polarity and trigger-mode flags.
+    pub const fn flags(self) -> u16 {
+        self.flags
+    }
+}
+
+/// Local APIC NMI routing information from the MADT.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MadtLocalApicNmi {
+    processor_id: u8,
+    flags: u16,
+    lint: u8,
+}
+
+impl MadtLocalApicNmi {
+    const EMPTY: Self = Self::new(0, 0, 0);
+
+    const fn new(processor_id: u8, flags: u16, lint: u8) -> Self {
+        Self {
+            processor_id,
+            flags,
+            lint,
+        }
+    }
+
+    /// Return the ACPI processor identifier.
+    pub const fn processor_id(self) -> u8 {
+        self.processor_id
+    }
+
+    /// Return the raw polarity and trigger-mode flags.
+    pub const fn flags(self) -> u16 {
+        self.flags
+    }
+
+    /// Return the Local APIC LINT input.
+    pub const fn lint(self) -> u8 {
+        self.lint
+    }
+}
+
+/// Processor Local x2APIC information from the MADT.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MadtX2Apic {
+    x2apic_id: u32,
+    flags: u32,
+    processor_uid: u32,
+}
+
+impl MadtX2Apic {
+    const EMPTY: Self = Self::new(0, 0, 0);
+
+    const fn new(x2apic_id: u32, flags: u32, processor_uid: u32) -> Self {
+        Self {
+            x2apic_id,
+            flags,
+            processor_uid,
+        }
+    }
+
+    /// Return the x2APIC identifier.
+    pub const fn x2apic_id(self) -> u32 {
+        self.x2apic_id
+    }
+
+    /// Return the raw x2APIC flags.
+    pub const fn flags(self) -> u32 {
+        self.flags
+    }
+
+    /// Return the ACPI processor UID.
+    pub const fn processor_uid(self) -> u32 {
+        self.processor_uid
+    }
+
+    /// Return whether this x2APIC is enabled.
+    pub const fn is_enabled(self) -> bool {
+        self.flags & MADT_LOCAL_APIC_ENABLED_FLAG != 0
+    }
+
+    /// Return whether this x2APIC can be brought online later.
+    pub const fn is_online_capable(self) -> bool {
+        self.flags & MADT_LOCAL_APIC_ONLINE_CAPABLE_FLAG != 0
+    }
+}
+
+/// Bounded MADT interrupt topology records for APIC provider setup.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MadtInterruptTopology {
+    local_apics: [MadtLocalApic; MAX_MADT_LOCAL_APICS],
+    local_apic_records: usize,
+    ioapics: [MadtIoApic; MAX_MADT_IOAPICS],
+    ioapic_records: usize,
+    interrupt_source_overrides: [MadtInterruptSourceOverride; MAX_MADT_INTERRUPT_SOURCE_OVERRIDES],
+    interrupt_source_override_records: usize,
+    local_apic_nmis: [MadtLocalApicNmi; MAX_MADT_LOCAL_APIC_NMIS],
+    local_apic_nmi_records: usize,
+    x2apics: [MadtX2Apic; MAX_MADT_X2APICS],
+    x2apic_records: usize,
+    truncated: bool,
+}
+
+impl MadtInterruptTopology {
+    const fn new() -> Self {
+        Self {
+            local_apics: [MadtLocalApic::EMPTY; MAX_MADT_LOCAL_APICS],
+            local_apic_records: 0,
+            ioapics: [MadtIoApic::EMPTY; MAX_MADT_IOAPICS],
+            ioapic_records: 0,
+            interrupt_source_overrides: [MadtInterruptSourceOverride::EMPTY;
+                MAX_MADT_INTERRUPT_SOURCE_OVERRIDES],
+            interrupt_source_override_records: 0,
+            local_apic_nmis: [MadtLocalApicNmi::EMPTY; MAX_MADT_LOCAL_APIC_NMIS],
+            local_apic_nmi_records: 0,
+            x2apics: [MadtX2Apic::EMPTY; MAX_MADT_X2APICS],
+            x2apic_records: 0,
+            truncated: false,
+        }
+    }
+
+    /// Return whether any MADT records exceeded the retained topology capacity.
+    pub const fn is_truncated(self) -> bool {
+        self.truncated
+    }
+
+    /// Return the retained Processor Local APIC record count.
+    pub const fn retained_local_apic_count(self) -> usize {
+        self.local_apic_records
+    }
+
+    /// Return the retained IOAPIC record count.
+    pub const fn retained_ioapic_count(self) -> usize {
+        self.ioapic_records
+    }
+
+    /// Return the retained interrupt source override record count.
+    pub const fn retained_interrupt_source_override_count(self) -> usize {
+        self.interrupt_source_override_records
+    }
+
+    /// Return the retained Local APIC NMI record count.
+    pub const fn retained_local_apic_nmi_count(self) -> usize {
+        self.local_apic_nmi_records
+    }
+
+    /// Return the retained Processor Local x2APIC record count.
+    pub const fn retained_x2apic_count(self) -> usize {
+        self.x2apic_records
+    }
+
+    /// Return one retained Processor Local APIC record by index.
+    pub const fn local_apic(self, index: usize) -> Option<MadtLocalApic> {
+        if index < self.local_apic_records {
+            Some(self.local_apics[index])
+        } else {
+            None
+        }
+    }
+
+    /// Return one retained IOAPIC record by index.
+    pub const fn ioapic(self, index: usize) -> Option<MadtIoApic> {
+        if index < self.ioapic_records {
+            Some(self.ioapics[index])
+        } else {
+            None
+        }
+    }
+
+    /// Return one retained interrupt source override record by index.
+    pub const fn interrupt_source_override(
+        self,
+        index: usize,
+    ) -> Option<MadtInterruptSourceOverride> {
+        if index < self.interrupt_source_override_records {
+            Some(self.interrupt_source_overrides[index])
+        } else {
+            None
+        }
+    }
+
+    /// Return one retained Local APIC NMI record by index.
+    pub const fn local_apic_nmi(self, index: usize) -> Option<MadtLocalApicNmi> {
+        if index < self.local_apic_nmi_records {
+            Some(self.local_apic_nmis[index])
+        } else {
+            None
+        }
+    }
+
+    /// Return one retained Processor Local x2APIC record by index.
+    pub const fn x2apic(self, index: usize) -> Option<MadtX2Apic> {
+        if index < self.x2apic_records {
+            Some(self.x2apics[index])
+        } else {
+            None
+        }
+    }
+
+    /// Return the override for a legacy IRQ source line when one exists.
+    pub fn interrupt_source_override_for_legacy_irq(
+        self,
+        source_irq: u8,
+    ) -> Option<MadtInterruptSourceOverride> {
+        let mut index = 0;
+        while index < self.interrupt_source_override_records {
+            let record = self.interrupt_source_overrides[index];
+            if record.source_irq() == source_irq {
+                return Some(record);
+            }
+            index += 1;
+        }
+        None
+    }
+
+    /// Return the global system interrupt for a legacy IRQ source line.
+    pub fn global_system_interrupt_for_legacy_irq(self, source_irq: u8) -> u32 {
+        self.interrupt_source_override_for_legacy_irq(source_irq)
+            .map_or(u32::from(source_irq), |source_override| {
+                source_override.global_system_interrupt()
+            })
+    }
+
+    fn push_local_apic(&mut self, record: MadtLocalApic) {
+        if self.local_apic_records < MAX_MADT_LOCAL_APICS {
+            self.local_apics[self.local_apic_records] = record;
+            self.local_apic_records += 1;
+        } else {
+            self.truncated = true;
+        }
+    }
+
+    fn push_ioapic(&mut self, record: MadtIoApic) {
+        if self.ioapic_records < MAX_MADT_IOAPICS {
+            self.ioapics[self.ioapic_records] = record;
+            self.ioapic_records += 1;
+        } else {
+            self.truncated = true;
+        }
+    }
+
+    fn push_interrupt_source_override(&mut self, record: MadtInterruptSourceOverride) {
+        if self.interrupt_source_override_records < MAX_MADT_INTERRUPT_SOURCE_OVERRIDES {
+            self.interrupt_source_overrides[self.interrupt_source_override_records] = record;
+            self.interrupt_source_override_records += 1;
+        } else {
+            self.truncated = true;
+        }
+    }
+
+    fn push_local_apic_nmi(&mut self, record: MadtLocalApicNmi) {
+        if self.local_apic_nmi_records < MAX_MADT_LOCAL_APIC_NMIS {
+            self.local_apic_nmis[self.local_apic_nmi_records] = record;
+            self.local_apic_nmi_records += 1;
+        } else {
+            self.truncated = true;
+        }
+    }
+
+    fn push_x2apic(&mut self, record: MadtX2Apic) {
+        if self.x2apic_records < MAX_MADT_X2APICS {
+            self.x2apics[self.x2apic_records] = record;
+            self.x2apic_records += 1;
+        } else {
+            self.truncated = true;
+        }
+    }
+}
+
 /// Validated ACPI Multiple APIC Description Table diagnostics.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MadtDiagnostics {
@@ -179,35 +570,10 @@ pub struct MadtDiagnostics {
     local_apic_nmi_count: u64,
     local_apic_address_override_count: u64,
     x2apic_count: u64,
+    topology: MadtInterruptTopology,
 }
 
 impl MadtDiagnostics {
-    const fn new(
-        physical_address: u64,
-        length: u32,
-        revision: u8,
-        local_apic_address: u64,
-        flags: u32,
-        pc_at_compatible: bool,
-        counts: MadtEntryCounts,
-    ) -> Self {
-        Self {
-            physical_address,
-            length,
-            revision,
-            local_apic_address,
-            flags,
-            pc_at_compatible,
-            entry_count: counts.entries,
-            local_apic_count: counts.local_apics,
-            ioapic_count: counts.ioapics,
-            interrupt_source_override_count: counts.interrupt_source_overrides,
-            local_apic_nmi_count: counts.local_apic_nmis,
-            local_apic_address_override_count: counts.local_apic_address_overrides,
-            x2apic_count: counts.x2apics,
-        }
-    }
-
     /// Return the MADT physical address.
     pub const fn physical_address(self) -> u64 {
         self.physical_address
@@ -272,6 +638,11 @@ impl MadtDiagnostics {
     pub const fn x2apic_count(self) -> u64 {
         self.x2apic_count
     }
+
+    /// Return bounded MADT interrupt topology records.
+    pub const fn topology(self) -> MadtInterruptTopology {
+        self.topology
+    }
 }
 
 /// Validated ACPI root pointer and root table diagnostics.
@@ -290,7 +661,7 @@ impl Diagnostics {
         root_pointer: RootPointer,
         parsed_root_pointer: ParsedRootPointer,
         root_table: RootTableDiagnostics,
-        madt: MadtDiagnostics,
+        madt: &MadtDiagnostics,
     ) -> Self {
         Self {
             root_pointer,
@@ -298,7 +669,7 @@ impl Diagnostics {
             rsdt_address: parsed_root_pointer.rsdt_address,
             xsdt_address: parsed_root_pointer.xsdt_address,
             root_table,
-            madt,
+            madt: *madt,
         }
     }
 
@@ -405,7 +776,7 @@ pub unsafe fn inspect_root_pointer(root_pointer: RootPointer) -> Option<Diagnost
         root_pointer,
         parsed_root_pointer,
         root_table,
-        madt,
+        &madt,
     ))
 }
 
@@ -428,7 +799,20 @@ pub fn verify_parser_rules() -> bool {
     let Some(madt) = parse_madt_bytes(0x4000, &madt_bytes) else {
         return false;
     };
-    let diagnostics = Diagnostics::new(root_pointer, parsed_root_pointer, root_table, madt);
+    let diagnostics = Diagnostics::new(root_pointer, parsed_root_pointer, root_table, &madt);
+    let topology = diagnostics.madt().topology();
+    let Some(local_apic) = topology.local_apic(0) else {
+        return false;
+    };
+    let Some(ioapic) = topology.ioapic(0) else {
+        return false;
+    };
+    let Some(interrupt_source_override) = topology.interrupt_source_override(0) else {
+        return false;
+    };
+    let Some(local_apic_nmi) = topology.local_apic_nmi(0) else {
+        return false;
+    };
     diagnostics.revision() == 2
         && diagnostics.rsdt_address() == 0x3000
         && diagnostics.xsdt_address() == Some(0x2000)
@@ -445,6 +829,29 @@ pub fn verify_parser_rules() -> bool {
         && diagnostics.madt().local_apic_nmi_count() == 1
         && diagnostics.madt().local_apic_address_override_count() == 1
         && diagnostics.madt().x2apic_count() == 0
+        && !topology.is_truncated()
+        && topology.retained_local_apic_count() == 1
+        && topology.retained_ioapic_count() == 1
+        && topology.retained_interrupt_source_override_count() == 1
+        && topology.retained_local_apic_nmi_count() == 1
+        && topology.retained_x2apic_count() == 0
+        && local_apic.processor_id() == 0
+        && local_apic.apic_id() == 0
+        && local_apic.flags() == MADT_LOCAL_APIC_ENABLED_FLAG
+        && local_apic.is_enabled()
+        && !local_apic.is_online_capable()
+        && ioapic.id() == 1
+        && ioapic.physical_address() == 0xfec0_0000
+        && ioapic.global_system_interrupt_base() == 0
+        && interrupt_source_override.bus() == 0
+        && interrupt_source_override.source_irq() == 0
+        && interrupt_source_override.global_system_interrupt() == 2
+        && interrupt_source_override.flags() == 0
+        && topology.global_system_interrupt_for_legacy_irq(0) == 2
+        && topology.global_system_interrupt_for_legacy_irq(1) == 1
+        && local_apic_nmi.processor_id() == 0xff
+        && local_apic_nmi.flags() == 0
+        && local_apic_nmi.lint() == 1
 }
 
 unsafe fn read_root_pointer_bytes(physical_address: u64) -> Option<&'static [u8]> {
@@ -611,6 +1018,7 @@ fn parse_madt_bytes(physical_address: u64, bytes: &[u8]) -> Option<MadtDiagnosti
     let mut local_apic_address = u64::from(read_u32(bytes, MADT_LOCAL_APIC_ADDRESS_OFFSET));
     let flags = read_u32(bytes, MADT_FLAGS_OFFSET);
     let mut counts = MadtEntryCounts::new();
+    let mut topology = MadtInterruptTopology::new();
     let mut offset = MADT_ENTRY_OFFSET;
     while offset < length {
         let entry_type = *bytes.get(offset)?;
@@ -623,60 +1031,114 @@ fn parse_madt_bytes(physical_address: u64, bytes: &[u8]) -> Option<MadtDiagnosti
             return None;
         }
 
-        match entry_type {
-            MADT_LOCAL_APIC_ENTRY_TYPE => {
-                if entry_length < MADT_LOCAL_APIC_ENTRY_LENGTH {
-                    return None;
-                }
-                counts.local_apics += 1;
-            }
-            MADT_IOAPIC_ENTRY_TYPE => {
-                if entry_length < MADT_IOAPIC_ENTRY_LENGTH {
-                    return None;
-                }
-                counts.ioapics += 1;
-            }
-            MADT_INTERRUPT_SOURCE_OVERRIDE_ENTRY_TYPE => {
-                if entry_length < MADT_INTERRUPT_SOURCE_OVERRIDE_ENTRY_LENGTH {
-                    return None;
-                }
-                counts.interrupt_source_overrides += 1;
-            }
-            MADT_LOCAL_APIC_NMI_ENTRY_TYPE => {
-                if entry_length < MADT_LOCAL_APIC_NMI_ENTRY_LENGTH {
-                    return None;
-                }
-                counts.local_apic_nmis += 1;
-            }
-            MADT_LOCAL_APIC_ADDRESS_OVERRIDE_ENTRY_TYPE => {
-                if entry_length < MADT_LOCAL_APIC_ADDRESS_OVERRIDE_ENTRY_LENGTH {
-                    return None;
-                }
-                local_apic_address = read_u64(bytes, offset + 4);
-                counts.local_apic_address_overrides += 1;
-            }
-            MADT_X2APIC_ENTRY_TYPE => {
-                if entry_length < MADT_X2APIC_ENTRY_LENGTH {
-                    return None;
-                }
-                counts.x2apics += 1;
-            }
-            _ => {}
-        }
-
-        counts.entries += 1;
+        parse_madt_entry(
+            bytes,
+            offset,
+            entry_type,
+            entry_length,
+            &mut local_apic_address,
+            &mut counts,
+            &mut topology,
+        )?;
         offset = next_offset;
     }
 
-    Some(MadtDiagnostics::new(
+    Some(MadtDiagnostics {
         physical_address,
-        u32::try_from(length).expect("validated ACPI table length fits u32"),
-        bytes[8],
+        length: u32::try_from(length).expect("validated ACPI table length fits u32"),
+        revision: bytes[8],
         local_apic_address,
         flags,
-        flags & MADT_PC_AT_COMPATIBLE_FLAG != 0,
-        counts,
-    ))
+        pc_at_compatible: flags & MADT_PC_AT_COMPATIBLE_FLAG != 0,
+        entry_count: counts.entries,
+        local_apic_count: counts.local_apics,
+        ioapic_count: counts.ioapics,
+        interrupt_source_override_count: counts.interrupt_source_overrides,
+        local_apic_nmi_count: counts.local_apic_nmis,
+        local_apic_address_override_count: counts.local_apic_address_overrides,
+        x2apic_count: counts.x2apics,
+        topology,
+    })
+}
+
+fn parse_madt_entry(
+    bytes: &[u8],
+    offset: usize,
+    entry_type: u8,
+    entry_length: usize,
+    local_apic_address: &mut u64,
+    counts: &mut MadtEntryCounts,
+    topology: &mut MadtInterruptTopology,
+) -> Option<()> {
+    match entry_type {
+        MADT_LOCAL_APIC_ENTRY_TYPE => {
+            if entry_length < MADT_LOCAL_APIC_ENTRY_LENGTH {
+                return None;
+            }
+            topology.push_local_apic(MadtLocalApic::new(
+                bytes[offset + 2],
+                bytes[offset + 3],
+                read_u32(bytes, offset + 4),
+            ));
+            counts.local_apics += 1;
+        }
+        MADT_IOAPIC_ENTRY_TYPE => {
+            if entry_length < MADT_IOAPIC_ENTRY_LENGTH {
+                return None;
+            }
+            topology.push_ioapic(MadtIoApic::new(
+                bytes[offset + 2],
+                u64::from(read_u32(bytes, offset + 4)),
+                read_u32(bytes, offset + 8),
+            ));
+            counts.ioapics += 1;
+        }
+        MADT_INTERRUPT_SOURCE_OVERRIDE_ENTRY_TYPE => {
+            if entry_length < MADT_INTERRUPT_SOURCE_OVERRIDE_ENTRY_LENGTH {
+                return None;
+            }
+            topology.push_interrupt_source_override(MadtInterruptSourceOverride::new(
+                bytes[offset + 2],
+                bytes[offset + 3],
+                read_u32(bytes, offset + 4),
+                read_u16(bytes, offset + 8),
+            ));
+            counts.interrupt_source_overrides += 1;
+        }
+        MADT_LOCAL_APIC_NMI_ENTRY_TYPE => {
+            if entry_length < MADT_LOCAL_APIC_NMI_ENTRY_LENGTH {
+                return None;
+            }
+            topology.push_local_apic_nmi(MadtLocalApicNmi::new(
+                bytes[offset + 2],
+                read_u16(bytes, offset + 3),
+                bytes[offset + 5],
+            ));
+            counts.local_apic_nmis += 1;
+        }
+        MADT_LOCAL_APIC_ADDRESS_OVERRIDE_ENTRY_TYPE => {
+            if entry_length < MADT_LOCAL_APIC_ADDRESS_OVERRIDE_ENTRY_LENGTH {
+                return None;
+            }
+            *local_apic_address = read_u64(bytes, offset + 4);
+            counts.local_apic_address_overrides += 1;
+        }
+        MADT_X2APIC_ENTRY_TYPE => {
+            if entry_length < MADT_X2APIC_ENTRY_LENGTH {
+                return None;
+            }
+            topology.push_x2apic(MadtX2Apic::new(
+                read_u32(bytes, offset + 4),
+                read_u32(bytes, offset + 8),
+                read_u32(bytes, offset + 12),
+            ));
+            counts.x2apics += 1;
+        }
+        _ => {}
+    }
+
+    counts.entries += 1;
+    Some(())
 }
 
 fn valid_root_pointer_fixture() -> [u8; ROOT_POINTER_V2_MIN_LENGTH] {
@@ -794,6 +1256,14 @@ fn read_u32(bytes: &[u8], offset: usize) -> u32 {
         bytes[offset..offset + core::mem::size_of::<u32>()]
             .try_into()
             .expect("validated ACPI byte slice contains a u32 field"),
+    )
+}
+
+fn read_u16(bytes: &[u8], offset: usize) -> u16 {
+    u16::from_le_bytes(
+        bytes[offset..offset + core::mem::size_of::<u16>()]
+            .try_into()
+            .expect("validated ACPI byte slice contains a u16 field"),
     )
 }
 

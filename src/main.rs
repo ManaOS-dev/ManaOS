@@ -481,6 +481,46 @@ fn verify_acpi_root_table(root_pointer: Option<kernel::acpi::RootPointer>) {
         madt.local_apic_address_override_count(),
         madt.x2apic_count()
     );
+    let topology: kernel::acpi::MadtInterruptTopology = madt.topology();
+    let ioapic: kernel::acpi::MadtIoApic = topology
+        .ioapic(0)
+        .expect("ACPI MADT must contain at least one IOAPIC before IOAPIC setup");
+    let local_apic: kernel::acpi::MadtLocalApic = topology
+        .local_apic(0)
+        .expect("ACPI MADT must contain at least one Local APIC before APIC setup");
+    let legacy_timer_override: Option<kernel::acpi::MadtInterruptSourceOverride> =
+        topology.interrupt_source_override_for_legacy_irq(0);
+    let local_apic_nmi: Option<kernel::acpi::MadtLocalApicNmi> = topology.local_apic_nmi(0);
+    let x2apic: Option<kernel::acpi::MadtX2Apic> = topology.x2apic(0);
+    crate::log_info!(
+        "acpi",
+        "ACPI interrupt topology verified: retained_local_apics={} retained_ioapics={} retained_interrupt_source_overrides={} retained_local_apic_nmis={} retained_x2apics={} topology_truncated={} local_apic0_processor={} local_apic0_id={} local_apic0_flags={:#x} local_apic0_enabled={} local_apic0_online_capable={} ioapic0_id={} ioapic0_address={:#x} ioapic0_gsi_base={} legacy_irq0_gsi={} legacy_irq0_flags={:#x} legacy_irq1_gsi={} legacy_irq12_gsi={} local_apic_nmi0_lint={} x2apic0_present={} x2apic0_id={} x2apic0_uid={} x2apic0_flags={:#x} x2apic0_enabled={} x2apic0_online_capable={}",
+        topology.retained_local_apic_count(),
+        topology.retained_ioapic_count(),
+        topology.retained_interrupt_source_override_count(),
+        topology.retained_local_apic_nmi_count(),
+        topology.retained_x2apic_count(),
+        topology.is_truncated(),
+        local_apic.processor_id(),
+        local_apic.apic_id(),
+        local_apic.flags(),
+        local_apic.is_enabled(),
+        local_apic.is_online_capable(),
+        ioapic.id(),
+        ioapic.physical_address(),
+        ioapic.global_system_interrupt_base(),
+        topology.global_system_interrupt_for_legacy_irq(0),
+        legacy_timer_override.map_or(0, kernel::acpi::MadtInterruptSourceOverride::flags),
+        topology.global_system_interrupt_for_legacy_irq(1),
+        topology.global_system_interrupt_for_legacy_irq(12),
+        local_apic_nmi.map_or(0, kernel::acpi::MadtLocalApicNmi::lint),
+        x2apic.is_some(),
+        x2apic.map_or(0, kernel::acpi::MadtX2Apic::x2apic_id),
+        x2apic.map_or(0, kernel::acpi::MadtX2Apic::processor_uid),
+        x2apic.map_or(0, kernel::acpi::MadtX2Apic::flags),
+        x2apic.is_some_and(kernel::acpi::MadtX2Apic::is_enabled),
+        x2apic.is_some_and(kernel::acpi::MadtX2Apic::is_online_capable)
+    );
 }
 
 fn verify_mounted_disk_file(path: &str) {
