@@ -4,21 +4,9 @@ This document sorts the current unfinished work by implementation difficulty and
 dependency depth. It is intentionally focused on the next engineering order,
 not on product value.
 
-## Hardest First Order
+## Remaining High-Risk Order
 
-1. ACPI and APIC interrupt migration
-   - Parse ACPI RSDP and RSDT/XSDT.
-   - Parse MADT entries.
-   - Enable IOAPIC routing.
-   - Replace legacy PIC routing.
-   - Harden the legacy PIC fallback boundary.
-   - Add masked Local APIC timer calibration diagnostics.
-   - Calibrate and switch scheduling ticks to the Local APIC timer.
-   - Add spurious and unexpected external interrupt vector diagnostics.
-   - Reason: this changes early boot discovery, interrupt topology, timer
-     ownership, and architecture/kernel wiring at the same time.
-
-2. Full user process lifecycle
+1. Full user process lifecycle
    - Add `execve`.
    - Add user-visible `wait` or `waitpid`.
    - Add a minimal user shell process.
@@ -26,23 +14,31 @@ not on product value.
    - Reason: this crosses ELF loading, syscall ABI, address-space ownership,
      file descriptors, parent-child metadata, and scheduler cleanup.
 
-3. Remaining per-task kernel stack completion
+2. Remaining per-task kernel stack completion
    - Represent bootstrap and architecture-owned TSS/IST stacks in diagnostics.
    - Finish guard-page ownership for non-scheduler stacks.
    - Reason: this touches fault handling and low-level stack safety, but the
      scheduler-owned stack path is already in place.
 
-4. Typed physical and virtual address wrapper sweep
+3. Typed physical and virtual address wrapper sweep
    - Replace remaining raw `u64` address leakage across subsystem boundaries.
    - Reason: this has broad call-site churn but can be staged behind existing
      newtypes and tests.
 
-5. Synchronization and interrupt-time lock audit
+4. Synchronization and interrupt-time lock audit
    - Define interrupt-callable APIs.
    - Add lock ordering notes.
    - Split queue producer/consumer assumptions where needed.
    - Reason: this is broad but mostly diagnostic and structural until new SMP
      or APIC paths make the risks observable.
+
+5. Storage mutation and parser test expansion
+   - Add GPT and FAT32 parser fixtures.
+   - Add FAT32 mutation semantics for create, grow, truncate, unlink, and
+     directory operations.
+   - Add storage reliability counters, retry policy, and write smoke coverage.
+   - Reason: the read path is stable enough to protect with tests before the
+     write path starts mutating disk images.
 
 6. Input/display/userland quality work
    - Keyboard layout boundary, key releases, modifier state, text console,
@@ -52,13 +48,21 @@ not on product value.
 
 ## Current Selection
 
-The active task is ACPI and APIC interrupt migration. ACPI root discovery,
-RSDT/XSDT validation, MADT validation, bounded MADT topology diagnostics,
-architecture-owned APIC routing provider configuration, dry-run IOAPIC
-redirection entries, masked IOAPIC MMIO staging, Local APIC EOI-provider
-diagnostics, unified EOI dispatch, active IOAPIC routing, post-activation APIC
-EOI counters, legacy PIC fallback masking, masked Local APIC timer calibration,
-periodic Local APIC scheduler ticks, and spurious/unexpected external interrupt
-vector diagnostics are now proven by storage smoke. The next slice should
-continue full user process lifecycle work now that timer preemption no longer
-depends on the PIT route.
+ACPI and APIC interrupt migration is no longer the active selection. ACPI root
+discovery, RSDT/XSDT validation, MADT validation, APIC routing provider
+configuration, IOAPIC route activation, legacy PIC fallback masking, Local APIC
+timer calibration, periodic Local APIC scheduler ticks, and spurious/unexpected
+external vector diagnostics are proven by storage smoke.
+
+The active selection is now full user process lifecycle work. Start with small
+contract slices:
+
+1. document and implement the `execve` path, argv/envp copying limits, and
+   failure rollback rules;
+2. define the scheduler-owned child exit record model needed for `waitpid`;
+3. extend smoke coverage for multiple spawned user processes before introducing
+   a broader user shell;
+4. update scheduler diagnostics whenever lifecycle state gains a new transition.
+
+Prefer docs, diagnostics, and narrow smoke assertions before broad syscall
+surface expansion.

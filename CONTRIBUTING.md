@@ -6,8 +6,9 @@ Welcome! ManaOS is an "OS for Developers," and we value your contributions. This
 
 External contributors should use a pull request workflow. When there are no
 external contributors involved in the change, maintainers and project-owned
-automation may use the direct branch workflow documented in `AGENTS.md` after
-local verification.
+automation may use the direct branch workflow required by `AGENTS.md` and
+documented in [`docs/MAINTAINER_WORKFLOW.md`](docs/MAINTAINER_WORKFLOW.md)
+after local verification.
 
 1. **Fork** the repository.
 2. **Create a branch** for your feature or bug fix: `git checkout -b feature/your-awesome-feature` or `git checkout -b fix/your-bug`.
@@ -75,7 +76,8 @@ just lint
 
 ### 3. Documentation
 - All `pub` functions, structs, and enums must have `///` doc comments.
-- Use English for all comments and documentation to ensure global accessibility.
+- Use English for Rust comments and Rust doc comments. Markdown documents follow
+  the documentation language policy above.
 
 ### 4. Naming
 - Avoid unclear local abbreviations such as `fb_info`, `h`, and `v`.
@@ -94,21 +96,65 @@ just lint
 - Minimize the use of `unsafe` blocks.
 - If you use `unsafe`, you **must** add a `// SAFETY:` comment explaining why it is safe.
 
+## 📚 Documentation Standards
+
+Documentation changes should be treated as part of the engineering contract, not
+as an afterthought.
+
+- English documents are the source of truth.
+- Japanese companion documents should explain the same operational meaning when
+  a Japanese file exists for the English document.
+- Keep generated files generated. Do not hand-edit
+  `THIRD_PARTY_LICENSES.md`; regenerate it with `just licenses`.
+- Keep `TODO.md` limited to unfinished work. Move completed items into
+  `TODO_COMPLETED.md` after the implementing branch is verified.
+- When changing architecture, memory, syscall, storage, scheduler, or userland
+  behavior, update the nearest design document in the same branch.
+- When adding a new Markdown file under `docs/`, add or deliberately skip a
+  Japanese companion and update the documentation map in `README.md` if it is a
+  contributor-facing document.
+- Prefer concrete invariants, ownership rules, failure modes, and validation
+  commands over vague roadmap text.
+
+## ✅ Verification Matrix
+
+Use the smallest meaningful check first, then broaden when the change crosses
+runtime boundaries.
+
+| Change type | Minimum verification |
+| --- | --- |
+| Documentation only | `git diff --check` or `git show --check` |
+| Formatting-only Rust changes | `just fmt` |
+| Kernel Rust behavior | `cargo check --target x86_64-unknown-uefi` |
+| Userland no-std behavior | `cargo clippy --manifest-path userland/Cargo.toml --target x86_64-unknown-none --target-dir target/userland --lib --bin file_demo --bin bad_pointer_demo --bin smoke_demo -- -D warnings` |
+| Architecture or kernel/userland boundary | `just lint` |
+| Boot-visible runtime behavior | `just storage-smoke` |
+
+If a command cannot be run locally, record the exact reason and the expected
+follow-up validation.
+
 ---
 
 ## 🛠 Design Principles (Scalable & Contributor Friendly)
 
 ### 1. HAL (Hardware Abstraction Layer)
 Strictly separate architecture-dependent code from generic logic to support future architectures (e.g., AArch64).
-- **`kernel/`**: Platform-independent logic (scheduler, filesystem, network stack, etc.).
-- **`arch/x86_64/`**: CPU-specific implementations (GDT, IDT, page table manipulation, context switching, etc.).
+- **`src/kernel/`**: Platform-independent kernel policy such as memory, task
+  scheduling, syscalls, filesystems, drivers, diagnostics, console services,
+  and runtime services.
+- **`src/arch/x86_64/`**: CPU-specific implementations such as GDT, IDT,
+  interrupt-controller setup, context switching, and architecture entry paths.
 - **Interface**: Kernel core interacts only through abstraction APIs provided by the `arch::` module.
 - **Interrupt Boundary**: `arch/` must not call `kernel::...` directly. Interrupt handlers dispatch to callbacks registered by `main.rs`.
 
 ### 2. Trait-Driven Driver Design
-Abstract device drivers using traits to allow modular expansion.
-- **Console Trait**: Treat Serial, GOP, etc., as common Write operations.
-- **BlockDevice Trait**: Abstract disk access for AHCI, NVMe, etc.
+Keep driver abstractions narrow and local to the device class that needs them.
+- **BlockDevice trait**: Storage code uses an internal block-device interface
+  for AHCI devices, partitions, and filesystem parsers.
+- **Console and display path**: Serial logging uses `core::fmt::Write`, while
+  framebuffer output flows through display commands, the renderer, and the
+  framebuffer driver. Do not introduce a broad console/display trait without a
+  design document update.
 
 ### 3. Type-Safe Memory Management (Newtype Pattern)
 Distinguish between physical and virtual addresses at the type level to prevent bugs.
@@ -121,8 +167,6 @@ Distinguish between physical and virtual addresses at the type level to prevent 
 - **Static Analysis**: Strictly enforced `cargo clippy` checks (`just lint`).
 - **Documentation**: All `pub` items must have `///` doc comments.
 - **Auto Documentation**: Visualize internal structures with `cargo doc`.
-
----
 
 ---
 

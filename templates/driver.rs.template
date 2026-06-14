@@ -1,16 +1,24 @@
-//! # `kernel::driver::[driver_name]`
+//! # `kernel::driver::<device_class>::<driver_name>`
 //!
 //! ## Owns
-//! - Replace with the single resource or workflow this driver owns.
+//! - Replace with the single hardware resource, queue, or workflow this driver owns.
 //!
 //! ## Does NOT own
 //! - Replace with adjacent responsibilities owned by other modules.
+//! - Hardware interrupt vector setup (-> `arch/` and `main.rs` callback wiring).
 //!
 //! ## Public API
 //! - [`init`] - Initialize the driver.
-//! - [`process`] - Process pending driver work from the main loop.
+//! - [`process_events`] - Process pending driver work from the main loop.
+//! - [`get_state`] - Return a snapshot of driver state.
 
 // Keep all static variables private. Expose state only through functions.
+
+/// Snapshot of driver-owned state exposed to other modules.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DriverState {
+    // Add public fields only when another module is allowed to read them.
+}
 
 /// Initialize the driver. Must be called once before use.
 pub fn init() {
@@ -18,6 +26,12 @@ pub fn init() {
 }
 
 /// Process pending input/events. Call this from the main loop.
-pub fn process() {
+pub fn process_events() {
     // Add main-loop processing here.
+}
+
+/// Return a snapshot of the current driver state.
+pub fn get_state() -> DriverState {
+    // Replace this with a snapshot copied from private driver state.
+    DriverState::default()
 }
