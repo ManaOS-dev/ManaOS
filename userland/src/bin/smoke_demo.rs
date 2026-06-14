@@ -11,6 +11,7 @@ const ENTRY_ARGUMENT_MESSAGE: &[u8] = b"user entry arguments ok\n";
 const PROCESS_ID_MESSAGE: &[u8] = b"user process ids ok\n";
 const SYSCALL_ERROR_MESSAGE: &[u8] = b"user syscall errors ok\n";
 const EXECVE_VALIDATION_MESSAGE: &[u8] = b"user execve validation ok\n";
+const EXECVE_SUCCESS_MESSAGE: &[u8] = b"user execve success ok\n";
 const SLEEP_MESSAGE: &[u8] = b"user sleep ok\n";
 const BSS_MESSAGE: &[u8] = b"user bss ok\n";
 const HEAP_MESSAGE: &[u8] = b"user heap ok\n";
@@ -18,6 +19,8 @@ const MMAP_MESSAGE: &[u8] = b"user mmap ok\n";
 const FILE_MMAP_MESSAGE: &[u8] = b"user file mmap ok\n";
 const SHELL_MESSAGE: &[u8] = b"user shell ok\n";
 const PASS_MESSAGE: &[u8] = b"user smoke ok\n";
+const EXECVE_MARKER_ARGUMENT: &[u8] = b"--after-execve";
+const EXECVE_MARKER_ENVIRONMENT: &[u8] = b"MANAOS_EXECVE=1";
 const BSS_SMOKE_MARKER: u64 = 0x4d414e414f535f36;
 static BSS_SMOKE_VALUE: AtomicU64 = AtomicU64::new(0);
 
@@ -27,6 +30,12 @@ extern "C" fn _start(
     argument_values: *const *const u8,
     environment_values: *const *const u8,
 ) -> ! {
+    if is_after_execve_invocation(argument_count, argument_values, environment_values) {
+        verify_after_execve_entry(argument_count, argument_values, environment_values);
+        let _ = syscall::write(STDOUT, EXECVE_SUCCESS_MESSAGE);
+        syscall::exit(0);
+    }
+
     verify_process_identifiers();
     verify_syscall_error_paths();
 
@@ -41,7 +50,7 @@ extern "C" fn _start(
     verify_user_file_mapping();
 
     let _ = syscall::write(STDOUT, PASS_MESSAGE);
-    syscall::exit(0);
+    execve_self_success();
 }
 
 fn verify_process_identifiers() {
@@ -129,22 +138,16 @@ fn verify_syscall_error_paths() {
         syscall::exit(70);
     }
 
-    verify_execve_unsupported();
+    verify_execve_error_paths();
 
     let _ = syscall::write(STDOUT, SYSCALL_ERROR_MESSAGE);
 }
 
-fn verify_execve_unsupported() {
+fn verify_execve_error_paths() {
     let executable_path = b"/disk/bin/smoke_demo\0";
     let arguments = [executable_path.as_ptr(), core::ptr::null()];
     let environment = [core::ptr::null()];
     let bad_user_pointer = 0x0000_4000_0000_2000_usize;
-
-    if syscall::execve(executable_path, arguments.as_ptr(), environment.as_ptr())
-        != syscall::ERROR_NOT_IMPLEMENTED
-    {
-        syscall::exit(71);
-    }
 
     let missing_path = b"/disk/bin/missing_exec\0";
     if syscall::execve(missing_path, arguments.as_ptr(), environment.as_ptr())
@@ -198,6 +201,76 @@ fn verify_execve_unsupported() {
     }
 
     let _ = syscall::write(STDOUT, EXECVE_VALIDATION_MESSAGE);
+}
+
+fn execve_self_success() -> ! {
+    let executable_path = b"/disk/bin/smoke_demo\0";
+    let marker_argument = b"--after-execve\0";
+    let marker_environment = b"MANAOS_EXECVE=1\0";
+    let arguments = [
+        executable_path.as_ptr(),
+        marker_argument.as_ptr(),
+        core::ptr::null(),
+    ];
+    let environment = [marker_environment.as_ptr(), core::ptr::null()];
+
+    let result = syscall::execve(executable_path, arguments.as_ptr(), environment.as_ptr());
+    if result < 0 {
+        syscall::exit(78);
+    }
+    syscall::exit(79);
+}
+
+fn is_after_execve_invocation(
+    argument_count: usize,
+    argument_values: *const *const u8,
+    environment_values: *const *const u8,
+) -> bool {
+    argument_count == 2
+        && !argument_values.is_null()
+        && !environment_values.is_null()
+        && argument_equals(argument_values, 1, EXECVE_MARKER_ARGUMENT)
+        && argument_equals(environment_values, 0, EXECVE_MARKER_ENVIRONMENT)
+}
+
+fn verify_after_execve_entry(
+    argument_count: usize,
+    argument_values: *const *const u8,
+    environment_values: *const *const u8,
+) {
+    verify_process_identifiers();
+    if argument_count != 2 || argument_values.is_null() || environment_values.is_null() {
+        syscall::exit(80);
+    }
+    if !argument_equals(argument_values, 0, b"/disk/bin/smoke_demo") {
+        syscall::exit(81);
+    }
+    if !argument_equals(argument_values, 1, EXECVE_MARKER_ARGUMENT) {
+        syscall::exit(82);
+    }
+    if !argument_pointer_is_null(argument_values, 2) {
+        syscall::exit(83);
+    }
+    if !argument_equals(environment_values, 0, EXECVE_MARKER_ENVIRONMENT) {
+        syscall::exit(84);
+    }
+    if !argument_pointer_is_null(environment_values, 1) {
+        syscall::exit(85);
+    }
+    verify_bss_zero_after_execve();
+}
+
+fn verify_bss_zero_after_execve() {
+    if BSS_SMOKE_VALUE
+        .compare_exchange(0, BSS_SMOKE_MARKER, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        syscall::exit(86);
+    }
+    if BSS_SMOKE_VALUE.load(Ordering::Acquire) != BSS_SMOKE_MARKER {
+        syscall::exit(87);
+    }
+    let _ = syscall::write(STDOUT, BSS_MESSAGE);
 }
 
 fn verify_user_sleep() {

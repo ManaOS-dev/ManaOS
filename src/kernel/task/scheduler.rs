@@ -550,6 +550,6 @@ pub use facade::{
     get_scheduler_task_snapshots, initialize, prepare_current_user_sleep,
     process_current_user_break, process_current_user_mapping, process_current_user_unmapping,
     process_timer_tick, record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
-    run_active_user_tasks_until_empty, run_next_user_task_once, run_user_task_once,
-    set_preemption_enabled, spawn, spawn_user_task,
+    replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
+    run_user_task_once, set_preemption_enabled, spawn, spawn_user_task,
 };

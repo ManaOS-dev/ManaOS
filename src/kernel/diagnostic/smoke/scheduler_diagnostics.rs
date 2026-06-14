@@ -59,12 +59,13 @@ fn verify_scheduler_reclaim_diagnostics(
     diagnostics: &crate::kernel::task::SchedulerDiagnostics,
     expected_user_tasks: u64,
 ) {
-    // The current smoke ELF reclaims five ELF pages, four user stack pages,
-    // and the final two-page heap. Private mmap pages are unmapped earlier.
-    const SMOKE_RECLAIMED_USER_PAGES_PER_TASK: u64 = 11;
-    // The current smoke process touches the program, heap/mmap, and stack
-    // windows, leaving ten page-table frames to reclaim with the PML4.
-    const SMOKE_RECLAIMED_PAGE_TABLE_PAGES_PER_TASK: u64 = 10;
+    // The final post-exec smoke image reclaims five ELF pages and four user
+    // stack pages. The old heap and private mappings are reclaimed during
+    // execve publication, before the task exits.
+    const SMOKE_RECLAIMED_USER_PAGES_PER_TASK: u64 = 9;
+    // The post-exec image touches only the program and stack windows, leaving
+    // seven page-table frames to reclaim with the PML4.
+    const SMOKE_RECLAIMED_PAGE_TABLE_PAGES_PER_TASK: u64 = 7;
     // User smoke tasks use the current default guarded kernel stack: four
     // writable pages plus one reserved guard page.
     let expected_reclaimed_user_kernel_stack_writable_pages = expected_user_tasks * 4;
@@ -512,48 +513,43 @@ fn log_scheduler_task_snapshot_counters(
 fn verify_user_task_snapshot(
     snapshot: crate::kernel::task::SchedulerTaskSnapshot,
 ) -> UserTaskSnapshotVerification {
-    const SMOKE_PRIVATE_MAPPING_BYTES: u64 = 16_384;
-    const SMOKE_TOTAL_PRIVATE_MAPPING_PAGES: u64 = 6;
-    const SMOKE_PEAK_PRIVATE_MAPPING_PAGES: u64 = 3;
-    const SMOKE_PEAK_PRIVATE_MAPPING_RECORDS: u64 = 2;
-
     let user_virtual_memory = snapshot
         .user_virtual_memory()
         .expect("user task snapshots must include virtual memory bookkeeping");
     assert_eq!(
         user_virtual_memory.heap_mapped_pages(),
-        2,
-        "user smoke task snapshots must retain the final two-page brk state"
+        0,
+        "execve must reset user heap bookkeeping before task exit"
     );
     assert_eq!(
         user_virtual_memory.mapping_next_start(),
-        crate::kernel::memory::user_layout::USER_MAPPING_BASE + SMOKE_PRIVATE_MAPPING_BYTES,
-        "user smoke task snapshots must show one three-page anonymous mmap and one file mmap allocation"
+        crate::kernel::memory::user_layout::USER_MAPPING_BASE,
+        "execve must reset private mapping placement bookkeeping before task exit"
     );
     assert_eq!(
         user_virtual_memory.mapping_total_mapped_pages(),
-        SMOKE_TOTAL_PRIVATE_MAPPING_PAGES,
-        "user smoke task snapshots must retain total private mmap page allocations"
+        0,
+        "execve must reset total private mapping allocations"
     );
     assert_eq!(
         user_virtual_memory.mapping_total_released_pages(),
-        SMOKE_TOTAL_PRIVATE_MAPPING_PAGES,
-        "user smoke task snapshots must retain total private mmap page releases"
+        0,
+        "execve must reset total private mapping releases"
     );
     assert_eq!(
         user_virtual_memory.mapping_peak_active_pages(),
-        SMOKE_PEAK_PRIVATE_MAPPING_PAGES,
-        "user smoke task snapshots must retain mmap active-page high-water marks"
+        0,
+        "execve must reset private mapping active-page high-water marks"
     );
     assert_eq!(
         user_virtual_memory.mapping_peak_active_records(),
-        SMOKE_PEAK_PRIVATE_MAPPING_RECORDS,
-        "user smoke task snapshots must retain mmap record high-water marks"
+        0,
+        "execve must reset private mapping record high-water marks"
     );
     assert_eq!(
         user_virtual_memory.mapping_file_private_map_count(),
-        1,
-        "user smoke task snapshots must retain file-private mmap call counts"
+        0,
+        "execve must reset file-private mmap call counts"
     );
 
     UserTaskSnapshotVerification {

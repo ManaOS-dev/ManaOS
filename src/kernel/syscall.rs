@@ -85,6 +85,8 @@ const LINUX_ERRNO_MAX: u64 = 4095;
 pub const USER_EXIT_SENTINEL: u64 = u64::MAX - LINUX_ERRNO_MAX;
 /// Internal sentinel telling the syscall entry code to block and return to the kernel.
 pub const USER_BLOCK_SENTINEL: u64 = u64::MAX - LINUX_ERRNO_MAX - 1;
+/// Internal sentinel telling the syscall entry code to resume in a new image.
+pub const USER_EXECVE_SENTINEL: u64 = u64::MAX - LINUX_ERRNO_MAX - 2;
 
 static TRACE_ENABLED: AtomicBool = AtomicBool::new(false);
 static TRACE_RECORD_COUNT: AtomicU64 = AtomicU64::new(0);
@@ -212,7 +214,7 @@ fn dispatch_syscall(syscall_number: u64, arguments: [u64; 6]) -> u64 {
         SYS_MUNMAP => memory::sys_munmap(first_argument, second_argument),
         SYS_BRK => memory::sys_brk(first_argument),
         SYS_NANOSLEEP => memory::sys_nanosleep(first_argument, second_argument),
-        SYS_EXECVE => sys_execve(first_argument, second_argument, third_argument),
+        SYS_EXECVE => sys_execve(first_argument, second_argument, third_argument, None),
         SYS_READ => sys_read(first_argument, second_argument, third_argument),
         SYS_GETDENTS64 => sys_getdents64(first_argument, second_argument, third_argument),
         SYS_GETPID => sys_getpid(),
@@ -316,15 +318,25 @@ pub unsafe extern "C" fn syscall_dispatch_from_trap_frame(trap_frame: *mut UserT
     trap_frame.code_segment = u64::from(selectors.code);
     trap_frame.stack_segment = u64::from(selectors.data);
 
-    let result = syscall_dispatch(
-        trap_frame.rax,
+    let task_id = crate::kernel::task::get_current_task_id();
+    let syscall_number = trap_frame.rax;
+    let arguments = [
         trap_frame.rdi,
         trap_frame.rsi,
         trap_frame.rdx,
         trap_frame.r10,
         trap_frame.r8,
         trap_frame.r9,
-    );
+    ];
+    let result = if syscall_number == SYS_EXECVE {
+        sys_execve(arguments[0], arguments[1], arguments[2], Some(trap_frame))
+    } else {
+        dispatch_syscall(syscall_number, arguments)
+    };
+    record_syscall_trace(task_id, syscall_number, arguments, result);
+    if result == USER_EXECVE_SENTINEL {
+        return USER_EXECVE_SENTINEL;
+    }
     if result == USER_BLOCK_SENTINEL {
         trap_frame.rax = 0;
         crate::kernel::task::record_current_user_trap_frame(
@@ -535,6 +547,7 @@ fn sys_execve(
     user_path_pointer: u64,
     user_argument_values_pointer: u64,
     user_environment_values_pointer: u64,
+    replacement_trap_frame: Option<&mut UserTrapFrame>,
 ) -> u64 {
     let staging = match copy_execve_staging(
         user_path_pointer,
@@ -551,59 +564,119 @@ fn sys_execve(
     if !crate::kernel::elf::validate_user_program_image(&executable_image, &staging.path) {
         return ERROR_INVALID_ARGUMENT;
     }
-
-    let Some(candidate) =
-        crate::kernel::memory::runtime_allocator::with_user_runtime_frame_allocator(
-            |frame_allocator| {
-                build_and_rollback_execve_candidate(frame_allocator, &staging, &executable_image)
-            },
-        )
-    else {
+    let Some(replacement_trap_frame) = replacement_trap_frame else {
+        crate::log_debug!(
+            "syscall",
+            "execve(path={}, image_bytes={}, argc={}, envc={}, bytes={}) requires a trap frame",
+            staging.path,
+            executable_image.len(),
+            staging.argument_values.len(),
+            staging.environment_values.len(),
+            staging.copied_string_bytes
+        );
         return ERROR_NOT_IMPLEMENTED;
     };
 
+    let Some(published) =
+        crate::kernel::memory::runtime_allocator::with_user_runtime_frame_allocator(
+            |frame_allocator| {
+                build_and_publish_execve_candidate(frame_allocator, &staging, &executable_image)
+            },
+        )
+        .flatten()
+    else {
+        return ERROR_NOT_IMPLEMENTED;
+    };
+    *replacement_trap_frame = published.trap_frame;
+
     crate::log_info!(
         "syscall",
-        "execve candidate rollback -> path={} entry={:#x} stack={:#x} heap_start={:#x} argc={} user_pages={} page_table_pages={} owner_stats_restored=true",
+        "execve image published -> task={} path={} entry={:#x} stack={:#x} heap_start={:#x} argc={} old_user_pages={} old_page_table_pages={}",
+        published.task_id,
         staging.path,
-        candidate.entry_point,
-        candidate.stack_pointer,
-        candidate.heap_start,
-        candidate.argument_count,
-        candidate.reclaimed_user_pages,
-        candidate.reclaimed_page_table_pages
+        published.entry_point,
+        published.stack_pointer,
+        published.heap_start,
+        published.argument_count,
+        published.reclaimed_old_user_pages,
+        published.reclaimed_old_page_table_pages
     );
 
-    crate::log_debug!(
-        "syscall",
-        "execve(path={}, image_bytes={}, argc={}, envc={}, bytes={}) is not implemented",
-        staging.path,
-        executable_image.len(),
-        staging.argument_values.len(),
-        staging.environment_values.len(),
-        staging.copied_string_bytes
-    );
-
-    ERROR_NOT_IMPLEMENTED
+    USER_EXECVE_SENTINEL
 }
 
-struct ExecveCandidateRollback {
+struct ExecveImageCandidate {
+    address_space: crate::kernel::memory::address_space::UserAddressSpace,
+    trap_frame: UserTrapFrame,
+    heap_start: crate::kernel::memory::address::UserVirtualAddress,
+    argument_count: u64,
+}
+
+struct ExecvePublishedImage {
+    task_id: u64,
     entry_point: u64,
     stack_pointer: u64,
     heap_start: u64,
     argument_count: u64,
-    reclaimed_user_pages: u64,
-    reclaimed_page_table_pages: u64,
+    trap_frame: UserTrapFrame,
+    reclaimed_old_user_pages: u64,
+    reclaimed_old_page_table_pages: u64,
 }
 
-fn build_and_rollback_execve_candidate(
+fn build_and_publish_execve_candidate(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
     staging: &ExecveStaging,
     executable_image: &[u8],
-) -> ExecveCandidateRollback {
-    let before = frame_allocator.owner_statistics();
+) -> Option<ExecvePublishedImage> {
     let current_address_space = crate::kernel::task::get_current_user_address_space();
+    let candidate = build_execve_candidate(frame_allocator, staging, executable_image);
+    let Some((task_id, old_address_space)) = crate::kernel::task::replace_current_user_image(
+        candidate.address_space,
+        candidate.trap_frame,
+        candidate.heap_start,
+    ) else {
+        let reclaim = crate::kernel::memory::address_space::destroy_user_address_space(
+            frame_allocator,
+            candidate.address_space,
+        );
+        if let Some(current_address_space) = current_address_space {
+            crate::kernel::memory::address_space::switch_to_user_address_space(
+                current_address_space,
+            );
+        }
+        crate::log_warn!(
+            "syscall",
+            "execve candidate dropped -> path={} user_pages={} page_table_pages={}",
+            staging.path,
+            reclaim.user_pages(),
+            reclaim.page_table_pages()
+        );
+        return None;
+    };
 
+    let reclaim = crate::kernel::memory::address_space::destroy_user_address_space(
+        frame_allocator,
+        old_address_space,
+    );
+    crate::kernel::memory::address_space::switch_to_user_address_space(candidate.address_space);
+
+    Some(ExecvePublishedImage {
+        task_id,
+        entry_point: candidate.trap_frame.instruction_pointer,
+        stack_pointer: candidate.trap_frame.stack_pointer,
+        heap_start: candidate.heap_start.as_u64(),
+        argument_count: candidate.argument_count,
+        trap_frame: candidate.trap_frame,
+        reclaimed_old_user_pages: reclaim.user_pages(),
+        reclaimed_old_page_table_pages: reclaim.page_table_pages(),
+    })
+}
+
+fn build_execve_candidate(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    staging: &ExecveStaging,
+    executable_image: &[u8],
+) -> ExecveImageCandidate {
     let candidate_address_space =
         crate::kernel::memory::address_space::create_user_address_space(frame_allocator);
     let loaded = crate::kernel::elf::load_user_program(
@@ -650,26 +723,11 @@ fn build_and_rollback_execve_candidate(
     };
     let trap_frame = entry_context.to_trap_frame();
 
-    let reclaim = crate::kernel::memory::address_space::destroy_user_address_space(
-        frame_allocator,
-        candidate_address_space,
-    );
-    if let Some(current_address_space) = current_address_space {
-        crate::kernel::memory::address_space::switch_to_user_address_space(current_address_space);
-    }
-    let after = frame_allocator.owner_statistics();
-    assert_eq!(
-        before, after,
-        "execve candidate rollback must restore frame owner statistics"
-    );
-
-    ExecveCandidateRollback {
-        entry_point: trap_frame.instruction_pointer,
-        stack_pointer: trap_frame.stack_pointer,
-        heap_start: loaded.heap_start().as_u64(),
-        argument_count: trap_frame.rdi,
-        reclaimed_user_pages: reclaim.user_pages(),
-        reclaimed_page_table_pages: reclaim.page_table_pages(),
+    ExecveImageCandidate {
+        address_space: candidate_address_space,
+        trap_frame,
+        heap_start: loaded.heap_start(),
+        argument_count: prepared_stack.argument_count(),
     }
 }
 

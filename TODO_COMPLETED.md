@@ -22,6 +22,23 @@ active roadmap can list only unfinished work.
 - [x] Add a failure smoke case for `execve` on a non-ELF file.
 - [x] Document `execve` ownership and cleanup invariants in the process lifecycle docs.
 - [x] Build and roll back an unpublished `execve` image candidate before returning unsupported.
+- [x] Return a successful `execve` sentinel from syscall dispatch without writing an old-image return value.
+- [x] Publish the prepared `execve` address space, stack, heap start, and trap frame through one scheduler-owned transition.
+- [x] Replace the current user address space without leaking old user frames.
+- [x] Preserve process ID across successful `execve`.
+- [x] Preserve parent-child relationship across successful `execve`.
+- [x] Reset user signal-like runtime state that should not survive image replacement.
+- [x] Reset old `brk` heap bookkeeping during successful `execve`.
+- [x] Reset old private `mmap` bookkeeping during successful `execve`.
+- [x] Replace the user stack with a freshly built argv/envp stack image.
+- [x] Reclaim the old user image only after the new image can no longer return to the old instruction pointer.
+- [x] Add a no-return userland smoke path for successful self-`execve` without recursive re-exec.
+
+## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
+
+### Address Space Lifecycle
+
+- [x] Publish successful `execve` image replacement through one scheduler-owned transition.
 
 ## Immediate Priorities
 

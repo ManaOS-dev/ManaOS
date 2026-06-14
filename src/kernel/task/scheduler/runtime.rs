@@ -3,8 +3,8 @@
 use super::{
     address_space, FinishedUserTaskReclaim, KernelStackReclaim, OneShotUserTask,
     PhysicalFrameAllocator, Scheduler, SwitchAction, TaskIdentifier, TaskKind, TaskState,
-    UserAddressSpace, UserAddressSpaceReclaim, UserTaskExit, UserTrapFrame, UserTrapFrameSource,
-    USER_TASK_PREEMPTION_ENABLED,
+    UserAddressSpace, UserAddressSpaceReclaim, UserHeap, UserMappings, UserTaskExit, UserTrapFrame,
+    UserTrapFrameSource, UserVirtualAddress, USER_TASK_PREEMPTION_ENABLED,
 };
 impl Scheduler {
     pub(in crate::kernel::task) fn activate_user_task(&mut self, task_id: u64) -> bool {
@@ -376,6 +376,50 @@ impl Scheduler {
                 interrupted_user_mode && user_runtime.interrupt_frame_recorded
             }
         }
+    }
+
+    pub(in crate::kernel::task) fn replace_current_user_image(
+        &mut self,
+        address_space: UserAddressSpace,
+        trap_frame: UserTrapFrame,
+        heap_start: UserVirtualAddress,
+    ) -> Option<(u64, UserAddressSpace)> {
+        let current_task = &mut self.tasks[self.current_index];
+        let task_id = current_task.get_id();
+        if current_task.state != TaskState::Running {
+            return None;
+        }
+        let TaskKind::User(user_runtime) = &mut current_task.kind else {
+            return None;
+        };
+        let old_address_space = user_runtime.address_space.take()?;
+        user_runtime.address_space = Some(address_space);
+
+        user_runtime.saved_frame = trap_frame;
+        user_runtime.heap = UserHeap::new(heap_start);
+        user_runtime.mappings = UserMappings::new();
+        user_runtime.mapping_total_mapped_pages = 0;
+        user_runtime.mapping_total_released_pages = 0;
+        user_runtime.mapping_peak_active_pages = 0;
+        user_runtime.mapping_peak_active_records = 0;
+        user_runtime.mapping_file_private_map_count = 0;
+        user_runtime.sleep_wake_tick = None;
+        user_runtime.syscall_frame_recorded = false;
+        user_runtime.interrupt_frame_recorded = false;
+        current_task.context.clear();
+
+        crate::log_info!(
+            "task",
+            "User image replaced by execve: task={} old_address_space={:#x} new_address_space={:#x} entry={:#x} stack={:#x} heap_start={:#x}",
+            task_id,
+            old_address_space.level_4_frame().as_u64(),
+            address_space.level_4_frame().as_u64(),
+            trap_frame.instruction_pointer,
+            trap_frame.stack_pointer,
+            heap_start.as_u64()
+        );
+
+        Some((task_id, old_address_space))
     }
 
     pub(in crate::kernel::task) fn can_schedule_task(

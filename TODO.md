@@ -11,21 +11,10 @@ reviewable unit before implementing it.
 
 ### `execve` And Image Replacement
 
-- [ ] Return a successful `execve` sentinel from syscall dispatch without writing an old-image return value.
-- [ ] Publish the prepared `execve` address space, stack, heap start, and trap frame through one scheduler-owned transition.
-- [ ] Replace the current user address space without leaking old user frames.
-- [ ] Preserve process ID across successful `execve`.
-- [ ] Preserve parent-child relationship across successful `execve`.
-- [ ] Reset user signal-like runtime state that should not survive image replacement.
-- [ ] Reset old `brk` heap bookkeeping during successful `execve`.
-- [ ] Reset old private `mmap` bookkeeping during successful `execve`.
 - [ ] Preserve current working directory across successful `execve`.
 - [ ] Preserve open file descriptors that do not have close-on-exec semantics.
 - [ ] Add close-on-exec metadata to file descriptors.
 - [ ] Close descriptors marked close-on-exec during successful `execve`.
-- [ ] Replace the user stack with a freshly built argv/envp stack image.
-- [ ] Reclaim the old user image only after the new image can no longer return to the old instruction pointer.
-- [ ] Add a no-return userland smoke path for successful self-`execve` without recursive re-exec.
 - [ ] Add `execve` diagnostics to the `tasks` console command.
 - [ ] Add a boot smoke case that `execve`s a second user program from `/disk`.
 
@@ -144,7 +133,6 @@ reviewable unit before implementing it.
 ### Address Space Lifecycle
 
 - [ ] Add explicit address-space state transitions for building, active, exiting, and reclaimed states.
-- [ ] Publish successful `execve` image replacement through one scheduler-owned transition.
 - [ ] Convert `execve` candidate image construction to fallible allocation instead of panic-on-OOM.
 - [ ] Ensure failed spawn cleanup returns all newly allocated frames.
 - [ ] Track page-table frame ownership per process in diagnostics.

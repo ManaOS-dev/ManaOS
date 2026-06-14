@@ -340,6 +340,18 @@ pub fn get_current_user_address_space() -> Option<UserAddressSpace> {
         .and_then(Scheduler::current_user_address_space)
 }
 
+/// Replace the currently running user task image and return its old address space.
+pub fn replace_current_user_image(
+    address_space: UserAddressSpace,
+    trap_frame: UserTrapFrame,
+    heap_start: UserVirtualAddress,
+) -> Option<(u64, UserAddressSpace)> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler.as_mut().and_then(|scheduler| {
+        scheduler.replace_current_user_image(address_space, trap_frame, heap_start)
+    })
+}
+
 /// Return scheduler task counts and lifecycle accounting diagnostics.
 pub fn get_scheduler_diagnostics() -> Option<SchedulerDiagnostics> {
     SCHEDULER

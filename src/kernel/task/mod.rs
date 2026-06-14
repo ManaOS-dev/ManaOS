@@ -36,6 +36,7 @@
 //! - [`close_user_return_preemption_window`] - Disable preemption after a user stop syscall
 //! - [`record_current_user_trap_frame`] - Save a captured user trap frame
 //! - [`record_current_user_interrupt_trap_frame`] - Save a timer interrupt user trap frame
+//! - [`replace_current_user_image`] - Replace the current user task image during `execve`
 //! - [`get_kernel_stack_guard_fault`] - Classify a kernel stack guard fault
 //! - [`get_kernel_stack_guard_fault_diagnostic_sample`] - Probe guard-fault diagnostics
 
@@ -68,8 +69,8 @@ pub use scheduler::{
     get_scheduler_task_snapshots, initialize, prepare_current_user_sleep,
     process_current_user_break, process_current_user_mapping, process_current_user_unmapping,
     process_timer_tick, record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
-    run_active_user_tasks_until_empty, run_next_user_task_once, run_user_task_once,
-    set_preemption_enabled, spawn, spawn_user_task, Task, UserMappingRequest,
+    replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
+    run_user_task_once, set_preemption_enabled, spawn, spawn_user_task, Task, UserMappingRequest,
 };
 #[allow(unused_imports)]
 pub use stack::{KernelStackFaultOwner, KernelStackGuardFault};

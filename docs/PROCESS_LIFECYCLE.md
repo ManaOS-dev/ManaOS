@@ -25,11 +25,12 @@ metadata can be verified one slice at a time.
 The current kernel can load user ELF images from the filesystem for the smoke
 lifecycle, build initial `argc` / `argv` / `envp` stack state, run multiple
 active user task records under timer preemption, retain parent-child metadata,
-and reclaim finished user address spaces and scheduler-owned kernel stacks.
+successfully replace a running smoke task image through `execve`, and reclaim
+finished user address spaces and scheduler-owned kernel stacks.
 
-General user-created process lifecycle is not complete yet. `execve`,
-user-visible child creation, `waitpid`, process-owned current directories, and
-close-on-exec descriptor metadata are still future work.
+General user-created process lifecycle is not complete yet. Current-directory
+ownership, descriptor close-on-exec metadata, user-visible child creation, and
+`waitpid` are still future work.
 
 ## `execve` Kernel Contract
 
@@ -43,12 +44,12 @@ The syscall ABI slice should use the normal ManaOS syscall register convention:
 - `rsi`: user pointer to a NUL-terminated `argv` pointer array.
 - `rdx`: user pointer to a NUL-terminated `envp` pointer array.
 
-The shared syscall number and no-std userland wrapper are reserved now. The
-kernel also stages the executable path, `argv`, and `envp` through user pointer
+The shared syscall number and no-std userland wrapper are implemented now. The
+kernel stages the executable path, `argv`, and `envp` through user pointer
 validation, resolves the executable through the current filesystem namespace,
-validates ELF metadata, builds an unpublished replacement candidate, and rolls
-that candidate back before returning the current unsupported runtime result.
-The successful image publication path remains pending.
+validates ELF metadata, builds a replacement candidate, publishes the prepared
+address space and trap frame through the scheduler, and reclaims the old user
+image after the old instruction pointer can no longer resume.
 
 The kernel-side contract is:
 
@@ -115,9 +116,9 @@ Current path validation accepts only absolute executable paths, reads regular
 file contents through a temporary descriptor, rejects missing paths with
 `-ENOENT`, rejects directories with `-EISDIR`, rejects device nodes with
 `-EOPNOTSUPP`, and rejects invalid ELF metadata with `-EINVAL`. Valid images
-are mapped into an unpublished candidate address space with byte-preserving
-`argv` and `envp` stack contents, then rolled back while `execve` still returns
-`-ENOSYS`.
+are mapped into a candidate address space with byte-preserving `argv` and
+`envp` stack contents, then published by replacing the current task's address
+space, heap state, private mapping state, and saved user trap frame.
 
 ## Address-Space Publication And Rollback
 
@@ -140,21 +141,26 @@ The old address space, old trap frame, old user stack, old heap state, old
 private mappings, current process ID, parent ID, and inherited descriptors must
 remain unchanged on failure.
 
-The current unsupported valid-image path already exercises this rule: the
-kernel builds the candidate address space, maps ELF segments, prepares the
-candidate user stack and trap frame, destroys the candidate address space, and
-asserts that frame-owner totals match their pre-build snapshot before returning
-`-ENOSYS` to the old image.
+The current runtime path exercises successful publication: the kernel builds the
+candidate address space, maps ELF segments, prepares the candidate user stack
+and trap frame, swaps the task record through `kernel::task`, overwrites the
+syscall stack trap frame with the new image entry state, and reclaims the old
+address space through owner-checked frame allocator paths. Candidate
+construction is still panic-on-OOM and must become fallible before this path is
+used as a general process facility.
 
 On success, the scheduler lifecycle transition owns the swap:
 
-1. Close preemption for the current user task while replacement is committed.
-2. Replace the task's address-space root and initial resume trap frame.
-3. Mark old user memory and mapping records reclaimable only after no return
+1. Replace the task's address-space root, heap bookkeeping, private mapping
+   bookkeeping, sleep state, and initial resume trap frame.
+2. Write the new image trap frame back to the syscall stack frame.
+3. Return the internal successful `execve` sentinel so syscall dispatch does
+   not write an old-image return value.
+4. Mark old user memory and mapping records reclaimable only after no return
    path can resume the old image.
-4. Reclaim old image resources through the same owner-checked frame allocator
+5. Reclaim old image resources through the same owner-checked frame allocator
    paths used by finished-task cleanup.
-5. Record diagnostics for the old image reclaim and the new image publication.
+6. Record diagnostics for the old image reclaim and the new image publication.
 
 ## Descriptor Inheritance
 
@@ -170,15 +176,24 @@ descriptor state.
 
 ## Diagnostics And Smoke Coverage
 
-The first runtime implementation should add diagnostics before broad behavior:
+Current runtime diagnostics cover the first successful replacement path:
+
+- Storage smoke proves a successful self-replacement from `/disk/bin/smoke_demo`
+  and verifies that the old image does not resume.
+- Serial logs record `User image replaced by execve` and
+  `execve image published` with old-image reclaim counts.
+- Scheduler smoke verifies that `execve` resets heap and private mapping
+  bookkeeping before the post-exec image exits.
+
+Remaining runtime diagnostics should cover broader behavior:
 
 - `tasks` output should show the last successful image path, current image
   generation, and whether an `execve` replacement is building, active, or
   failed.
-- Storage smoke should prove a successful replacement from `/disk`.
-- Failure smoke should prove missing-path and directory-target errors.
-- Address-space smoke should prove failed replacement returns all candidate
-  frames and keeps the old image runnable.
+- Failure smoke should prove any future post-candidate failure returns all
+  candidate frames and keeps the old image runnable.
+- A second user program smoke should prove replacement is not limited to
+  self-`execve`.
 
 These diagnostics should use stable serial log lines so future CI smoke can
 assert the process lifecycle without parsing interactive console output.
