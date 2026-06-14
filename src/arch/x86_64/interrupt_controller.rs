@@ -11,6 +11,13 @@ const APIC_PROVIDER_CONFIGURED_FLAG: u8 = 1;
 const APIC_PROVIDER_ROUTING_ACTIVE_FLAG: u8 = 1 << 1;
 const APIC_PROVIDER_LOCAL_APIC_SUPPORTED_FLAG: u8 = 1 << 2;
 const APIC_PROVIDER_TRUNCATED_FLAG: u8 = 1 << 3;
+const IOAPIC_STAGING_READBACK_MATCHED_FLAG: u8 = 1;
+const IOAPIC_STAGING_ALL_MASKED_FLAG: u8 = 1 << 1;
+const IOAPIC_REGISTER_SELECT_OFFSET: usize = 0x00;
+const IOAPIC_REGISTER_WINDOW_OFFSET: usize = 0x10;
+const IOAPIC_VERSION_REGISTER: u32 = 0x01;
+const IOAPIC_VERSION_MAX_REDIRECTION_ENTRY_SHIFT: u32 = 16;
+const IOAPIC_VERSION_MAX_REDIRECTION_ENTRY_MASK: u32 = 0xff;
 const LEGACY_TIMER_IRQ: u8 = 0;
 const LEGACY_KEYBOARD_IRQ: u8 = 1;
 const LEGACY_MOUSE_IRQ: u8 = 12;
@@ -19,9 +26,17 @@ const KEYBOARD_INTERRUPT_VECTOR: u8 = INTERRUPT_CONTROLLER_1_OFFSET + 1;
 const MOUSE_INTERRUPT_VECTOR: u8 = INTERRUPT_CONTROLLER_1_OFFSET + LEGACY_MOUSE_IRQ;
 const IOAPIC_REDIRECTION_TABLE_BASE_REGISTER: u32 = 0x10;
 const IOAPIC_REDIRECTION_VECTOR_MASK: u32 = 0xff;
+const IOAPIC_REDIRECTION_DELIVERY_MODE_MASK: u32 = 0b111 << 8;
+const IOAPIC_REDIRECTION_DESTINATION_MODE_BIT: u32 = 1 << 11;
 const IOAPIC_REDIRECTION_ACTIVE_LOW_BIT: u32 = 1 << 13;
 const IOAPIC_REDIRECTION_LEVEL_TRIGGERED_BIT: u32 = 1 << 15;
 const IOAPIC_REDIRECTION_MASKED_BIT: u32 = 1 << 16;
+const IOAPIC_REDIRECTION_LOW_READBACK_MASK: u32 = IOAPIC_REDIRECTION_VECTOR_MASK
+    | IOAPIC_REDIRECTION_DELIVERY_MODE_MASK
+    | IOAPIC_REDIRECTION_DESTINATION_MODE_BIT
+    | IOAPIC_REDIRECTION_ACTIVE_LOW_BIT
+    | IOAPIC_REDIRECTION_LEVEL_TRIGGERED_BIT
+    | IOAPIC_REDIRECTION_MASKED_BIT;
 const IOAPIC_DESTINATION_SHIFT: u32 = 24;
 const ACPI_INTERRUPT_POLARITY_MASK: u16 = 0b11;
 const ACPI_INTERRUPT_ACTIVE_LOW: u16 = 0b11;
@@ -551,6 +566,146 @@ impl ApicRoutingProviderStatus {
     }
 }
 
+/// Result of staging masked IOAPIC redirection entries.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct IoApicRedirectionStagingStatus {
+    flags: u8,
+    version: u32,
+    maximum_redirection_entry: u32,
+    planned_entry_count: usize,
+    staged_entry_count: usize,
+    out_of_range_entry_count: usize,
+    timer_low_readback: u32,
+    timer_high_readback: u32,
+    keyboard_low_readback: u32,
+    keyboard_high_readback: u32,
+    mouse_low_readback: u32,
+    mouse_high_readback: u32,
+}
+
+impl IoApicRedirectionStagingStatus {
+    const fn new(version: u32, maximum_redirection_entry: u32, planned_entry_count: usize) -> Self {
+        Self {
+            flags: IOAPIC_STAGING_READBACK_MATCHED_FLAG | IOAPIC_STAGING_ALL_MASKED_FLAG,
+            version,
+            maximum_redirection_entry,
+            planned_entry_count,
+            staged_entry_count: 0,
+            out_of_range_entry_count: 0,
+            timer_low_readback: 0,
+            timer_high_readback: 0,
+            keyboard_low_readback: 0,
+            keyboard_high_readback: 0,
+            mouse_low_readback: 0,
+            mouse_high_readback: 0,
+        }
+    }
+
+    /// Return the raw IOAPIC version register readback.
+    pub const fn version(self) -> u32 {
+        self.version
+    }
+
+    /// Return the maximum supported redirection table index.
+    pub const fn maximum_redirection_entry(self) -> u32 {
+        self.maximum_redirection_entry
+    }
+
+    /// Return the number of redirection entries from the current plan.
+    pub const fn planned_entry_count(self) -> usize {
+        self.planned_entry_count
+    }
+
+    /// Return the number of redirection entries written and read back.
+    pub const fn staged_entry_count(self) -> usize {
+        self.staged_entry_count
+    }
+
+    /// Return the number of planned entries outside the IOAPIC table range.
+    pub const fn out_of_range_entry_count(self) -> usize {
+        self.out_of_range_entry_count
+    }
+
+    /// Return whether all staged entries matched their masked readback values.
+    pub const fn readback_matches(self) -> bool {
+        self.flags & IOAPIC_STAGING_READBACK_MATCHED_FLAG != 0
+    }
+
+    /// Return whether all staged entries remained masked after readback.
+    pub const fn all_entries_masked(self) -> bool {
+        self.flags & IOAPIC_STAGING_ALL_MASKED_FLAG != 0
+    }
+
+    /// Return the timer low redirection dword readback.
+    pub const fn timer_low_readback(self) -> u32 {
+        self.timer_low_readback
+    }
+
+    /// Return the timer high redirection dword readback.
+    pub const fn timer_high_readback(self) -> u32 {
+        self.timer_high_readback
+    }
+
+    /// Return the keyboard low redirection dword readback.
+    pub const fn keyboard_low_readback(self) -> u32 {
+        self.keyboard_low_readback
+    }
+
+    /// Return the keyboard high redirection dword readback.
+    pub const fn keyboard_high_readback(self) -> u32 {
+        self.keyboard_high_readback
+    }
+
+    /// Return the mouse low redirection dword readback.
+    pub const fn mouse_low_readback(self) -> u32 {
+        self.mouse_low_readback
+    }
+
+    /// Return the mouse high redirection dword readback.
+    pub const fn mouse_high_readback(self) -> u32 {
+        self.mouse_high_readback
+    }
+
+    fn record_staged_entry(
+        &mut self,
+        entry: IoApicRedirectionEntry,
+        low_value: u32,
+        high_value: u32,
+        low_readback: u32,
+        high_readback: u32,
+    ) {
+        self.staged_entry_count += 1;
+        if (low_readback & IOAPIC_REDIRECTION_LOW_READBACK_MASK) != low_value
+            || high_readback != high_value
+        {
+            self.flags &= !IOAPIC_STAGING_READBACK_MATCHED_FLAG;
+        }
+        if low_readback & IOAPIC_REDIRECTION_MASKED_BIT == 0 {
+            self.flags &= !IOAPIC_STAGING_ALL_MASKED_FLAG;
+        }
+        match entry.legacy_irq() {
+            LEGACY_TIMER_IRQ => {
+                self.timer_low_readback = low_readback;
+                self.timer_high_readback = high_readback;
+            }
+            LEGACY_KEYBOARD_IRQ => {
+                self.keyboard_low_readback = low_readback;
+                self.keyboard_high_readback = high_readback;
+            }
+            LEGACY_MOUSE_IRQ => {
+                self.mouse_low_readback = low_readback;
+                self.mouse_high_readback = high_readback;
+            }
+            _ => {}
+        }
+    }
+
+    fn record_out_of_range_entry(&mut self) {
+        self.out_of_range_entry_count += 1;
+        self.flags &= !IOAPIC_STAGING_READBACK_MATCHED_FLAG;
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct ApicRoutingProviderState {
     configured: bool,
@@ -597,6 +752,68 @@ pub fn get_apic_routing_provider_status() -> ApicRoutingProviderStatus {
     }
 }
 
+/// Stage the planned IOAPIC redirection entries as masked routes.
+///
+/// The function writes only masked redirection entries and leaves active
+/// interrupt routing disabled. It is intended to prove MMIO access and table
+/// programming before APIC EOI handling replaces the legacy PIC path.
+///
+/// # Safety
+///
+/// The configured IOAPIC MMIO physical page must be identity-mapped as
+/// writable uncached kernel memory, and the caller must ensure no other code is
+/// concurrently programming the same IOAPIC registers.
+pub unsafe fn stage_masked_ioapic_redirection_entries() -> Option<IoApicRedirectionStagingStatus> {
+    let configuration = {
+        let provider = APIC_ROUTING_PROVIDER.lock();
+        if !provider.configured {
+            return None;
+        }
+        provider.configuration
+    };
+
+    let plan = IoApicRedirectionPlan::from_configuration(&configuration);
+    let ioapic = configuration.ioapic();
+    let registers = IoApicRegisters::new(ioapic.physical_address());
+    // SAFETY: The IOAPIC register window is mapped and the version register is
+    // a read-only architectural IOAPIC register.
+    let version = unsafe { registers.read(IOAPIC_VERSION_REGISTER) };
+    let maximum_redirection_entry = maximum_redirection_entry_from_version(version);
+    let mut status =
+        IoApicRedirectionStagingStatus::new(version, maximum_redirection_entry, plan.entry_count());
+
+    let mut index = 0;
+    while index < plan.entry_count() {
+        let entry = plan
+            .entry(index)
+            .expect("retained IOAPIC redirection plan entry must exist");
+        if entry.table_index() > maximum_redirection_entry {
+            status.record_out_of_range_entry();
+            index += 1;
+            continue;
+        }
+
+        let low_value = entry.low_value() | IOAPIC_REDIRECTION_MASKED_BIT;
+        let high_value = entry.high_value();
+        // SAFETY: The IOAPIC register window is mapped, and the redirection
+        // registers were range-checked against the IOAPIC version register.
+        unsafe {
+            registers.write(entry.high_register(), high_value);
+            registers.write(entry.low_register(), low_value);
+        }
+        // SAFETY: The same range-checked redirection registers were just
+        // programmed and can be read back through the mapped IOAPIC window.
+        let high_readback = unsafe { registers.read(entry.high_register()) };
+        // SAFETY: The same range-checked redirection registers were just
+        // programmed and can be read back through the mapped IOAPIC window.
+        let low_readback = unsafe { registers.read(entry.low_register()) };
+        status.record_staged_entry(entry, low_value, high_value, low_readback, high_readback);
+        index += 1;
+    }
+
+    Some(status)
+}
+
 fn redirection_entry_for_legacy_irq(
     configuration: &ApicRoutingConfiguration,
     legacy_irq: u8,
@@ -628,6 +845,68 @@ fn redirection_entry_for_legacy_irq(
         low_value,
         high_value,
     ))
+}
+
+struct IoApicRegisters {
+    base_address: usize,
+}
+
+impl IoApicRegisters {
+    fn new(physical_address: u64) -> Self {
+        assert!(
+            physical_address.is_multiple_of(4),
+            "IOAPIC MMIO address must be 4-byte aligned"
+        );
+        Self {
+            base_address: usize::try_from(physical_address)
+                .expect("IOAPIC MMIO address must fit in usize"),
+        }
+    }
+
+    unsafe fn read(&self, register: u32) -> u32 {
+        let register_select = self.register_select_pointer();
+        let register_window = self.register_window_pointer();
+        // SAFETY: register_select points into the mapped IOAPIC selector
+        // register. Volatile access is required for MMIO.
+        unsafe {
+            core::ptr::write_volatile(register_select, register);
+        }
+        // SAFETY: register_window points into the mapped IOAPIC data window.
+        // Volatile access is required for MMIO.
+        unsafe { core::ptr::read_volatile(register_window) }
+    }
+
+    unsafe fn write(&self, register: u32, value: u32) {
+        let register_select = self.register_select_pointer();
+        let register_window = self.register_window_pointer();
+        // SAFETY: register_select points into the mapped IOAPIC selector
+        // register. Volatile access is required for MMIO.
+        unsafe {
+            core::ptr::write_volatile(register_select, register);
+        }
+        // SAFETY: register_window points into the mapped IOAPIC data window.
+        // Volatile access is required for MMIO.
+        unsafe {
+            core::ptr::write_volatile(register_window, value);
+        }
+    }
+
+    fn register_select_pointer(&self) -> *mut u32 {
+        self.base_address
+            .checked_add(IOAPIC_REGISTER_SELECT_OFFSET)
+            .expect("IOAPIC selector address overflowed") as *mut u32
+    }
+
+    fn register_window_pointer(&self) -> *mut u32 {
+        self.base_address
+            .checked_add(IOAPIC_REGISTER_WINDOW_OFFSET)
+            .expect("IOAPIC window address overflowed") as *mut u32
+    }
+}
+
+const fn maximum_redirection_entry_from_version(version: u32) -> u32 {
+    (version >> IOAPIC_VERSION_MAX_REDIRECTION_ENTRY_SHIFT)
+        & IOAPIC_VERSION_MAX_REDIRECTION_ENTRY_MASK
 }
 
 /// Initialize the legacy interrupt controller backend used by the current boot path.

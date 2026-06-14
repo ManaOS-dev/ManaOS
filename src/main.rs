@@ -26,6 +26,8 @@ use uefi::{
     mem::memory_map::{MemoryDescriptor, MemoryMap, MemoryType},
 };
 
+const IOAPIC_MMIO_MAPPING_SIZE: u64 = 4096;
+
 extern "C" fn idle_task() -> ! {
     loop {
         x86_64::instructions::hlt();
@@ -425,7 +427,10 @@ fn verify_acpi_parser_rules() {
     );
 }
 
-fn verify_acpi_root_table(root_pointer: Option<kernel::acpi::RootPointer>) {
+fn verify_acpi_root_table(
+    root_pointer: Option<kernel::acpi::RootPointer>,
+    frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
+) {
     let root_pointer =
         root_pointer.expect("UEFI ACPI RSDP configuration table is required before APIC setup");
     // SAFETY: The RSDP address came from the UEFI configuration table before
@@ -521,7 +526,7 @@ fn verify_acpi_root_table(root_pointer: Option<kernel::acpi::RootPointer>) {
         x2apic.is_some_and(kernel::acpi::MadtX2Apic::is_enabled),
         x2apic.is_some_and(kernel::acpi::MadtX2Apic::is_online_capable)
     );
-    configure_apic_routing_provider(&madt, &topology, local_apic, ioapic);
+    configure_apic_routing_provider(&madt, &topology, local_apic, ioapic, frame_allocator);
 }
 
 fn configure_apic_routing_provider(
@@ -529,6 +534,7 @@ fn configure_apic_routing_provider(
     topology: &kernel::acpi::MadtInterruptTopology,
     local_apic: kernel::acpi::MadtLocalApic,
     ioapic: kernel::acpi::MadtIoApic,
+    frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
 ) {
     let local_apic_configuration = arch::x86_64::interrupt_controller::LocalApicConfiguration::new(
         madt.local_apic_address(),
@@ -565,6 +571,14 @@ fn configure_apic_routing_provider(
 
     arch::x86_64::interrupt_controller::configure_apic_routing_provider(&routing_configuration);
     let status = arch::x86_64::interrupt_controller::get_apic_routing_provider_status();
+    log_apic_routing_provider_status(status);
+    log_ioapic_redirection_plan(status);
+    stage_ioapic_redirection_entries(frame_allocator, status.ioapic());
+}
+
+fn log_apic_routing_provider_status(
+    status: arch::x86_64::interrupt_controller::ApicRoutingProviderStatus,
+) {
     let configured_local_apic = status.local_apic();
     let configured_ioapic = status.ioapic();
     crate::log_info!(
@@ -587,6 +601,11 @@ fn configure_apic_routing_provider(
         status.legacy_irq12_global_system_interrupt(),
         status.is_truncated()
     );
+}
+
+fn log_ioapic_redirection_plan(
+    status: arch::x86_64::interrupt_controller::ApicRoutingProviderStatus,
+) {
     let redirection_plan = status.redirection_plan();
     let timer_redirection_entry = redirection_plan
         .entry_for_legacy_irq(0)
@@ -628,6 +647,52 @@ fn configure_apic_routing_provider(
         mouse_redirection_entry.vector(),
         mouse_redirection_entry.table_index(),
         mouse_redirection_entry.low_register()
+    );
+}
+
+fn stage_ioapic_redirection_entries(
+    frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    configured_ioapic: arch::x86_64::interrupt_controller::IoApicConfiguration,
+) {
+    // SAFETY: The MADT IOAPIC address describes an MMIO register page, and this
+    // boot-time mapping keeps it identity-mapped as writable uncached memory
+    // before arch-owned IOAPIC register access reads or writes it.
+    unsafe {
+        kernel::memory::paging::map_kernel_mmio_range(
+            frame_allocator,
+            kernel::memory::address::PhysAddr::new(configured_ioapic.physical_address()),
+            IOAPIC_MMIO_MAPPING_SIZE,
+        );
+    }
+    crate::log_info!(
+        "arch",
+        "IOAPIC MMIO mapped: address={:#x} size={}",
+        configured_ioapic.physical_address(),
+        IOAPIC_MMIO_MAPPING_SIZE
+    );
+    // SAFETY: The IOAPIC MMIO page was just identity-mapped for boot-time
+    // access, and routing remains disabled because only masked entries are
+    // staged before APIC EOI handling is available.
+    let staging_status =
+        unsafe { arch::x86_64::interrupt_controller::stage_masked_ioapic_redirection_entries() }
+            .expect("APIC routing provider must be configured before IOAPIC staging");
+    crate::log_info!(
+        "arch",
+        "IOAPIC redirection staging verified: entries={} staged={} readback_matches={} routing_active={} masked={} ioapic_version={:#x} max_redirection_entry={} out_of_range_entries={} timer_low_readback={:#x} timer_high_readback={:#x} keyboard_low_readback={:#x} keyboard_high_readback={:#x} mouse_low_readback={:#x} mouse_high_readback={:#x}",
+        staging_status.planned_entry_count(),
+        staging_status.staged_entry_count(),
+        staging_status.readback_matches(),
+        arch::x86_64::interrupt_controller::has_ioapic_routing(),
+        staging_status.all_entries_masked(),
+        staging_status.version(),
+        staging_status.maximum_redirection_entry(),
+        staging_status.out_of_range_entry_count(),
+        staging_status.timer_low_readback(),
+        staging_status.timer_high_readback(),
+        staging_status.keyboard_low_readback(),
+        staging_status.keyboard_high_readback(),
+        staging_status.mouse_low_readback(),
+        staging_status.mouse_high_readback()
     );
 }
 
@@ -1499,7 +1564,7 @@ fn main() -> Status {
         },
         backbuffer_address,
     );
-    verify_acpi_root_table(acpi_root_pointer);
+    verify_acpi_root_table(acpi_root_pointer, &mut frame_allocator);
     verify_dynamic_kernel_mapping_lifecycle(&mut frame_allocator);
     verify_user_address_space_template(&mut frame_allocator);
     verify_user_address_space_reclaim(&mut frame_allocator);

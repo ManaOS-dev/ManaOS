@@ -51,7 +51,7 @@ not on product value.
 
 The active task is ACPI and APIC interrupt migration. ACPI root discovery,
 RSDT/XSDT validation, MADT validation, bounded MADT topology diagnostics,
-architecture-owned APIC routing provider configuration, and dry-run IOAPIC
-redirection entries are now proven by storage smoke. The next slice should add
-guarded IOAPIC MMIO register access and program those planned entries while
-preserving the `arch/` to `kernel/` dependency boundary.
+architecture-owned APIC routing provider configuration, dry-run IOAPIC
+redirection entries, and masked IOAPIC MMIO staging are now proven by storage
+smoke. The next slice should add APIC EOI handling and then unmask the staged
+IOAPIC routes while preserving the `arch/` to `kernel/` dependency boundary.
