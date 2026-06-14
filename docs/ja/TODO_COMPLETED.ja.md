@@ -24,7 +24,8 @@ number/constants、no-std userland wrapper、
 selector validation、no-child `ECHILD` path、non-child negative smoke、parent-child lifecycle state
 documentation、scheduler-owned child exit record model、double-reap prevention、wait lifecycle serial
 assertions、zombie/reaped diagnostics、`tasks` command の per-task lifecycle output、
-already-exited child の scheduler-backed `waitpid` reap、kernel-internal spawn helper、
+already-exited child の scheduler-backed `waitpid` reap、first stable model を `spawn + execve` とする
+decision、copy-on-write `fork` defer policy、kernel-internal spawn helper、
 spawned process origin diagnostics、2つの concurrently spawned user program smoke、
 spawn 前の argv/envp entry vector 表現、spawn path lookup failure の errno mapping、
 spawned process の current working directory inheritance、task-owned current directory を読む

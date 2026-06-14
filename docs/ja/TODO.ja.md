@@ -28,7 +28,7 @@
 
 - `execve` による user image replacement。
 - `waitpid` と exit status の保持、reap、zombie 管理。
-- `spawn + execve` を最初の安定モデルにするか、最小 `fork` を導入するかの判断。
+- `spawn + execve` を最初の安定モデルとして進めるための残り実装。
 - 最小 user shell の導入。
 - timer preemption を一般的な user process lifecycle へ拡張すること。
 
@@ -55,6 +55,8 @@ scheduler-backed `waitpid` reap、filesystem path から user task を作る ker
 と spawned process origin diagnostics、2つの concurrently spawned user program smoke、spawn 前の
 argv/envp entry vector 表現、spawn path lookup failure の errno mapping まで完了済みです。
 spawned process の current working directory inheritance も完了済みです。
+最初の stable process model は `spawn + execve` として決定済みで、minimal `fork` は Phase 2 の
+address-space copy plan ができるまで defer します。
 user process scheduling は、3つの active user process を同時に扱う storage smoke まで完了済みです。
 per-task の last preemption / last resume diagnostics と、preempted process の exit 後も別の
 active process が継続する storage smoke も完了済みです。

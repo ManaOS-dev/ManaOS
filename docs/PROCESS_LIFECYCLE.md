@@ -54,6 +54,35 @@ no-child `ECHILD` path, and scheduler-owned child exit records keyed by parent
 task identifier are in place now so later child-exit work has a stable ABI
 target.
 
+## First Stable Process Model
+
+ManaOS will use `spawn` plus `execve` as the first stable user process model.
+The initial user-visible launch operation should create a child task directly
+from an executable path, bounded `argv` / `envp` staging, inherited process
+metadata, and a freshly constructed address space. The child may later replace
+itself through `execve` without changing its process identifier, parent
+identifier, waitability, or current working directory.
+
+A minimal `fork` is intentionally deferred. Correct `fork` support requires an
+address-space copy plan before exposing POSIX-like semantics: page-table frame
+ownership must be cloneable or shareable by construction, writable user pages
+need either eager copy or copy-on-write state, private mapping records need
+clear parent/child ownership, and kernel stack / saved trap frame state must be
+duplicated without aliasing execution state that belongs to only one task.
+ManaOS does not yet have those address-space lifecycle states.
+
+Compared with POSIX `fork`, the first ManaOS model will not return twice from
+one syscall, will not duplicate the caller's entire address space, and will not
+preserve arbitrary in-memory user state in the child. It instead starts the
+child at a selected executable entry point with explicit arguments. The model
+still preserves the process properties needed by shells and wait logic:
+parent-child metadata, inherited current working directory, close-on-exec aware
+descriptor inheritance, stable exit status, and `waitpid` collection.
+
+Deferred `fork` work must start from the Phase 2 address-space copy plan TODO,
+not from the spawn syscall surface. Until that plan exists, shell and runtime
+launch helpers should target `spawn` plus `execve`.
+
 ## `waitpid` Syscall Contract
 
 `waitpid` will let a parent process observe and reap exited child processes

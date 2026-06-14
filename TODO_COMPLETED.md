@@ -59,6 +59,8 @@ active roadmap can list only unfinished work.
 
 ### Spawn Model And Fork Decision
 
+- [x] Decide whether the first stable process model is `spawn` plus `execve` or a minimal `fork`.
+- [x] Document why copy-on-write `fork` is deferred if `spawn` is selected.
 - [x] Define a kernel-internal spawn helper for creating a process from a filesystem path.
 - [x] Add scheduler metadata for spawned process origin.
 - [x] Add a smoke case for two concurrently spawned user programs.
@@ -66,6 +68,8 @@ active roadmap can list only unfinished work.
 - [x] Add errno mappings for spawn path lookup failures.
 - [x] Define how current working directory is inherited by spawned processes.
 - [x] Add a no-std `getcwd` wrapper for task-owned current directory checks.
+- [x] Add docs that compare the selected model with POSIX `fork` expectations.
+- [x] Add TODO links from deferred `fork` work to the address-space copy plan.
 
 ### User Process Scheduling
 

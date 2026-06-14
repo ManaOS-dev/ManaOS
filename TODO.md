@@ -25,15 +25,11 @@ reviewable unit before implementing it.
 
 ### Spawn Model And Fork Decision
 
-- [ ] Decide whether the first stable process model is `spawn` plus `execve` or a minimal `fork`.
-- [ ] Document why copy-on-write `fork` is deferred if `spawn` is selected.
 - [ ] Move user file descriptor tables from global filesystem state to process-owned metadata before general spawn.
 - [ ] Define how inherited file descriptors are selected for spawned processes.
 - [ ] Add a userland runtime helper for launching a child program.
 - [ ] Add errno mappings for spawn memory allocation failures.
 - [ ] Add a smoke case for parent exit while child remains alive.
-- [ ] Add docs that compare the selected model with POSIX `fork` expectations.
-- [ ] Add TODO links from deferred `fork` work to the address-space copy plan.
 
 ### Minimal User Shell
 
@@ -106,6 +102,7 @@ reviewable unit before implementing it.
 ### Address Space Lifecycle
 
 - [ ] Add explicit address-space state transitions for building, active, exiting, and reclaimed states.
+- [ ] Add an address-space copy plan before enabling deferred `fork`.
 - [ ] Convert `execve` candidate image construction to fallible allocation instead of panic-on-OOM.
 - [ ] Ensure failed spawn cleanup returns all newly allocated frames.
 - [ ] Track page-table frame ownership per process in diagnostics.
