@@ -138,7 +138,7 @@ items have been removed so the file stays useful for deciding the next task.
 
 - [x] Parse ACPI RSDP and XSDT/RSDT.
 - [x] Parse ACPI MADT.
-- [ ] Enable IOAPIC routing; APIC routing provider data now produces dry-run IOAPIC redirection entries and masked MMIO staging with readback diagnostics, but active unmasking and APIC EOI handling are still pending.
+- [ ] Enable IOAPIC routing; APIC routing provider data now produces dry-run IOAPIC redirection entries, masked MMIO staging with readback diagnostics, Local APIC EOI-provider diagnostics, and unified EOI dispatch, but active route unmasking and APIC routing activation are still pending.
 - [ ] Replace legacy PIC routing after IOAPIC is stable.
 - [ ] Calibrate and use the Local APIC timer.
 - [ ] Replace PIT scheduling ticks after Local APIC timer validation.

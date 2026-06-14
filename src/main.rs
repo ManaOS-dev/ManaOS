@@ -26,6 +26,7 @@ use uefi::{
     mem::memory_map::{MemoryDescriptor, MemoryMap, MemoryType},
 };
 
+const LOCAL_APIC_MMIO_MAPPING_SIZE: u64 = 4096;
 const IOAPIC_MMIO_MAPPING_SIZE: u64 = 4096;
 
 extern "C" fn idle_task() -> ! {
@@ -573,6 +574,7 @@ fn configure_apic_routing_provider(
     let status = arch::x86_64::interrupt_controller::get_apic_routing_provider_status();
     log_apic_routing_provider_status(status);
     log_ioapic_redirection_plan(status);
+    verify_local_apic_eoi_provider(frame_allocator, status.local_apic());
     stage_ioapic_redirection_entries(frame_allocator, status.ioapic());
 }
 
@@ -647,6 +649,45 @@ fn log_ioapic_redirection_plan(
         mouse_redirection_entry.vector(),
         mouse_redirection_entry.table_index(),
         mouse_redirection_entry.low_register()
+    );
+}
+
+fn verify_local_apic_eoi_provider(
+    frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    configured_local_apic: arch::x86_64::interrupt_controller::LocalApicConfiguration,
+) {
+    // SAFETY: The MADT Local APIC address describes an MMIO register page, and
+    // this boot-time mapping keeps it identity-mapped before arch-owned Local
+    // APIC register access reads it for EOI-provider diagnostics.
+    unsafe {
+        kernel::memory::paging::map_kernel_mmio_range(
+            frame_allocator,
+            kernel::memory::address::PhysAddr::new(configured_local_apic.physical_address()),
+            LOCAL_APIC_MMIO_MAPPING_SIZE,
+        );
+    }
+    crate::log_info!(
+        "arch",
+        "Local APIC MMIO mapped: address={:#x} size={}",
+        configured_local_apic.physical_address(),
+        LOCAL_APIC_MMIO_MAPPING_SIZE
+    );
+    // SAFETY: The Local APIC MMIO page was just identity-mapped for boot-time
+    // diagnostics, and this read does not enable APIC interrupt routing.
+    let local_apic_eoi_status =
+        unsafe { arch::x86_64::interrupt_controller::inspect_local_apic_eoi_provider() }
+            .expect("Local APIC EOI provider must be configured before inspection");
+    crate::log_info!(
+        "arch",
+        "Local APIC EOI provider verified: configured={} routing_active={} software_enabled={} local_apic_address={:#x} local_apic_id={} version={:#x} max_lvt_entry={} spurious_vector={:#x}",
+        local_apic_eoi_status.is_configured(),
+        local_apic_eoi_status.is_routing_active(),
+        local_apic_eoi_status.is_software_enabled(),
+        local_apic_eoi_status.physical_address(),
+        local_apic_eoi_status.apic_id(),
+        local_apic_eoi_status.version(),
+        local_apic_eoi_status.maximum_lvt_entry(),
+        local_apic_eoi_status.spurious_interrupt_vector()
     );
 }
 

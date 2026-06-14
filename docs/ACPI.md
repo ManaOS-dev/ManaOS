@@ -38,18 +38,25 @@ The current foundation validates:
   register access.
 - Masked IOAPIC redirection entry staging with IOAPIC version, table range,
   and register readback diagnostics.
+- Guarded Local APIC MMIO mapping from the composition root before arch-owned
+  EOI-provider diagnostics.
+- Local APIC EOI-provider diagnostics for APIC ID, version, LVT capacity, and
+  spurious-vector state.
+- Unified interrupt EOI dispatch that continues to acknowledge the legacy PIC
+  until IOAPIC routing is explicitly activated.
 
 The boot smoke logs the validated root table, MADT diagnostics, retained
 interrupt topology, APIC routing provider configuration, and dry-run IOAPIC
 redirection plan before staging the planned entries as masked IOAPIC routes.
-It also verifies the IOAPIC MMIO mapping and masked redirection readback while
-keeping hardware interrupt routing inactive.
+It also verifies Local APIC and IOAPIC MMIO mapping, Local APIC EOI-provider
+diagnostics, and masked IOAPIC redirection readback while keeping hardware
+interrupt routing inactive.
 
 ## Next Steps
 
-1. Switch hardware interrupt EOI handling from legacy PIC to APIC when routing
-   is active.
-2. Unmask the staged IOAPIC redirection entries only after APIC EOI handling is
-   available.
+1. Unmask the staged IOAPIC redirection entries and activate APIC EOI dispatch
+   under the same validation gate.
+2. Add diagnostics proving interrupts are acknowledged through Local APIC EOI
+   after IOAPIC routing is active.
 3. Replace legacy PIC routing after IOAPIC validation.
 4. Calibrate and move scheduling ticks to the Local APIC timer.
