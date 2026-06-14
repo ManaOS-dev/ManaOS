@@ -421,7 +421,7 @@ fn verify_acpi_parser_rules() {
     );
     crate::log_info!(
         "acpi",
-        "ACPI parser self-check passed: rsdp=true root_table=true"
+        "ACPI parser self-check passed: rsdp=true root_table=true madt=true"
     );
 }
 
@@ -463,6 +463,24 @@ fn verify_acpi_root_table(root_pointer: Option<kernel::acpi::RootPointer>) {
             root_table.entry_count()
         );
     }
+    let madt: kernel::acpi::MadtDiagnostics = diagnostics.madt();
+    crate::log_info!(
+        "acpi",
+        "ACPI MADT verified: address={:#x} revision={} length={} local_apic={:#x} flags={:#x} pc_at_compatible={} entries={} local_apics={} ioapics={} interrupt_source_overrides={} local_apic_nmis={} local_apic_address_overrides={} x2apics={} checksum=true",
+        madt.physical_address(),
+        madt.revision(),
+        madt.length(),
+        madt.local_apic_address(),
+        madt.flags(),
+        madt.pc_at_compatible(),
+        madt.entry_count(),
+        madt.local_apic_count(),
+        madt.ioapic_count(),
+        madt.interrupt_source_override_count(),
+        madt.local_apic_nmi_count(),
+        madt.local_apic_address_override_count(),
+        madt.x2apic_count()
+    );
 }
 
 fn verify_mounted_disk_file(path: &str) {

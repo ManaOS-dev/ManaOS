@@ -20,15 +20,20 @@ The current foundation validates:
 - ACPI 2.0 extended RSDP length and checksum when present.
 - RSDT/XSDT signature.
 - RSDT/XSDT length, checksum, and root entry count.
+- RSDT/XSDT entry walk for the MADT (`APIC`) table.
+- MADT signature, length, and checksum.
+- MADT Local APIC address, raw flags, compatibility flags, and
+  interrupt-controller entry counts.
+- MADT Processor Local APIC, IOAPIC, interrupt source override, Local APIC NMI,
+  Local APIC address override, and Processor Local x2APIC diagnostics.
 
-The boot smoke logs the validated root table before any APIC migration work
-depends on it.
+The boot smoke logs the validated root table and MADT diagnostics before any
+APIC migration work depends on them.
 
 ## Next Steps
 
-1. Walk the validated RSDT/XSDT entries.
-2. Locate and validate the MADT.
-3. Parse Local APIC, IOAPIC, interrupt source override, and NMI entries.
-4. Expose kernel-side MADT diagnostics without making `arch/` depend on
-   `kernel/`.
-5. Wire IOAPIC and Local APIC providers through `main.rs`.
+1. Define kernel-owned interrupt topology data derived from MADT diagnostics.
+2. Wire IOAPIC and Local APIC providers through `main.rs`.
+3. Enable IOAPIC routing while keeping `arch/` independent from `kernel/`.
+4. Replace legacy PIC routing after IOAPIC validation.
+5. Calibrate and move scheduling ticks to the Local APIC timer.
