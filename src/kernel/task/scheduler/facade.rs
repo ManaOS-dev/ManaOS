@@ -8,6 +8,7 @@ use super::{
     UserTaskExit, UserTaskSpawnRequest, UserTrapFrame, UserTrapFrameSource, UserVirtualAddress,
     PREEMPTION_STATE, SCHEDULER, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::sync::atomic::Ordering;
 pub(in crate::kernel::task) fn install_user_task_kernel_stack(kernel_stack_top: usize) {
@@ -356,6 +357,23 @@ pub fn get_current_parent_task_id() -> Option<u64> {
         scheduler
             .as_ref()
             .and_then(Scheduler::get_current_parent_task_id)
+    })
+}
+
+/// Return the currently selected task's current working directory.
+pub fn get_current_working_directory() -> Option<String> {
+    SCHEDULER.try_lock().and_then(|scheduler| {
+        scheduler
+            .as_ref()
+            .map(|scheduler| scheduler.get_current_working_directory().into())
+    })
+}
+
+/// Replace the currently selected task's current working directory.
+pub fn set_current_working_directory(path: String) -> Option<()> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler.as_mut().map(|scheduler| {
+        scheduler.set_current_working_directory(path);
     })
 }
 

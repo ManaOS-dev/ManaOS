@@ -40,14 +40,16 @@ Scheduler diagnostics retain the spawned origin path separately from the current
 image path, so a later successful `execve` can change `path=` while `origin=`
 still identifies the program that created the task record.
 
-General user-created process lifecycle is not complete yet. Current-directory
-ownership, user-visible child creation, and the scheduler-backed `waitpid`
-wait/reap state machine are still future work. Descriptor close-on-exec
-metadata and successful-`execve` close behavior exist for the current global
-descriptor table. The `waitpid` syscall number, option constants, no-std
-userland wrapper, selector validation, no-child `ECHILD` path, and
-scheduler-owned child exit records keyed by parent task identifier are in place
-now so later child-exit work has a stable ABI target.
+General user-created process lifecycle is not complete yet. Current working
+directories are now task metadata, relative paths resolve through the current
+task's directory, and successful `execve` preserves that directory across image
+replacement. User-visible child creation and the scheduler-backed `waitpid`
+wait/reap state machine are still future work. Descriptor close-on-exec metadata
+and successful-`execve` close behavior exist for the current global descriptor
+table. The `waitpid` syscall number, option constants, no-std userland wrapper,
+selector validation, no-child `ECHILD` path, and scheduler-owned child exit
+records keyed by parent task identifier are in place now so later child-exit
+work has a stable ABI target.
 
 ## `waitpid` Syscall Contract
 
@@ -164,9 +166,8 @@ The kernel-side contract is:
 - Cap path bytes, argument count, environment count, and total copied
   argument/environment bytes with named constants before allocation or stack
   construction.
-- Resolve the path through the current process filesystem namespace. Until
-  process-owned current directories exist, only absolute paths should be
-  accepted for user `execve`.
+- Resolve the path through the current process filesystem namespace. Relative
+  paths are interpreted against the task-owned current working directory.
 - Reject directory targets with `-EISDIR`.
 - Reject missing targets with `-ENOENT`.
 - Reject unsupported device targets with `-EOPNOTSUPP`.
@@ -179,8 +180,8 @@ The kernel-side contract is:
 - Preserve the current process identifier on success.
 - Preserve the parent process identifier and waitable-child relationship on
   success.
-- Preserve the current working directory once current directories are owned by
-  process metadata.
+- Preserve the task-owned current working directory across successful image
+  replacement.
 - Preserve open descriptors by default, then close only descriptors marked
   close-on-exec after the replacement image has been published.
 - Reset runtime state that belongs to the old image, including saved user trap
@@ -216,13 +217,14 @@ entries, and 4096 total copied argument/environment string bytes including NUL
 terminators. Invalid user pointers return `-EFAULT`; count or byte limit
 overflow returns `-E2BIG`.
 
-Current path validation accepts only absolute executable paths, reads regular
-file contents through a temporary descriptor, rejects missing paths with
-`-ENOENT`, rejects directories with `-EISDIR`, rejects device nodes with
-`-EOPNOTSUPP`, and rejects invalid ELF metadata with `-EINVAL`. Valid images
-are mapped into a candidate address space with byte-preserving `argv` and
-`envp` stack contents, then published by replacing the current task's address
-space, heap state, private mapping state, and saved user trap frame.
+Current path validation resolves absolute paths directly and relative paths
+against the task-owned current working directory. It reads regular file
+contents through a temporary descriptor, rejects missing paths with `-ENOENT`,
+rejects directories with `-EISDIR`, rejects device nodes with `-EOPNOTSUPP`,
+and rejects invalid ELF metadata with `-EINVAL`. Valid images are mapped into a
+candidate address space with byte-preserving `argv` and `envp` stack contents,
+then published by replacing the current task's address space, heap state,
+private mapping state, and saved user trap frame.
 
 ## Address-Space Publication And Rollback
 
@@ -289,6 +291,9 @@ Current runtime diagnostics cover the first successful replacement path:
 
 - Storage smoke proves a successful self-replacement from `/disk/bin/smoke_demo`
   and verifies that the old image does not resume.
+- Storage smoke changes the user task's current working directory to `/disk`,
+  then proves relative self-`execve` and relative post-exec `file_demo`
+  replacement resolve through that preserved directory.
 - Storage smoke starts user programs through the kernel-internal
   `spawn_user_program` helper so filesystem path loading, ELF mapping, initial
   argv/envp stack construction, and scheduler task creation share one path.

@@ -137,6 +137,7 @@ $expectedPatterns = @(
     "user process ids ok",
     "user execve validation ok",
     "user syscall errors ok",
+    "chdir -> path=/disk",
     "user entry arguments ok",
     "user sleep ok",
     "user shell ok",

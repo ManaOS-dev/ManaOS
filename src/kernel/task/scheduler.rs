@@ -27,6 +27,7 @@ use crate::kernel::memory::virtual_allocator::{
 };
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
+use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
@@ -338,6 +339,7 @@ impl Task {
     fn kernel(
         identifier: TaskIdentifier,
         parent_identifier: TaskIdentifier,
+        parent_current_working_directory: &str,
         entry: TaskEntry,
         frame_allocator: &mut PhysicalFrameAllocator,
         kernel_stack_range_allocator: &mut KernelVirtualRangeAllocator,
@@ -355,7 +357,11 @@ impl Task {
         let context = unsafe { TaskContext::from_stack(stack_top, entry) };
 
         Self {
-            metadata: TaskMetadata::child(identifier, parent_identifier),
+            metadata: TaskMetadata::child(
+                identifier,
+                parent_identifier,
+                parent_current_working_directory,
+            ),
             state: TaskState::Ready,
             kind: TaskKind::Kernel,
             context,
@@ -366,6 +372,7 @@ impl Task {
     fn user(
         identifier: TaskIdentifier,
         parent_identifier: TaskIdentifier,
+        parent_current_working_directory: &str,
         request: UserTaskSpawnRequest<'_>,
         user_context: UserTaskContext,
         frame_allocator: &mut PhysicalFrameAllocator,
@@ -379,7 +386,11 @@ impl Task {
             kernel_stack.writable_page_count() + 1
         );
         Self {
-            metadata: TaskMetadata::child(identifier, parent_identifier),
+            metadata: TaskMetadata::child(
+                identifier,
+                parent_identifier,
+                parent_current_working_directory,
+            ),
             state: TaskState::Ready,
             kind: TaskKind::User(Box::new(UserTaskRuntime::new(
                 request.address_space,
@@ -551,9 +562,14 @@ impl Scheduler {
     fn spawn(&mut self, frame_allocator: &mut PhysicalFrameAllocator, entry: TaskEntry) -> u64 {
         let task_identifier = self.next_task_identifier.allocate();
         let parent_identifier = self.tasks[self.current_index].metadata.get_identifier();
+        let parent_current_working_directory = self.tasks[self.current_index]
+            .metadata
+            .current_working_directory()
+            .to_string();
         let task = Task::kernel(
             task_identifier,
             parent_identifier,
+            &parent_current_working_directory,
             entry,
             frame_allocator,
             &mut self.kernel_stack_range_allocator,
@@ -602,6 +618,10 @@ impl Scheduler {
     ) -> u64 {
         let task_identifier = self.next_task_identifier.allocate();
         let parent_identifier = self.tasks[self.current_index].metadata.get_identifier();
+        let parent_current_working_directory = self.tasks[self.current_index]
+            .metadata
+            .current_working_directory()
+            .to_string();
         // SAFETY: The caller provides a mapped user entry point and user stack.
         let user_context = unsafe {
             UserTaskContext::new(
@@ -613,6 +633,7 @@ impl Scheduler {
         let task = Task::user(
             task_identifier,
             parent_identifier,
+            &parent_current_working_directory,
             request,
             user_context,
             frame_allocator,
@@ -668,6 +689,18 @@ impl Scheduler {
             .map(TaskIdentifier::as_u64)
     }
 
+    fn get_current_working_directory(&self) -> &str {
+        self.tasks[self.current_index]
+            .metadata
+            .current_working_directory()
+    }
+
+    fn set_current_working_directory(&mut self, path: alloc::string::String) {
+        self.tasks[self.current_index]
+            .metadata
+            .set_current_working_directory(path);
+    }
+
     fn get_task_index(&self, task_id: u64) -> Option<usize> {
         self.tasks
             .iter()
@@ -689,11 +722,13 @@ pub use facade::{
     activate_user_task, block_current_user_after_syscall, close_user_return_preemption_window,
     collect_waitable_child_exit, current_user_task_has_child, finish_current_task,
     get_current_parent_task_id, get_current_task_id, get_current_user_address_space,
-    get_kernel_stack_guard_fault, get_kernel_stack_guard_fault_diagnostic_sample,
-    get_scheduler_diagnostics, get_scheduler_task_snapshots, has_active_user_tasks, initialize,
-    prepare_current_user_sleep, process_current_user_break, process_current_user_mapping,
-    process_current_user_unmapping, process_timer_tick, record_current_user_execve_reclaim,
+    get_current_working_directory, get_kernel_stack_guard_fault,
+    get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
+    get_scheduler_task_snapshots, has_active_user_tasks, initialize, prepare_current_user_sleep,
+    process_current_user_break, process_current_user_mapping, process_current_user_unmapping,
+    process_timer_tick, record_current_user_execve_reclaim,
     record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
     replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
-    run_user_task_once, set_preemption_enabled, spawn, spawn_user_task,
+    run_user_task_once, set_current_working_directory, set_preemption_enabled, spawn,
+    spawn_user_task,
 };

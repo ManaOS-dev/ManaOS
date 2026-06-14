@@ -38,6 +38,7 @@ active roadmap can list only unfinished work.
 - [x] Add a boot smoke case that `execve`s a second user program from `/disk`.
 - [x] Add close-on-exec metadata to file descriptors.
 - [x] Close descriptors marked close-on-exec during successful `execve`.
+- [x] Preserve current working directory across successful `execve`.
 
 ### `waitpid`, Exit Status, And Reaping
 

@@ -11,7 +11,6 @@ reviewable unit before implementing it.
 
 ### `execve` And Image Replacement
 
-- [ ] Preserve current working directory across successful `execve`.
 - [ ] Add `execve` replacement-state diagnostics to the `tasks` console command once fallible candidate states exist.
 
 ### `waitpid`, Exit Status, And Reaping

@@ -35,6 +35,7 @@
 //! - [`SYS_GETPID`] - Linux-compatible get-process-identifier syscall number
 //! - [`SYS_GETPPID`] - Linux-compatible get-parent-process-identifier syscall number
 //! - [`SYS_OPENAT`] - Linux-compatible open-at syscall number
+//! - [`SYS_CHDIR`] - Linux-compatible change-directory syscall number
 
 use alloc::{string::String, vec::Vec};
 
@@ -51,7 +52,7 @@ mod contract;
 mod memory;
 
 pub use contract::{
-    SYS_BRK, SYS_CLOSE, SYS_EXECVE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64,
+    SYS_BRK, SYS_CHDIR, SYS_CLOSE, SYS_EXECVE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETDENTS64,
     SYS_GETPID, SYS_GETPPID, SYS_LSEEK, SYS_MMAP, SYS_MUNMAP, SYS_NANOSLEEP, SYS_OPEN, SYS_OPENAT,
     SYS_READ, SYS_WAITPID, SYS_WRITE,
 };
@@ -224,6 +225,7 @@ fn dispatch_syscall(syscall_number: u64, arguments: [u64; 6]) -> u64 {
         SYS_GETDENTS64 => sys_getdents64(first_argument, second_argument, third_argument),
         SYS_GETPID => sys_getpid(),
         SYS_GETPPID => sys_getppid(),
+        SYS_CHDIR => sys_chdir(first_argument),
         _ => ERROR_NOT_IMPLEMENTED,
     }
 }
@@ -463,6 +465,10 @@ fn sys_open(user_path_pointer: u64, flags: u64, mode: u64) -> u64 {
     };
 
     let close_on_exec = flags & contract::OPEN_CLOSE_ON_EXEC != 0;
+    let Some(path) = resolve_current_process_path(&path) else {
+        return ERROR_NOT_IMPLEMENTED;
+    };
+
     match crate::kernel::filesystem::open_with_close_on_exec(&path, close_on_exec) {
         Ok(file_descriptor) => u64::try_from(file_descriptor).unwrap_or(u64::MAX),
         Err(error) => filesystem_error_to_linux(error),
@@ -480,6 +486,27 @@ fn sys_openat(
     }
 
     sys_open(user_path_pointer, flags, mode)
+}
+
+fn sys_chdir(user_path_pointer: u64) -> u64 {
+    let Some(path) = copy_path_argument(user_path_pointer) else {
+        return ERROR_BAD_ADDRESS;
+    };
+    let Some(path) = resolve_current_process_path(&path) else {
+        return ERROR_NOT_IMPLEMENTED;
+    };
+
+    match crate::kernel::filesystem::metadata(&path) {
+        Ok(metadata) if metadata.file_type == crate::kernel::filesystem::FileType::Directory => {
+            if crate::kernel::task::set_current_working_directory(path.clone()).is_none() {
+                return ERROR_NOT_IMPLEMENTED;
+            }
+            crate::log_info!("syscall", "chdir -> path={}", path);
+            0
+        }
+        Ok(_) => ERROR_NOT_DIRECTORY,
+        Err(error) => filesystem_error_to_linux(error),
+    }
 }
 
 fn sys_close(file_descriptor: u64) -> u64 {
@@ -835,6 +862,9 @@ fn copy_execve_staging(
     let Some(path) = copy_path_argument(user_path_pointer) else {
         return Err(ERROR_BAD_ADDRESS);
     };
+    let Some(path) = resolve_current_process_path(&path) else {
+        return Err(ERROR_NOT_IMPLEMENTED);
+    };
 
     let mut copied_string_bytes = 0;
     let argument_values = copy_execve_string_vector(
@@ -875,6 +905,14 @@ fn read_execve_candidate_image(path: &str) -> Result<Vec<u8>, u64> {
     }
 
     result
+}
+
+fn resolve_current_process_path(path: &str) -> Option<String> {
+    let current_working_directory = crate::kernel::task::get_current_working_directory()?;
+    Some(crate::kernel::filesystem::resolve_path(
+        &current_working_directory,
+        path,
+    ))
 }
 
 fn read_execve_descriptor_image(file_descriptor: usize, byte_len: usize) -> Result<Vec<u8>, u64> {

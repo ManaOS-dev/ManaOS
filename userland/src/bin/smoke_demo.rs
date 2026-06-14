@@ -23,6 +23,7 @@ const EXECVE_MARKER_ARGUMENT: &[u8] = b"--after-execve";
 const EXECVE_DESCRIPTOR_ENVIRONMENT_INDEX: usize = 14;
 const FIRST_NON_STANDARD_FILE_DESCRIPTOR: isize = 3;
 const SECOND_NON_STANDARD_FILE_DESCRIPTOR: isize = 4;
+const THIRD_NON_STANDARD_FILE_DESCRIPTOR: isize = 5;
 const BSS_SMOKE_MARKER: u64 = 0x4d414e414f535f36;
 static BSS_SMOKE_VALUE: AtomicU64 = AtomicU64::new(0);
 
@@ -40,6 +41,9 @@ extern "C" fn _start(
 
     verify_process_identifiers();
     verify_syscall_error_paths();
+    if syscall::chdir(b"/disk\0") != 0 {
+        syscall::exit(93);
+    }
 
     verify_entry_arguments(argument_count, argument_values, environment_values);
     verify_user_sleep();
@@ -206,13 +210,14 @@ fn verify_execve_error_paths() {
 }
 
 fn execve_self_success() -> ! {
-    let executable_path = b"/disk/bin/smoke_demo\0";
+    let executable_path = b"bin/smoke_demo\0";
     let marker_argument = b"--after-execve\0";
     let inherited_file_descriptor =
         syscall::open_with_options(executable_path, syscall::OPEN_READ_ONLY, 0);
     let marker_environment = match inherited_file_descriptor {
         FIRST_NON_STANDARD_FILE_DESCRIPTOR => b"MANAOS_EXECVE=3\0",
         SECOND_NON_STANDARD_FILE_DESCRIPTOR => b"MANAOS_EXECVE=4\0",
+        THIRD_NON_STANDARD_FILE_DESCRIPTOR => b"MANAOS_EXECVE=5\0",
         _ => syscall::exit(88),
     };
     let arguments = [
@@ -230,7 +235,7 @@ fn execve_self_success() -> ! {
 }
 
 fn execve_file_demo_success() -> ! {
-    let executable_path = b"/disk/bin/file_demo\0";
+    let executable_path = b"bin/file_demo\0";
     if syscall::open_with_options(
         executable_path,
         syscall::OPEN_READ_ONLY | syscall::OPEN_CLOSE_ON_EXEC,
@@ -267,7 +272,7 @@ fn verify_after_execve_entry(
     if argument_count != 2 || argument_values.is_null() || environment_values.is_null() {
         syscall::exit(80);
     }
-    if !argument_equals(argument_values, 0, b"/disk/bin/smoke_demo") {
+    if !argument_equals(argument_values, 0, b"bin/smoke_demo") {
         syscall::exit(81);
     }
     if !argument_equals(argument_values, 1, EXECVE_MARKER_ARGUMENT) {

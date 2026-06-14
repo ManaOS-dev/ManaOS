@@ -44,5 +44,6 @@ pub use read_only::ReadOnlyFile;
 pub use service::{
     close, close_on_exec_descriptors, descriptor_metadata, initialize, list_directory, list_mounts,
     metadata, mount_fat32_file, mount_ram_file, mount_read_only_file, normalize_path_for_display,
-    open, open_with_close_on_exec, read, read_at, read_directory, seek, seek_from, write,
+    open, open_with_close_on_exec, read, read_at, read_directory, resolve_path, seek, seek_from,
+    write,
 };

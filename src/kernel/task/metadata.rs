@@ -1,5 +1,7 @@
 //! Task identity metadata used before process ownership exists.
 
+use alloc::string::{String, ToString};
+
 /// A scheduler-local task identifier.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct TaskIdentifier(u64);
@@ -29,25 +31,29 @@ pub struct TaskMetadata {
     identifier: TaskIdentifier,
     parent_identifier: Option<TaskIdentifier>,
     exit_status: Option<TaskExitStatus>,
+    current_working_directory: String,
 }
 
 impl TaskMetadata {
-    pub(super) const fn bootstrap() -> Self {
+    pub(super) fn bootstrap() -> Self {
         Self {
             identifier: TaskIdentifier::BOOTSTRAP,
             parent_identifier: None,
             exit_status: None,
+            current_working_directory: String::from("/"),
         }
     }
 
-    pub(super) const fn child(
+    pub(super) fn child(
         identifier: TaskIdentifier,
         parent_identifier: TaskIdentifier,
+        parent_current_working_directory: &str,
     ) -> Self {
         Self {
             identifier,
             parent_identifier: Some(parent_identifier),
             exit_status: None,
+            current_working_directory: parent_current_working_directory.to_string(),
         }
     }
 
@@ -91,6 +97,14 @@ impl TaskMetadata {
 
         exit_status.mark_wait_collected();
         Some(exit_status.exit_code())
+    }
+
+    pub(super) fn current_working_directory(&self) -> &str {
+        &self.current_working_directory
+    }
+
+    pub(super) fn set_current_working_directory(&mut self, path: String) {
+        self.current_working_directory = path;
     }
 }
 

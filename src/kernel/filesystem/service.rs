@@ -3,6 +3,7 @@
 use super::descriptor::{FileDescriptor, FileDescriptorTable, SeekWhence};
 use super::namespace::VirtualFileSystem;
 use super::node::{normalize_path, DirectoryEntry, FileMetadata, FileSystemResult};
+use alloc::format;
 use alloc::sync::Arc;
 use spin::{LazyLock, Mutex};
 
@@ -166,4 +167,13 @@ pub fn list_mounts() -> alloc::vec::Vec<MountInfo> {
 /// Normalize a user-visible filesystem path for command output.
 pub fn normalize_path_for_display(path: &str) -> alloc::string::String {
     normalize_path(path)
+}
+
+/// Resolve a path against a current working directory and return a canonical path.
+pub fn resolve_path(current_working_directory: &str, path: &str) -> alloc::string::String {
+    if path.starts_with('/') {
+        normalize_path(path)
+    } else {
+        normalize_path(&format!("{current_working_directory}/{path}"))
+    }
 }
