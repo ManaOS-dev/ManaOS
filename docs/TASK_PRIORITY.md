@@ -14,6 +14,7 @@ not on product value.
    - Harden the legacy PIC fallback boundary.
    - Add masked Local APIC timer calibration diagnostics.
    - Calibrate and switch scheduling ticks to the Local APIC timer.
+   - Add spurious and unexpected external interrupt vector diagnostics.
    - Reason: this changes early boot discovery, interrupt topology, timer
      ownership, and architecture/kernel wiring at the same time.
 
@@ -57,7 +58,7 @@ architecture-owned APIC routing provider configuration, dry-run IOAPIC
 redirection entries, masked IOAPIC MMIO staging, Local APIC EOI-provider
 diagnostics, unified EOI dispatch, active IOAPIC routing, post-activation APIC
 EOI counters, legacy PIC fallback masking, masked Local APIC timer calibration,
-and periodic Local APIC scheduler ticks are now proven by storage smoke. The
-next slice should either add broader interrupt-controller diagnostics for
-unexpected vectors or continue full user process lifecycle work now that timer
-preemption no longer depends on the PIT route.
+periodic Local APIC scheduler ticks, and spurious/unexpected external interrupt
+vector diagnostics are now proven by storage smoke. The next slice should
+continue full user process lifecycle work now that timer preemption no longer
+depends on the PIT route.

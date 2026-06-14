@@ -54,6 +54,8 @@ The current foundation validates:
   unmasking its interrupt and compare the count delta against PIT ticks.
 - Periodic Local APIC timer activation that masks the IOAPIC PIT timer route and
   keeps scheduler ticks on the existing vector 32 interrupt path.
+- Local APIC spurious vector 255 setup plus IDT counters for spurious and
+  unexpected external vectors.
 
 The boot smoke logs the validated root table, MADT diagnostics, retained
 interrupt topology, APIC routing provider configuration, and dry-run IOAPIC
@@ -64,11 +66,11 @@ post-activation APIC EOI counts. Normal APIC boots also assert that the legacy
 PIC backend remains masked with fallback delivery disabled before interrupts are
 enabled. The smoke path now also proves that a masked Local APIC timer sample
 decrements, the IOAPIC PIT timer route is masked, and periodic Local APIC timer
-ticks continue to drive scheduler progress.
+ticks continue to drive scheduler progress. It also asserts that the Local APIC
+spurious vector matches the IDT diagnostic vector and that boot does not observe
+spurious or unexpected external interrupts.
 
 ## Next Steps
 
-1. Add broader interrupt-controller diagnostics for spurious or unexpected
-   vectors before expanding hardware coverage.
-2. Continue full process lifecycle work now that timer-driven user preemption no
+1. Continue full process lifecycle work now that timer-driven user preemption no
    longer depends on the PIT route.

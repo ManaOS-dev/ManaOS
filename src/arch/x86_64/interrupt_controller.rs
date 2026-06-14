@@ -35,6 +35,8 @@ const LOCAL_APIC_VERSION_REGISTER: usize = 0x30;
 const LOCAL_APIC_EOI_REGISTER: usize = 0xb0;
 const LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_REGISTER: usize = 0xf0;
 const LOCAL_APIC_EOI_VALUE: u32 = 0;
+const LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_MASK: u32 = 0xff;
+const LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_NUMBER: u32 = 0xff;
 const LOCAL_APIC_ID_SHIFT: u32 = 24;
 const LOCAL_APIC_ID_MASK: u32 = 0xff;
 const LOCAL_APIC_VERSION_MAX_LVT_ENTRY_SHIFT: u32 = 16;
@@ -811,6 +813,17 @@ impl LocalApicEoiProviderStatus {
     pub const fn spurious_interrupt_vector(self) -> u32 {
         self.spurious_interrupt_vector
     }
+
+    /// Return the Local APIC spurious interrupt IDT vector number.
+    pub const fn spurious_interrupt_vector_number(self) -> u8 {
+        (self.spurious_interrupt_vector & LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_MASK) as u8
+    }
+
+    /// Return whether the Local APIC uses the diagnostic spurious vector.
+    pub const fn has_diagnostic_spurious_interrupt_vector(self) -> bool {
+        self.spurious_interrupt_vector_number() as u32
+            == LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_NUMBER
+    }
 }
 
 /// Result of activating IOAPIC interrupt routing.
@@ -1332,7 +1345,7 @@ pub unsafe fn activate_ioapic_routing() -> Option<IoApicRoutingActivationStatus>
 
     // SAFETY: The caller guarantees Local APIC MMIO is mapped and exclusively
     // programmed during interrupt-controller activation.
-    if unsafe { ensure_local_apic_software_enabled(&local_apic_registers) } {
+    if unsafe { ensure_local_apic_spurious_vector_enabled(&local_apic_registers) } {
         status.mark_local_apic_software_enabled();
     }
     // SAFETY: The caller guarantees IOAPIC MMIO is mapped and exclusively
@@ -1475,18 +1488,22 @@ fn redirection_entry_for_legacy_irq(
     ))
 }
 
-unsafe fn ensure_local_apic_software_enabled(registers: &LocalApicRegisters) -> bool {
+unsafe fn ensure_local_apic_spurious_vector_enabled(registers: &LocalApicRegisters) -> bool {
     // SAFETY: The caller guarantees Local APIC MMIO is mapped and exclusively
     // programmed during interrupt-controller activation.
     let spurious_interrupt_vector =
         unsafe { registers.read(LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_REGISTER) };
-    if spurious_interrupt_vector & LOCAL_APIC_SOFTWARE_ENABLE_BIT == 0 {
+    let configured_spurious_interrupt_vector = (spurious_interrupt_vector
+        & !LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_MASK)
+        | LOCAL_APIC_SOFTWARE_ENABLE_BIT
+        | LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_NUMBER;
+    if spurious_interrupt_vector != configured_spurious_interrupt_vector {
         // SAFETY: The caller guarantees Local APIC MMIO is mapped and
         // exclusively programmed during interrupt-controller activation.
         unsafe {
             registers.write(
                 LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_REGISTER,
-                spurious_interrupt_vector | LOCAL_APIC_SOFTWARE_ENABLE_BIT,
+                configured_spurious_interrupt_vector,
             );
         }
     }
@@ -1495,6 +1512,8 @@ unsafe fn ensure_local_apic_software_enabled(registers: &LocalApicRegisters) -> 
     let enabled_spurious_interrupt_vector =
         unsafe { registers.read(LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_REGISTER) };
     enabled_spurious_interrupt_vector & LOCAL_APIC_SOFTWARE_ENABLE_BIT != 0
+        && enabled_spurious_interrupt_vector & LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_MASK
+            == LOCAL_APIC_SPURIOUS_INTERRUPT_VECTOR_NUMBER
 }
 
 unsafe fn activate_ioapic_redirection_plan(
@@ -1723,23 +1742,33 @@ pub unsafe fn notify_legacy_end_of_interrupt(interrupt_index: u8) {
 /// by the currently active interrupt controller backend.
 pub unsafe fn notify_end_of_interrupt(interrupt_index: u8) {
     if has_ioapic_routing() {
-        let base_address = LOCAL_APIC_EOI_BASE_ADDRESS.load(Ordering::Acquire);
-        assert!(
-            base_address != 0,
-            "Local APIC EOI provider must be configured before APIC routing"
-        );
-        let registers = LocalApicRegisters::new(base_address);
-        // SAFETY: APIC routing is active only after the Local APIC MMIO page has
-        // been mapped and the EOI provider has been configured.
+        // SAFETY: APIC routing is active only after the Local APIC MMIO page
+        // has been mapped and the EOI provider has been configured.
         unsafe {
-            registers.write(LOCAL_APIC_EOI_REGISTER, LOCAL_APIC_EOI_VALUE);
+            notify_local_apic_end_of_interrupt();
         }
-        APIC_END_OF_INTERRUPT_COUNT.fetch_add(1, Ordering::Relaxed);
     } else {
         // SAFETY: The legacy PIC backend remains active while IOAPIC routing is
         // disabled, so the interrupt must be acknowledged through the PIC.
         unsafe {
             notify_legacy_end_of_interrupt(interrupt_index);
+        }
+    }
+}
+
+/// Notify APIC EOI for an unexpected external interrupt without a routed vector.
+///
+/// # Safety
+///
+/// Must be called only after servicing an unexpected external interrupt handler
+/// entry. The handler must not use this for Local APIC spurious interrupts,
+/// which do not require EOI.
+pub unsafe fn notify_unexpected_external_end_of_interrupt() {
+    if has_ioapic_routing() {
+        // SAFETY: APIC routing is active only after the Local APIC MMIO page
+        // has been mapped and the EOI provider has been configured.
+        unsafe {
+            notify_local_apic_end_of_interrupt();
         }
     }
 }
@@ -1755,4 +1784,19 @@ pub fn has_local_apic() -> bool {
 /// unmasked, the legacy PIC is masked, and Local APIC EOI dispatch is active.
 pub fn has_ioapic_routing() -> bool {
     IOAPIC_ROUTING_ACTIVE.load(Ordering::Acquire)
+}
+
+unsafe fn notify_local_apic_end_of_interrupt() {
+    let base_address = LOCAL_APIC_EOI_BASE_ADDRESS.load(Ordering::Acquire);
+    assert!(
+        base_address != 0,
+        "Local APIC EOI provider must be configured before APIC routing"
+    );
+    let registers = LocalApicRegisters::new(base_address);
+    // SAFETY: APIC routing is active only after the Local APIC MMIO page has
+    // been mapped and the EOI provider has been configured.
+    unsafe {
+        registers.write(LOCAL_APIC_EOI_REGISTER, LOCAL_APIC_EOI_VALUE);
+    }
+    APIC_END_OF_INTERRUPT_COUNT.fetch_add(1, Ordering::Relaxed);
 }
