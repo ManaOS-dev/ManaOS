@@ -39,6 +39,8 @@ pub const SYS_OPENAT: u64 = 257;
 
 /// File opened for read-only access.
 pub const OPEN_READ_ONLY: u64 = 0;
+/// Linux-compatible close-on-exec open flag.
+pub const OPEN_CLOSE_ON_EXEC: u64 = 0x80000;
 /// Linux-compatible current-working-directory marker for `openat`.
 pub const AT_FDCWD: u64 = u64::MAX - 99;
 /// Seek relative to the start of a file.

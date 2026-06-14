@@ -43,6 +43,8 @@ pub const SYS_OPENAT: usize = contract::SYS_OPENAT as usize;
 
 /// File opened for read-only access.
 pub const OPEN_READ_ONLY: usize = contract::OPEN_READ_ONLY as usize;
+/// Linux-compatible close-on-exec open flag.
+pub const OPEN_CLOSE_ON_EXEC: usize = contract::OPEN_CLOSE_ON_EXEC as usize;
 /// Linux-compatible current-working-directory marker for `openat`.
 pub const AT_FDCWD: usize = contract::AT_FDCWD as usize;
 /// Seek relative to the start of a file.

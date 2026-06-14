@@ -393,7 +393,8 @@ fn sys_open(user_path_pointer: u64, flags: u64, mode: u64) -> u64 {
         return ERROR_BAD_ADDRESS;
     };
 
-    match crate::kernel::filesystem::open(&path) {
+    let close_on_exec = flags & contract::OPEN_CLOSE_ON_EXEC != 0;
+    match crate::kernel::filesystem::open_with_close_on_exec(&path, close_on_exec) {
         Ok(file_descriptor) => u64::try_from(file_descriptor).unwrap_or(u64::MAX),
         Err(error) => filesystem_error_to_linux(error),
     }
@@ -669,6 +670,14 @@ fn build_and_publish_execve_candidate(
         crate::kernel::task::record_current_user_execve_reclaim(task_id, reclaim),
         "published execve task must retain reclaim diagnostics"
     );
+    let closed_descriptors = crate::kernel::filesystem::close_on_exec_descriptors();
+    if closed_descriptors > 0 {
+        crate::log_info!(
+            "syscall",
+            "close-on-exec descriptors closed: count={}",
+            closed_descriptors
+        );
+    }
     crate::kernel::memory::address_space::switch_to_user_address_space(candidate.address_space);
 
     Some(ExecvePublishedImage {

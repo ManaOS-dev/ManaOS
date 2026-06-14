@@ -82,9 +82,25 @@ pub fn open(path: &str) -> FileSystemResult<FileDescriptor> {
     FILE_DESCRIPTORS.lock().open(node)
 }
 
+/// Open a path with close-on-exec metadata and return a file descriptor.
+pub fn open_with_close_on_exec(
+    path: &str,
+    close_on_exec: bool,
+) -> FileSystemResult<FileDescriptor> {
+    let node = VIRTUAL_FILE_SYSTEM.lock().get_node(path)?;
+    FILE_DESCRIPTORS
+        .lock()
+        .open_with_close_on_exec(node, close_on_exec)
+}
+
 /// Close an open file descriptor.
 pub fn close(descriptor: FileDescriptor) -> FileSystemResult<()> {
     FILE_DESCRIPTORS.lock().close(descriptor)
+}
+
+/// Close descriptors marked close-on-exec and return the number closed.
+pub fn close_on_exec_descriptors() -> usize {
+    FILE_DESCRIPTORS.lock().close_on_exec_descriptors()
 }
 
 /// Read bytes from an open file descriptor.

@@ -142,6 +142,7 @@ $expectedPatterns = @(
     "user smoke ok",
     "User image replaced by execve: task=.* old_address_space=0x[0-9a-f]+ new_address_space=0x[0-9a-f]+ entry=0x400000000000 stack=0x[0-9a-f]+ heap_start=0x400000005000",
     "execve image published -> task=.* path=/disk/bin/smoke_demo .*argc=2 old_user_pages=11 old_page_table_pages=10",
+    "close-on-exec descriptors closed: count=[1-9][0-9]*",
     "execve image published -> task=.* path=/disk/bin/file_demo .*argc=1 old_user_pages=9 old_page_table_pages=7",
     "user execve success ok",
     "user waitpid unsupported ok",

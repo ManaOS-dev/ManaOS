@@ -29,10 +29,12 @@ successfully replace a running smoke task image through `execve`, and reclaim
 finished user address spaces and scheduler-owned kernel stacks.
 
 General user-created process lifecycle is not complete yet. Current-directory
-ownership, descriptor close-on-exec metadata, user-visible child creation, and
-the scheduler-backed `waitpid` wait/reap state machine are still future work.
-The `waitpid` syscall number, option constants, and no-std userland wrapper are
-reserved now so later child-exit work has a stable ABI target.
+ownership, user-visible child creation, and the scheduler-backed `waitpid`
+wait/reap state machine are still future work. Descriptor close-on-exec
+metadata and successful-`execve` close behavior exist for the current global
+descriptor table. The `waitpid` syscall number, option constants, and no-std
+userland wrapper are reserved now so later child-exit work has a stable ABI
+target.
 
 ## `waitpid` Syscall Contract
 
@@ -116,7 +118,7 @@ The kernel-side contract is:
 - Preserve the current working directory once current directories are owned by
   process metadata.
 - Preserve open descriptors by default, then close only descriptors marked
-  close-on-exec after descriptor metadata supports that flag.
+  close-on-exec after the replacement image has been published.
 - Reset runtime state that belongs to the old image, including saved user trap
   frames, syscall trace state scoped to the image, sleep/block state, pending
   user mapping records, heap break state, and executable mapping metadata.
@@ -207,14 +209,15 @@ marked close-on-exec. Storage smoke now opens the executable file in the old
 image as the first non-standard descriptor and verifies that the new image can
 close the same descriptor number.
 
-The close-on-exec flag is not present yet, so the next descriptor metadata step
-must keep existing descriptor numbers and offsets stable by default and close
-only descriptors explicitly marked close-on-exec.
+The current descriptor table records close-on-exec metadata per open file. The
+user-visible `OPEN_CLOSE_ON_EXEC` flag marks a descriptor for successful
+`execve` cleanup. Unmarked descriptors keep their descriptor numbers and offsets
+by default, while marked descriptors are closed only after the new image is
+ready to run.
 
-When close-on-exec exists, closing must happen only after the new image is
-ready to publish. If closing a descriptor fails internally, the kernel should
-panic with context rather than leave a partially replaced process with ambiguous
-descriptor state.
+The current table is still global rather than per-process, so this is the
+minimum metadata needed for the smoke lifecycle. Future per-process descriptor
+tables must preserve the same rule but apply it only to the execing process.
 
 ## Diagnostics And Smoke Coverage
 
@@ -224,6 +227,8 @@ Current runtime diagnostics cover the first successful replacement path:
   and verifies that the old image does not resume.
 - Storage smoke verifies that an unmarked descriptor inherited through
   successful self-`execve` remains usable in the new image.
+- Storage smoke asserts the kernel log emitted when descriptors opened with
+  `OPEN_CLOSE_ON_EXEC` are closed during successful image replacement.
 - Storage smoke verifies that replacement is not limited to self-`execve` by
   replacing the post-exec smoke image with `/disk/bin/file_demo`.
 - Serial logs record `User image replaced by execve` and

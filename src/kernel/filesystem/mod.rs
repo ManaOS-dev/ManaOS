@@ -17,6 +17,7 @@
 //! - [`read_at`] - Read from an open file descriptor without changing its offset
 //! - [`write`] - Write to an open file descriptor
 //! - [`close`] - Close an open file descriptor
+//! - [`close_on_exec_descriptors`] - Close descriptors marked close-on-exec
 
 mod backend;
 mod descriptor;
@@ -41,7 +42,7 @@ pub use ramfs::RamFile;
 #[allow(unused_imports)]
 pub use read_only::ReadOnlyFile;
 pub use service::{
-    close, descriptor_metadata, initialize, list_directory, list_mounts, metadata,
-    mount_fat32_file, mount_ram_file, mount_read_only_file, normalize_path_for_display, open, read,
-    read_at, read_directory, seek, seek_from, write,
+    close, close_on_exec_descriptors, descriptor_metadata, initialize, list_directory, list_mounts,
+    metadata, mount_fat32_file, mount_ram_file, mount_read_only_file, normalize_path_for_display,
+    open, open_with_close_on_exec, read, read_at, read_directory, seek, seek_from, write,
 };

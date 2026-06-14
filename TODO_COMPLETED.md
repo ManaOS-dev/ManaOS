@@ -36,6 +36,8 @@ active roadmap can list only unfinished work.
 - [x] Add current `execve` image generation, path, and old-image reclaim diagnostics to the `tasks` console command.
 - [x] Preserve open file descriptors that do not have close-on-exec semantics.
 - [x] Add a boot smoke case that `execve`s a second user program from `/disk`.
+- [x] Add close-on-exec metadata to file descriptors.
+- [x] Close descriptors marked close-on-exec during successful `execve`.
 
 ### `waitpid`, Exit Status, And Reaping
 

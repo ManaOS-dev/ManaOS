@@ -33,6 +33,17 @@ pub enum SeekWhence {
 struct OpenFile {
     node: Arc<dyn FileNode>,
     offset: usize,
+    close_on_exec: bool,
+}
+
+impl OpenFile {
+    fn new(node: Arc<dyn FileNode>, close_on_exec: bool) -> Self {
+        Self {
+            node,
+            offset: 0,
+            close_on_exec,
+        }
+    }
 }
 
 /// Per-kernel open file descriptor table.
@@ -56,25 +67,25 @@ impl FileDescriptorTable {
         error: Arc<dyn FileNode>,
     ) {
         self.entries.clear();
-        self.entries.push(Some(OpenFile {
-            node: input,
-            offset: 0,
-        }));
-        self.entries.push(Some(OpenFile {
-            node: output,
-            offset: 0,
-        }));
-        self.entries.push(Some(OpenFile {
-            node: error,
-            offset: 0,
-        }));
+        self.entries.push(Some(OpenFile::new(input, false)));
+        self.entries.push(Some(OpenFile::new(output, false)));
+        self.entries.push(Some(OpenFile::new(error, false)));
     }
 
     /// Open a node and return a file descriptor.
     pub fn open(&mut self, node: Arc<dyn FileNode>) -> FileSystemResult<FileDescriptor> {
+        self.open_with_close_on_exec(node, false)
+    }
+
+    /// Open a node with close-on-exec metadata and return a file descriptor.
+    pub fn open_with_close_on_exec(
+        &mut self,
+        node: Arc<dyn FileNode>,
+        close_on_exec: bool,
+    ) -> FileSystemResult<FileDescriptor> {
         for (descriptor, entry) in self.entries.iter_mut().enumerate() {
             if entry.is_none() {
-                *entry = Some(OpenFile { node, offset: 0 });
+                *entry = Some(OpenFile::new(node, close_on_exec));
                 return Ok(descriptor);
             }
         }
@@ -84,7 +95,7 @@ impl FileDescriptorTable {
         }
 
         let descriptor = self.entries.len();
-        self.entries.push(Some(OpenFile { node, offset: 0 }));
+        self.entries.push(Some(OpenFile::new(node, close_on_exec)));
         Ok(descriptor)
     }
 
@@ -100,6 +111,21 @@ impl FileDescriptorTable {
 
         *entry = None;
         Ok(())
+    }
+
+    /// Close all descriptors marked close-on-exec and return the number closed.
+    pub fn close_on_exec_descriptors(&mut self) -> usize {
+        let mut closed_count = 0;
+        for entry in &mut self.entries {
+            if entry
+                .as_ref()
+                .is_some_and(|open_file| open_file.close_on_exec)
+            {
+                *entry = None;
+                closed_count += 1;
+            }
+        }
+        closed_count
     }
 
     /// Read from an open file descriptor at its current offset.

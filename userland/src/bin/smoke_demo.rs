@@ -231,6 +231,14 @@ fn execve_self_success() -> ! {
 
 fn execve_file_demo_success() -> ! {
     let executable_path = b"/disk/bin/file_demo\0";
+    if syscall::open_with_options(
+        executable_path,
+        syscall::OPEN_READ_ONLY | syscall::OPEN_CLOSE_ON_EXEC,
+        0,
+    ) < 0
+    {
+        syscall::exit(92);
+    }
     let arguments = [executable_path.as_ptr(), core::ptr::null()];
     let environment = [core::ptr::null()];
 
