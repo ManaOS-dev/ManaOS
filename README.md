@@ -64,7 +64,7 @@ for smoother discussion and onboarding.
 | --- | --- | --- |
 | Project overview | [README.md](README.md) | [docs/ja/README.ja.md](docs/ja/README.ja.md) |
 | Contribution rules | [CONTRIBUTING.md](CONTRIBUTING.md) | [docs/ja/CONTRIBUTING.ja.md](docs/ja/CONTRIBUTING.ja.md) |
-| Agent rules | [AGENTS.md](AGENTS.md) | [AGENTS.ja.md](AGENTS.ja.md) |
+| Agent rules | [AGENTS.md](AGENTS.md) | English source only |
 | Maintainer workflow | [docs/MAINTAINER_WORKFLOW.md](docs/MAINTAINER_WORKFLOW.md) | [docs/ja/MAINTAINER_WORKFLOW.ja.md](docs/ja/MAINTAINER_WORKFLOW.ja.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | [docs/ja/ARCHITECTURE.ja.md](docs/ja/ARCHITECTURE.ja.md) |
 | ACPI and APIC | [docs/ACPI.md](docs/ACPI.md) | [docs/ja/ACPI.ja.md](docs/ja/ACPI.ja.md) |

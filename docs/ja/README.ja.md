@@ -60,7 +60,7 @@ ManaOS のドキュメントは、次の topic を軸に読むと把握しやす
 | --- | --- | --- |
 | Project overview | [../../README.md](../../README.md) | [README.ja.md](README.ja.md) |
 | Contribution rules | [../../CONTRIBUTING.md](../../CONTRIBUTING.md) | [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) |
-| Agent rules | [../../AGENTS.md](../../AGENTS.md) | [../../AGENTS.ja.md](../../AGENTS.ja.md) |
+| Agent rules | [../../AGENTS.md](../../AGENTS.md) | 英語正本のみ |
 | Maintainer workflow | [../MAINTAINER_WORKFLOW.md](../MAINTAINER_WORKFLOW.md) | [MAINTAINER_WORKFLOW.ja.md](MAINTAINER_WORKFLOW.ja.md) |
 | Architecture | [../ARCHITECTURE.md](../ARCHITECTURE.md) | [ARCHITECTURE.ja.md](ARCHITECTURE.ja.md) |
 | ACPI and APIC | [../ACPI.md](../ACPI.md) | [ACPI.ja.md](ACPI.ja.md) |
