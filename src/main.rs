@@ -660,6 +660,7 @@ fn run_user_smoke_demo(
         finished.iter().all(|is_finished| *is_finished),
         "all user smoke tasks must exit"
     );
+    verify_bootstrap_child_exit_collection(user_task_ids);
     crate::log_info!(
         "task",
         "Multi-user preemption smoke passed: tasks={}",
@@ -668,18 +669,55 @@ fn run_user_smoke_demo(
     kernel::task::set_preemption_enabled(true);
 }
 
+fn verify_bootstrap_child_exit_collection(user_task_ids: [u64; 2]) {
+    let parent_task_id = kernel::task::TaskIdentifier::BOOTSTRAP.as_u64();
+    let mut collected = [false; 2];
+    for _ in 0..user_task_ids.len() {
+        let exit = kernel::task::collect_waitable_child_exit(parent_task_id)
+            .expect("bootstrap parent must have a waitable user child exit");
+        assert_eq!(
+            exit.exit_code(),
+            0,
+            "user smoke child exit status must retain code zero"
+        );
+        let child_index = user_task_ids
+            .iter()
+            .position(|task_id| *task_id == exit.task_id())
+            .expect("waited child must belong to the user smoke task set");
+        assert!(
+            !collected[child_index],
+            "waited child exit status must be collected once"
+        );
+        collected[child_index] = true;
+    }
+    assert!(
+        collected.iter().all(|is_collected| *is_collected),
+        "bootstrap wait collection must cover every user smoke child"
+    );
+    assert!(
+        kernel::task::collect_waitable_child_exit(parent_task_id).is_none(),
+        "bootstrap parent must not collect the same child exit twice"
+    );
+    crate::log_info!(
+        "task",
+        "Bootstrap child wait collection verified: parent={} children={}",
+        parent_task_id,
+        user_task_ids.len()
+    );
+}
+
 fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
     let diagnostics = kernel::task::get_scheduler_diagnostics()
         .expect("scheduler diagnostics must be available after user smoke tasks");
     let states = diagnostics.states();
-    verify_scheduler_task_counts(diagnostics, states, expected_user_tasks);
-    verify_scheduler_reclaim_diagnostics(diagnostics, expected_user_tasks);
-    verify_scheduler_user_return_diagnostics(diagnostics, expected_user_tasks);
-    log_scheduler_task_diagnostics(diagnostics, states);
+    verify_scheduler_task_counts(&diagnostics, states, expected_user_tasks);
+    verify_scheduler_reclaim_diagnostics(&diagnostics, expected_user_tasks);
+    verify_scheduler_user_return_diagnostics(&diagnostics, expected_user_tasks);
+    log_scheduler_task_diagnostics(&diagnostics, states);
 }
 
 fn verify_scheduler_task_counts(
-    diagnostics: kernel::task::SchedulerDiagnostics,
+    diagnostics: &kernel::task::SchedulerDiagnostics,
     states: kernel::task::TaskStateDiagnostics,
     expected_user_tasks: u64,
 ) {
@@ -699,6 +737,21 @@ fn verify_scheduler_task_counts(
         "finished user tasks must not remain in the active scheduling set"
     );
     assert_eq!(
+        diagnostics.retained_user_exit_statuses(),
+        expected_user_tasks,
+        "finished user tasks must retain waitable exit status records"
+    );
+    assert_eq!(
+        diagnostics.waitable_user_exit_statuses(),
+        0,
+        "bootstrap parent must collect every waitable user child exit"
+    );
+    assert_eq!(
+        diagnostics.collected_user_exit_statuses(),
+        expected_user_tasks,
+        "finished user task exit statuses must be marked collected"
+    );
+    assert_eq!(
         states.finished(),
         expected_user_tasks,
         "all user smoke tasks must be finished"
@@ -706,7 +759,7 @@ fn verify_scheduler_task_counts(
 }
 
 fn verify_scheduler_reclaim_diagnostics(
-    diagnostics: kernel::task::SchedulerDiagnostics,
+    diagnostics: &kernel::task::SchedulerDiagnostics,
     expected_user_tasks: u64,
 ) {
     // The current smoke ELF reclaims five ELF pages, four user stack pages,
@@ -760,7 +813,7 @@ fn verify_scheduler_reclaim_diagnostics(
 }
 
 fn verify_scheduler_user_return_diagnostics(
-    diagnostics: kernel::task::SchedulerDiagnostics,
+    diagnostics: &kernel::task::SchedulerDiagnostics,
     expected_user_tasks: u64,
 ) {
     let expected_user_stops = expected_user_tasks * 2;
@@ -829,12 +882,12 @@ fn verify_scheduler_user_return_diagnostics(
 }
 
 fn log_scheduler_task_diagnostics(
-    diagnostics: kernel::task::SchedulerDiagnostics,
+    diagnostics: &kernel::task::SchedulerDiagnostics,
     states: kernel::task::TaskStateDiagnostics,
 ) {
     crate::log_info!(
         "task",
-        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_tasks={} active_user_address_spaces={} pending_user_exits={} preemption_state={} preemption_enabled={} user_sleep_blocks={} user_sleep_wakes={} user_return_preemption_window_closes={} user_return_stack_sets={} user_return_stack_takes={} reclaimed_user_resource_records={} reclaimed_user_address_spaces={} reclaimed_user_pages={} reclaimed_user_page_table_pages={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} one_shot_user_entries={} timer_user_entries={} user_resumes={} finished_tasks={}",
+        "Scheduler diagnostics verified: total_tasks={} kernel_tasks={} user_tasks={} ready={} running={} blocked={} finished={} active_user_tasks={} active_user_address_spaces={} pending_user_exits={} retained_user_exit_statuses={} waitable_user_exit_statuses={} collected_user_exit_statuses={} preemption_state={} preemption_enabled={} user_sleep_blocks={} user_sleep_wakes={} user_return_preemption_window_closes={} user_return_stack_sets={} user_return_stack_takes={} reclaimed_user_resource_records={} reclaimed_user_address_spaces={} reclaimed_user_pages={} reclaimed_user_page_table_pages={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} context_switches={} timer_preemptions={} user_entries={} one_shot_user_entries={} timer_user_entries={} user_resumes={} finished_tasks={}",
         diagnostics.total_tasks(),
         diagnostics.kernel_tasks(),
         diagnostics.user_tasks(),
@@ -845,6 +898,9 @@ fn log_scheduler_task_diagnostics(
         diagnostics.active_user_tasks(),
         diagnostics.active_user_address_spaces(),
         diagnostics.pending_user_exits(),
+        diagnostics.retained_user_exit_statuses(),
+        diagnostics.waitable_user_exit_statuses(),
+        diagnostics.collected_user_exit_statuses(),
         diagnostics.preemption_state().as_str(),
         diagnostics.preemption_enabled(),
         diagnostics.user_sleep_blocks(),
@@ -893,6 +949,7 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
     let mut user_vm_snapshots = 0_u64;
     let mut anonymous_mapping_release_snapshots = 0_u64;
     let mut bootstrap_child_user_tasks = 0_u64;
+    let mut collected_user_exit_snapshots = 0_u64;
     for snapshot in snapshots {
         if snapshot.kind() != kernel::task::TaskKindDiagnostics::User {
             continue;
@@ -911,6 +968,16 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
             Some(kernel::task::TaskIdentifier::BOOTSTRAP.as_u64()),
             "user smoke task snapshots must retain the bootstrap parent task"
         );
+        assert_eq!(
+            snapshot.exit_code(),
+            Some(0),
+            "finished user task snapshots must retain exit code zero"
+        );
+        assert!(
+            snapshot.wait_collected(),
+            "finished user task snapshots must show collected wait status"
+        );
+        collected_user_exit_snapshots = collected_user_exit_snapshots.saturating_add(1);
         bootstrap_child_user_tasks = bootstrap_child_user_tasks.saturating_add(1);
         finished_user_tasks = finished_user_tasks.saturating_add(1);
         let verification = verify_user_task_snapshot(snapshot);
@@ -943,12 +1010,17 @@ fn verify_scheduler_task_snapshots(expected_user_tasks: u64) {
         bootstrap_child_user_tasks, expected_user_tasks,
         "scheduler snapshots must show every user task as a bootstrap child"
     );
+    assert_eq!(
+        collected_user_exit_snapshots, expected_user_tasks,
+        "scheduler snapshots must show collected user exit statuses"
+    );
     crate::log_info!(
         "task",
-        "Scheduler task snapshots verified: rows={} finished_user_tasks={} bootstrap_child_user_tasks={} fully_reclaimed_user_tasks={} user_vm_snapshots={} released_mmap_snapshots={}",
+        "Scheduler task snapshots verified: rows={} finished_user_tasks={} bootstrap_child_user_tasks={} collected_user_exit_snapshots={} fully_reclaimed_user_tasks={} user_vm_snapshots={} released_mmap_snapshots={}",
         expected_total_tasks,
         finished_user_tasks,
         bootstrap_child_user_tasks,
+        collected_user_exit_snapshots,
         fully_reclaimed_user_tasks,
         user_vm_snapshots,
         anonymous_mapping_release_snapshots
@@ -1039,6 +1111,8 @@ fn verify_scheduler_console_command() {
         "tasks",
         &[
             "reclaimed_user_address_spaces=",
+            "process_lifecycle:",
+            "collected_user_exit_statuses=",
             "one_shot_user_entries=",
             "timer_user_entries=",
             "user_vm_layout:",
@@ -1046,7 +1120,7 @@ fn verify_scheduler_console_command() {
             "task_mmap_lifecycle:",
         ],
     ) {
-        Some(output_lines) if output_lines >= 14 => crate::log_info!(
+        Some(output_lines) if output_lines >= 15 => crate::log_info!(
             "console",
             "Tasks command smoke passed: command=\"tasks\" output_lines={}",
             output_lines
