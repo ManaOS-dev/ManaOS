@@ -32,15 +32,17 @@ The current foundation validates:
   source override entries.
 - Architecture-owned APIC routing provider configuration translated by
   `main.rs` from kernel-owned ACPI topology records.
+- Dry-run IOAPIC redirection entries for timer, keyboard, and mouse vectors
+  derived from the architecture-owned APIC routing provider configuration.
 
 The boot smoke logs the validated root table, MADT diagnostics, retained
-interrupt topology, and APIC routing provider configuration before any IOAPIC
-redirection programming depends on them.
+interrupt topology, APIC routing provider configuration, and dry-run IOAPIC
+redirection plan before any IOAPIC MMIO writes depend on them.
 
 ## Next Steps
 
-1. Program IOAPIC redirection entries from the architecture-owned provider
-   configuration.
+1. Add guarded IOAPIC MMIO register access and program the planned redirection
+   entries.
 2. Switch hardware interrupt EOI handling from legacy PIC to APIC when routing
    is active.
 3. Replace legacy PIC routing after IOAPIC validation.

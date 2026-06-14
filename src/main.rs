@@ -587,6 +587,48 @@ fn configure_apic_routing_provider(
         status.legacy_irq12_global_system_interrupt(),
         status.is_truncated()
     );
+    let redirection_plan = status.redirection_plan();
+    let timer_redirection_entry = redirection_plan
+        .entry_for_legacy_irq(0)
+        .expect("APIC routing provider must plan a timer redirection entry");
+    let keyboard_redirection_entry = redirection_plan
+        .entry_for_legacy_irq(1)
+        .expect("APIC routing provider must plan a keyboard redirection entry");
+    let mouse_redirection_entry = redirection_plan
+        .entry_for_legacy_irq(12)
+        .expect("APIC routing provider must plan a mouse redirection entry");
+    let first_redirection_entry = redirection_plan
+        .entry(0)
+        .expect("APIC routing provider must retain the first redirection entry");
+    crate::log_info!(
+        "arch",
+        "IOAPIC redirection plan verified: entries={} truncated={} routing_active={} first_irq={} timer_irq={} timer_gsi={} timer_vector={} timer_table_index={} timer_low_register={:#x} timer_high_register={:#x} timer_low_value={:#x} timer_high_value={:#x} timer_active_low={} timer_level_triggered={} timer_masked={} keyboard_irq={} keyboard_gsi={} keyboard_vector={} keyboard_table_index={} keyboard_low_register={:#x} mouse_irq={} mouse_gsi={} mouse_vector={} mouse_table_index={} mouse_low_register={:#x}",
+        redirection_plan.entry_count(),
+        redirection_plan.is_truncated(),
+        status.is_routing_active(),
+        first_redirection_entry.legacy_irq(),
+        timer_redirection_entry.legacy_irq(),
+        timer_redirection_entry.global_system_interrupt(),
+        timer_redirection_entry.vector(),
+        timer_redirection_entry.table_index(),
+        timer_redirection_entry.low_register(),
+        timer_redirection_entry.high_register(),
+        timer_redirection_entry.low_value(),
+        timer_redirection_entry.high_value(),
+        timer_redirection_entry.is_active_low(),
+        timer_redirection_entry.is_level_triggered(),
+        timer_redirection_entry.is_masked(),
+        keyboard_redirection_entry.legacy_irq(),
+        keyboard_redirection_entry.global_system_interrupt(),
+        keyboard_redirection_entry.vector(),
+        keyboard_redirection_entry.table_index(),
+        keyboard_redirection_entry.low_register(),
+        mouse_redirection_entry.legacy_irq(),
+        mouse_redirection_entry.global_system_interrupt(),
+        mouse_redirection_entry.vector(),
+        mouse_redirection_entry.table_index(),
+        mouse_redirection_entry.low_register()
+    );
 }
 
 fn verify_mounted_disk_file(path: &str) {
