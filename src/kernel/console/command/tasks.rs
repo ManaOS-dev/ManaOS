@@ -69,6 +69,12 @@ pub(super) fn run(
         diagnostics.user_return_stack_takes()
     ));
     output.push(format!(
+        "process_lifecycle: retained_user_exit_statuses={} waitable_user_exit_statuses={} collected_user_exit_statuses={}",
+        diagnostics.retained_user_exit_statuses(),
+        diagnostics.waitable_user_exit_statuses(),
+        diagnostics.collected_user_exit_statuses()
+    ));
+    output.push(format!(
         "user_vm_layout: program_base={:#x} heap_end={:#x} mmap_start={:#x} mmap_end={:#x} stack_start={:#x} stack_slot_bytes={}",
         crate::kernel::memory::user_layout::USER_PROGRAM_BASE,
         crate::kernel::memory::user_layout::USER_HEAP_END,
@@ -89,7 +95,7 @@ pub(super) fn run(
 
 fn push_task_snapshot(output: &mut CommandOutput, snapshot: SchedulerTaskSnapshot) {
     output.push(format!(
-        "task: id={} parent={} kind={} state={} active={} address_space_owned={} kernel_stack_owned={}",
+        "task: id={} parent={} kind={} state={} active={} address_space_owned={} kernel_stack_owned={} exit_code={} wait_collected={}",
         snapshot.task_id(),
         snapshot
             .parent_task_id()
@@ -98,7 +104,11 @@ fn push_task_snapshot(output: &mut CommandOutput, snapshot: SchedulerTaskSnapsho
         snapshot.state().as_str(),
         snapshot.active(),
         snapshot.address_space_owned(),
-        snapshot.kernel_stack_owned()
+        snapshot.kernel_stack_owned(),
+        snapshot
+            .exit_code()
+            .map_or_else(|| "-".to_string(), |exit_code| exit_code.to_string()),
+        snapshot.wait_collected()
     ));
     if let Some(user_virtual_memory) = snapshot.user_virtual_memory() {
         push_user_virtual_memory(output, snapshot.task_id(), user_virtual_memory);

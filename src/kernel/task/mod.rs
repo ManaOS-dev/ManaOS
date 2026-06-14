@@ -26,6 +26,7 @@
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
 //! - [`get_current_parent_task_id`] - Read the current parent task identifier
+//! - [`collect_waitable_child_exit`] - Collect one retained child exit status
 //! - [`get_scheduler_diagnostics`] - Read scheduler accounting diagnostics
 //! - [`get_scheduler_task_snapshots`] - Read retained task rows for diagnostics
 //! - [`activate_user_task`] - Add a user task to the active scheduling set
@@ -68,8 +69,8 @@ pub use diagnostics::{
     TaskStateDiagnostics, UserVirtualMemorySnapshot,
 };
 use diagnostics::{
-    UserHeapDiagnosticsSnapshot, UserMappingActiveDiagnosticsSnapshot,
-    UserMappingLifecycleDiagnosticsSnapshot,
+    TaskExitStatusDiagnostics, TaskRuntimeDiagnosticsSnapshot, UserHeapDiagnosticsSnapshot,
+    UserMappingActiveDiagnosticsSnapshot, UserMappingLifecycleDiagnosticsSnapshot,
 };
 pub use metadata::{TaskIdentifier, TaskMetadata};
 pub use process_lifecycle::UserTaskExit;
@@ -582,6 +583,9 @@ impl Scheduler {
         let mut kernel_tasks = 0_u64;
         let mut user_tasks = 0_u64;
         let mut active_user_address_spaces = 0_u64;
+        let mut retained_user_exit_statuses = 0_u64;
+        let mut waitable_user_exit_statuses = 0_u64;
+        let mut collected_user_exit_statuses = 0_u64;
 
         for task in &self.tasks {
             match task.state {
@@ -596,6 +600,16 @@ impl Scheduler {
                     user_tasks = user_tasks.saturating_add(1);
                     if user_runtime.address_space.is_some() {
                         active_user_address_spaces = active_user_address_spaces.saturating_add(1);
+                    }
+                    if task.metadata.get_exit_code().is_some() {
+                        retained_user_exit_statuses = retained_user_exit_statuses.saturating_add(1);
+                    }
+                    if task.metadata.is_waitable() {
+                        waitable_user_exit_statuses = waitable_user_exit_statuses.saturating_add(1);
+                    }
+                    if task.metadata.wait_collected() {
+                        collected_user_exit_statuses =
+                            collected_user_exit_statuses.saturating_add(1);
                     }
                 }
             }
@@ -625,6 +639,9 @@ impl Scheduler {
             finished_tasks: self.finished_task_count,
             pending_user_exits: u64::try_from(self.finished_user_exits.len())
                 .expect("pending user exit count must fit in u64"),
+            retained_user_exit_statuses,
+            waitable_user_exit_statuses,
+            collected_user_exit_statuses,
             preemption_state: current_preemption_state(),
             user_return_preemption_window_closes: USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT
                 .load(Ordering::Acquire),
@@ -657,8 +674,12 @@ impl Scheduler {
                         task_id,
                         parent_task_id,
                         task.state,
-                        active,
-                        task.kernel_stack.is_some(),
+                        TaskRuntimeDiagnosticsSnapshot::new(
+                            active,
+                            false,
+                            task.kernel_stack.is_some(),
+                        ),
+                        task_exit_status_diagnostics(task),
                     ),
                     TaskKind::User(user_runtime) => {
                         let user_virtual_memory = UserVirtualMemorySnapshot::new(
@@ -685,9 +706,12 @@ impl Scheduler {
                             task_id,
                             parent_task_id,
                             task.state,
-                            active,
-                            user_runtime.address_space.is_some(),
-                            task.kernel_stack.is_some(),
+                            TaskRuntimeDiagnosticsSnapshot::new(
+                                active,
+                                user_runtime.address_space.is_some(),
+                                task.kernel_stack.is_some(),
+                            ),
+                            task_exit_status_diagnostics(task),
                             user_virtual_memory,
                         )
                     }
@@ -804,6 +828,17 @@ impl Scheduler {
         if !self.tasks[self.current_index].state.finish_running() {
             return None;
         }
+        assert!(
+            self.tasks[self.current_index]
+                .metadata
+                .record_exit_status(exit_code),
+            "user task exit status must be recorded exactly once"
+        );
+        let parent_task_id = self.tasks[self.current_index]
+            .metadata
+            .get_parent_identifier()
+            .map(TaskIdentifier::as_u64)
+            .expect("user tasks must have a parent task identifier");
 
         if let Some(bootstrap_task) = self.tasks.first_mut() {
             if !bootstrap_task.state.resume_blocked() {
@@ -816,11 +851,48 @@ impl Scheduler {
 
         let exit = UserTaskExit::new(task_id, exit_code);
         self.finished_user_exits.push_back(exit);
+        crate::log_info!(
+            "task",
+            "User task exit status retained: parent={} child={} code={} waitable=true",
+            parent_task_id,
+            task_id,
+            exit_code
+        );
         Some(exit)
     }
 
     fn take_finished_user_exit(&mut self) -> Option<UserTaskExit> {
         self.finished_user_exits.pop_front()
+    }
+
+    fn collect_waitable_child_exit(&mut self, parent_task_id: u64) -> Option<UserTaskExit> {
+        for task in &mut self.tasks {
+            let child_task_id = task.get_id();
+            if task
+                .metadata
+                .get_parent_identifier()
+                .map(TaskIdentifier::as_u64)
+                != Some(parent_task_id)
+            {
+                continue;
+            }
+            if !matches!(&task.kind, TaskKind::User(_)) {
+                continue;
+            }
+            let Some(exit_code) = task.metadata.collect_waitable_exit() else {
+                continue;
+            };
+            crate::log_info!(
+                "task",
+                "Waitable child exit collected: parent={} child={} code={}",
+                parent_task_id,
+                child_task_id,
+                exit_code
+            );
+            return Some(UserTaskExit::new(child_task_id, exit_code));
+        }
+
+        None
     }
 
     fn process_current_user_break(
@@ -1304,6 +1376,17 @@ impl Scheduler {
     }
 }
 
+fn task_exit_status_diagnostics(task: &Task) -> TaskExitStatusDiagnostics {
+    match (
+        task.metadata.get_exit_code(),
+        task.metadata.wait_collected(),
+    ) {
+        (Some(exit_code), true) => TaskExitStatusDiagnostics::collected(exit_code),
+        (Some(exit_code), false) => TaskExitStatusDiagnostics::waitable(exit_code),
+        (None, _) => TaskExitStatusDiagnostics::none(),
+    }
+}
+
 pub(super) fn install_user_task_kernel_stack(kernel_stack_top: usize) {
     let kernel_stack_top =
         u64::try_from(kernel_stack_top).expect("kernel stack top must fit in u64");
@@ -1427,6 +1510,14 @@ pub fn run_active_user_tasks_until_empty(
 /// Mark the currently running task as finished.
 pub fn finish_current_task(exit_code: u64) -> Option<u64> {
     process_lifecycle::finish_current_task(exit_code)
+}
+
+/// Collect one retained child exit status for `parent_task_id`.
+pub fn collect_waitable_child_exit(parent_task_id: u64) -> Option<UserTaskExit> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .and_then(|scheduler| scheduler.collect_waitable_child_exit(parent_task_id))
 }
 
 /// Process a `brk` request for the currently running user task.

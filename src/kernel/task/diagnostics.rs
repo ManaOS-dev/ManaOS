@@ -276,10 +276,73 @@ pub struct SchedulerTaskSnapshot {
     parent_task_id: Option<u64>,
     kind: TaskKindDiagnostics,
     state: TaskState,
+    runtime: TaskRuntimeDiagnosticsSnapshot,
+    exit_status: TaskExitStatusDiagnostics,
+    user_virtual_memory: Option<UserVirtualMemorySnapshot>,
+}
+
+/// Snapshot of runtime ownership flags for one scheduler task.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct TaskRuntimeDiagnosticsSnapshot {
     active: bool,
     address_space_owned: bool,
     kernel_stack_owned: bool,
-    user_virtual_memory: Option<UserVirtualMemorySnapshot>,
+}
+
+impl TaskRuntimeDiagnosticsSnapshot {
+    /// Create a runtime ownership diagnostics snapshot.
+    pub(super) const fn new(
+        active: bool,
+        address_space_owned: bool,
+        kernel_stack_owned: bool,
+    ) -> Self {
+        Self {
+            active,
+            address_space_owned,
+            kernel_stack_owned,
+        }
+    }
+}
+
+/// Retained process exit status state for one scheduler task.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TaskExitStatusDiagnostics {
+    /// The task has not retained an exit status.
+    None,
+    /// The task has an exit status that the parent has not collected.
+    Waitable(u64),
+    /// The task has an exit status that the parent already collected.
+    Collected(u64),
+}
+
+impl TaskExitStatusDiagnostics {
+    /// Create an empty exit-status diagnostic state.
+    pub(super) const fn none() -> Self {
+        Self::None
+    }
+
+    /// Create an uncollected exit-status diagnostic state.
+    pub(super) const fn waitable(exit_code: u64) -> Self {
+        Self::Waitable(exit_code)
+    }
+
+    /// Create a collected exit-status diagnostic state.
+    pub(super) const fn collected(exit_code: u64) -> Self {
+        Self::Collected(exit_code)
+    }
+
+    /// Return the retained exit code when one exists.
+    pub const fn exit_code(self) -> Option<u64> {
+        match self {
+            Self::None => None,
+            Self::Waitable(exit_code) | Self::Collected(exit_code) => Some(exit_code),
+        }
+    }
+
+    /// Return whether this retained exit status has been collected.
+    pub const fn wait_collected(self) -> bool {
+        matches!(self, Self::Collected(_))
+    }
 }
 
 impl SchedulerTaskSnapshot {
@@ -288,17 +351,16 @@ impl SchedulerTaskSnapshot {
         task_id: u64,
         parent_task_id: Option<u64>,
         state: TaskState,
-        active: bool,
-        kernel_stack_owned: bool,
+        runtime: TaskRuntimeDiagnosticsSnapshot,
+        exit_status: TaskExitStatusDiagnostics,
     ) -> Self {
         Self {
             task_id,
             parent_task_id,
             kind: TaskKindDiagnostics::Kernel,
             state,
-            active,
-            address_space_owned: false,
-            kernel_stack_owned,
+            runtime,
+            exit_status,
             user_virtual_memory: None,
         }
     }
@@ -308,9 +370,8 @@ impl SchedulerTaskSnapshot {
         task_id: u64,
         parent_task_id: Option<u64>,
         state: TaskState,
-        active: bool,
-        address_space_owned: bool,
-        kernel_stack_owned: bool,
+        runtime: TaskRuntimeDiagnosticsSnapshot,
+        exit_status: TaskExitStatusDiagnostics,
         user_virtual_memory: UserVirtualMemorySnapshot,
     ) -> Self {
         Self {
@@ -318,9 +379,8 @@ impl SchedulerTaskSnapshot {
             parent_task_id,
             kind: TaskKindDiagnostics::User,
             state,
-            active,
-            address_space_owned,
-            kernel_stack_owned,
+            runtime,
+            exit_status,
             user_virtual_memory: Some(user_virtual_memory),
         }
     }
@@ -347,17 +407,27 @@ impl SchedulerTaskSnapshot {
 
     /// Return whether this user task is in the active scheduling set.
     pub const fn active(self) -> bool {
-        self.active
+        self.runtime.active
     }
 
     /// Return whether this task still owns a user address space.
     pub const fn address_space_owned(self) -> bool {
-        self.address_space_owned
+        self.runtime.address_space_owned
     }
 
     /// Return whether this task still owns a scheduler-managed kernel stack.
     pub const fn kernel_stack_owned(self) -> bool {
-        self.kernel_stack_owned
+        self.runtime.kernel_stack_owned
+    }
+
+    /// Return the retained exit code for finished task records.
+    pub const fn exit_code(self) -> Option<u64> {
+        self.exit_status.exit_code()
+    }
+
+    /// Return whether the retained exit code has been collected by the parent.
+    pub const fn wait_collected(self) -> bool {
+        self.exit_status.wait_collected()
     }
 
     /// Return user virtual memory bookkeeping for user task records.
@@ -385,6 +455,9 @@ pub struct SchedulerDiagnostics {
     pub(super) user_sleep_wakes: u64,
     pub(super) finished_tasks: u64,
     pub(super) pending_user_exits: u64,
+    pub(super) retained_user_exit_statuses: u64,
+    pub(super) waitable_user_exit_statuses: u64,
+    pub(super) collected_user_exit_statuses: u64,
     pub(super) preemption_state: PreemptionStateDiagnostics,
     pub(super) user_return_preemption_window_closes: u64,
     pub(super) user_return_stack_sets: u64,
@@ -477,6 +550,21 @@ impl SchedulerDiagnostics {
     /// Return the number of finished user exits waiting to be reported.
     pub const fn pending_user_exits(self) -> u64 {
         self.pending_user_exits
+    }
+
+    /// Return the number of retained finished user exit statuses.
+    pub const fn retained_user_exit_statuses(self) -> u64 {
+        self.retained_user_exit_statuses
+    }
+
+    /// Return the number of retained user exits still available to a parent wait.
+    pub const fn waitable_user_exit_statuses(self) -> u64 {
+        self.waitable_user_exit_statuses
+    }
+
+    /// Return the number of retained user exits already collected by a parent wait.
+    pub const fn collected_user_exit_statuses(self) -> u64 {
+        self.collected_user_exit_statuses
     }
 
     /// Return whether timer-driven task switching is currently enabled.
