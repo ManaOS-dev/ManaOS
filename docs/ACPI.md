@@ -34,16 +34,22 @@ The current foundation validates:
   `main.rs` from kernel-owned ACPI topology records.
 - Dry-run IOAPIC redirection entries for timer, keyboard, and mouse vectors
   derived from the architecture-owned APIC routing provider configuration.
+- Guarded IOAPIC MMIO mapping from the composition root before arch-owned
+  register access.
+- Masked IOAPIC redirection entry staging with IOAPIC version, table range,
+  and register readback diagnostics.
 
 The boot smoke logs the validated root table, MADT diagnostics, retained
 interrupt topology, APIC routing provider configuration, and dry-run IOAPIC
-redirection plan before any IOAPIC MMIO writes depend on them.
+redirection plan before staging the planned entries as masked IOAPIC routes.
+It also verifies the IOAPIC MMIO mapping and masked redirection readback while
+keeping hardware interrupt routing inactive.
 
 ## Next Steps
 
-1. Add guarded IOAPIC MMIO register access and program the planned redirection
-   entries.
-2. Switch hardware interrupt EOI handling from legacy PIC to APIC when routing
+1. Switch hardware interrupt EOI handling from legacy PIC to APIC when routing
    is active.
+2. Unmask the staged IOAPIC redirection entries only after APIC EOI handling is
+   available.
 3. Replace legacy PIC routing after IOAPIC validation.
 4. Calibrate and move scheduling ticks to the Local APIC timer.
