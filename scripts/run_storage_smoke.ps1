@@ -47,6 +47,7 @@ $expectedPatterns = @(
     "ACPI parser self-check passed: rsdp=true root_table=true madt=true",
     "ACPI root table verified: source=uefi_acpi[12] revision=.* root_table=(xsdt|rsdt) root_address=0x[0-9a-f]+ root_revision=.* root_length=.* entries=[1-9][0-9]* checksum=true",
     "ACPI MADT verified: address=0x[0-9a-f]+ revision=.* length=.* local_apic=0x[0-9a-f]+ flags=0x[0-9a-f]+ pc_at_compatible=(true|false) entries=[1-9][0-9]* local_apics=.* ioapics=[1-9][0-9]* interrupt_source_overrides=.* local_apic_nmis=.* local_apic_address_overrides=.* x2apics=.* checksum=true",
+    "ACPI interrupt topology verified: retained_local_apics=[1-9][0-9]* retained_ioapics=[1-9][0-9]* retained_interrupt_source_overrides=.* retained_local_apic_nmis=.* retained_x2apics=.* topology_truncated=false local_apic0_processor=.* local_apic0_id=.* local_apic0_flags=0x[0-9a-f]+ local_apic0_enabled=(true|false) local_apic0_online_capable=(true|false) ioapic0_id=.* ioapic0_address=0x[0-9a-f]+ ioapic0_gsi_base=.* legacy_irq0_gsi=.* legacy_irq0_flags=0x[0-9a-f]+ legacy_irq1_gsi=.* legacy_irq12_gsi=.* local_apic_nmi0_lint=.* x2apic0_present=(true|false) x2apic0_id=.* x2apic0_uid=.* x2apic0_flags=0x[0-9a-f]+ x2apic0_enabled=(true|false) x2apic0_online_capable=(true|false)",
     "Dynamic kernel mapping lifecycle self-check passed: map=true unmap=true virtual_reuse=true physical_reuse=true",
     "User address-space template self-check passed: kernel_shared=true user_window_empty=true",
     "User address-space reclaim self-check passed: user_pages=1 page_table_pages=4",
