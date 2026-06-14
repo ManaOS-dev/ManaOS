@@ -76,7 +76,8 @@ just lint
 
 ### 3. Documentation
 - All `pub` functions, structs, and enums must have `///` doc comments.
-- Use English for all comments and documentation to ensure global accessibility.
+- Use English for Rust comments and Rust doc comments. Markdown documents follow
+  the documentation language policy above.
 
 ### 4. Naming
 - Avoid unclear local abbreviations such as `fb_info`, `h`, and `v`.
@@ -138,15 +139,22 @@ follow-up validation.
 
 ### 1. HAL (Hardware Abstraction Layer)
 Strictly separate architecture-dependent code from generic logic to support future architectures (e.g., AArch64).
-- **`kernel/`**: Platform-independent logic (scheduler, filesystem, network stack, etc.).
-- **`arch/x86_64/`**: CPU-specific implementations (GDT, IDT, page table manipulation, context switching, etc.).
+- **`src/kernel/`**: Platform-independent kernel policy such as memory, task
+  scheduling, syscalls, filesystems, drivers, diagnostics, console services,
+  and runtime services.
+- **`src/arch/x86_64/`**: CPU-specific implementations such as GDT, IDT,
+  interrupt-controller setup, context switching, and architecture entry paths.
 - **Interface**: Kernel core interacts only through abstraction APIs provided by the `arch::` module.
 - **Interrupt Boundary**: `arch/` must not call `kernel::...` directly. Interrupt handlers dispatch to callbacks registered by `main.rs`.
 
 ### 2. Trait-Driven Driver Design
-Abstract device drivers using traits to allow modular expansion.
-- **Console Trait**: Treat Serial, GOP, etc., as common Write operations.
-- **BlockDevice Trait**: Abstract disk access for AHCI, NVMe, etc.
+Keep driver abstractions narrow and local to the device class that needs them.
+- **BlockDevice trait**: Storage code uses an internal block-device interface
+  for AHCI devices, partitions, and filesystem parsers.
+- **Console and display path**: Serial logging uses `core::fmt::Write`, while
+  framebuffer output flows through display commands, the renderer, and the
+  framebuffer driver. Do not introduce a broad console/display trait without a
+  design document update.
 
 ### 3. Type-Safe Memory Management (Newtype Pattern)
 Distinguish between physical and virtual addresses at the type level to prevent bugs.
@@ -159,8 +167,6 @@ Distinguish between physical and virtual addresses at the type level to prevent 
 - **Static Analysis**: Strictly enforced `cargo clippy` checks (`just lint`).
 - **Documentation**: All `pub` items must have `///` doc comments.
 - **Auto Documentation**: Visualize internal structures with `cargo doc`.
-
----
 
 ---
 

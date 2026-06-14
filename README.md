@@ -7,7 +7,8 @@
 - **HAL Architecture**: Strict separation between hardware-specific and generic kernel logic.
 - **Callback-Based Interrupt Wiring**: `arch/` handles hardware interrupts without directly depending on `kernel/`.
 - **Boot/Runtime Split**: `main.rs` wires the system together while boot and runtime modules own focused initialization and tick processing.
-- **Developer-First API**: Ergonomic and intuitive APIs (e.g., `graphics.DrawText`).
+- **Developer-First API Direction**: Ergonomic APIs with Rust-style naming,
+  such as future drawing helpers like `graphics.draw_text`.
 - **Global Collaboration**: English-first documentation and standard PR-based workflow.
 - **Modern Tooling**: Seamless build and run experience with `just` and `qemu`.
 
@@ -69,6 +70,7 @@ The repository is intentionally split by ownership boundary:
 | `docs/` | English design documents and validation guides. |
 | `docs/ja/` | Japanese companion documents for discussion and onboarding. |
 | `scripts/` | Host-side PowerShell tooling for disk images, smoke runs, license generation, and boundary checks. |
+| `templates/` | Copy-start templates for modules, drivers, design docs, and commit messages. |
 | `esp/` | UEFI system partition assets copied into the QEMU boot image. |
 
 Before changing a subsystem, read the nearest design document and the module's
@@ -110,6 +112,7 @@ for smoother discussion and onboarding.
 | Task priority | [docs/TASK_PRIORITY.md](docs/TASK_PRIORITY.md) | [docs/ja/TASK_PRIORITY.ja.md](docs/ja/TASK_PRIORITY.ja.md) |
 | Active TODO | [TODO.md](TODO.md) | [TODO.ja.md](TODO.ja.md) |
 | Completed TODO archive | [TODO_COMPLETED.md](TODO_COMPLETED.md) | [TODO_COMPLETED.ja.md](TODO_COMPLETED.ja.md) |
+| Templates | [templates/README.md](templates/README.md) | [templates/README.ja.md](templates/README.ja.md) |
 | Security policy | [SECURITY.md](SECURITY.md) | [SECURITY.ja.md](SECURITY.ja.md) |
 | Third-party licenses | [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) | [THIRD_PARTY_LICENSES.ja.md](THIRD_PARTY_LICENSES.ja.md) |
 

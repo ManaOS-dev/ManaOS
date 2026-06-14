@@ -101,8 +101,9 @@ module を追加します。
 
 ## 新しいドライバの追加 (チェックリスト)
 
-- [ ] `templates/driver.rs.template` をコピーして開始する
+- [ ] `templates/README.md` を読んでから、`templates/driver.rs.template` をコピーして開始する
 - [ ] `mod.rs` にモジュールの責務に関するコメントを書く
 - [ ] すべての `static` 変数は `private` にする
 - [ ] 割り込みハンドラではハードウェア読み取り、通知、登録済みコールバックへの配送だけを行う
-- [ ] すべての処理はメインループから呼ばれる `process()` に記述する
+- [ ] main-loop work は `process_packets`、`process_input`、`process_events` など、
+      内容が分かる `process_*` entry point に置く

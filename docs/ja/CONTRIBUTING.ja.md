@@ -79,7 +79,8 @@ just lint
 
 ### 3. ドキュメントの記述
 - すべてのパブリックな項目 (`pub` 関数、構造体、列挙型など) には、`///` を使用したドキュメントコメントを記述してください。
-- 内部的なロジックが複雑な場合は、適宜インラインコメントを追加してください。
+- Rust のコメントと Rust doc comment は英語で書いてください。Markdown 文書は上記の言語ポリシーに従います。
+- 内部的なロジックが複雑な場合は、英語のインラインコメントを最小限追加してください。
 
 ### 4. 命名
 - `fb_info`、`h`、`v` のような不明瞭なローカル略語は避けてください。
@@ -135,15 +136,15 @@ local で command を実行できない場合は、正確な理由と必要な f
 
 ### 1. HAL (Hardware Abstraction Layer)
 アーキテクチャ依存のコードと、OS のコアロジックを厳格に分離します。これにより、将来的な他アーキテクチャ（AArch64 など）への対応を容易にします。
-- **`src/kernel/`**: プラットフォームに依存しないロジック（スケジューラ、ファイルシステム、ネットワークスタックなど）。
-- **`src/arch/x86_64/`**: CPU 固有の実装（GDT, IDT, ページテーブル操作、コンテキストスイッチなど）。
+- **`src/kernel/`**: memory、task scheduling、syscall、filesystem、driver、diagnostics、console service、runtime service など、プラットフォームに依存しない kernel policy。
+- **`src/arch/x86_64/`**: GDT、IDT、interrupt-controller setup、context switching、architecture entry path など、CPU 固有の実装。
 - **インターフェース**: カーネルコアは `arch::` モジュールが提供する抽象化 API を通じてのみハードウェアを操作します。
 - **割り込み境界**: `arch/` は `kernel::...` を直接呼びません。割り込みハンドラは `main.rs` が登録したコールバックへ配送します。
 
 ### 2. トレイト駆動のドライバ設計
-デバイスドライバを Rust のトレイトで抽象化し、モジュール式の拡張を可能にします。
-- **Console トレイト**: シリアルポートや GOP フレームバッファなどを、共通の書き込み操作として扱います。
-- **BlockDevice トレイト**: AHCI, NVMe などの異なるディスクアクセスを抽象化します。
+driver abstraction は、それを必要とする device class の近くに小さく置きます。
+- **BlockDevice trait**: storage code は、AHCI device、partition、filesystem parser 用に内部 block-device interface を使います。
+- **Console / display path**: serial logging は `core::fmt::Write` を使い、framebuffer output は display command、renderer、framebuffer driver を通ります。広い console/display trait を追加する場合は、先に design document を更新してください。
 
 ### 3. 型安全なメモリ管理 (Newtype パターン)
 物理アドレスと仮想アドレスを型レベルで厳密に区別し、誤用によるバグを防ぎます。

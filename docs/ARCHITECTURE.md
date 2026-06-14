@@ -116,8 +116,9 @@ putting business logic in `mod.rs`.
 
 ## Adding a New Driver (Checklist)
 
-- [ ] Copy `templates/driver.rs.template` to start.
+- [ ] Read `templates/README.md`, then copy `templates/driver.rs.template` to start.
 - [ ] Write module responsibility comments in `mod.rs`.
 - [ ] Keep all static variables `private`.
 - [ ] Interrupt handlers must only read hardware, acknowledge, and dispatch to a registered callback.
-- [ ] All processing must occur in `process()` called from the main loop.
+- [ ] Main-loop work must use a descriptive `process_*` entry point such as
+      `process_packets`, `process_input`, or `process_events`.

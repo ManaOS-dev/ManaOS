@@ -282,8 +282,7 @@ push `origin/master`, and delete the task branch after success.
    working-tree changes to include.
 2. Create a focused branch such as `feature/...`, `fix/...`, `refactor/...`, or
    `docs/...`.
-3. Commit with a clear English message. Conventional Commit prefixes are
-   optional, not mandatory.
+3. Commit with a clear English message that follows the commit rules below.
 4. Run the relevant checks before merging. For Rust code, run `cargo fmt`,
    `cargo check`, and `cargo clippy --all-targets --all-features`; run
    `just lint` when the change touches kernel/userland boundaries.
@@ -292,7 +291,48 @@ push `origin/master`, and delete the task branch after success.
 
 ---
 
-## 12. Markdown And Documentation Maintenance
+## 12. Commit Message And History Rules
+
+Commit history is part of the maintainer workflow. Agents must keep it readable
+and recoverable.
+
+### Commit Message Format
+
+- Use English only.
+- Use a concise imperative subject line, for example
+  `Polish documentation templates`.
+- Conventional Commit prefixes are optional. Use them only when they make the
+  change type clearer, for example `docs: ...`, `fix: ...`, or `refactor: ...`.
+- Keep the subject focused on the change, not on the tool or agent that made it.
+- For non-trivial changes, include a short body with the reason and validation
+  commands.
+- Do not mention skipped checks unless the reason is specific and actionable.
+
+### Commit Scope
+
+- Prefer one verified commit per focused task branch.
+- Do not mix unrelated code, documentation, generated metadata, and formatting
+  churn in the same commit.
+- If generated files change, mention the generator command in the commit body
+  or handoff notes.
+- If a commit updates `TODO.md`, keep the completed/unfinished split consistent
+  in the same commit.
+
+### History Cleanup
+
+- Do not rewrite `master` history unless the project owner explicitly requests
+  it.
+- Before rewriting `master`, create a backup branch that points to the exact
+  pre-rewrite tip.
+- Prefer non-interactive history cleanup commands with an explicit base commit.
+- Use `--force-with-lease` rather than an unconditional force push when pushing
+  rewritten `master`.
+- After cleanup, verify that `master` is clean, the backup branch exists, and
+  the intended commit range was rewritten.
+
+---
+
+## 13. Markdown And Documentation Maintenance
 
 Documentation is part of the project contract. Agents must keep Markdown files
 accurate, navigable, and synchronized with implementation reality.
