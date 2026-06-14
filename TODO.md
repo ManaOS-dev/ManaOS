@@ -1,225 +1,562 @@
 # ManaOS TODO
 
 This roadmap intentionally lists only unfinished work. Completed historical
-items have been removed so the file stays useful for deciding the next task.
+items live in [`TODO_COMPLETED.md`](TODO_COMPLETED.md).
 
-## Immediate Priorities
+Keep each checked-off item backed by a focused branch, a clear commit, and the
+narrowest useful verification command. Split any item that grows beyond one
+reviewable unit before implementing it.
 
-- [x] Set `NO_EXECUTE` on non-executable kernel and user mappings where appropriate.
-- [x] Avoid parsing font data on every `draw_text` call; cache parsed font faces.
-- [x] Replace the display command queue with a design that is correct for multi-producer use.
-- [x] Replace cursor backup dimensions with the cursor size constant.
-- [x] Split kernel console command dispatch into command-focused modules once more commands are added.
+## Phase 1: Process Lifecycle And User Program Execution
 
-## Phase 5: Filesystem And Storage
+### `execve` And Image Replacement
 
-### Storage Driver
+- [ ] Define the kernel-side `execve` contract for path, argv, envp, and file descriptor inheritance.
+- [ ] Add the shared syscall number and ABI constants for `execve`.
+- [ ] Add a no-std userland wrapper for `execve`.
+- [ ] Copy `argv` strings through the existing user pointer validation policy.
+- [ ] Copy `envp` strings through the existing user pointer validation policy.
+- [ ] Bound total argument and environment bytes with a documented limit.
+- [ ] Resolve executable paths through the current process filesystem namespace.
+- [ ] Reject directory targets with a stable errno value.
+- [ ] Reject non-ELF targets with a stable errno value.
+- [ ] Reuse the existing ELF validation path for `execve` images.
+- [ ] Replace the current user address space without leaking old user frames.
+- [ ] Preserve process ID across successful `execve`.
+- [ ] Preserve parent-child relationship across successful `execve`.
+- [ ] Reset user signal-like runtime state that should not survive image replacement.
+- [ ] Preserve current working directory across successful `execve`.
+- [ ] Preserve open file descriptors that do not have close-on-exec semantics.
+- [ ] Add close-on-exec metadata to file descriptors.
+- [ ] Close descriptors marked close-on-exec during successful `execve`.
+- [ ] Replace the user stack with a freshly built argv/envp stack image.
+- [ ] Add `execve` diagnostics to the `tasks` console command.
+- [ ] Add a boot smoke case that `execve`s a second user program from `/disk`.
+- [ ] Add a failure smoke case for `execve` on a missing path.
+- [ ] Add a failure smoke case for `execve` on a directory path.
+- [ ] Document `execve` ownership and cleanup invariants in the process lifecycle docs.
 
-- [x] Turn the AHCI probe path into a persistent block-device service instead of a boot-only smoke test.
-- [x] Add a storage device registry with stable device identifiers.
-- [x] Support multi-sector reads in the AHCI command path.
-- [x] Support reads that cross FAT32 cluster boundaries.
-- [x] Add AHCI error propagation instead of returning only `bool`.
-- [x] Add AHCI interrupt-driven completion as an alternative to polling.
-- [x] Add cache invalidation or explicit ownership rules for DMA buffers.
-- [x] Add write support for AHCI sectors after read-only storage is stable.
-- [x] Add a QEMU storage test mode that boots and verifies expected serial log lines automatically.
+### `waitpid`, Exit Status, And Reaping
 
-### Partition And Filesystem Parsing
+- [ ] Define the `waitpid` syscall contract and supported option subset.
+- [ ] Add the shared syscall number and ABI constants for `waitpid`.
+- [ ] Add a no-std userland wrapper for `waitpid`.
+- [ ] Add scheduler-owned child exit records keyed by parent process ID.
+- [ ] Preserve exit status until the parent reaps the child.
+- [ ] Return `ECHILD` when the caller has no matching child.
+- [ ] Return `EINTR` only after an interrupt policy exists, or document that it is unsupported.
+- [ ] Support blocking wait for any child.
+- [ ] Support nonblocking wait with a minimal `WNOHANG` equivalent.
+- [ ] Prevent double-reaping of the same child exit record.
+- [ ] Reparent orphaned children to a documented initial process policy.
+- [ ] Reclaim finished child address spaces after the exit record is safe.
+- [ ] Reclaim finished child kernel stacks after the exit record is safe.
+- [ ] Expose zombie and reaped counts in scheduler diagnostics.
+- [ ] Add `tasks` output for waiting, zombie, and reaped states.
+- [ ] Add a userland smoke program that spawns a child and waits for exit.
+- [ ] Add a userland smoke program that verifies a nonzero child exit status.
+- [ ] Add a negative smoke case for waiting on a non-child PID.
+- [ ] Document parent-child lifecycle state transitions.
+- [ ] Add serial assertions for the wait lifecycle smoke path.
 
-- [x] Fall back to the backup GPT header when the primary header is invalid.
-- [x] Support selecting a partition by type GUID or name instead of always selecting the first entry.
-- [x] Validate FAT32 backup boot sector.
-- [x] Implement FAT32 long file name entries.
-- [x] Implement FAT32 directory traversal beyond the root directory.
-- [x] Implement FAT32 file reads across full cluster chains.
-- [x] Detect FAT32 cluster chain loops and invalid cluster numbers.
-- [x] Implement FAT32 read-only directory listing API.
-- [x] Add FAT32 write planning before mutating disk images.
+### Spawn Model And Fork Decision
 
-### Virtual Filesystem
+- [ ] Decide whether the first stable process model is `spawn` plus `execve` or a minimal `fork`.
+- [ ] Document why copy-on-write `fork` is deferred if `spawn` is selected.
+- [ ] Define a kernel-internal spawn helper for creating a process from a filesystem path.
+- [ ] Define how inherited file descriptors are selected for spawned processes.
+- [ ] Define how current working directory is inherited by spawned processes.
+- [ ] Define how argv and envp are represented before user stack construction.
+- [ ] Add scheduler metadata for spawned process origin.
+- [ ] Add a userland runtime helper for launching a child program.
+- [ ] Add errno mappings for spawn path lookup failures.
+- [ ] Add errno mappings for spawn memory allocation failures.
+- [ ] Add a smoke case for two concurrently spawned user programs.
+- [ ] Add a smoke case for parent exit while child remains alive.
+- [ ] Add docs that compare the selected model with POSIX `fork` expectations.
+- [ ] Add TODO links from deferred `fork` work to the address-space copy plan.
 
-- [x] Add a real mount table with mount points and filesystem backends.
-- [x] Mount FAT32 as a filesystem backend instead of copying one boot-time file into memory.
-- [x] Add path traversal for directories and nested files.
-- [x] Add file metadata operations such as `stat`.
-- [x] Add `seek` support to file descriptors.
-- [x] Add directory handles and `readdir` support.
-- [x] Add read-only and writable mount flags.
-- [x] Return richer filesystem errors and map them consistently to syscall errno values.
-- [x] Add `/dev` directory listing.
-- [x] Decide and document pathname normalization rules for `..`, repeated slashes, and trailing slashes.
+### Minimal User Shell
 
-### Kernel Console Commands
+- [ ] Add a minimal userland shell binary to the userland build.
+- [ ] Start the userland shell as the initial interactive process after smoke gating.
+- [ ] Implement fixed-buffer command reading from stdin.
+- [ ] Implement whitespace tokenization without heap allocation.
+- [ ] Implement absolute path execution for user programs.
+- [ ] Implement relative path execution using the current working directory.
+- [ ] Implement `cd` through a user-visible syscall or runtime helper.
+- [ ] Implement `pwd` using the userland runtime path API.
+- [ ] Implement `exit` with a configurable status code.
+- [ ] Implement `help` with commands compiled into the shell.
+- [ ] Implement single-command execution without pipelines first.
+- [ ] Add fixed-buffer argv construction for command execution.
+- [ ] Add bounded error messages for command failures.
+- [ ] Add shell smoke logs for launching `file_demo`.
+- [ ] Add shell smoke logs for a missing command.
+- [ ] Keep the kernel console available while the user shell is experimental.
+- [ ] Document how to enter and leave the user shell in QEMU.
 
-- [x] Split command parsing and individual commands out of `kernel::console::mod.rs`.
-- [x] Add `ls`.
-- [x] Add `pwd`.
-- [x] Add `cd`.
-- [x] Add `stat`.
-- [x] Add `mounts`.
-- [x] Add `hexdump`.
-- [x] Add `grep`.
-- [x] Add single-pipe command execution with `command | command`.
-- [x] Add command history.
-- [x] Add cursor movement and line editing.
-- [x] Add scrollback for console output.
-- [x] Make `cat /disk/hello.txt` a manual smoke test in the docs.
+### User Process Scheduling
 
-## Phase 6: Userland
+- [ ] Extend timer preemption across general spawned user process lifecycles.
+- [ ] Save the full runtime user trap frame for every preempted user process.
+- [ ] Restore the full runtime user trap frame for resumed user processes.
+- [ ] Cover syscall return frames and timer interrupt frames with one scheduler path.
+- [ ] Verify that each user task resumes with its own address-space root.
+- [ ] Verify that each user task resumes with its own kernel stack.
+- [ ] Prevent scheduling a task while its address space is being reclaimed.
+- [ ] Add scheduler assertions for impossible active, finished, and reclaiming transitions.
+- [ ] Add diagnostics for last preemption reason per task.
+- [ ] Add diagnostics for last resume path per task.
+- [ ] Add a storage smoke case with three active user processes.
+- [ ] Add a storage smoke case where one preempted process exits while another continues.
+- [ ] Document scheduler invariants for active, waiting, zombie, and reaped tasks.
 
-### ELF And Process Loading
+## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 
-- [x] Implement a 64-bit ELF loader.
-- [x] Validate ELF headers, program headers, and segment permissions.
-- [x] Map user text, rodata, data, bss, stack, and guard pages with correct flags.
-- [x] Pass `argc`, `argv`, and environment pointers to user entry points.
-- [x] Load user programs from the filesystem instead of `include_bytes!`.
-- [ ] Add `execve`.
-- [x] Add process identifiers and parent-child relationships.
-- [ ] Add `wait` or `waitpid`.
-- [ ] Add a minimal user shell process.
-- [x] Add a userland test program that opens `/disk/hello.txt`.
+### Typed Address Boundaries
 
-### Syscall Surface
+- [ ] Replace raw physical address parameters with `PhysAddr` in remaining memory APIs.
+- [ ] Replace raw virtual address parameters with `VirtAddr` in remaining memory APIs.
+- [ ] Add typed page-aligned address wrappers where alignment is required by construction.
+- [ ] Add typed page count wrappers for APIs that distinguish bytes from pages.
+- [ ] Add typed frame count wrappers for frame allocator APIs.
+- [ ] Replace raw `u64` address values in scheduler diagnostics snapshots.
+- [ ] Replace raw `u64` address values in task metadata where feasible.
+- [ ] Replace raw `u64` address values in storage DMA setup boundaries.
+- [ ] Replace raw `u64` address values in ELF segment mapping boundaries.
+- [ ] Replace raw `u64` address values in syscall memory helpers.
+- [ ] Add conversion helpers with explicit checked failure modes.
+- [ ] Add docs for when raw numeric addresses are still allowed.
+- [ ] Add compile-time layout assertions where typed wrappers cross assembly-facing structs.
+- [ ] Add tests or smoke assertions for representative typed address conversions.
 
-- [x] Define syscall numbers and ABI in a shared generated or copied contract for kernel and userland.
-- [x] Add `lseek`.
-- [x] Add `stat` or `newfstatat`.
-- [x] Add `getdents64`.
-- [x] Add `brk` as the first heap-growth syscall.
-- [x] Add an anonymous `mmap`/`munmap` syscall subset.
-- [x] Support partial anonymous `munmap` with mapping-record splits.
-- [x] Support non-overlapping fixed-address anonymous mappings.
-- [x] Add file-backed private `mmap` for current VFS file descriptors.
-- [x] Add replacement `MAP_FIXED` for private user mappings.
-- [x] Add `nanosleep` or a minimal sleep syscall.
-- [ ] Add `fork` or document why the first process model uses `spawn`/`exec` instead.
-- [x] Add syscall tracing controls.
+### Kernel Stack Guards
 
-### Userland Runtime
+- [ ] Finish guard pages for bootstrap kernel stacks.
+- [ ] Finish guard pages for architecture-owned TSS stacks.
+- [ ] Finish guard pages for IST stacks.
+- [ ] Represent bootstrap stack ownership in memory diagnostics.
+- [ ] Represent TSS stack ownership in memory diagnostics.
+- [ ] Represent IST stack ownership in memory diagnostics.
+- [ ] Add page fault diagnostics that identify a bootstrap stack guard hit.
+- [ ] Add page fault diagnostics that identify a TSS stack guard hit.
+- [ ] Add page fault diagnostics that identify an IST stack guard hit.
+- [ ] Add a documented policy for which stacks may be shared during early boot.
+- [ ] Add a documented policy for when bootstrap stacks stop being used.
+- [ ] Add a boot-time self-check for kernel stack guard placement.
+- [ ] Add a smoke assertion for scheduler-owned stack guard diagnostics.
+- [ ] Document all kernel stack classes in `docs/KERNEL_STACKS.md`.
 
-- [x] Grow the no-std userland support crate into a small runtime.
-- [x] Add panic handling that exits with a clear status.
-- [ ] Add basic formatting helpers for userland output.
-- [x] Add file descriptor wrappers in userland.
-- [x] Add argument parsing helpers.
-- [x] Add fixed-buffer userland command modules with single-pipe execution.
-- [x] Add build scripts for multiple userland binaries.
-- [x] Add a userland smoke-test runner.
+### Address Space Lifecycle
 
-## Phase 7: Kernel Hardening
+- [ ] Add explicit address-space state transitions for building, active, exiting, and reclaimed states.
+- [ ] Prevent `execve` from publishing a partially built address space.
+- [ ] Ensure failed `execve` cleanup returns all newly allocated frames.
+- [ ] Ensure failed spawn cleanup returns all newly allocated frames.
+- [ ] Track page-table frame ownership per process in diagnostics.
+- [ ] Track mapped user frame ownership per process in diagnostics.
+- [ ] Track guard page virtual reservations per process in diagnostics.
+- [ ] Add per-process address-space reclaim counters.
+- [ ] Add serial smoke assertions for address-space reclaim after process exit.
+- [ ] Add serial smoke assertions for address-space reclaim after failed image load.
+- [ ] Add documentation for address-space publication and rollback.
+- [ ] Audit address-space APIs for init-order assumptions.
 
-### Memory Management
+### User Mapping Policy
 
-- [x] Audit `PhysicalFrameAllocator` call sites and document reusable ownership invariants.
-- [x] Replace the bump frame allocator with a reusable physical frame allocator.
-- [x] Track reserved, used, and free physical frame ranges.
-- [x] Design ownership rules for free, used, and reserved physical frame ranges.
-- [x] Add a kernel virtual memory allocator for dynamic mappings, including writable NX mapping and generic unmap/free for kernel ranges.
-- [x] Add visible frame allocator owner diagnostics to the `memory` console command and status strip.
-- [ ] Add guard pages for kernel stacks; scheduler-owned task stacks now have mapped writable pages, unmapped virtual guards, and guard-fault diagnostics. Bootstrap/IST stacks remain.
-- [x] Design kernel stack guard page placement and fault diagnostics.
-- [x] Add per-process page tables; user smoke tasks now own separate address-space roots for ELF and stack mappings.
-- [x] Reclaim finished user address spaces and return tracked user/page-table frames to the allocator.
-- [x] Reclaim finished user task kernel stacks after `SYS_EXIT`.
-- [x] Document the page ownership model required before per-process page tables.
-- [x] Add copy-in/copy-out helpers with consistent user pointer validation.
-- [x] Define a syscall-by-syscall user pointer validation policy.
-- [x] Enforce writable, user, and executable page permissions in syscall validation.
-- [x] Add boot-time self-checks for kernel and user mapping permissions.
-- [x] Audit identity mapping lifetime and shrink it when possible.
-- [x] Identify identity mappings that can be removed after boot-time hardware setup.
-- [ ] Add typed physical and virtual address wrappers where raw `u64` still leaks across boundaries.
-- [x] Inventory APIs where raw `u64` physical or virtual addresses cross module boundaries.
-- [x] Add page fault diagnostics that include the current task and access type.
+- [ ] Add named permission presets for user text, rodata, data, heap, stack, and MMIO-denied mappings.
+- [ ] Audit every user mapping call site for writable and executable flag combinations.
+- [ ] Add a policy test that rejects writable executable user mappings unless explicitly allowed.
+- [ ] Add a policy test that rejects kernel-access-only pages from user pointer validation.
+- [ ] Add page fault messages that report expected mapping class.
+- [ ] Add `tasks` output that groups mappings by class.
+- [ ] Add a userland fault smoke for executing non-executable data.
+- [ ] Add a userland fault smoke for writing read-only rodata.
+- [ ] Add a userland fault smoke for reading an unmapped guard page.
+- [ ] Document mapping classes in `docs/MEMORY_MANAGEMENT.md`.
 
-### Interrupts And Scheduling
+### Heap And `mmap`
 
-- [x] Parse ACPI RSDP and XSDT/RSDT.
-- [x] Parse ACPI MADT.
-- [x] Enable IOAPIC routing; APIC routing provider data now produces dry-run IOAPIC redirection entries, masked MMIO staging with readback diagnostics, Local APIC EOI-provider diagnostics, unified EOI dispatch, active route unmasking, and APIC EOI count diagnostics.
-- [x] Replace legacy PIC routing after IOAPIC is stable; normal APIC boots now keep the legacy PIC masked and fallback-disabled, while the legacy PIC path remains for boots without APIC routing provider data.
-- [x] Calibrate and use the Local APIC timer; boot now calibrates from a masked sample, masks the IOAPIC PIT timer route, and runs scheduler ticks from a periodic Local APIC timer.
-- [x] Replace PIT scheduling ticks after Local APIC timer validation.
-- [x] Add broader interrupt-controller diagnostics for Local APIC spurious vectors and unexpected external vectors.
-- [ ] Save and restore a full user trap frame on interrupt and syscall paths; one-shot user entry restores an initial full trap frame, SYSCALL entry captures runtime user frames on the task kernel stack, and the x86_64 timer interrupt entry now captures, records, preempts, and resumes Ring 3 timer contexts. Broader multi-process lifecycle coverage remains.
-- [x] Design the full user trap frame register layout.
-- [x] Document the interrupt and syscall register sets that must be saved.
-- [x] Make preemptive scheduling safe for the current one-shot user task path.
-- [x] Add separate user stack slots so multiple user task records can coexist in the shared address space.
-- [x] Prove timer preemption and resume across two user task records in storage smoke.
-- [ ] Extend preemptive user scheduling across full process lifecycle paths now that user tasks own separate address spaces.
-- [x] Allow multiple active user tasks to be scheduled by timer preemption in the current smoke lifecycle.
-- [x] Move next active user task selection into the scheduler-owned lifecycle path.
-- [x] Add a scheduler-owned active user lifecycle drain API for current smoke tasks.
-- [x] Checklist the prerequisites for enabling user task preemption.
-- [x] Add scheduler accounting and task state diagnostics.
-- [x] Add a visible `tasks` console command for scheduler and user-preemption diagnostics.
-- [x] Expose user virtual memory layout and per-task VM snapshots in `tasks`.
-- [x] Add a scheduler/preemption status strip to the console overlay.
-- [x] Add user kernel stack reclaim accounting to scheduler diagnostics and the console overlay.
-- [x] Aggregate finished user task resource reclaim inside the scheduler lifecycle path.
-- [x] Add per-task scheduler snapshots to the visible `tasks` console command.
-- [ ] Add kernel stack switching per task where needed; user task stacks are installed before entry and timer-context resume, Ring 3 timer interrupts use the installed TSS stack and save their raw frame there, and SYSCALL switches onto the task kernel stack. Bootstrap/IST stacks remain.
-- [x] Design the per-task kernel stack switching policy.
+- [ ] Add `mprotect` planning for changing user mapping permissions.
+- [ ] Add `mremap` planning for growing and moving mappings.
+- [ ] Add shared anonymous mapping planning, or document why it is deferred.
+- [ ] Add file-backed mapping writeback planning, or document why private-only mappings remain.
+- [ ] Add map-count limits per process.
+- [ ] Add total mapped-byte limits per process.
+- [ ] Add errno coverage for map-count exhaustion.
+- [ ] Add errno coverage for address-space exhaustion.
+- [ ] Add stress smoke for many small anonymous mappings.
+- [ ] Add stress smoke for alternating partial `munmap` operations.
+- [ ] Add userland runtime helpers for page size and mapping flags.
+- [ ] Document `brk` and `mmap` interaction rules.
 
-### Context Switch And Task Refactoring
+## Phase 3: Synchronization, Interrupt Context, And Scheduler Robustness
 
-- [x] Separate kernel task context and user task context responsibilities.
-- [x] Document the context switch ABI.
-- [x] Verify the `UserTrapFrame` register layout against `context_switch.s` offsets.
-- [x] Move user task exit and run-once lifecycle handling into a process lifecycle module.
-- [x] Replace the global user-exit result latch with a scheduler-owned finished user exit queue.
-- [x] Add explicit set/take invariants for the one-shot user exit return stack window.
-- [x] Close scheduler preemption from `SYS_EXIT` before returning through the one-shot exit stack.
-- [x] Expose user-exit preemption window close accounting in scheduler diagnostics.
-- [x] Replace boolean preemption diagnostics with explicit scheduler preemption states.
-- [x] Normalize user task scheduler state transitions.
-- [x] Define the task metadata model needed before process identifiers and parent-child relationships.
+### Interrupt-Time Lock Audit
 
-### Synchronization And Concurrency
+- [ ] Inventory every lock that can be reached from interrupt context.
+- [ ] Inventory every lock that can be reached from exception context.
+- [ ] Inventory every lock that can be reached from syscall context.
+- [ ] Mark APIs that are interrupt-callable in module documentation.
+- [ ] Mark APIs that must never be interrupt-callable in module documentation.
+- [ ] Add lock ordering notes for memory, scheduler, console, storage, and input subsystems.
+- [ ] Add assertions or diagnostics for lock acquisition in forbidden contexts where practical.
+- [ ] Audit serial logging from interrupt and exception paths.
+- [ ] Audit console rendering from interrupt and exception paths.
+- [ ] Audit allocator calls from interrupt and exception paths.
+- [ ] Audit storage completion paths for lock ordering.
+- [ ] Audit scheduler tick paths for lock ordering.
+- [ ] Document known interrupt-time lock risks before changing queue primitives.
 
-- [ ] Audit all interrupt-time locks for deadlock and priority inversion risk.
-- [ ] Replace queues that have mismatched producer/consumer assumptions.
-- [ ] Add explicit single-producer/single-consumer and multi-producer queue types.
-- [ ] Define which APIs are callable from interrupt context.
-- [ ] Add lock ordering notes for kernel subsystems.
+### Queue Primitive Cleanup
 
-## Phase 8: Drivers And Hardware
+- [ ] Define a single-producer single-consumer queue type.
+- [ ] Define a multi-producer single-consumer queue type.
+- [ ] Define a bounded interrupt-safe byte queue type.
+- [ ] Replace input queues that assume a different producer count than they actually have.
+- [ ] Replace display queues that assume a different producer count than they actually have.
+- [ ] Add overflow counters for interrupt-fed queues.
+- [ ] Add drop-policy documentation for input queues.
+- [ ] Add backpressure documentation for non-interrupt queues.
+- [ ] Add unit-level tests for queue wraparound behavior where host tests are possible.
+- [ ] Add boot smoke diagnostics for queue overflow counters.
+- [ ] Document which queue types may be used with interrupts disabled.
 
-### Input
+### Scheduler State Machine
+
+- [ ] Define a single enum for user task runnable, waiting, zombie, and reclaimed states.
+- [ ] Remove duplicated task state transition logic from scheduler submodules.
+- [ ] Add transition helper functions with documented preconditions.
+- [ ] Add transition diagnostics for invalid state changes.
+- [ ] Add per-state task counters to scheduler snapshots.
+- [ ] Add a scheduler invariant check that runs during storage smoke.
+- [ ] Add a scheduler invariant check that can be triggered from the `tasks` command.
+- [ ] Add timeout-aware waiting state for sleep and waitpid.
+- [ ] Add wake reason diagnostics for sleeping tasks.
+- [ ] Add wake reason diagnostics for waitpid tasks.
+- [ ] Document state transitions in a scheduler lifecycle diagram.
+
+### Syscall And Trap Robustness
+
+- [ ] Audit syscall entry for all clobbered registers.
+- [ ] Audit syscall return for user flags handling.
+- [ ] Audit syscall return for canonical user instruction pointers.
+- [ ] Audit syscall return for canonical user stack pointers.
+- [ ] Add negative tests for invalid syscall numbers.
+- [ ] Add negative tests for unsupported syscall flags.
+- [ ] Add tracing controls per process instead of global-only tracing.
+- [ ] Add syscall latency counters for slow path diagnostics.
+- [ ] Add syscall failure counters grouped by errno.
+- [ ] Add trap diagnostics that include process ID and thread-like task ID.
+- [ ] Document syscall argument ownership rules for pointer and scalar arguments.
+
+### Timer And Preemption Policy
+
+- [ ] Add configurable scheduler quantum constants with rationale comments.
+- [ ] Add diagnostics for missed timer ticks.
+- [ ] Add diagnostics for timer ticks skipped while interrupts are masked.
+- [ ] Add a preemption disable counter for critical scheduler sections.
+- [ ] Add assertions for unbalanced preemption disable scopes.
+- [ ] Add per-task runtime accounting in timer ticks.
+- [ ] Add per-task preemption count accounting.
+- [ ] Add fairness smoke for two CPU-bound user tasks.
+- [ ] Add fairness smoke for one sleeping and one CPU-bound user task.
+- [ ] Document the current single-core scheduling assumptions.
+
+## Phase 4: Filesystem, Storage, And Device I/O Expansion
+
+### Filesystem Tests And Semantics
+
+- [ ] Add parser unit tests for GPT primary header parsing using byte fixtures.
+- [ ] Add parser unit tests for GPT backup header parsing using byte fixtures.
+- [ ] Add parser unit tests for GPT partition entry validation using byte fixtures.
+- [ ] Add parser unit tests for FAT32 boot sector validation using byte fixtures.
+- [ ] Add parser unit tests for FAT32 FSInfo validation using byte fixtures.
+- [ ] Add parser unit tests for FAT32 long file name decoding using byte fixtures.
+- [ ] Add parser unit tests for FAT32 cluster-chain loop detection using byte fixtures.
+- [ ] Add parser unit tests for FAT32 invalid cluster rejection using byte fixtures.
+- [ ] Add VFS tests for repeated slash normalization.
+- [ ] Add VFS tests for trailing slash normalization.
+- [ ] Add VFS tests for `..` traversal at mount roots.
+- [ ] Add VFS tests for nested mount point traversal.
+- [ ] Add VFS tests for read-only mount write rejection.
+- [ ] Add VFS tests for directory read offsets.
+- [ ] Add VFS tests for file descriptor seek edge cases.
+
+### FAT32 Mutation Support
+
+- [ ] Define the FAT32 write transaction boundary for one file write.
+- [ ] Define FAT32 allocation rollback behavior on partial failure.
+- [ ] Implement free cluster search with bounded scan diagnostics.
+- [ ] Implement FAT entry updates for newly allocated cluster chains.
+- [ ] Implement directory entry creation for short names.
+- [ ] Implement directory entry creation for long file names.
+- [ ] Implement file growth within an existing cluster chain.
+- [ ] Implement file growth across newly allocated clusters.
+- [ ] Implement file truncation with cluster release.
+- [ ] Implement directory creation.
+- [ ] Implement unlink for regular files.
+- [ ] Implement empty-directory removal.
+- [ ] Add write-through or flush semantics for modified FAT sectors.
+- [ ] Add smoke tests that create, read, and delete a file on the disk image.
+- [ ] Document the corruption model until journaling exists.
+
+### Storage Reliability
+
+- [ ] Add AHCI retry policy for transient command failures.
+- [ ] Add AHCI timeout diagnostics that include port and command slot.
+- [ ] Add AHCI reset policy for a wedged port.
+- [ ] Add storage device health counters to the `storage` console command.
+- [ ] Add read/write byte counters per registered block device.
+- [ ] Add partition-level I/O counters.
+- [ ] Add bounded request queueing for block devices.
+- [ ] Add request cancellation policy for shutdown or device reset.
+- [ ] Add cache coherency notes for DMA buffer ownership.
+- [ ] Add smoke coverage for multi-sector writes.
+- [ ] Add smoke coverage for reads after writes across cluster boundaries.
+- [ ] Add documentation for block-device error mapping into filesystem errors.
+
+### Device Discovery
+
+- [ ] Add PCI capability parsing.
+- [ ] Add MSI planning for future interrupt routing.
+- [ ] Add MSI-X planning for future interrupt routing.
+- [ ] Add NVMe discovery planning after AHCI write path stabilization.
+- [ ] Add NVMe queue ownership model planning.
+- [ ] Add USB keyboard investigation after interrupt routing remains stable.
+- [ ] Add USB mouse investigation after interrupt routing remains stable.
+- [ ] Add USB mass storage investigation after VFS write semantics are stable.
+- [ ] Add stable device path naming for multiple disks.
+- [ ] Add hotplug policy documentation even if hotplug is deferred.
+- [ ] Add device tree or bus inventory diagnostics to a console command.
+
+### File Descriptor Surface
+
+- [ ] Add `openat` planning or document why absolute paths remain first.
+- [ ] Add `mkdir` syscall planning.
+- [ ] Add `unlink` syscall planning.
+- [ ] Add `rmdir` syscall planning.
+- [ ] Add `rename` syscall planning.
+- [ ] Add `ftruncate` syscall planning.
+- [ ] Add close-on-exec support to descriptor metadata.
+- [ ] Add descriptor duplication planning for shell redirection.
+- [ ] Add stdin, stdout, and stderr initialization for spawned user programs.
+- [ ] Add pipe file descriptor planning beyond the current shell pipeline model.
+- [ ] Document descriptor lifetime and ownership across process exit.
+
+## Phase 5: Drivers, Display, Input, And Console UX
+
+### Keyboard Input
 
 - [ ] Move keyboard layout choice behind a small configuration boundary.
 - [ ] Add key release handling where useful.
 - [ ] Add modifier state reporting for Shift, Control, Alt, and Super.
-- [ ] Add Caps Lock state and LED updates.
-- [ ] Add mouse wheel packet support.
-- [ ] Add optional double-click and drag state at the UI layer, not the input driver layer.
+- [ ] Add Caps Lock state tracking.
+- [ ] Add Caps Lock LED update support.
+- [ ] Add Num Lock state tracking.
+- [ ] Add Scroll Lock state tracking.
+- [ ] Add extended scancode support for navigation keys.
+- [ ] Add function key decoding.
+- [ ] Add keyboard diagnostics for dropped scancodes.
+- [ ] Add keyboard diagnostics for unknown scancode sequences.
+- [ ] Add user-facing input events for the future window layer.
+- [ ] Document the selected default keyboard layout.
 
-### Display
+### Mouse Input
+
+- [ ] Add mouse wheel packet support.
+- [ ] Add horizontal wheel packet planning if the device reports it.
+- [ ] Add mouse packet resynchronization diagnostics.
+- [ ] Add mouse overflow counters.
+- [ ] Add configurable pointer acceleration policy, or document why it is deferred.
+- [ ] Add optional double-click state at the UI layer.
+- [ ] Add optional drag state at the UI layer.
+- [ ] Keep raw mouse movement reporting separate from cursor rendering.
+- [ ] Add input smoke diagnostics for mouse packet decoding.
+- [ ] Document PS/2 mouse packet variants currently supported.
+
+### Display And Rendering
 
 - [ ] Add a text console with scrolling independent of the graphical overlay.
 - [ ] Add damage tracking tests for dirty rectangles.
-- [ ] Add primitive window/widget layer planning.
-- [ ] Add bitmap image rendering support if the UI starts using assets.
+- [ ] Add renderer diagnostics for dirty rectangle count per frame.
+- [ ] Add renderer diagnostics for clipped draw operations.
+- [ ] Add a bitmap image rendering path if the UI starts using assets.
+- [ ] Add glyph cache invalidation policy if multiple fonts are introduced.
+- [ ] Add color palette constants for console themes.
+- [ ] Add display mode diagnostics for GOP framebuffer details.
+- [ ] Add panic-safe minimal text rendering path.
+- [ ] Add documentation for framebuffer ownership and renderer layering.
 
-### Future Hardware
+### Console Commands
 
-- [ ] Investigate NVMe support after AHCI read/write is stable.
-- [ ] Investigate USB keyboard and mouse support after ACPI/interrupt work.
-- [ ] Add PCI capability parsing.
-- [ ] Add MSI/MSI-X planning.
+- [ ] Add a user-visible command for process spawning once spawn is stable.
+- [ ] Add a user-visible command for killing a user process once termination policy exists.
+- [ ] Add a command for dumping open file descriptors.
+- [ ] Add a command for dumping mount table details with flags.
+- [ ] Add a command for dumping interrupt routing state.
+- [ ] Add a command for dumping queue overflow counters.
+- [ ] Add a command for dumping timer and scheduler quantum diagnostics.
+- [ ] Add a command history search shortcut.
+- [ ] Add tab completion planning for filesystem paths.
+- [ ] Add bounded console output paging for large diagnostics.
+- [ ] Add docs for console smoke commands that maintainers should run manually.
 
-## Phase 9: Tooling, Tests, And Documentation
+### UI Layer Planning
+
+- [ ] Add primitive window and widget layer planning.
+- [ ] Define ownership boundaries between input events, widgets, and display rendering.
+- [ ] Define focus handling for keyboard input.
+- [ ] Define pointer capture handling for drag operations.
+- [ ] Define z-order representation for windows.
+- [ ] Define invalidation propagation from widgets to dirty rectangles.
+- [ ] Add a simple status panel prototype plan.
+- [ ] Add a simple file viewer prototype plan.
+- [ ] Keep UI state out of low-level input drivers.
+- [ ] Document the first UI milestones separately from kernel console milestones.
+
+## Phase 6: Tooling, CI, Tests, And Documentation
+
+### CI And Build Automation
 
 - [ ] Add a headless QEMU smoke test script for CI.
-- [x] Add serial log assertions for boot milestones.
-- [x] Add a disk-image fixture generator with multiple files and directories.
-- [ ] Add parser unit tests for GPT and FAT32 using byte fixtures.
-- [x] Add syscall ABI tests for success and errno paths.
+- [ ] Wire storage smoke into CI with serial log artifacts.
 - [ ] Add userland build checks to CI for every committed user program.
-- [x] Add architecture boundary checks that reject `arch` to `kernel` imports.
-- [x] Add docs for the direct maintainer branch workflow.
-- [ ] Add docs for manual QEMU validation commands.
+- [ ] Add kernel `cargo check --target x86_64-unknown-uefi` to CI.
+- [ ] Add userland `cargo clippy` target checks to CI.
+- [ ] Add architecture boundary checks to CI.
+- [ ] Add `cargo fmt --check` for kernel and userland in CI.
+- [ ] Cache Rust toolchains and build artifacts safely in CI.
+- [ ] Upload QEMU serial logs on CI failure.
+- [ ] Upload disk image metadata on CI storage failures.
+- [ ] Document the expected CI runtime budget.
+- [ ] Add a CI-only timeout around QEMU smoke runs.
+
+### Local Developer Workflow
+
+- [ ] Refresh manual QEMU validation docs with current commands and serial milestones.
+- [ ] Link manual QEMU validation docs from `README.md`.
+- [ ] Link manual QEMU validation docs from `CONTRIBUTING.md`.
+- [ ] Add a one-command local pre-merge verification recipe.
+- [ ] Add troubleshooting notes for missing `OVMF.fd`.
+- [ ] Add troubleshooting notes for missing QEMU.
+- [ ] Add troubleshooting notes for missing nightly Rust components.
+- [ ] Add troubleshooting notes for PowerShell execution policy failures.
+- [ ] Add docs for regenerating and inspecting `disk.img`.
+- [ ] Add docs for reading serial output during manual QEMU runs.
+- [ ] Add docs for choosing between `just run` and `just storage-smoke`.
+
+### Architecture Documentation
+
 - [ ] Add a contributor-facing architecture map generated from the current module tree.
+- [ ] Add a module ownership table for `src/kernel`.
+- [ ] Add a module ownership table for `src/arch/x86_64`.
+- [ ] Add a module ownership table for storage drivers.
+- [ ] Add a module ownership table for memory management.
+- [ ] Add a module ownership table for scheduler and task modules.
+- [ ] Add a module ownership table for userland runtime crates.
+- [ ] Add diagrams for interrupt dispatch through registered callbacks.
+- [ ] Add diagrams for syscall entry and return.
+- [ ] Add diagrams for user process lifecycle state transitions.
+- [ ] Add diagrams for VFS mount and path traversal.
+- [ ] Add diagrams for frame ownership and reclaim paths.
+
+### Test Expansion
+
+- [ ] Add host-side parser fixtures for ELF headers.
+- [ ] Add host-side parser fixtures for syscall ABI layout.
+- [ ] Add host-side tests for fixed-buffer userland formatting helpers.
+- [ ] Add host-side tests for command tokenization.
+- [ ] Add smoke tests for invalid user pointers per syscall class.
+- [ ] Add smoke tests for file descriptor exhaustion.
+- [ ] Add smoke tests for process table exhaustion.
+- [ ] Add smoke tests for heap exhaustion.
+- [ ] Add smoke tests for map-count exhaustion.
+- [ ] Add smoke tests for scheduler fairness.
+- [ ] Add smoke tests for console command regressions.
+- [ ] Add smoke tests for storage write regressions once writes mutate FAT32.
+- [ ] Keep smoke assertions focused on stable serial log lines.
+
+### Release And Maintenance
+
+- [ ] Add a release checklist for verified `master` snapshots.
+- [ ] Add a changelog template for milestone summaries.
+- [ ] Add a policy for when completed TODO items move into `TODO_COMPLETED.md`.
+- [ ] Add a policy for pruning stale future TODO items.
+- [ ] Add issue templates for kernel bugs.
+- [ ] Add issue templates for driver bugs.
+- [ ] Add issue templates for documentation gaps.
+- [ ] Add labels or categories matching TODO phases.
+- [ ] Add maintainer notes for branch cleanup after direct workflow merges.
+
+## Phase 7: Long-Term Platform, Security, And Multi-Architecture Foundation
+
+### Security Hardening
+
+- [ ] Add kernel address exposure audit for console and serial diagnostics.
+- [ ] Add a policy for redacting sensitive addresses in release builds.
+- [ ] Add stack canary planning for kernel stacks.
+- [ ] Add userland stack canary planning.
+- [ ] Add syscall argument fuzzing plan for pointer-heavy syscalls.
+- [ ] Add filesystem parser fuzzing plan for byte fixtures.
+- [ ] Add ELF parser fuzzing plan for malformed binaries.
+- [ ] Add page-table permission audit tooling.
+- [ ] Add runtime checks for unexpected writable executable mappings.
+- [ ] Add documentation for the current threat model.
+- [ ] Add documentation for trusted boot assumptions.
+- [ ] Add documentation for DMA trust assumptions.
+
+### SMP And CPU Topology
+
+- [ ] Document why ManaOS remains single-core until scheduler invariants are ready.
+- [ ] Add ACPI CPU topology inventory diagnostics.
+- [ ] Add Local APIC ID reporting per detected processor.
+- [ ] Add bootstrap processor versus application processor role documentation.
+- [ ] Plan application processor startup sequence.
+- [ ] Plan per-CPU scheduler data.
+- [ ] Plan per-CPU interrupt stacks.
+- [ ] Plan per-CPU allocator caches or document why they are deferred.
+- [ ] Plan cross-CPU TLB shootdown.
+- [ ] Plan inter-processor interrupt routing.
+- [ ] Add SMP blockers to architecture docs.
+
+### Networking Foundation
+
+- [ ] Add PCI network device discovery planning.
+- [ ] Investigate a first supported NIC model for QEMU.
+- [ ] Define network driver ownership boundaries.
+- [ ] Define packet buffer ownership rules.
+- [ ] Define interrupt versus polling mode for first NIC support.
+- [ ] Add ARP planning.
+- [ ] Add IPv4 planning.
+- [ ] Add UDP planning.
+- [ ] Add TCP planning or document why it is deferred.
+- [ ] Add a minimal network smoke strategy.
+- [ ] Document how networking interacts with userland file descriptors.
+
+### Multi-Architecture Readiness
+
+- [ ] Audit `x86_64` assumptions that leak outside `src/arch`.
+- [ ] Move architecture-specific constants behind architecture provider APIs.
+- [ ] Document the minimum interface a future architecture module must expose.
+- [ ] Add architecture-neutral task provider traits where direct function pointers become insufficient.
+- [ ] Add architecture-neutral interrupt provider traits where direct callbacks become insufficient.
+- [ ] Add architecture-neutral time provider traits where Local APIC assumptions leak.
+- [ ] Add architecture-neutral address-space provider documentation.
+- [ ] Add compile-time guards for x86_64-only modules.
+- [ ] Add docs for a future AArch64 porting checklist.
+- [ ] Keep `main.rs` as the composition root for architecture and kernel wiring.
+
+### Packaging And User Experience
+
+- [ ] Add a bootable image packaging plan beyond raw QEMU setup.
+- [ ] Add a version banner tied to Git metadata when available.
+- [ ] Add build metadata to serial boot logs.
+- [ ] Add panic output that includes version metadata.
+- [ ] Add a documented command for collecting support logs.
+- [ ] Add a documented command for reproducing storage smoke failures.
+- [ ] Add screenshots or terminal captures for major milestones.
+- [ ] Add a contributor guide for choosing the next TODO slice.
+- [ ] Add a milestone map that groups TODO phases into public releases.
+- [ ] Add documentation for what must be true before calling the system self-hosting.

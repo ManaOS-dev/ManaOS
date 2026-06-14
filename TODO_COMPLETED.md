@@ -1,0 +1,177 @@
+# ManaOS Completed TODO Archive
+
+Completed items were moved out of [`TODO.md`](TODO.md) on 2026-06-14 so the
+active roadmap can list only unfinished work.
+
+## Immediate Priorities
+
+- [x] Set `NO_EXECUTE` on non-executable kernel and user mappings where appropriate.
+- [x] Avoid parsing font data on every `draw_text` call; cache parsed font faces.
+- [x] Replace the display command queue with a design that is correct for multi-producer use.
+- [x] Replace cursor backup dimensions with the cursor size constant.
+- [x] Split kernel console command dispatch into command-focused modules once more commands are added.
+
+## Phase 5: Filesystem And Storage
+
+### Storage Driver
+
+- [x] Turn the AHCI probe path into a persistent block-device service instead of a boot-only smoke test.
+- [x] Add a storage device registry with stable device identifiers.
+- [x] Support multi-sector reads in the AHCI command path.
+- [x] Support reads that cross FAT32 cluster boundaries.
+- [x] Add AHCI error propagation instead of returning only `bool`.
+- [x] Add AHCI interrupt-driven completion as an alternative to polling.
+- [x] Add cache invalidation or explicit ownership rules for DMA buffers.
+- [x] Add write support for AHCI sectors after read-only storage is stable.
+- [x] Add a QEMU storage test mode that boots and verifies expected serial log lines automatically.
+
+### Partition And Filesystem Parsing
+
+- [x] Fall back to the backup GPT header when the primary header is invalid.
+- [x] Support selecting a partition by type GUID or name instead of always selecting the first entry.
+- [x] Validate FAT32 backup boot sector.
+- [x] Implement FAT32 long file name entries.
+- [x] Implement FAT32 directory traversal beyond the root directory.
+- [x] Implement FAT32 file reads across full cluster chains.
+- [x] Detect FAT32 cluster chain loops and invalid cluster numbers.
+- [x] Implement FAT32 read-only directory listing API.
+- [x] Add FAT32 write planning before mutating disk images.
+
+### Virtual Filesystem
+
+- [x] Add a real mount table with mount points and filesystem backends.
+- [x] Mount FAT32 as a filesystem backend instead of copying one boot-time file into memory.
+- [x] Add path traversal for directories and nested files.
+- [x] Add file metadata operations such as `stat`.
+- [x] Add `seek` support to file descriptors.
+- [x] Add directory handles and `readdir` support.
+- [x] Add read-only and writable mount flags.
+- [x] Return richer filesystem errors and map them consistently to syscall errno values.
+- [x] Add `/dev` directory listing.
+- [x] Decide and document pathname normalization rules for `..`, repeated slashes, and trailing slashes.
+
+### Kernel Console Commands
+
+- [x] Split command parsing and individual commands out of `kernel::console::mod.rs`.
+- [x] Add `ls`.
+- [x] Add `pwd`.
+- [x] Add `cd`.
+- [x] Add `stat`.
+- [x] Add `mounts`.
+- [x] Add `hexdump`.
+- [x] Add `grep`.
+- [x] Add single-pipe command execution with `command | command`.
+- [x] Add command history.
+- [x] Add cursor movement and line editing.
+- [x] Add scrollback for console output.
+- [x] Make `cat /disk/hello.txt` a manual smoke test in the docs.
+
+## Phase 6: Userland
+
+### ELF And Process Loading
+
+- [x] Implement a 64-bit ELF loader.
+- [x] Validate ELF headers, program headers, and segment permissions.
+- [x] Map user text, rodata, data, bss, stack, and guard pages with correct flags.
+- [x] Pass `argc`, `argv`, and environment pointers to user entry points.
+- [x] Load user programs from the filesystem instead of `include_bytes!`.
+- [x] Add process identifiers and parent-child relationships.
+- [x] Add a userland test program that opens `/disk/hello.txt`.
+
+### Syscall Surface
+
+- [x] Define syscall numbers and ABI in a shared generated or copied contract for kernel and userland.
+- [x] Add `lseek`.
+- [x] Add `stat` or `newfstatat`.
+- [x] Add `getdents64`.
+- [x] Add `brk` as the first heap-growth syscall.
+- [x] Add an anonymous `mmap`/`munmap` syscall subset.
+- [x] Support partial anonymous `munmap` with mapping-record splits.
+- [x] Support non-overlapping fixed-address anonymous mappings.
+- [x] Add file-backed private `mmap` for current VFS file descriptors.
+- [x] Add replacement `MAP_FIXED` for private user mappings.
+- [x] Add `nanosleep` or a minimal sleep syscall.
+- [x] Add syscall tracing controls.
+
+### Userland Runtime
+
+- [x] Grow the no-std userland support crate into a small runtime.
+- [x] Add panic handling that exits with a clear status.
+- [x] Add file descriptor wrappers in userland.
+- [x] Add argument parsing helpers.
+- [x] Add fixed-buffer userland command modules with single-pipe execution.
+- [x] Add build scripts for multiple userland binaries.
+- [x] Add a userland smoke-test runner.
+
+## Phase 7: Kernel Hardening
+
+### Memory Management
+
+- [x] Audit `PhysicalFrameAllocator` call sites and document reusable ownership invariants.
+- [x] Replace the bump frame allocator with a reusable physical frame allocator.
+- [x] Track reserved, used, and free physical frame ranges.
+- [x] Design ownership rules for free, used, and reserved physical frame ranges.
+- [x] Add a kernel virtual memory allocator for dynamic mappings, including writable NX mapping and generic unmap/free for kernel ranges.
+- [x] Add visible frame allocator owner diagnostics to the `memory` console command and status strip.
+- [x] Design kernel stack guard page placement and fault diagnostics.
+- [x] Add per-process page tables; user smoke tasks now own separate address-space roots for ELF and stack mappings.
+- [x] Reclaim finished user address spaces and return tracked user/page-table frames to the allocator.
+- [x] Reclaim finished user task kernel stacks after `SYS_EXIT`.
+- [x] Document the page ownership model required before per-process page tables.
+- [x] Add copy-in/copy-out helpers with consistent user pointer validation.
+- [x] Define a syscall-by-syscall user pointer validation policy.
+- [x] Enforce writable, user, and executable page permissions in syscall validation.
+- [x] Add boot-time self-checks for kernel and user mapping permissions.
+- [x] Audit identity mapping lifetime and shrink it when possible.
+- [x] Identify identity mappings that can be removed after boot-time hardware setup.
+- [x] Inventory APIs where raw `u64` physical or virtual addresses cross module boundaries.
+- [x] Add page fault diagnostics that include the current task and access type.
+
+### Interrupts And Scheduling
+
+- [x] Parse ACPI RSDP and XSDT/RSDT.
+- [x] Parse ACPI MADT.
+- [x] Enable IOAPIC routing; APIC routing provider data now produces dry-run IOAPIC redirection entries, masked MMIO staging with readback diagnostics, Local APIC EOI-provider diagnostics, unified EOI dispatch, active route unmasking, and APIC EOI count diagnostics.
+- [x] Replace legacy PIC routing after IOAPIC is stable; normal APIC boots now keep the legacy PIC masked and fallback-disabled, while the legacy PIC path remains for boots without APIC routing provider data.
+- [x] Calibrate and use the Local APIC timer; boot now calibrates from a masked sample, masks the IOAPIC PIT timer route, and runs scheduler ticks from a periodic Local APIC timer.
+- [x] Replace PIT scheduling ticks after Local APIC timer validation.
+- [x] Add broader interrupt-controller diagnostics for Local APIC spurious vectors and unexpected external vectors.
+- [x] Design the full user trap frame register layout.
+- [x] Document the interrupt and syscall register sets that must be saved.
+- [x] Make preemptive scheduling safe for the current one-shot user task path.
+- [x] Add separate user stack slots so multiple user task records can coexist in the shared address space.
+- [x] Prove timer preemption and resume across two user task records in storage smoke.
+- [x] Allow multiple active user tasks to be scheduled by timer preemption in the current smoke lifecycle.
+- [x] Move next active user task selection into the scheduler-owned lifecycle path.
+- [x] Add a scheduler-owned active user lifecycle drain API for current smoke tasks.
+- [x] Checklist the prerequisites for enabling user task preemption.
+- [x] Add scheduler accounting and task state diagnostics.
+- [x] Add a visible `tasks` console command for scheduler and user-preemption diagnostics.
+- [x] Expose user virtual memory layout and per-task VM snapshots in `tasks`.
+- [x] Add a scheduler/preemption status strip to the console overlay.
+- [x] Add user kernel stack reclaim accounting to scheduler diagnostics and the console overlay.
+- [x] Aggregate finished user task resource reclaim inside the scheduler lifecycle path.
+- [x] Add per-task scheduler snapshots to the visible `tasks` console command.
+- [x] Design the per-task kernel stack switching policy.
+
+### Context Switch And Task Refactoring
+
+- [x] Separate kernel task context and user task context responsibilities.
+- [x] Document the context switch ABI.
+- [x] Verify the `UserTrapFrame` register layout against `context_switch.s` offsets.
+- [x] Move user task exit and run-once lifecycle handling into a process lifecycle module.
+- [x] Replace the global user-exit result latch with a scheduler-owned finished user exit queue.
+- [x] Add explicit set/take invariants for the one-shot user exit return stack window.
+- [x] Close scheduler preemption from `SYS_EXIT` before returning through the one-shot exit stack.
+- [x] Expose user-exit preemption window close accounting in scheduler diagnostics.
+- [x] Replace boolean preemption diagnostics with explicit scheduler preemption states.
+- [x] Normalize user task scheduler state transitions.
+- [x] Define the task metadata model needed before process identifiers and parent-child relationships.
+
+## Phase 9: Tooling, Tests, And Documentation
+
+- [x] Add serial log assertions for boot milestones.
+- [x] Add a disk-image fixture generator with multiple files and directories.
+- [x] Add syscall ABI tests for success and errno paths.
+- [x] Add architecture boundary checks that reject `arch` to `kernel` imports.
+- [x] Add docs for the direct maintainer branch workflow.
