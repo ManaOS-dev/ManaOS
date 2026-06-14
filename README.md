@@ -55,6 +55,38 @@ to decide which document to read before changing code:
 - **Developer Workflow**: contributors use pull requests; maintainers may use
   the direct branch workflow only after local verification.
 
+## Repository Layout
+
+The repository is intentionally split by ownership boundary:
+
+| Path | Purpose |
+| --- | --- |
+| `src/main.rs` | Composition root. Wires boot data, architecture providers, kernel services, drivers, and smoke lifecycle. |
+| `src/arch/` | Architecture-specific CPU, interrupt, APIC/PIC, syscall, context switch, and MMIO code. Must not depend on `kernel/`. |
+| `src/kernel/` | Platform-independent kernel policy: memory, task scheduling, syscalls, filesystems, drivers, diagnostics, and console services. |
+| `src/shared/` | ABI contracts and small shared layouts used across kernel and userland-facing boundaries. |
+| `userland/` | no-std userland runtime and demo programs built for `x86_64-unknown-none`. |
+| `docs/` | English design documents and validation guides. |
+| `docs/ja/` | Japanese companion documents for discussion and onboarding. |
+| `scripts/` | Host-side PowerShell tooling for disk images, smoke runs, license generation, and boundary checks. |
+| `esp/` | UEFI system partition assets copied into the QEMU boot image. |
+
+Before changing a subsystem, read the nearest design document and the module's
+`mod.rs` ownership comment. If an edit crosses a boundary, update the
+documentation in the same branch.
+
+## What To Read First
+
+| Change area | Start here |
+| --- | --- |
+| New agent or automated change | [AGENTS.md](AGENTS.md), then [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Architecture, interrupt, or syscall entry work | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/USER_TRAP_FRAME.md](docs/USER_TRAP_FRAME.md) |
+| ACPI, APIC, IOAPIC, PIC, or timer work | [docs/ACPI.md](docs/ACPI.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Memory, paging, stacks, or address ownership | [docs/MEMORY_MANAGEMENT.md](docs/MEMORY_MANAGEMENT.md), [docs/ADDRESS_BOUNDARIES.md](docs/ADDRESS_BOUNDARIES.md), [docs/KERNEL_STACKS.md](docs/KERNEL_STACKS.md) |
+| Syscall pointer validation | [docs/USER_POINTER_VALIDATION.md](docs/USER_POINTER_VALIDATION.md), [docs/USER_TRAP_FRAME.md](docs/USER_TRAP_FRAME.md) |
+| Storage, FAT32, VFS, or console file commands | [docs/FILESYSTEM.md](docs/FILESYSTEM.md), [docs/MANUAL_QEMU_VALIDATION.md](docs/MANUAL_QEMU_VALIDATION.md) |
+| Choosing the next task | [TODO.md](TODO.md), [docs/TASK_PRIORITY.md](docs/TASK_PRIORITY.md) |
+
 ## Documentation Map
 
 English documents are the source of truth. Japanese companion documents are kept
@@ -100,6 +132,10 @@ just storage-smoke
 - Use `just storage-smoke` for boot-visible changes, storage/filesystem work,
   scheduler changes, memory ownership changes, syscall behavior, or userland
   runtime behavior.
+
+When a check is skipped, record the reason in the commit or handoff notes. A
+successful compile is necessary, but not sufficient, for unsafe, interrupt,
+memory, scheduler, or syscall changes.
 
 ## 🤝 Contributing
 

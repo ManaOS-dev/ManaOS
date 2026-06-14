@@ -289,3 +289,57 @@ push `origin/master`, and delete the task branch after success.
    `just lint` when the change touches kernel/userland boundaries.
 5. Merge the verified branch into `master`, push `origin/master`, then delete
    the local and remote task branch.
+
+---
+
+## 12. Markdown And Documentation Maintenance
+
+Documentation is part of the project contract. Agents must keep Markdown files
+accurate, navigable, and synchronized with implementation reality.
+
+### English Source Of Truth
+
+- English Markdown files are the source of truth.
+- Japanese files are companion documents for discussion and onboarding.
+- When adding or changing a contributor-facing document under `docs/`, add or
+  update the matching `docs/ja/*.ja.md` file unless the project owner explicitly
+  says not to.
+- Do not create Japanese companion files for agent-only instruction files unless
+  the project owner explicitly requests them.
+
+### README And Documentation Map
+
+- If a new contributor-facing Markdown file is added, update the documentation
+  map in `README.md` and `docs/ja/README.ja.md`.
+- Keep README topic guidance concrete: tell readers which document to read for
+  architecture, memory, syscall, storage, scheduler, tooling, and TODO work.
+- Prefer precise ownership, invariants, failure modes, and validation commands
+  over broad marketing language.
+
+### TODO Files
+
+- `TODO.md` must list unfinished work only.
+- Completed TODO items must move to `TODO_COMPLETED.md` after the implementing
+  branch is verified.
+- `TODO.ja.md` is a Japanese guide to the active roadmap, not a stale duplicate
+  checklist.
+- `TODO_COMPLETED.ja.md` is a Japanese guide to the completed archive, not the
+  authoritative item-by-item record.
+
+### Generated And External Metadata
+
+- Do not hand-edit generated Markdown such as `THIRD_PARTY_LICENSES.md`.
+- Refresh generated license metadata with `just licenses` after dependency
+  changes.
+- If generated content needs explanation, add it to a separate guide file rather
+  than modifying the generated table by hand.
+
+### Documentation Verification
+
+- For docs-only changes, run `git diff --check` before committing.
+- After committing docs-only changes, run `git show --check --stat --oneline
+  HEAD` or an equivalent staged/commit whitespace check.
+- Check local Markdown links when changing README files, documentation maps, or
+  file names.
+- Rust build, lint, and QEMU smoke checks are not required for docs-only changes
+  unless the docs change accompanies behavior changes.

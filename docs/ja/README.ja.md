@@ -52,6 +52,37 @@ ManaOS のドキュメントは、次の topic を軸に読むと把握しやす
 - **Developer Workflow**: 外部 contributor は PR workflow、maintainer は local verification 後のみ direct
   branch workflow を使います。
 
+## リポジトリ構成 (Repository Layout)
+
+ManaOS は ownership boundary ごとにディレクトリを分けています。
+
+| Path | Purpose |
+| --- | --- |
+| `src/main.rs` | composition root。boot data、architecture provider、kernel service、driver、smoke lifecycle を配線します。 |
+| `src/arch/` | CPU、interrupt、APIC/PIC、syscall、context switch、MMIO など architecture-specific code。`kernel/` に依存してはいけません。 |
+| `src/kernel/` | memory、scheduler、syscall、filesystem、driver、diagnostics、console service など platform-independent kernel policy。 |
+| `src/shared/` | kernel と userland-facing boundary で共有する ABI contract と小さな layout。 |
+| `userland/` | `x86_64-unknown-none` 向け no-std userland runtime と demo program。 |
+| `docs/` | 英語正本の design document と validation guide。 |
+| `docs/ja/` | 日本語 discussion / onboarding 用 companion document。 |
+| `scripts/` | disk image、smoke run、license generation、boundary check など host-side PowerShell tooling。 |
+| `esp/` | QEMU boot image にコピーされる UEFI system partition asset。 |
+
+subsystem を変更する前に、近い design document と module の `mod.rs` ownership comment を読んでください。
+boundary をまたぐ変更では、同じ branch で documentation も更新します。
+
+## 最初に読む文書
+
+| Change area | Start here |
+| --- | --- |
+| agent または automated change | [../../AGENTS.md](../../AGENTS.md), then [../../CONTRIBUTING.md](../../CONTRIBUTING.md) |
+| architecture、interrupt、syscall entry | [../ARCHITECTURE.md](../ARCHITECTURE.md), [../USER_TRAP_FRAME.md](../USER_TRAP_FRAME.md) |
+| ACPI、APIC、IOAPIC、PIC、timer | [../ACPI.md](../ACPI.md), [../ARCHITECTURE.md](../ARCHITECTURE.md) |
+| memory、paging、stack、address ownership | [../MEMORY_MANAGEMENT.md](../MEMORY_MANAGEMENT.md), [../ADDRESS_BOUNDARIES.md](../ADDRESS_BOUNDARIES.md), [../KERNEL_STACKS.md](../KERNEL_STACKS.md) |
+| syscall pointer validation | [../USER_POINTER_VALIDATION.md](../USER_POINTER_VALIDATION.md), [../USER_TRAP_FRAME.md](../USER_TRAP_FRAME.md) |
+| storage、FAT32、VFS、console file command | [../FILESYSTEM.md](../FILESYSTEM.md), [../MANUAL_QEMU_VALIDATION.md](../MANUAL_QEMU_VALIDATION.md) |
+| 次の task selection | [../../TODO.md](../../TODO.md), [../TASK_PRIORITY.md](../TASK_PRIORITY.md) |
+
 ## ドキュメントマップ (Documentation Map)
 
 英語文書を正本とし、日本語 companion document を併置しています。
@@ -93,6 +124,9 @@ just storage-smoke
 - architecture、kernel/userland、syscall boundary に触る場合は `just lint` を使います。
 - boot-visible behavior、storage/filesystem、scheduler、memory ownership、syscall behavior、
   userland runtime behavior に触る場合は `just storage-smoke` を使います。
+
+check を省略した場合は、commit または handoff note に理由を残します。compile が通ることは必要ですが、
+unsafe、interrupt、memory、scheduler、syscall の正しさを単独で証明するものではありません。
 
 ## 🤝 貢献 (Contributing)
 

@@ -98,6 +98,37 @@ just lint
 - `unsafe` ブロックの使用は最小限に留めてください。
 - `unsafe` を使用する場合は、**必ず** `// SAFETY:` コメントを添え、なぜその操作が安全であるかを論理的に説明してください。
 
+## 📚 ドキュメント標準
+
+ドキュメント変更は、実装の後付け説明ではなく、engineering contract の一部として扱います。
+
+- 英語文書を正本とします。
+- 日本語 companion document が存在する場合は、英語版と同じ運用上の意味を説明します。
+- generated file は手で編集しません。`THIRD_PARTY_LICENSES.md` は `just licenses` で再生成します。
+- `TODO.md` には未完了作業だけを残します。完了済み項目は、実装 branch の検証後に
+  `TODO_COMPLETED.md` へ移動します。
+- architecture、memory、syscall、storage、scheduler、userland behavior を変更する場合は、
+  同じ branch で近い design document も更新します。
+- `docs/` 配下に新しい Markdown を追加する場合は、日本語 companion を追加するか、
+  追加しない理由を明確にし、contributor-facing document なら `README.md` の documentation map も更新します。
+- あいまいな roadmap text より、具体的な invariant、ownership rule、failure mode、
+  validation command を優先します。
+
+## ✅ 検証マトリクス
+
+変更内容に合う最小の検証から始め、runtime boundary をまたぐ場合は広い検証へ進みます。
+
+| Change type | Minimum verification |
+| --- | --- |
+| docs-only | `git diff --check` または `git show --check` |
+| formatting-only Rust changes | `just fmt` |
+| kernel Rust behavior | `cargo check --target x86_64-unknown-uefi` |
+| userland no-std behavior | `cargo clippy --manifest-path userland/Cargo.toml --target x86_64-unknown-none --target-dir target/userland --lib --bin file_demo --bin bad_pointer_demo --bin smoke_demo -- -D warnings` |
+| architecture または kernel/userland boundary | `just lint` |
+| boot-visible runtime behavior | `just storage-smoke` |
+
+local で command を実行できない場合は、正確な理由と必要な follow-up validation を記録します。
+
 ---
 
 ## 🛠 設計原則 (拡張性とコントリビュートのしやすさ)

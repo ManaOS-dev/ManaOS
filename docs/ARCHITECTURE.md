@@ -64,17 +64,55 @@ owns the assembly entry points and user segment selector values, `main.rs`
 registers them with `kernel::task`, and the scheduler calls only the registered
 task architecture provider.
 
+## Current Execution Model
+
+The current boot path reaches a single-core x86_64 UEFI kernel with APIC-capable
+interrupt routing on supported QEMU boots. User tasks can own separate address
+spaces, guarded scheduler-owned kernel stacks, retained metadata, syscall trace
+state, and virtual-memory diagnostics. Timer-driven user preemption is proven
+for the current smoke lifecycle, but general spawned process lifecycle paths are
+still being built.
+
+The practical rule is:
+
+- architecture code owns CPU and interrupt mechanics;
+- kernel task code owns lifecycle, scheduling, and retained task metadata;
+- memory code owns frame, page-table, user mapping, and kernel virtual range
+  ownership;
+- filesystem code owns path, mount, descriptor, and backend dispatch;
+- `main.rs` wires those owners together and should not accumulate subsystem
+  policy.
+
 ## Current Known Design Debt
 
 - IOAPIC routing, Local APIC EOI, and periodic Local APIC timer ticks are active
   on APIC-capable boots. The PIT is still initialized briefly as the calibration
   reference before the IOAPIC PIT timer route is masked.
-- Ring 3 has selector registration, the initial `iretq` transition path, a
-  fixed user stack mapping, and minimal `SYSCALL`/`SYSRET` MSR setup. Real
-  syscall dispatch, ELF loading, and per-process address spaces are still Phase
-  6 work.
+- Ring 3 now has ELF loading from the filesystem, syscall dispatch, separate
+  user address spaces, guarded user task kernel stacks, syscall trace controls,
+  and timer-context preemption coverage for the smoke lifecycle. General
+  `execve`, user-created child processes, `waitpid`, and a minimal user shell
+  are still pending process-lifecycle work.
+- Bootstrap and architecture-owned TSS/IST stacks are not yet represented in
+  the same guarded stack diagnostics as scheduler-owned task stacks.
 - Cursor rendering is display-owned, but the cursor shape is still a simple
   placeholder rectangle.
+
+## Choosing A Module Owner
+
+When a new behavior crosses subsystems, choose the owner by the state it
+mutates:
+
+- hardware register state belongs in `arch/` or a driver module;
+- interrupt event routing belongs in `kernel::interrupt`;
+- task lifecycle and scheduling state belongs in `kernel::task`;
+- address-space and frame ownership belongs in `kernel::memory`;
+- path traversal and descriptor state belongs in `kernel::filesystem`;
+- command parsing and interactive text output belongs in `kernel::console`;
+- only composition and provider registration belong in `main.rs`.
+
+If no existing module owns the state, add a focused sibling module instead of
+putting business logic in `mod.rs`.
 
 ## Adding a New Driver (Checklist)
 

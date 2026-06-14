@@ -95,6 +95,43 @@ just lint
 - Minimize the use of `unsafe` blocks.
 - If you use `unsafe`, you **must** add a `// SAFETY:` comment explaining why it is safe.
 
+## 📚 Documentation Standards
+
+Documentation changes should be treated as part of the engineering contract, not
+as an afterthought.
+
+- English documents are the source of truth.
+- Japanese companion documents should explain the same operational meaning when
+  a Japanese file exists for the English document.
+- Keep generated files generated. Do not hand-edit
+  `THIRD_PARTY_LICENSES.md`; regenerate it with `just licenses`.
+- Keep `TODO.md` limited to unfinished work. Move completed items into
+  `TODO_COMPLETED.md` after the implementing branch is verified.
+- When changing architecture, memory, syscall, storage, scheduler, or userland
+  behavior, update the nearest design document in the same branch.
+- When adding a new Markdown file under `docs/`, add or deliberately skip a
+  Japanese companion and update the documentation map in `README.md` if it is a
+  contributor-facing document.
+- Prefer concrete invariants, ownership rules, failure modes, and validation
+  commands over vague roadmap text.
+
+## ✅ Verification Matrix
+
+Use the smallest meaningful check first, then broaden when the change crosses
+runtime boundaries.
+
+| Change type | Minimum verification |
+| --- | --- |
+| Documentation only | `git diff --check` or `git show --check` |
+| Formatting-only Rust changes | `just fmt` |
+| Kernel Rust behavior | `cargo check --target x86_64-unknown-uefi` |
+| Userland no-std behavior | `cargo clippy --manifest-path userland/Cargo.toml --target x86_64-unknown-none --target-dir target/userland --lib --bin file_demo --bin bad_pointer_demo --bin smoke_demo -- -D warnings` |
+| Architecture or kernel/userland boundary | `just lint` |
+| Boot-visible runtime behavior | `just storage-smoke` |
+
+If a command cannot be run locally, record the exact reason and the expected
+follow-up validation.
+
 ---
 
 ## 🛠 Design Principles (Scalable & Contributor Friendly)
