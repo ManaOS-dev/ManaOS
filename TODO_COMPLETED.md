@@ -21,6 +21,7 @@ active roadmap can list only unfinished work.
 - [x] Add a failure smoke case for `execve` on a directory path.
 - [x] Add a failure smoke case for `execve` on a non-ELF file.
 - [x] Document `execve` ownership and cleanup invariants in the process lifecycle docs.
+- [x] Build and roll back an unpublished `execve` image candidate before returning unsupported.
 
 ## Immediate Priorities
 

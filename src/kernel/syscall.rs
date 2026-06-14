@@ -75,6 +75,7 @@ const MAX_USER_STRING_LENGTH: usize = 256;
 const MAX_EXECVE_ARGUMENT_COUNT: usize = 8;
 const MAX_EXECVE_ENVIRONMENT_COUNT: usize = 8;
 const MAX_EXECVE_COPIED_STRING_BYTES: usize = 4096;
+const EXECVE_USER_STACK_PAGES: u64 = 4;
 const PAGE_SIZE: u64 = 4096;
 const NANOSECONDS_PER_SECOND: u64 = 1_000_000_000;
 const NANOSECONDS_PER_TIMER_TICK: u64 =
@@ -551,6 +552,28 @@ fn sys_execve(
         return ERROR_INVALID_ARGUMENT;
     }
 
+    let Some(candidate) =
+        crate::kernel::memory::runtime_allocator::with_user_runtime_frame_allocator(
+            |frame_allocator| {
+                build_and_rollback_execve_candidate(frame_allocator, &staging, &executable_image)
+            },
+        )
+    else {
+        return ERROR_NOT_IMPLEMENTED;
+    };
+
+    crate::log_info!(
+        "syscall",
+        "execve candidate rollback -> path={} entry={:#x} stack={:#x} heap_start={:#x} argc={} user_pages={} page_table_pages={} owner_stats_restored=true",
+        staging.path,
+        candidate.entry_point,
+        candidate.stack_pointer,
+        candidate.heap_start,
+        candidate.argument_count,
+        candidate.reclaimed_user_pages,
+        candidate.reclaimed_page_table_pages
+    );
+
     crate::log_debug!(
         "syscall",
         "execve(path={}, image_bytes={}, argc={}, envc={}, bytes={}) is not implemented",
@@ -562,6 +585,92 @@ fn sys_execve(
     );
 
     ERROR_NOT_IMPLEMENTED
+}
+
+struct ExecveCandidateRollback {
+    entry_point: u64,
+    stack_pointer: u64,
+    heap_start: u64,
+    argument_count: u64,
+    reclaimed_user_pages: u64,
+    reclaimed_page_table_pages: u64,
+}
+
+fn build_and_rollback_execve_candidate(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    staging: &ExecveStaging,
+    executable_image: &[u8],
+) -> ExecveCandidateRollback {
+    let before = frame_allocator.owner_statistics();
+    let current_address_space = crate::kernel::task::get_current_user_address_space();
+
+    let candidate_address_space =
+        crate::kernel::memory::address_space::create_user_address_space(frame_allocator);
+    let loaded = crate::kernel::elf::load_user_program(
+        candidate_address_space,
+        frame_allocator,
+        executable_image,
+        &staging.path,
+    );
+    let candidate_stack = crate::kernel::memory::user_stack::allocate_user_stack(
+        candidate_address_space,
+        frame_allocator,
+        EXECVE_USER_STACK_PAGES,
+    );
+    let argument_values = staging
+        .argument_values
+        .iter()
+        .map(Vec::as_slice)
+        .collect::<Vec<_>>();
+    let environment_values = staging
+        .environment_values
+        .iter()
+        .map(Vec::as_slice)
+        .collect::<Vec<_>>();
+    let prepared_stack = crate::kernel::memory::user_stack::prepare_initial_stack_bytes(
+        candidate_address_space,
+        candidate_stack,
+        &argument_values,
+        &environment_values,
+    );
+    let entry_arguments = crate::kernel::task::UserEntryArguments::new(
+        prepared_stack.argument_count(),
+        prepared_stack.argument_values_pointer(),
+        prepared_stack.environment_values_pointer(),
+    );
+    // SAFETY: The candidate ELF loader mapped the entry point in
+    // `candidate_address_space`, and `prepare_initial_stack_bytes` returned a
+    // stack pointer inside the freshly mapped writable user stack.
+    let entry_context = unsafe {
+        crate::kernel::task::context::UserTaskContext::new(
+            loaded.entry_point(),
+            prepared_stack.stack_pointer(),
+            entry_arguments,
+        )
+    };
+    let trap_frame = entry_context.to_trap_frame();
+
+    let reclaim = crate::kernel::memory::address_space::destroy_user_address_space(
+        frame_allocator,
+        candidate_address_space,
+    );
+    if let Some(current_address_space) = current_address_space {
+        crate::kernel::memory::address_space::switch_to_user_address_space(current_address_space);
+    }
+    let after = frame_allocator.owner_statistics();
+    assert_eq!(
+        before, after,
+        "execve candidate rollback must restore frame owner statistics"
+    );
+
+    ExecveCandidateRollback {
+        entry_point: trap_frame.instruction_pointer,
+        stack_pointer: trap_frame.stack_pointer,
+        heap_start: loaded.heap_start().as_u64(),
+        argument_count: trap_frame.rdi,
+        reclaimed_user_pages: reclaim.user_pages(),
+        reclaimed_page_table_pages: reclaim.page_table_pages(),
+    }
 }
 
 struct ExecveStaging {

@@ -46,8 +46,9 @@ The syscall ABI slice should use the normal ManaOS syscall register convention:
 The shared syscall number and no-std userland wrapper are reserved now. The
 kernel also stages the executable path, `argv`, and `envp` through user pointer
 validation, resolves the executable through the current filesystem namespace,
-and validates ELF metadata before returning the current unsupported runtime
-result. The image replacement path remains pending.
+validates ELF metadata, builds an unpublished replacement candidate, and rolls
+that candidate back before returning the current unsupported runtime result.
+The successful image publication path remains pending.
 
 The kernel-side contract is:
 
@@ -113,7 +114,10 @@ overflow returns `-E2BIG`.
 Current path validation accepts only absolute executable paths, reads regular
 file contents through a temporary descriptor, rejects missing paths with
 `-ENOENT`, rejects directories with `-EISDIR`, rejects device nodes with
-`-EOPNOTSUPP`, and rejects invalid ELF metadata with `-EINVAL`.
+`-EOPNOTSUPP`, and rejects invalid ELF metadata with `-EINVAL`. Valid images
+are mapped into an unpublished candidate address space with byte-preserving
+`argv` and `envp` stack contents, then rolled back while `execve` still returns
+`-ENOSYS`.
 
 ## Address-Space Publication And Rollback
 
@@ -135,6 +139,12 @@ image:
 The old address space, old trap frame, old user stack, old heap state, old
 private mappings, current process ID, parent ID, and inherited descriptors must
 remain unchanged on failure.
+
+The current unsupported valid-image path already exercises this rule: the
+kernel builds the candidate address space, maps ELF segments, prepares the
+candidate user stack and trap frame, destroys the candidate address space, and
+asserts that frame-owner totals match their pre-build snapshot before returning
+`-ENOSYS` to the old image.
 
 On success, the scheduler lifecycle transition owns the swap:
 

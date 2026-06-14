@@ -332,6 +332,14 @@ pub fn get_current_parent_task_id() -> Option<u64> {
     })
 }
 
+/// Return the currently selected user task address space.
+pub fn get_current_user_address_space() -> Option<UserAddressSpace> {
+    let scheduler = SCHEDULER.lock();
+    scheduler
+        .as_ref()
+        .and_then(Scheduler::current_user_address_space)
+}
+
 /// Return scheduler task counts and lifecycle accounting diagnostics.
 pub fn get_scheduler_diagnostics() -> Option<SchedulerDiagnostics> {
     SCHEDULER

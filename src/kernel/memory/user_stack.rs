@@ -170,6 +170,48 @@ pub fn prepare_initial_stack(
     arguments: &[&str],
     environment: &[&str],
 ) -> PreparedUserStack {
+    assert!(
+        arguments.len() <= MAX_USER_ENTRY_ARGUMENTS,
+        "too many user entry arguments"
+    );
+    assert!(
+        environment.len() <= MAX_USER_ENTRY_ENVIRONMENT,
+        "too many user entry environment entries"
+    );
+
+    let mut argument_bytes = [&[][..]; MAX_USER_ENTRY_ARGUMENTS];
+    for (index, value) in arguments.iter().enumerate() {
+        argument_bytes[index] = value.as_bytes();
+    }
+    let mut environment_bytes = [&[][..]; MAX_USER_ENTRY_ENVIRONMENT];
+    for (index, value) in environment.iter().enumerate() {
+        environment_bytes[index] = value.as_bytes();
+    }
+
+    prepare_initial_stack_bytes(
+        address_space,
+        stack,
+        &argument_bytes[..arguments.len()],
+        &environment_bytes[..environment.len()],
+    )
+}
+
+/// Place byte-preserving `argv` and environment strings on the mapped user stack.
+///
+/// Returns the adjusted stack pointer and user virtual addresses for the
+/// null-terminated pointer arrays.
+///
+/// # Panics
+///
+/// Panics if the stack is invalid, the fixed argument limits are exceeded, any
+/// value contains an interior NUL byte, or the argument block does not fit in
+/// the mapped stack range.
+pub fn prepare_initial_stack_bytes(
+    address_space: UserAddressSpace,
+    stack: AllocatedUserStack,
+    arguments: &[&[u8]],
+    environment: &[&[u8]],
+) -> PreparedUserStack {
     let stack_top_address = stack.top();
     let stack_top = stack_top_address.as_u64();
     let stack_base = stack.base();
@@ -191,16 +233,24 @@ pub fn prepare_initial_stack(
         environment.len() <= MAX_USER_ENTRY_ENVIRONMENT,
         "too many user entry environment entries"
     );
+    assert!(
+        arguments
+            .iter()
+            .chain(environment.iter())
+            .all(|value| !value.contains(&0)),
+        "user entry strings must not contain interior NUL bytes"
+    );
 
     let mut stack_cursor = UserStackCursor::new(stack, stack_top_address);
     let mut argument_pointers = [None; MAX_USER_ENTRY_ARGUMENTS];
     let mut environment_pointers = [None; MAX_USER_ENTRY_ENVIRONMENT];
 
     for index in (0..arguments.len()).rev() {
-        argument_pointers[index] = Some(push_c_string(&mut stack_cursor, arguments[index]));
+        argument_pointers[index] = Some(push_c_string_bytes(&mut stack_cursor, arguments[index]));
     }
     for index in (0..environment.len()).rev() {
-        environment_pointers[index] = Some(push_c_string(&mut stack_cursor, environment[index]));
+        environment_pointers[index] =
+            Some(push_c_string_bytes(&mut stack_cursor, environment[index]));
     }
 
     stack_cursor.align_down(POINTER_SIZE);
@@ -337,7 +387,7 @@ impl UserStackCursor {
     }
 }
 
-fn push_c_string(stack_cursor: &mut UserStackCursor, value: &str) -> UserVirtualAddress {
+fn push_c_string_bytes(stack_cursor: &mut UserStackCursor, value: &[u8]) -> UserVirtualAddress {
     let length = u64::try_from(value.len().saturating_add(1))
         .expect("user entry string length must fit in u64");
     let stack_pointer = stack_cursor.push_bytes(length);

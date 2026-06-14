@@ -27,6 +27,7 @@
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
 //! - [`get_current_parent_task_id`] - Read the current parent task identifier
+//! - [`get_current_user_address_space`] - Read the current user task address space
 //! - [`collect_waitable_child_exit`] - Collect one retained child exit status
 //! - [`get_scheduler_diagnostics`] - Read scheduler accounting diagnostics
 //! - [`get_scheduler_task_snapshots`] - Read retained task rows for diagnostics
@@ -62,7 +63,7 @@ pub use process_lifecycle::UserTaskExit;
 pub use scheduler::{
     activate_user_task, block_current_user_after_syscall, close_user_return_preemption_window,
     collect_waitable_child_exit, finish_current_task, get_current_parent_task_id,
-    get_current_task_id, get_kernel_stack_guard_fault,
+    get_current_task_id, get_current_user_address_space, get_kernel_stack_guard_fault,
     get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
     get_scheduler_task_snapshots, initialize, prepare_current_user_sleep,
     process_current_user_break, process_current_user_mapping, process_current_user_unmapping,

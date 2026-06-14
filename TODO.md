@@ -138,8 +138,8 @@ reviewable unit before implementing it.
 ### Address Space Lifecycle
 
 - [ ] Add explicit address-space state transitions for building, active, exiting, and reclaimed states.
-- [ ] Prevent `execve` from publishing a partially built address space.
-- [ ] Ensure failed `execve` cleanup returns all newly allocated frames.
+- [ ] Publish successful `execve` image replacement through one scheduler-owned transition.
+- [ ] Convert `execve` candidate image construction to fallible allocation instead of panic-on-OOM.
 - [ ] Ensure failed spawn cleanup returns all newly allocated frames.
 - [ ] Track page-table frame ownership per process in diagnostics.
 - [ ] Track mapped user frame ownership per process in diagnostics.

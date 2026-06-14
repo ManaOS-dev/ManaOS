@@ -545,7 +545,7 @@ pub(super) use facade::install_user_task_kernel_stack;
 pub use facade::{
     activate_user_task, block_current_user_after_syscall, close_user_return_preemption_window,
     collect_waitable_child_exit, finish_current_task, get_current_parent_task_id,
-    get_current_task_id, get_kernel_stack_guard_fault,
+    get_current_task_id, get_current_user_address_space, get_kernel_stack_guard_fault,
     get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
     get_scheduler_task_snapshots, initialize, prepare_current_user_sleep,
     process_current_user_break, process_current_user_mapping, process_current_user_unmapping,

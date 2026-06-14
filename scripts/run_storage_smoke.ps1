@@ -129,6 +129,7 @@ $expectedPatterns = @(
     "User file_private mapping unmapped: .*pages=1 records=0 active_pages=0",
     "getppid -> parent=0",
     "user process ids ok",
+    "execve candidate rollback -> path=/disk/bin/smoke_demo .*owner_stats_restored=true",
     "user execve validation ok",
     "user syscall errors ok",
     "user entry arguments ok",

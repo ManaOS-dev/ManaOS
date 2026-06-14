@@ -59,8 +59,8 @@ The active selection is now full user process lifecycle work. The kernel-side
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. implement the documented `execve` address-space replacement and failure
-   rollback rules;
+1. publish successful `execve` image replacement through one scheduler-owned
+   transition;
 2. define the scheduler-owned child exit record model needed for `waitpid`;
 3. extend smoke coverage for multiple spawned user processes before introducing
    a broader user shell;

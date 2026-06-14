@@ -54,7 +54,7 @@ full user process lifecycle を進めることです。`execve` の kernel-side 
 invariant は [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。ここからは
 小さい runtime slice で進めます。
 
-1. 文書化済みの `execve` address-space replacement と failure rollback rule を実装する。
+1. 成功した `execve` image replacement を scheduler-owned transition で publish する。
 2. `waitpid` に必要な scheduler-owned child exit record model を定義する。
 3. broader user shell の前に、複数 spawned user process の smoke coverage を拡張する。
 4. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。

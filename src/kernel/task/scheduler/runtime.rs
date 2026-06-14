@@ -424,6 +424,10 @@ impl Scheduler {
         }
     }
 
+    pub(in crate::kernel::task) fn current_user_address_space(&self) -> Option<UserAddressSpace> {
+        self.user_address_space(self.current_index)
+    }
+
     pub(in crate::kernel::task) fn is_first_entry_user_candidate(&self, index: usize) -> bool {
         matches!(self.tasks[index].kind, TaskKind::User(_))
             && self.tasks[index].context.is_empty()

@@ -67,8 +67,8 @@ address-space replacement、failure rollback code、smoke coverage を
 
 - 物理アドレスと仮想アドレスを混ぜないことが最優先です。
 - guard page は mapped page ではなく、fault させるための unmapped reservation です。
-- `execve` や spawn 失敗時に途中の page table frame を残さないよう、rollback の
-  所有権を先に設計します。
+- `execve` candidate の rollback は実装済みです。次は successful publish と、
+  allocation failure でも panic しない fallible construction を固めます。
 - writable executable user mapping は、明示的に許す設計ができるまで拒否する方針を
   維持します。
 
