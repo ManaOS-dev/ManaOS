@@ -19,6 +19,8 @@ use uefi::prelude::*;
 use uefi::proto::console::gop::GraphicsOutput;
 use uefi::proto::media::file::{File, FileAttribute, FileMode};
 use uefi::proto::media::fs::SimpleFileSystem;
+use uefi::system;
+use uefi::table::cfg::ConfigTableEntry;
 use uefi::{
     boot,
     mem::memory_map::{MemoryDescriptor, MemoryMap, MemoryType},
@@ -84,6 +86,36 @@ fn get_framebuffer_info() -> kernel::driver::display::framebuffer::FrameBufferIn
         boot::open_protocol_exclusive::<GraphicsOutput>(graphics_output_handle)
             .expect("GraphicsOutput protocol is required for ManaOS framebuffer setup");
     kernel::driver::display::framebuffer::get_info(&mut graphics_output)
+}
+
+fn find_acpi_root_pointer() -> Option<kernel::acpi::RootPointer> {
+    system::with_config_table(|entries| {
+        entries
+            .iter()
+            .find(|entry| entry.guid == ConfigTableEntry::ACPI2_GUID)
+            .and_then(|entry| {
+                acpi_root_pointer_from_entry(entry, kernel::acpi::RootPointerSource::UefiAcpi2)
+            })
+            .or_else(|| {
+                entries
+                    .iter()
+                    .find(|entry| entry.guid == ConfigTableEntry::ACPI_GUID)
+                    .and_then(|entry| {
+                        acpi_root_pointer_from_entry(
+                            entry,
+                            kernel::acpi::RootPointerSource::UefiAcpi1,
+                        )
+                    })
+            })
+    })
+}
+
+fn acpi_root_pointer_from_entry(
+    entry: &ConfigTableEntry,
+    source: kernel::acpi::RootPointerSource,
+) -> Option<kernel::acpi::RootPointer> {
+    let physical_address = u64::try_from(entry.address.addr()).ok()?;
+    (physical_address != 0).then_some(kernel::acpi::RootPointer::new(physical_address, source))
 }
 
 fn import_boot_memory_map<'a>(
@@ -380,6 +412,57 @@ fn verify_elf_loader_rules() {
         kernel::elf::verify_invalid_elf_rejections(),
         "ELF invalid-image rejection smoke must pass"
     );
+}
+
+fn verify_acpi_parser_rules() {
+    assert!(
+        kernel::acpi::verify_parser_rules(),
+        "ACPI parser self-check must pass"
+    );
+    crate::log_info!(
+        "acpi",
+        "ACPI parser self-check passed: rsdp=true root_table=true"
+    );
+}
+
+fn verify_acpi_root_table(root_pointer: Option<kernel::acpi::RootPointer>) {
+    let root_pointer =
+        root_pointer.expect("UEFI ACPI RSDP configuration table is required before APIC setup");
+    // SAFETY: The RSDP address came from the UEFI configuration table before
+    // ExitBootServices, and paging has identity-mapped boot memory ranges.
+    let diagnostics: kernel::acpi::Diagnostics =
+        unsafe { kernel::acpi::inspect_root_pointer(root_pointer) }
+            .expect("UEFI ACPI RSDP and root table must validate before APIC setup");
+    let root_table: kernel::acpi::RootTableDiagnostics = diagnostics.root_table();
+    let root_table_kind: kernel::acpi::RootTableKind = root_table.kind();
+    if let Some(xsdt_address) = diagnostics.xsdt_address() {
+        crate::log_info!(
+            "acpi",
+            "ACPI root table verified: source={} revision={} rsdt={:#x} xsdt={:#x} root_table={} root_address={:#x} root_revision={} root_length={} entries={} checksum=true",
+            diagnostics.root_pointer().source().as_str(),
+            diagnostics.revision(),
+            diagnostics.rsdt_address(),
+            xsdt_address,
+            root_table_kind.as_str(),
+            root_table.physical_address(),
+            root_table.revision(),
+            root_table.length(),
+            root_table.entry_count()
+        );
+    } else {
+        crate::log_info!(
+            "acpi",
+            "ACPI root table verified: source={} revision={} rsdt={:#x} xsdt=none root_table={} root_address={:#x} root_revision={} root_length={} entries={} checksum=true",
+            diagnostics.root_pointer().source().as_str(),
+            diagnostics.revision(),
+            diagnostics.rsdt_address(),
+            root_table_kind.as_str(),
+            root_table.physical_address(),
+            root_table.revision(),
+            root_table.length(),
+            root_table.entry_count()
+        );
+    }
 }
 
 fn verify_mounted_disk_file(path: &str) {
@@ -1210,6 +1293,7 @@ fn main() -> Status {
     // Pre-load fonts before exiting boot services
     let font_inter = load_file("Inter.ttf");
     let font_noto = load_file("NotoSansJP.ttf");
+    let acpi_root_pointer = find_acpi_root_pointer();
 
     // ────────────────────────────────────────────────
     // ExitBootServices
@@ -1229,6 +1313,7 @@ fn main() -> Status {
     verify_frame_allocator_rules();
     verify_kernel_virtual_range_allocator_rules();
     verify_elf_loader_rules();
+    verify_acpi_parser_rules();
 
     // ────────────────────────────────────────────────
     // Kernel Phase (UEFI Services unavailable)
@@ -1248,6 +1333,7 @@ fn main() -> Status {
         },
         backbuffer_address,
     );
+    verify_acpi_root_table(acpi_root_pointer);
     verify_dynamic_kernel_mapping_lifecycle(&mut frame_allocator);
     verify_user_address_space_template(&mut frame_allocator);
     verify_user_address_space_reclaim(&mut frame_allocator);

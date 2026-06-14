@@ -136,7 +136,7 @@ items have been removed so the file stays useful for deciding the next task.
 
 ### Interrupts And Scheduling
 
-- [ ] Parse ACPI RSDP and XSDT/RSDT.
+- [x] Parse ACPI RSDP and XSDT/RSDT.
 - [ ] Parse ACPI MADT.
 - [ ] Enable IOAPIC routing.
 - [ ] Replace legacy PIC routing after IOAPIC is stable.
