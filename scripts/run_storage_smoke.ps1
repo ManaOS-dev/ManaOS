@@ -102,6 +102,7 @@ $expectedPatterns = @(
     "Installed user task kernel stack: task=.* address_space=",
     "User entry arguments prepared: argc=2",
     "Multi-user smoke tasks spawned",
+    "Concurrent user program spawn smoke passed: tasks=2",
     "Multi-user active set prepared: tasks=2",
     "User timer trap frame saved",
     "User task preempted by timer",

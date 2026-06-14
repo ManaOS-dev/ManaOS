@@ -249,6 +249,8 @@ unmarked descriptor は default で descriptor number と offset を保持し、
 - storage smoke は kernel-internal な `spawn_user_program` helper 経由で user program を起動し、
   filesystem path loading、ELF mapping、initial argv/envp stack construction、scheduler task creation が
   1つの path を共有することを検証します。
+- storage smoke は、同じ filesystem path から distinct な user task を2つ spawn し、両方をまとめて
+  active set に入れる前提を assert します。
 - storage smoke は、同じ task が `execve` で current image を置き換えた後も、`tasks` output が
   original spawn path を `origin=` として保持することを assert します。
 - storage smoke は successful self-`execve` で継承された unmarked descriptor が new image でも使えることを

@@ -43,6 +43,17 @@ pub fn run_user_smoke_demo(
         user_task_ids[0],
         user_task_ids[1]
     );
+    assert_ne!(
+        user_task_ids[0], user_task_ids[1],
+        "concurrent user spawn smoke tasks must be distinct"
+    );
+    crate::log_info!(
+        "task",
+        "Concurrent user program spawn smoke passed: tasks={} first={} second={}",
+        user_task_ids.len(),
+        user_task_ids[0],
+        user_task_ids[1]
+    );
     for user_task_id in &user_task_ids {
         assert!(
             crate::kernel::task::activate_user_task(*user_task_id),
