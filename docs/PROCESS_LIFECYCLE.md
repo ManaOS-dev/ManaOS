@@ -75,6 +75,40 @@ The remaining scheduler-backed contract is:
 - Reclaim address-space and kernel-stack resources only after the exit record is
   safe according to the scheduler-owned lifecycle policy.
 
+## Parent-Child Lifecycle States
+
+The current scheduler already records the parent task identifier when a kernel
+or user task is spawned. Successful `execve` keeps the same task identifier and
+parent relationship, so image replacement does not create a new child from the
+parent's point of view.
+
+The current lifecycle states are:
+
+- Running or ready child: the child task has a parent identifier, still owns any
+  live user runtime resources, and is not waitable yet.
+- Finished waitable child: `SYS_EXIT` moved the user task to `Finished`,
+  retained its exit code, and made the status available to the recorded parent.
+- Collected child: the parent-side collection path consumed the retained exit
+  code once. A second collection for the same child returns no exit record.
+- Reclaimed child resources: the scheduler-owned cleanup path released the
+  finished child's user address space and kernel stack after the current smoke
+  lifecycle no longer needs to resume the child.
+
+The future general process model must keep these invariants:
+
+- A child is waitable only to its recorded parent, except for a documented
+  reparenting policy after parent exit.
+- A successful `execve` never changes process identifier, parent identifier, or
+  waitability.
+- A child exit status remains observable until exactly one successful parent
+  reap consumes it.
+- `waitpid(WNOHANG)` may return `0` only when the caller has a matching child
+  but no exited matching child is ready to reap.
+- Address-space and kernel-stack reclamation must not erase the exit status
+  before the parent can reap it.
+- Orphan handling must be explicit: either reparent to the documented initial
+  process or reject the process model that can produce orphans.
+
 ## `execve` Kernel Contract
 
 `execve` replaces the current process image while preserving the process

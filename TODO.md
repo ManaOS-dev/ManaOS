@@ -28,7 +28,6 @@ reviewable unit before implementing it.
 - [ ] Add `tasks` output for waiting, zombie, and reaped states.
 - [ ] Add a userland smoke program that spawns a child and waits for exit.
 - [ ] Add a userland smoke program that verifies a nonzero child exit status.
-- [ ] Document parent-child lifecycle state transitions.
 - [ ] Add serial assertions for the wait lifecycle smoke path.
 
 ### Spawn Model And Fork Decision

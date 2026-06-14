@@ -69,6 +69,35 @@ behavior change は明示的に変わります。
 - address-space と kernel-stack resource は、scheduler-owned lifecycle policy 上で exit record が
   安全になってから reclaim します。
 
+## parent-child lifecycle states
+
+現在の scheduler は、kernel task または user task を spawn するときに parent task identifier を
+記録します。成功した `execve` は同じ task identifier と parent relationship を維持するため、parent
+から見た child は image replacement によって別 process にはなりません。
+
+現在の lifecycle state:
+
+- Running or ready child: child task は parent identifier を持ち、live user runtime resource を
+  所有しており、まだ waitable ではありません。
+- Finished waitable child: `SYS_EXIT` が user task を `Finished` へ移し、exit code を保持し、
+  記録済み parent から観測可能にします。
+- Collected child: parent-side collection path が保持済み exit code を一度だけ消費済みです。
+  同じ child に対する二度目の collection は exit record を返しません。
+- Reclaimed child resources: current smoke lifecycle が child を再開しなくなった後で、scheduler-owned
+  cleanup path が finished child の user address space と kernel stack を解放済みです。
+
+将来の general process model では、次の invariant を維持します。
+
+- child は、parent exit 後の reparenting policy が文書化されるまでは、記録済み parent に対してのみ
+  waitable です。
+- 成功した `execve` は process identifier、parent identifier、waitability を変えません。
+- child exit status は、成功した parent reap がちょうど一度だけ消費するまで観測可能です。
+- `waitpid(WNOHANG)` が `0` を返してよいのは、caller に matching child が存在し、reap 可能な
+  exited matching child がまだない場合だけです。
+- address-space と kernel-stack reclamation は、parent が reap する前に exit status を消してはいけません。
+- orphan handling は明示する必要があります。documented initial process へ reparent するか、orphan を
+  生成しうる process model を拒否します。
+
 ## `execve` kernel contract
 
 `execve` は、process identity と parent-child relationship を保ったまま、現在の process image を

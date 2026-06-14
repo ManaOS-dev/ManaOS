@@ -47,6 +47,7 @@ active roadmap can list only unfinished work.
 - [x] Return `ECHILD` when the caller has no matching child.
 - [x] Return `EINTR` only after an interrupt policy exists, or document that it is unsupported.
 - [x] Add a negative smoke case for waiting on a non-child PID.
+- [x] Document parent-child lifecycle state transitions.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 
