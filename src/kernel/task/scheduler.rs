@@ -107,6 +107,38 @@ impl UserMappingRequest {
     }
 }
 
+/// Scheduler-internal request for constructing a user task record.
+#[derive(Clone, Copy)]
+pub(in crate::kernel::task::scheduler) struct UserTaskSpawnRequest<'a> {
+    address_space: UserAddressSpace,
+    entry_point: UserVirtualAddress,
+    user_stack_top: UserVirtualAddress,
+    heap_start: UserVirtualAddress,
+    entry_arguments: UserEntryArguments,
+    spawn_origin_path: &'a str,
+}
+
+impl<'a> UserTaskSpawnRequest<'a> {
+    /// Create a scheduler-internal user task spawn request.
+    pub(in crate::kernel::task::scheduler) const fn new(
+        address_space: UserAddressSpace,
+        entry_point: UserVirtualAddress,
+        user_stack_top: UserVirtualAddress,
+        heap_start: UserVirtualAddress,
+        entry_arguments: UserEntryArguments,
+        spawn_origin_path: &'a str,
+    ) -> Self {
+        Self {
+            address_space,
+            entry_point,
+            user_stack_top,
+            heap_start,
+            entry_arguments,
+            spawn_origin_path,
+        }
+    }
+}
+
 fn current_preemption_state() -> PreemptionStateDiagnostics {
     PreemptionStateDiagnostics::from_raw(PREEMPTION_STATE.load(Ordering::Acquire))
 }
@@ -147,11 +179,12 @@ impl UserTaskRuntime {
         address_space: UserAddressSpace,
         entry_context: UserTaskContext,
         heap_start: UserVirtualAddress,
+        spawn_origin_path: &str,
     ) -> Self {
         Self {
             address_space: Some(address_space),
             saved_frame: entry_context.to_trap_frame(),
-            image: UserImageRuntime::new(),
+            image: UserImageRuntime::new(spawn_origin_path),
             heap: UserHeap::new(heap_start),
             mappings: UserMappings::new(),
             mapping_total_mapped_pages: 0,
@@ -169,6 +202,8 @@ impl UserTaskRuntime {
 #[derive(Debug)]
 struct UserImageRuntime {
     generation: u64,
+    origin_path_len: usize,
+    origin_path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
     path_len: usize,
     path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
     last_execve_old_user_pages: u64,
@@ -176,11 +211,17 @@ struct UserImageRuntime {
 }
 
 impl UserImageRuntime {
-    const fn new() -> Self {
+    fn new(spawn_origin_path: &str) -> Self {
+        let mut path_bytes = [0; USER_IMAGE_PATH_DIAGNOSTIC_BYTES];
+        let path_len = copy_path_to_diagnostic(spawn_origin_path, &mut path_bytes);
+        let mut origin_path_bytes = [0; USER_IMAGE_PATH_DIAGNOSTIC_BYTES];
+        let origin_path_len = copy_path_to_diagnostic(spawn_origin_path, &mut origin_path_bytes);
         Self {
             generation: 0,
-            path_len: 0,
-            path_bytes: [0; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
+            origin_path_len,
+            origin_path_bytes,
+            path_len,
+            path_bytes,
             last_execve_old_user_pages: 0,
             last_execve_old_page_table_pages: 0,
         }
@@ -189,9 +230,7 @@ impl UserImageRuntime {
     fn replace_with_path(&mut self, path: &str) {
         self.generation = self.generation.saturating_add(1);
         self.path_bytes.fill(0);
-        let path_len = truncated_path_len(path);
-        self.path_bytes[..path_len].copy_from_slice(&path.as_bytes()[..path_len]);
-        self.path_len = path_len;
+        self.path_len = copy_path_to_diagnostic(path, &mut self.path_bytes);
         self.last_execve_old_user_pages = 0;
         self.last_execve_old_page_table_pages = 0;
     }
@@ -199,6 +238,8 @@ impl UserImageRuntime {
     const fn snapshot(&self) -> UserImageDiagnosticsSnapshot {
         UserImageDiagnosticsSnapshot::new(
             self.generation,
+            self.origin_path_len,
+            self.origin_path_bytes,
             self.path_len,
             self.path_bytes,
             self.last_execve_old_user_pages,
@@ -212,11 +253,15 @@ impl UserImageRuntime {
     }
 }
 
-fn truncated_path_len(path: &str) -> usize {
+fn copy_path_to_diagnostic(
+    path: &str,
+    destination: &mut [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
+) -> usize {
     let mut path_len = path.len().min(USER_IMAGE_PATH_DIAGNOSTIC_BYTES);
     while !path.is_char_boundary(path_len) {
         path_len = path_len.saturating_sub(1);
     }
+    destination[..path_len].copy_from_slice(&path.as_bytes()[..path_len]);
     path_len
 }
 
@@ -316,9 +361,8 @@ impl Task {
     fn user(
         identifier: TaskIdentifier,
         parent_identifier: TaskIdentifier,
-        address_space: UserAddressSpace,
+        request: UserTaskSpawnRequest<'_>,
         user_context: UserTaskContext,
-        heap_start: UserVirtualAddress,
         frame_allocator: &mut PhysicalFrameAllocator,
         kernel_stack_range_allocator: &mut KernelVirtualRangeAllocator,
     ) -> Self {
@@ -333,9 +377,10 @@ impl Task {
             metadata: TaskMetadata::child(identifier, parent_identifier),
             state: TaskState::Ready,
             kind: TaskKind::User(Box::new(UserTaskRuntime::new(
-                address_space,
+                request.address_space,
                 user_context,
-                heap_start,
+                request.heap_start,
+                request.spawn_origin_path,
             ))),
             context: TaskContext::new(),
             kernel_stack: Some(kernel_stack),
@@ -548,23 +593,23 @@ impl Scheduler {
     fn spawn_user_task(
         &mut self,
         frame_allocator: &mut PhysicalFrameAllocator,
-        address_space: UserAddressSpace,
-        entry_point: UserVirtualAddress,
-        user_stack_top: UserVirtualAddress,
-        heap_start: UserVirtualAddress,
-        entry_arguments: UserEntryArguments,
+        request: UserTaskSpawnRequest<'_>,
     ) -> u64 {
         let task_identifier = self.next_task_identifier.allocate();
         let parent_identifier = self.tasks[self.current_index].metadata.get_identifier();
         // SAFETY: The caller provides a mapped user entry point and user stack.
-        let user_context =
-            unsafe { UserTaskContext::new(entry_point, user_stack_top, entry_arguments) };
+        let user_context = unsafe {
+            UserTaskContext::new(
+                request.entry_point,
+                request.user_stack_top,
+                request.entry_arguments,
+            )
+        };
         let task = Task::user(
             task_identifier,
             parent_identifier,
-            address_space,
+            request,
             user_context,
-            heap_start,
             frame_allocator,
             &mut self.kernel_stack_range_allocator,
         );
@@ -595,8 +640,8 @@ impl Scheduler {
             "task",
             "User task kernel stack prepared: task={} address_space={:#x} heap_start={:#x} bytes={} guard_virtual={:#x} writable_virtual={:#x} virtual_top={:#x} reserved_pages={} writable_pages={} guard_unmapped=true writable_mapped=true",
             task_identifier.as_u64(),
-            address_space.level_4_frame().as_u64(),
-            heap_start.as_u64(),
+            request.address_space.level_4_frame().as_u64(),
+            request.heap_start.as_u64(),
             kernel_stack_bytes,
             kernel_stack_guard_page_virtual_start,
             kernel_stack_writable_virtual_start,

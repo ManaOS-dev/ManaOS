@@ -31,6 +31,9 @@ The kernel-internal `kernel::process::spawn_user_program` helper now owns the
 boot-visible path from filesystem executable path to initial user task record,
 while filesystem lookup, ELF mapping, address-space construction, and scheduler
 metadata remain owned by their existing modules.
+Scheduler diagnostics retain the spawned origin path separately from the current
+image path, so a later successful `execve` can change `path=` while `origin=`
+still identifies the program that created the task record.
 
 General user-created process lifecycle is not complete yet. Current-directory
 ownership, user-visible child creation, and the scheduler-backed `waitpid`
@@ -284,6 +287,9 @@ Current runtime diagnostics cover the first successful replacement path:
 - Storage smoke starts user programs through the kernel-internal
   `spawn_user_program` helper so filesystem path loading, ELF mapping, initial
   argv/envp stack construction, and scheduler task creation share one path.
+- Storage smoke asserts that `tasks` output retains the original spawn path as
+  `origin=` after the same task successfully replaces its current image through
+  `execve`.
 - Storage smoke verifies that an unmarked descriptor inherited through
   successful self-`execve` remains usable in the new image.
 - Storage smoke asserts the kernel log emitted when descriptors opened with
@@ -302,8 +308,9 @@ Current runtime diagnostics cover the first successful replacement path:
   status encoding through the scheduler-owned child exit records.
 - Storage smoke asserts a stable wait lifecycle summary showing retained child
   count, collected child count, and double-reap prevention.
-- The `tasks` console command shows each user task's current image generation,
-  retained image path, and last successful old-image reclaim counts.
+- The `tasks` console command shows each user task's spawned origin path,
+  current image generation, retained image path, and last successful old-image
+  reclaim counts.
 
 Remaining runtime diagnostics should cover broader behavior:
 

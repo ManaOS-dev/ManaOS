@@ -59,6 +59,7 @@ active roadmap can list only unfinished work.
 ### Spawn Model And Fork Decision
 
 - [x] Define a kernel-internal spawn helper for creating a process from a filesystem path.
+- [x] Add scheduler metadata for spawned process origin.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

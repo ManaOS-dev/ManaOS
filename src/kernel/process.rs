@@ -117,6 +117,7 @@ pub fn spawn_user_program(
         user_entry_point,
         user_heap_start,
         prepared_user_stack,
+        request.path,
     );
     crate::log_info!(
         "task",
@@ -241,6 +242,7 @@ fn spawn_prepared_user_task(
     user_entry_point: UserVirtualAddress,
     user_heap_start: UserVirtualAddress,
     prepared_user_stack: PreparedUserStack,
+    spawn_origin_path: &str,
 ) -> u64 {
     let user_task_id = task::spawn_user_task(
         frame_allocator,
@@ -253,6 +255,7 @@ fn spawn_prepared_user_task(
             prepared_user_stack.argument_values_pointer(),
             prepared_user_stack.environment_values_pointer(),
         ),
+        spawn_origin_path,
     );
     crate::log_info!(
         "task",

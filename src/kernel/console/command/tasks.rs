@@ -128,21 +128,28 @@ fn push_user_image(
     task_id: u64,
     user_image: &UserImageDiagnosticsSnapshot,
 ) {
+    let origin_path =
+        path_diagnostic_text(user_image.origin_path_bytes(), user_image.origin_path_len());
     let path_bytes = user_image.path_bytes();
     let path_len = user_image.path_len();
-    let image_path = if path_len == 0 {
-        "-"
-    } else {
-        core::str::from_utf8(&path_bytes[..path_len]).unwrap_or("<invalid>")
-    };
+    let image_path = path_diagnostic_text(path_bytes, path_len);
     output.push(format!(
-        "task_image: id={} generation={} path={} last_execve_old_user_pages={} last_execve_old_page_table_pages={}",
+        "task_image: id={} generation={} origin={} path={} last_execve_old_user_pages={} last_execve_old_page_table_pages={}",
         task_id,
         user_image.generation(),
+        origin_path,
         image_path,
         user_image.last_execve_old_user_pages(),
         user_image.last_execve_old_page_table_pages()
     ));
+}
+
+fn path_diagnostic_text(path_bytes: &[u8], path_len: usize) -> &str {
+    if path_len == 0 {
+        "-"
+    } else {
+        core::str::from_utf8(&path_bytes[..path_len]).unwrap_or("<invalid>")
+    }
 }
 
 fn push_user_virtual_memory(

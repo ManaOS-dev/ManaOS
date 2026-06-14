@@ -29,6 +29,8 @@ address space と scheduler-owned kernel stack を reclaim できます。
 kernel-internal な `kernel::process::spawn_user_program` helper は、filesystem executable path から
 initial user task record までの boot-visible path を所有します。一方で filesystem lookup、ELF
 mapping、address-space construction、scheduler metadata は既存 module の所有のままです。
+scheduler diagnostics は spawned origin path を current image path と別に保持するため、後続の
+successful `execve` で `path=` が変わっても、`origin=` は task record を作った program を示し続けます。
 
 一方で、一般的な user-created process lifecycle はまだ未完成です。current directory の ownership、
 user-visible child creation、scheduler-backed な `waitpid` の wait/reap state machine は今後の作業です。
@@ -247,6 +249,8 @@ unmarked descriptor は default で descriptor number と offset を保持し、
 - storage smoke は kernel-internal な `spawn_user_program` helper 経由で user program を起動し、
   filesystem path loading、ELF mapping、initial argv/envp stack construction、scheduler task creation が
   1つの path を共有することを検証します。
+- storage smoke は、同じ task が `execve` で current image を置き換えた後も、`tasks` output が
+  original spawn path を `origin=` として保持することを assert します。
 - storage smoke は successful self-`execve` で継承された unmarked descriptor が new image でも使えることを
   検証します。
 - storage smoke は `OPEN_CLOSE_ON_EXEC` 付きで open した descriptor が successful image replacement 中に
@@ -265,8 +269,8 @@ unmarked descriptor は default で descriptor number と offset を保持し、
   scheduler-owned child exit record 経由で assert します。
 - storage smoke は retained child count、collected child count、double-reap prevention を示す stable な
   wait lifecycle summary も assert します。
-- `tasks` console command は、user task ごとの current image generation、retained image path、last successful
-  old-image reclaim count を表示します。
+- `tasks` console command は、user task ごとの spawned origin path、current image generation、
+  retained image path、last successful old-image reclaim count を表示します。
 
 残りの runtime diagnostics では、より広い behavior を扱います。
 

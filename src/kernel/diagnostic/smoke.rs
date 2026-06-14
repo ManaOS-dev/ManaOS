@@ -200,6 +200,7 @@ pub fn verify_scheduler_console_command() -> bool {
             "timer_user_entries=",
             "user_vm_layout:",
             "task_image:",
+            "origin=/disk/bin/smoke_demo",
             "path=/disk/bin/file_demo",
             "last_execve_old_user_pages=9",
             "task_vm:",

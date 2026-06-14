@@ -150,6 +150,8 @@ impl PreemptionStateDiagnostics {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserImageDiagnosticsSnapshot {
     generation: u64,
+    origin_path_len: usize,
+    origin_path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
     path_len: usize,
     path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
     last_execve_old_user_pages: u64,
@@ -160,6 +162,8 @@ impl UserImageDiagnosticsSnapshot {
     /// Create a user image diagnostics snapshot.
     pub(super) const fn new(
         generation: u64,
+        origin_path_len: usize,
+        origin_path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
         path_len: usize,
         path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
         last_execve_old_user_pages: u64,
@@ -167,6 +171,8 @@ impl UserImageDiagnosticsSnapshot {
     ) -> Self {
         Self {
             generation,
+            origin_path_len,
+            origin_path_bytes,
             path_len,
             path_bytes,
             last_execve_old_user_pages,
@@ -177,6 +183,16 @@ impl UserImageDiagnosticsSnapshot {
     /// Return the current image generation.
     pub const fn generation(&self) -> u64 {
         self.generation
+    }
+
+    /// Return the number of valid bytes in the retained spawn origin path.
+    pub const fn origin_path_len(&self) -> usize {
+        self.origin_path_len
+    }
+
+    /// Return the retained spawn origin path bytes.
+    pub const fn origin_path_bytes(&self) -> &[u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES] {
+        &self.origin_path_bytes
     }
 
     /// Return the number of valid bytes in the retained image path.

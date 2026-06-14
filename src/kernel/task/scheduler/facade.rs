@@ -5,8 +5,8 @@ use super::{
     KernelStackGuardFault, PhysicalFrameAllocator, PreemptionStateDiagnostics, Scheduler,
     SchedulerDiagnostics, SchedulerTaskSnapshot, SwitchAction, TaskEntry, UserAddressSpace,
     UserAddressSpaceReclaim, UserEntryArguments, UserMappingError, UserMappingRequest,
-    UserTaskExit, UserTrapFrame, UserTrapFrameSource, UserVirtualAddress, PREEMPTION_STATE,
-    SCHEDULER, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
+    UserTaskExit, UserTaskSpawnRequest, UserTrapFrame, UserTrapFrameSource, UserVirtualAddress,
+    PREEMPTION_STATE, SCHEDULER, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
 use alloc::vec::Vec;
 use core::sync::atomic::Ordering;
@@ -41,6 +41,9 @@ pub fn spawn(frame_allocator: &mut PhysicalFrameAllocator, entry: TaskEntry) -> 
 
 /// Add a runnable user-space task to the round-robin scheduler.
 ///
+/// The spawn origin path is retained for diagnostics and is not changed by a
+/// later successful `execve`.
+///
 /// # Panics
 ///
 /// Panics if the scheduler has not been initialized, kernel stack frames cannot
@@ -52,6 +55,7 @@ pub fn spawn_user_task(
     user_stack_top: UserVirtualAddress,
     heap_start: UserVirtualAddress,
     entry_arguments: UserEntryArguments,
+    spawn_origin_path: &str,
 ) -> u64 {
     let mut scheduler = SCHEDULER.lock();
     scheduler
@@ -59,11 +63,14 @@ pub fn spawn_user_task(
         .expect("scheduler must be initialized before spawning user tasks")
         .spawn_user_task(
             frame_allocator,
-            address_space,
-            entry_point,
-            user_stack_top,
-            heap_start,
-            entry_arguments,
+            UserTaskSpawnRequest::new(
+                address_space,
+                entry_point,
+                user_stack_top,
+                heap_start,
+                entry_arguments,
+                spawn_origin_path,
+            ),
         )
 }
 
