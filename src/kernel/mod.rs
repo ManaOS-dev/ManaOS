@@ -17,6 +17,7 @@
 //! - [`interrupt`] - Kernel-side interrupt event routing
 //! - [`logger`] - Boot phase logging
 //! - [`memory`] - Kernel memory management
+//! - [`process`] - Kernel-internal user process construction
 //! - [`profiler`] - Lightweight profiling support
 //! - [`serial`] - Serial output
 //! - [`sync`] - Synchronization primitives
@@ -34,6 +35,7 @@ pub mod filesystem;
 pub mod interrupt;
 pub mod logger;
 pub mod memory;
+pub mod process;
 pub mod profiler;
 pub mod runtime;
 pub mod serial;

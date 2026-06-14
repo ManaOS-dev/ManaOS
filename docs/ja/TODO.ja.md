@@ -50,7 +50,8 @@ reclaim、no-return self-`execve` smoke、open descriptor inheritance smoke、se
 contract、shared number/constants、no-std wrapper、selector validation、no-child `ECHILD`
 path、parent-child lifecycle state documentation、scheduler-owned child exit record model、
 zombie/reaped diagnostics、`tasks` command の per-task lifecycle output、already-exited child の
-scheduler-backed `waitpid` reap まで完了済みです。
+scheduler-backed `waitpid` reap、filesystem path から user task を作る kernel-internal spawn helper
+まで完了済みです。
 `execve` は close-on-exec metadata / close behavior まで完了済みなので、残りは current
 directory と replacement-state diagnostics です。次は user-visible `waitpid` behavior と
 reaping state を小さい branch に分けて進めます。

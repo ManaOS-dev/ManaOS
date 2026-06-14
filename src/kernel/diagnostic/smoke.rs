@@ -1,7 +1,5 @@
 //! Boot-time kernel smoke diagnostics.
 
-use alloc::vec::Vec;
-
 mod scheduler_diagnostics;
 
 pub use scheduler_diagnostics::{
@@ -9,136 +7,22 @@ pub use scheduler_diagnostics::{
     verify_scheduler_task_snapshots,
 };
 
-fn read_kernel_file(path: &str) -> Option<Vec<u8>> {
-    let metadata = crate::kernel::filesystem::metadata(path).ok()?;
-    if metadata.file_type != crate::kernel::filesystem::FileType::Regular {
-        return None;
-    }
-
-    let descriptor = crate::kernel::filesystem::open(path).ok()?;
-    let mut contents = Vec::new();
-    contents
-        .try_reserve_exact(metadata.size)
-        .expect("OOM: failed to reserve kernel file buffer");
-    contents.resize(metadata.size, 0);
-
-    let mut bytes_read = 0_usize;
-    while bytes_read < metadata.size {
-        let read_now =
-            crate::kernel::filesystem::read(descriptor, &mut contents[bytes_read..]).ok()?;
-        if read_now == 0 {
-            break;
-        }
-        bytes_read = bytes_read
-            .checked_add(read_now)
-            .expect("kernel file read byte count overflowed");
-    }
-    crate::kernel::filesystem::close(descriptor).ok()?;
-    contents.truncate(bytes_read);
-    Some(contents)
-}
-
 fn spawn_user_smoke_task(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
     user_elf_path: &str,
-    user_elf_bytes: &[u8],
     user_stack_pages: u64,
 ) -> u64 {
-    let user_address_space =
-        crate::kernel::memory::address_space::create_user_address_space(frame_allocator);
-    crate::log_info!(
-        "memory",
-        "User address space prepared: pml4={:#x}",
-        user_address_space.level_4_frame().as_u64()
-    );
-    let user_elf: crate::kernel::elf::LoadedElf = crate::kernel::elf::load_user_program(
-        user_address_space,
-        frame_allocator,
-        user_elf_bytes,
-        user_elf_path,
-    );
-    let user_entry_point = user_elf.entry_point();
-    let user_heap_start = user_elf.heap_start();
-    let user_stack = crate::kernel::memory::user_stack::allocate_user_stack(
-        user_address_space,
-        frame_allocator,
-        user_stack_pages,
-    );
-    assert!(
-        crate::kernel::memory::user_stack::verify_user_stack_mapping(
-            user_address_space,
-            user_stack
-        ),
-        "user stack mapping and guard page smoke must pass"
-    );
-    crate::log_info!(
-        "memory",
-        "User stack mapping verified: pages={} base={:#x} top={:#x} guard_unmapped=true",
-        user_stack.page_count(),
-        user_stack.base().as_u64(),
-        user_stack.top().as_u64()
-    );
-
-    let user_stack_probe = user_stack
-        .top()
-        .checked_sub(1)
-        .expect("user stack top must be above the mapped stack");
-    assert!(
-        user_address_space.verify_kernel_user_mapping_permissions(
-            run_user_smoke_demo as *const () as usize,
-            user_stack_probe.as_usize(),
-            user_entry_point.as_usize(),
-        ),
-        "kernel and user mapping permission smoke must pass"
-    );
-    crate::log_info!(
-        "memory",
-        "Kernel/user mapping permission self-check passed: pml4={:#x}",
-        user_address_space.level_4_frame().as_u64()
-    );
-    assert!(
-        user_address_space.verify_syscall_user_data_permissions(
-            user_stack_probe.as_usize(),
-            user_entry_point.as_usize(),
-        ),
-        "syscall user data permission smoke must pass"
-    );
-    crate::log_info!("memory", "Syscall user data permission self-check passed.");
     let user_entry_arguments = [user_elf_path, "--storage-smoke"];
     let user_entry_environment = ["MANAOS_BOOT=storage-smoke"];
-    let prepared_user_stack = crate::kernel::memory::user_stack::prepare_initial_stack(
-        user_address_space,
-        user_stack,
+    let request = crate::kernel::process::UserProgramSpawnRequest::new(
+        user_elf_path,
         &user_entry_arguments,
         &user_entry_environment,
-    );
-    crate::log_info!(
-        "task",
-        "User entry arguments prepared: argc={} argv={:#x} envp={:#x}",
-        prepared_user_stack.argument_count(),
-        prepared_user_stack.argument_values_pointer().as_u64(),
-        prepared_user_stack.environment_values_pointer().as_u64()
-    );
-
-    let user_task_id = crate::kernel::task::spawn_user_task(
-        frame_allocator,
-        user_address_space,
-        user_entry_point,
-        prepared_user_stack.stack_pointer(),
-        user_heap_start,
-        crate::kernel::task::UserEntryArguments::new(
-            prepared_user_stack.argument_count(),
-            prepared_user_stack.argument_values_pointer(),
-            prepared_user_stack.environment_values_pointer(),
-        ),
-    );
-    crate::log_info!(
-        "task",
-        "User task spawned. task_id={} address_space={:#x}",
-        user_task_id,
-        user_address_space.level_4_frame().as_u64()
-    );
-    user_task_id
+        user_stack_pages,
+    )
+    .with_kernel_probe_address(run_user_smoke_demo as *const () as usize);
+    crate::kernel::process::spawn_user_program(frame_allocator, request)
+        .expect("user smoke program must spawn from /disk/bin")
 }
 
 /// Run the boot-time userland scheduler and syscall smoke demo.
@@ -149,27 +33,9 @@ pub fn run_user_smoke_demo(
 
     let user_stack_pages = 4;
     let user_elf_path = "/disk/bin/smoke_demo";
-    let user_elf_bytes =
-        read_kernel_file(user_elf_path).expect("user smoke ELF must be readable from /disk/bin");
-    crate::log_info!(
-        "elf",
-        "Loading user ELF from filesystem: path={} bytes={}",
-        user_elf_path,
-        user_elf_bytes.len()
-    );
     let user_task_ids = [
-        spawn_user_smoke_task(
-            frame_allocator,
-            user_elf_path,
-            &user_elf_bytes,
-            user_stack_pages,
-        ),
-        spawn_user_smoke_task(
-            frame_allocator,
-            user_elf_path,
-            &user_elf_bytes,
-            user_stack_pages,
-        ),
+        spawn_user_smoke_task(frame_allocator, user_elf_path, user_stack_pages),
+        spawn_user_smoke_task(frame_allocator, user_elf_path, user_stack_pages),
     ];
     crate::log_info!(
         "task",

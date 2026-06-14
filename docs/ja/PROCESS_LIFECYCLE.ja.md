@@ -26,6 +26,9 @@
 stack state を構築し、timer preemption の下で複数の active user task record を走らせ、
 parent-child metadata を保持し、running smoke task image を `execve` で置換し、終了済み user
 address space と scheduler-owned kernel stack を reclaim できます。
+kernel-internal な `kernel::process::spawn_user_program` helper は、filesystem executable path から
+initial user task record までの boot-visible path を所有します。一方で filesystem lookup、ELF
+mapping、address-space construction、scheduler metadata は既存 module の所有のままです。
 
 一方で、一般的な user-created process lifecycle はまだ未完成です。current directory の ownership、
 user-visible child creation、scheduler-backed な `waitpid` の wait/reap state machine は今後の作業です。
@@ -241,6 +244,9 @@ unmarked descriptor は default で descriptor number と offset を保持し、
 
 - storage smoke は `/disk/bin/smoke_demo` からの successful self-replacement と、old image が再開しないことを
   検証します。
+- storage smoke は kernel-internal な `spawn_user_program` helper 経由で user program を起動し、
+  filesystem path loading、ELF mapping、initial argv/envp stack construction、scheduler task creation が
+  1つの path を共有することを検証します。
 - storage smoke は successful self-`execve` で継承された unmarked descriptor が new image でも使えることを
   検証します。
 - storage smoke は `OPEN_CLOSE_ON_EXEC` 付きで open した descriptor が successful image replacement 中に

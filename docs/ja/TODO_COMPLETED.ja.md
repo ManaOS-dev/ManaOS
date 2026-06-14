@@ -23,7 +23,7 @@ inheritance smoke、second program smoke、close-on-exec metadata と successful
 selector validation、no-child `ECHILD` path、non-child negative smoke、parent-child lifecycle state
 documentation、scheduler-owned child exit record model、double-reap prevention、wait lifecycle serial
 assertions、zombie/reaped diagnostics、`tasks` command の per-task lifecycle output、
-already-exited child の scheduler-backed `waitpid` reap が完了済みです。正本は英語版の
+already-exited child の scheduler-backed `waitpid` reap、kernel-internal spawn helper が完了済みです。正本は英語版の
 `TODO_COMPLETED.md` と [`PROCESS_LIFECYCLE.md`](../PROCESS_LIFECYCLE.md) です。
 
 ### Immediate Priorities

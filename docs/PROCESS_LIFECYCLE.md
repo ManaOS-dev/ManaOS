@@ -27,6 +27,10 @@ lifecycle, build initial `argc` / `argv` / `envp` stack state, run multiple
 active user task records under timer preemption, retain parent-child metadata,
 successfully replace a running smoke task image through `execve`, and reclaim
 finished user address spaces and scheduler-owned kernel stacks.
+The kernel-internal `kernel::process::spawn_user_program` helper now owns the
+boot-visible path from filesystem executable path to initial user task record,
+while filesystem lookup, ELF mapping, address-space construction, and scheduler
+metadata remain owned by their existing modules.
 
 General user-created process lifecycle is not complete yet. Current-directory
 ownership, user-visible child creation, and the scheduler-backed `waitpid`
@@ -277,6 +281,9 @@ Current runtime diagnostics cover the first successful replacement path:
 
 - Storage smoke proves a successful self-replacement from `/disk/bin/smoke_demo`
   and verifies that the old image does not resume.
+- Storage smoke starts user programs through the kernel-internal
+  `spawn_user_program` helper so filesystem path loading, ELF mapping, initial
+  argv/envp stack construction, and scheduler task creation share one path.
 - Storage smoke verifies that an unmarked descriptor inherited through
   successful self-`execve` remains usable in the new image.
 - Storage smoke asserts the kernel log emitted when descriptors opened with

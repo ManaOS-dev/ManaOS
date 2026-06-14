@@ -56,6 +56,10 @@ active roadmap can list only unfinished work.
 - [x] Add `tasks` output for waiting, zombie, and reaped states.
 - [x] Reap an already-exited child through scheduler-backed `waitpid`.
 
+### Spawn Model And Fork Decision
+
+- [x] Define a kernel-internal spawn helper for creating a process from a filesystem path.
+
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 
 ### Address Space Lifecycle

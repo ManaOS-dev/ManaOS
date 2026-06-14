@@ -28,7 +28,6 @@ reviewable unit before implementing it.
 
 - [ ] Decide whether the first stable process model is `spawn` plus `execve` or a minimal `fork`.
 - [ ] Document why copy-on-write `fork` is deferred if `spawn` is selected.
-- [ ] Define a kernel-internal spawn helper for creating a process from a filesystem path.
 - [ ] Move user file descriptor tables from global filesystem state to process-owned metadata before general spawn.
 - [ ] Define how inherited file descriptors are selected for spawned processes.
 - [ ] Define how current working directory is inherited by spawned processes.
