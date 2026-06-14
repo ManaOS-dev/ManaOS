@@ -1,199 +1,182 @@
-# ManaOS TODO
+# ManaOS TODO 日本語ガイド
 
-このロードマップは未完了の作業だけを載せます。次にやることを決めやすくするため、完了済みの履歴は削除しています。
+このファイルは [`TODO.md`](TODO.md) の日本語ガイドです。実装対象としての正本は
+英語版の `TODO.md` です。日本語側では、フェーズの意図、読み方、着手順の判断材料を
+詳しく説明します。
 
-## 直近の優先事項
+完了済み項目は [`TODO_COMPLETED.md`](TODO_COMPLETED.md) に退避されています。
+今後 TODO を完了にする場合は、実装・検証・コミット後に英語版 `TODO.md` から削除し、
+完了済みアーカイブへ移動してください。
 
-- [x] 実行不要な kernel / user mapping に `NO_EXECUTE` を設定する。
-- [x] `draw_text` 呼び出しごとの font parse をやめ、parse 済み font face を cache する。
-- [x] display command queue を multi-producer 前提で正しい設計に置き換える。
-- [x] cursor backup の寸法に cursor size 定数を使う。
-- [x] command が増えた段階で kernel console command dispatch を command 単位の module に分割する。
+## 運用ルール
 
-## Phase 5: Filesystem And Storage
+- `TODO.md` には未完了項目だけを残します。
+- 完了済み項目は `TODO_COMPLETED.md` に移動します。
+- 日本語の会話は歓迎されますが、コード、コメント、コミットメッセージは英語です。
+- 1つの TODO は、できるだけ1つのレビュー可能なブランチに収まる大きさへ分割します。
+- kernel、userland、architecture、syscall、memory、scheduler の境界を触る場合は、
+  実装前に関連 docs と `AGENTS.md` の境界ルールを読みます。
+- docs-only の変更でも、`git diff --check` または `git show --check` で Markdown の
+  空白エラーを確認します。
 
-### Storage Driver
+## Phase 1: Process Lifecycle And User Program Execution
 
-- [x] AHCI probe 経路を boot-only smoke test ではなく永続的な block-device service にする。
-- [x] 安定した device identifier を持つ storage device registry を追加する。
-- [x] AHCI command path で multi-sector read を support する。
-- [x] FAT32 cluster 境界をまたぐ read を support する。
-- [x] AHCI error を `bool` だけではなく原因付きで伝搬する。
-- [x] polling だけでなく AHCI interrupt-driven completion を追加する。
-- [x] DMA buffer の cache invalidation または ownership rule を明文化する。
-- [x] read-only storage が安定した後に AHCI sector write を追加する。
-- [x] QEMU 起動と serial log 期待値確認を自動化する storage test mode を追加する。
+このフェーズは、ManaOS の user process を「起動できる smoke demo」から
+「親子関係、exec、wait、shell を持つ実用的なプロセスモデル」へ進める作業です。
 
-### Partition And Filesystem Parsing
+主な焦点:
 
-- [x] primary GPT header が壊れている場合に backup GPT header へ fallback する。
-- [x] 常に最初の entry を選ぶのではなく、type GUID または名前で partition を選べるようにする。
-- [x] FAT32 backup boot sector を検証する。
-- [x] FAT32 long file name entry を実装する。
-- [x] root directory 以外の FAT32 directory traversal を実装する。
-- [x] FAT32 file read を cluster chain 全体に対応させる。
-- [x] FAT32 cluster chain loop と不正 cluster number を検出する。
-- [x] FAT32 read-only directory listing API を実装する。
-- [x] disk image を変更する前に FAT32 write 方針を設計する。
+- `execve` による user image replacement。
+- `waitpid` と exit status の保持、reap、zombie 管理。
+- `spawn + execve` を最初の安定モデルにするか、最小 `fork` を導入するかの判断。
+- 最小 user shell の導入。
+- timer preemption を一般的な user process lifecycle へ拡張すること。
 
-### Virtual Filesystem
+実装時の注意:
 
-- [x] mount point と filesystem backend を持つ実 mount table を追加する。
-- [x] boot 時に 1 ファイルを memory にコピーするのではなく、FAT32 を filesystem backend として mount する。
-- [x] directory と nested file の path traversal を追加する。
-- [x] `stat` などの file metadata operation を追加する。
-- [x] file descriptor に `seek` support を追加する。
-- [x] directory handle と `readdir` support を追加する。
-- [x] read-only / writable mount flag を追加する。
-- [x] filesystem error を詳細化し、syscall errno value へ一貫して mapping する。
-- [x] `/dev` directory listing を追加する。
-- [x] `..`、連続 slash、末尾 slash の pathname normalization rule を決めて文書化する。
+- `execve` は syscall ABI、filesystem、ELF loader、address-space cleanup、
+  file descriptor inheritance、scheduler metadata をまたぎます。
+- 失敗時の rollback が重要です。途中で作った address space、stack、page table、
+  argv/envp buffer を漏らしてはいけません。
+- `waitpid` は exit status を保持するだけでなく、いつ資源を返すかを明確にする必要が
+  あります。
+- shell は最初から豪華にせず、fixed buffer と no-std runtime の制約を守ることを
+  優先します。
 
-### Kernel Console Commands
+## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 
-- [x] command parsing と個別 command を `kernel::console::mod.rs` から分離する。
-- [x] `ls` を追加する。
-- [x] `pwd` を追加する。
-- [x] `cd` を追加する。
-- [x] `stat` を追加する。
-- [x] `mounts` を追加する。
-- [x] `hexdump` を追加する。
-- [x] `grep` を追加する。
-- [x] single-pipe command execution with `command | command` を追加する。
-- [x] command history を追加する。
-- [x] cursor movement と line editing を追加する。
-- [x] console output の scrollback を追加する。
-- [x] `cat /disk/hello.txt` を manual smoke test として docs に追加する。
+このフェーズは、物理/仮想アドレス、user mapping、kernel stack、`mmap` 周辺の
+安全性を高める作業です。
 
-## Phase 6: Userland
+主な焦点:
 
-### ELF And Process Loading
+- raw `u64` address が module boundary を越える箇所を typed wrapper へ移すこと。
+- bootstrap、TSS、IST stack まで含めた guard page 設計の完了。
+- address-space の build、publish、rollback、reclaim の状態を明確にすること。
+- user text、rodata、heap、stack、private mapping などの permission policy を
+  名前付きで整理すること。
+- `brk` と `mmap` の上限、失敗時 errno、stress smoke を追加すること。
 
-- [x] 64-bit ELF loader を実装する。
-- [x] ELF header、program header、segment permission を検証する。
-- [x] user text、rodata、data、bss、stack、guard page を正しい flag で map する。
-- [x] `argc`、`argv`、environment pointer を user entry point に渡す。
-- [x] `include_bytes!` ではなく filesystem から user program を load する。
-- [ ] `execve` を追加する。
-- [ ] process identifier と parent-child relationship を追加する。
-- [ ] `wait` または `waitpid` を追加する。
-- [ ] 最小 user shell process を追加する。
-- [x] `/disk/hello.txt` を open する userland test program を追加する。
+実装時の注意:
 
-### Syscall Surface
+- 物理アドレスと仮想アドレスを混ぜないことが最優先です。
+- guard page は mapped page ではなく、fault させるための unmapped reservation です。
+- `execve` や spawn 失敗時に途中の page table frame を残さないよう、rollback の
+  所有権を先に設計します。
+- writable executable user mapping は、明示的に許す設計ができるまで拒否する方針を
+  維持します。
 
-- [x] kernel と userland が共有できる syscall number / ABI contract を定義する。
-- [x] `lseek` を追加する。
-- [x] `stat` または `newfstatat` を追加する。
-- [x] `getdents64` を追加する。
-- [ ] `brk` または最初の heap growth syscall を追加する。
-- [ ] `mmap` / `munmap` の設計を追加する。
-- [ ] `nanosleep` または最小 sleep syscall を追加する。
-- [ ] `fork` を追加する、または最初の process model が `spawn` / `exec` である理由を文書化する。
-- [ ] syscall tracing control を追加する。
+## Phase 3: Synchronization, Interrupt Context, And Scheduler Robustness
 
-### Userland Runtime
+このフェーズは、interrupt context、lock ordering、queue primitive、scheduler state
+machine、syscall/trap の堅牢性を固める作業です。
 
-- [x] no-std userland support crate を小さな runtime に育てる。
-- [x] panic 時に明確な status で exit する処理を追加する。
-- [ ] userland output 用の基本 formatting helper を追加する。
-- [x] userland file descriptor wrapper を追加する。
-- [x] argument parsing helper を追加する。
-- [x] fixed-buffer userland command modules with single-pipe execution を追加する。
-- [x] 複数 userland binary 用 build script を追加する。
-- [x] userland smoke-test runner を追加する。
+主な焦点:
 
-## Phase 7: Kernel Hardening
+- interrupt、exception、syscall の各 context から到達する lock の棚卸し。
+- single-producer / multi-producer など queue の前提を型と API に反映すること。
+- scheduler state transition を1つの明示的な state machine に寄せること。
+- syscall entry/return と trap diagnostics を register/flags/canonical address の
+  観点から audit すること。
+- preemption disable scope、timer accounting、fairness smoke を追加すること。
 
-### Memory Management
+実装時の注意:
 
-- [x] `BumpFrameAllocator` の利用箇所を audit し、置き換え前に必要な不変条件を文書化する。
-- [ ] bump frame allocator を再利用可能な physical frame allocator に置き換える。
-- [ ] reserved / used / free physical frame range を追跡する。
-- [x] free / used / reserved physical frame range の所有権ルールを設計する。
-- [ ] dynamic mapping 用 kernel virtual memory allocator を追加する。
-- [ ] kernel stack に guard page を追加する。
-- [x] kernel stack guard page の配置と fault diagnostics を設計する。
-- [ ] process ごとの page table を追加する。
-- [x] per-process page table 導入前に必要な page ownership model を文書化する。
-- [x] user pointer validation を一貫させる copy-in / copy-out helper を追加する。
-- [x] syscall ごとの user pointer validation policy を定義する。
-- [ ] syscall validation で writable / user / executable page permission を検証する。
-- [x] kernel / user mapping permission を検査する boot-time self-check を追加する。
-- [x] identity mapping の寿命を audit し、可能なら縮小する。
-- [x] boot-time hardware setup 後に削除できる identity mapping を特定する。
-- [ ] raw `u64` が boundary を漏れている箇所に typed physical / virtual address wrapper を追加する。
-- [x] raw `u64` の physical / virtual address が module boundary を越える API を一覧化する。
-- [ ] page fault diagnostics に current task と access type を含める。
+- interrupt handler は最小限の処理だけを行い、重い処理は main loop や scheduler 側へ
+  渡します。
+- interrupt context で ordinary lock、allocation、長い logging を行う場合は、
+  既存コードが安全性を証明している場合に限ります。
+- scheduler の状態は「動けばよい」ではなく、診断で説明できる形にします。
 
-### Interrupts And Scheduling
+## Phase 4: Filesystem, Storage, And Device I/O Expansion
 
-- [ ] ACPI RSDP と XSDT/RSDT を parse する。
-- [ ] ACPI MADT を parse する。
-- [ ] IOAPIC routing を有効化する。
-- [ ] IOAPIC 安定後に legacy PIC routing を置き換える。
-- [ ] Local APIC timer を calibrate して使用する。
-- [ ] Local APIC timer 検証後に PIT scheduling tick を置き換える。
-- [ ] interrupt / syscall path で完全な user trap frame を保存・復元する。
-- [ ] full user trap frame の register layout を設計する。
-- [ ] interrupt / syscall path で保存すべき register set を文書化する。
-- [ ] user task の preemptive scheduling を安全にする。
-- [ ] user task preemption を有効化する前提条件を checklist 化する。
-- [ ] scheduler accounting と task state diagnostics を追加する。
-- [ ] 必要な箇所で task ごとの kernel stack switching を追加する。
-- [x] task ごとの kernel stack switching 方針を設計する。
+このフェーズは、read-only で安定してきた storage/VFS を、fixture test、mutation、
+reliability、device discovery、file descriptor surface へ広げる作業です。
 
-### Context Switch And Task Refactoring
+主な焦点:
 
-- [ ] kernel task context と user task context の責務を分離する。
-- [x] context switch ABI を文書化する。
-- [x] `UserTaskContext` の register layout と `context_switch.s` の offset contract を検証する。
-- [x] user task exit / run-once lifecycle handling を process lifecycle module へ移動する。
-- [x] user task scheduler state transition を整理する。
-- [x] process identifier と parent-child relationship 導入前に必要な task metadata model を定義する。
+- GPT/FAT32 parser の byte fixture test。
+- FAT32 の file creation、growth、truncate、unlink、directory mutation。
+- AHCI retry、timeout、reset、I/O counters、request queueing。
+- PCI capability、MSI/MSI-X、NVMe、USB の調査と計画。
+- `openat`、`mkdir`、`unlink`、`rename`、`ftruncate`、descriptor duplication などの
+  syscall surface 計画。
 
-### Synchronization And Concurrency
+実装時の注意:
 
-- [ ] interrupt-time lock の deadlock / priority inversion risk を audit する。
-- [ ] producer/consumer 前提が合っていない queue を置き換える。
-- [ ] single-producer/single-consumer と multi-producer queue type を明示的に分ける。
-- [ ] interrupt context から呼べる API を定義する。
-- [ ] kernel subsystem の lock ordering note を追加する。
+- FAT32 write は corruption model を先に文書化してから進めます。
+- block-device error を filesystem error と syscall errno へどう写すかを明確にします。
+- device discovery は、最初から hotplug まで実装せず、名前付けと診断の安定性を優先します。
 
-## Phase 8: Drivers And Hardware
+## Phase 5: Drivers, Display, Input, And Console UX
 
-### Input
+このフェーズは、keyboard/mouse/display/console/UI layer の体験と診断性を高める作業です。
 
-- [ ] keyboard layout choice を小さな configuration boundary の後ろに移す。
-- [ ] 必要な範囲で key release handling を追加する。
-- [ ] Shift / Control / Alt / Super の modifier state reporting を追加する。
-- [ ] Caps Lock state と LED update を追加する。
-- [ ] mouse wheel packet support を追加する。
-- [ ] double-click / drag state は input driver ではなく UI layer で追加する。
+主な焦点:
 
-### Display
+- keyboard layout boundary、key release、modifier、lock LED。
+- mouse wheel、packet resync、overflow diagnostics、UI layer での double-click/drag。
+- graphical overlay と独立した text console。
+- dirty rectangle test、renderer diagnostics、panic-safe text rendering。
+- process、fd、mount、interrupt、queue、timer などの診断 console command。
+- primitive window/widget layer の設計。
 
-- [ ] graphical overlay とは独立した scroll 対応 text console を追加する。
-- [ ] dirty rectangle の damage tracking test を追加する。
-- [ ] primitive window/widget layer を設計する。
-- [ ] UI が asset を使い始める場合に bitmap image rendering support を追加する。
+実装時の注意:
 
-### Future Hardware
+- input driver は raw input を扱い、UI semantics は UI layer に置きます。
+- display driver は input に依存してはいけません。
+- panic path や interrupt path で使う rendering/logging は、lock と allocation の危険を
+  先に確認します。
 
-- [ ] AHCI read/write 安定後に NVMe support を調査する。
-- [ ] ACPI/interrupt work 後に USB keyboard/mouse support を調査する。
-- [ ] PCI capability parsing を追加する。
-- [ ] MSI/MSI-X の設計を追加する。
+## Phase 6: Tooling, CI, Tests, And Documentation
 
-## Phase 9: Tooling, Tests, And Documentation
+このフェーズは、開発者が同じ品質で build、lint、QEMU smoke、docs を扱えるようにする作業です。
 
-- [ ] CI 用 headless QEMU smoke test script を追加する。
-- [x] boot milestone の serial log assertion を追加する。
-- [x] 複数 file / directory を持つ disk-image fixture generator を追加する。
-- [ ] byte fixture を使った GPT / FAT32 parser unit test を追加する。
-- [ ] success path と errno path の syscall ABI test を追加する。
-- [ ] commit された全 user program の userland build check を CI に追加する。
-- [x] `arch` から `kernel` への import を拒否する architecture boundary check を追加する。
-- [ ] direct maintainer branch workflow の docs を追加する。
-- [ ] manual QEMU validation command の docs を追加する。
-- [ ] 現在の module tree から contributor 向け architecture map を生成する。
+主な焦点:
+
+- headless QEMU smoke の CI 化。
+- kernel/userland の check、clippy、fmt、architecture boundary check の CI 化。
+- QEMU serial log artifact の保存。
+- manual QEMU validation docs の更新。
+- architecture map、module ownership table、lifecycle diagram の整備。
+- parser、ABI、command tokenizer、invalid pointer、resource exhaustion などの test 拡張。
+- release checklist、issue template、TODO pruning policy。
+
+実装時の注意:
+
+- CI は「全部やる」より、失敗時に原因が追える artifact を残すことを優先します。
+- docs は英語正本と日本語版の対応が崩れないよう、README の文書一覧も更新します。
+
+## Phase 7: Long-Term Platform, Security, And Multi-Architecture Foundation
+
+このフェーズは、長期的な platform 化、安全性、SMP、networking、multi-architecture を扱います。
+
+主な焦点:
+
+- address exposure、stack canary、fuzzing、permission audit、threat model。
+- single-core 前提の明文化と、将来の SMP blocker の整理。
+- CPU topology、AP startup、per-CPU scheduler/interrupt stack、TLB shootdown。
+- first NIC model、packet buffer ownership、ARP/IPv4/UDP/TCP planning。
+- `x86_64` 前提を `src/arch` 外へ漏らさないための architecture provider 整理。
+- bootable image packaging、version banner、support log、milestone map。
+
+実装時の注意:
+
+- 長期計画でも、現在の x86_64 UEFI kernel と QEMU/OVMF boot path を壊さないことが
+  前提です。
+- multi-architecture は抽象化だけを増やすのではなく、実際に漏れている前提を audit して
+  必要な境界から切ります。
+
+## 着手順の目安
+
+次に着手する候補は、基本的に `docs/TASK_PRIORITY.md` と `TODO.md` の Phase 1 から
+選びます。大きい項目は、そのまま実装せず、先に「docs」「diagnostics」「narrow smoke」
+のような小さい単位に分割してください。
+
+特に優先度が高い流れ:
+
+1. `execve` の contract と rollback 設計を文書化する。
+2. `waitpid` の parent-child exit record model を固める。
+3. process lifecycle と scheduler state transition の診断を増やす。
+4. address-space cleanup と per-task kernel stack cleanup の smoke coverage を強める。
+5. user shell は runtime と process lifecycle が安定してから最小実装へ進む。
