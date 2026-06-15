@@ -42,6 +42,12 @@ impl VirtualFileSystem {
             MountFlags::read_write(),
         );
         self.mount_node(
+            "/dev/keyboard",
+            Arc::new(device::KeyboardInputDevice::new()),
+            MountSource::Device,
+            MountFlags::read_write(),
+        );
+        self.mount_node(
             "/dev/null",
             Arc::new(device::NullDevice::new()),
             MountSource::Device,

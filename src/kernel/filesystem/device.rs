@@ -41,6 +41,36 @@ impl FileNode for ConsoleDevice {
     }
 }
 
+/// Keyboard-backed standard input device.
+pub struct KeyboardInputDevice;
+
+impl KeyboardInputDevice {
+    /// Create a keyboard-backed input device node.
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+impl FileNode for KeyboardInputDevice {
+    fn read_at(&self, _offset: usize, buffer: &mut [u8]) -> FileSystemResult<usize> {
+        Ok(crate::kernel::driver::input::keyboard::get_stdin_bytes(
+            buffer,
+        ))
+    }
+
+    fn write_at(&self, _offset: usize, _buffer: &[u8]) -> FileSystemResult<usize> {
+        Err(FileSystemError::UnsupportedOperation)
+    }
+
+    fn metadata(&self) -> FileMetadata {
+        FileMetadata {
+            file_type: FileType::Device,
+            size: 0,
+            writable: false,
+        }
+    }
+}
+
 /// Null device that discards writes and returns end-of-file on reads.
 pub struct NullDevice;
 

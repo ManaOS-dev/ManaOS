@@ -81,8 +81,10 @@ command list, `pwd` through the userland `getcwd` wrapper, and `exit` status
 parsing for default and nonzero codes. It also verifies bounded command error
 messages for empty input, token overflow, argument-buffer exhaustion,
 `bin/missing_shell_command`, and the shell-loop EOF path because standard input
-is still backed by `/dev/null`;
-connecting keyboard-backed stdin remains future work.
+can still return EOF when no bytes are queued. The storage smoke-started shell
+now inherits `/dev/keyboard` as standard input, seeds `exit\n` through the
+keyboard stdin queue, and verifies the keyboard-backed exit path. Keeping the
+shell alive while waiting for later keyboard bytes remains future work.
 The shared userland linker envelope is now five 4 KiB pages so the experimental
 shell can carry the command loop and built-in smoke coverage without changing
 the ELF loader contract.

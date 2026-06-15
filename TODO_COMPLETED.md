@@ -106,6 +106,7 @@ active roadmap can list only unfinished work.
 - [x] Keep the kernel console available while the user shell is experimental.
 - [x] Run the experimental user shell stdin path through a command loop until EOF or `exit`.
 - [x] Raise the userland image linker envelope for the experimental shell command loop.
+- [x] Connect keyboard-backed stdin to the smoke-started userland shell standard input.
 
 ### User Process Scheduling
 

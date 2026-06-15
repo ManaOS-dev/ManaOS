@@ -47,6 +47,20 @@ pub fn create_standard_file_descriptor_table() -> FileDescriptorTable {
     file_descriptors
 }
 
+/// Create a descriptor table with keyboard-backed input and console output.
+///
+/// # Panics
+///
+/// Panics if required built-in device nodes cannot be found after mounting.
+pub fn create_keyboard_standard_file_descriptor_table() -> FileDescriptorTable {
+    let input = get_required_node("/dev/keyboard", "keyboard standard input");
+    let output = get_required_node("/dev/console", "standard output");
+    let error = get_required_node("/dev/console", "standard error");
+    let mut file_descriptors = FileDescriptorTable::new();
+    file_descriptors.initialize_standard_descriptors(input, output, error);
+    file_descriptors
+}
+
 fn get_required_node(path: &str, description: &str) -> Arc<dyn FileNode> {
     VIRTUAL_FILE_SYSTEM
         .lock()

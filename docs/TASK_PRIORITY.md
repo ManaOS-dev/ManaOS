@@ -71,11 +71,10 @@ smoke, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. connect keyboard-backed stdin to the smoke-started userland shell;
-2. keep the shell task alive across keyboard-backed reads until `exit` or EOF;
-3. document how to enter and leave the experimental user shell in QEMU;
-4. extend timer preemption across general spawned user process lifecycles;
-5. update scheduler diagnostics whenever lifecycle state gains a new transition.
+1. keep the shell task alive across keyboard-backed reads until `exit` or EOF;
+2. document how to enter and leave the experimental user shell in QEMU;
+3. extend timer preemption across general spawned user process lifecycles;
+4. update scheduler diagnostics whenever lifecycle state gains a new transition.
 
 Prefer docs, diagnostics, and narrow smoke assertions before broad syscall
 surface expansion.

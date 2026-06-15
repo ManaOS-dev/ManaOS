@@ -10,6 +10,7 @@ pub(super) fn process_character(character: char) {
     }
 
     if !crate::kernel::console::is_open() {
+        super::stdin::push_character(character);
         return;
     }
 
@@ -28,6 +29,11 @@ pub(super) fn process_key_code(key_code: KeyCode) {
     }
 
     if !crate::kernel::console::is_open() {
+        match key_code {
+            KeyCode::Return | KeyCode::NumpadEnter => super::stdin::push_byte(b'\n'),
+            KeyCode::Backspace => super::stdin::push_byte(0x08),
+            _ => {}
+        }
         return;
     }
 

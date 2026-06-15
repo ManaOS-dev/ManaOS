@@ -14,6 +14,7 @@
 //! ## Public API
 //! - [`initialize`] - Initialize the kernel filesystem namespace
 //! - [`create_standard_file_descriptor_table`] - Build a standard descriptor table
+//! - [`create_keyboard_standard_file_descriptor_table`] - Build a keyboard stdin descriptor table
 //! - [`open`] - Open a path and return a file descriptor
 //! - [`read`] - Read from an open file descriptor
 //! - [`write`] - Write to an open file descriptor
@@ -46,8 +47,9 @@ pub use ramfs::RamFile;
 pub use read_only::ReadOnlyFile;
 #[allow(unused_imports)]
 pub use service::{
-    close, create_standard_file_descriptor_table, descriptor_metadata, initialize, list_directory,
-    list_mounts, metadata, mount_fat32_file, mount_ram_file, mount_read_only_file,
-    normalize_path_for_display, open, open_with_close_on_exec, open_with_close_on_exec_in, read,
-    read_directory, resolve_path, seek, write,
+    close, create_keyboard_standard_file_descriptor_table, create_standard_file_descriptor_table,
+    descriptor_metadata, initialize, list_directory, list_mounts, metadata, mount_fat32_file,
+    mount_ram_file, mount_read_only_file, normalize_path_for_display, open,
+    open_with_close_on_exec, open_with_close_on_exec_in, read, read_directory, resolve_path, seek,
+    write,
 };

@@ -66,8 +66,9 @@ image に `/disk/bin/user_shell` として含まれ、storage smoke lifecycle ga
 userland `chdir` wrapper 経由の `cd`、compiled-in command list からの `help`、
 userland `getcwd` wrapper 経由の `pwd`、default / nonzero code の `exit` status parsing も実行し、
 empty input、token overflow、argument-buffer exhaustion、`bin/missing_shell_command` の bounded command error message と
-shell-loop EOF path も検証します。standard input はまだ `/dev/null` なので EOF を検出して
-正常終了します。keyboard-backed stdin への接続は未完了です。
+shell-loop EOF path も検証します。storage smoke で起動される shell は standard input として
+`/dev/keyboard` を継承し、keyboard stdin queue に `exit\n` を seed して keyboard-backed exit path を
+検証します。後から来る keyboard byte を待っている間も shell を生かす処理は未完了です。
 共有 userland linker envelope は 5 個の 4 KiB page になっています。これは experimental shell が
 command loop と built-in smoke coverage を持っても、ELF loader contract を変えずに済むようにするためです。
 

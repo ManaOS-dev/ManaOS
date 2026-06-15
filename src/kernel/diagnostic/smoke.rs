@@ -27,6 +27,7 @@ pub const USER_SMOKE_TASK_COUNT: usize = USER_LIFECYCLE_SMOKE_TASK_COUNT
 const USER_LIFECYCLE_SMOKE_TASK_COUNT: usize =
     USER_SMOKE_PARENT_TASK_COUNT + USER_SMOKE_CHILD_TASK_COUNT;
 const USER_SHELL_ELF_PATH: &str = "/disk/bin/user_shell";
+const USER_SHELL_KEYBOARD_STDIN: &[u8] = b"exit\n";
 const SPAWN_WAIT_PARENT_TASK_INDEX: usize = 3;
 const ORPHAN_PARENT_TASK_INDEX: usize = 4;
 // Storage-smoke user sleeps are single-digit milliseconds; 1000 timer ticks is
@@ -96,6 +97,21 @@ fn spawn_user_shell_smoke_task(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
     user_stack_pages: u64,
 ) -> u64 {
+    crate::kernel::driver::input::keyboard::clear_stdin_buffer();
+    crate::kernel::driver::input::keyboard::push_stdin_bytes(USER_SHELL_KEYBOARD_STDIN);
+    crate::log_info!(
+        "keyboard",
+        "Initial user shell keyboard stdin prepared: bytes={}",
+        USER_SHELL_KEYBOARD_STDIN.len()
+    );
+
+    let original_file_descriptors = crate::kernel::task::clone_current_file_descriptor_table()
+        .expect("scheduler must be initialized before user shell smoke spawn");
+    crate::kernel::task::replace_current_file_descriptor_table(
+        crate::kernel::filesystem::create_keyboard_standard_file_descriptor_table(),
+    )
+    .expect("scheduler must be initialized before keyboard stdin smoke setup");
+
     let user_entry_arguments: [&[u8]; 1] = [USER_SHELL_ELF_PATH.as_bytes()];
     let user_entry_environment: [&[u8]; 1] = [b"MANAOS_BOOT=user-shell-smoke"];
     let user_entry_vectors = crate::kernel::process::UserProgramEntryVectors::new(
@@ -107,8 +123,10 @@ fn spawn_user_shell_smoke_task(
         user_entry_vectors,
         user_stack_pages,
     );
-    crate::kernel::process::spawn_user_program(frame_allocator, request)
-        .expect("user shell smoke program must spawn from /disk/bin")
+    let spawn_result = crate::kernel::process::spawn_user_program(frame_allocator, request);
+    crate::kernel::task::replace_current_file_descriptor_table(original_file_descriptors)
+        .expect("scheduler must be initialized after user shell smoke spawn");
+    spawn_result.expect("user shell smoke program must spawn from /disk/bin")
 }
 
 /// Run the boot-time userland scheduler and syscall smoke demo.
@@ -195,13 +213,13 @@ fn run_initial_user_shell_smoke(
     assert_eq!(
         exit.exit_code(),
         0,
-        "initial user shell smoke must exit cleanly after stdin EOF"
+        "initial user shell smoke must exit cleanly after keyboard stdin exit"
     );
     verify_initial_user_shell_exit_collection(exit);
     verify_kernel_console_after_initial_user_shell();
     crate::log_info!(
         "task",
-        "Initial user shell smoke passed: task={} exit_code=0 stdin=eof",
+        "Initial user shell smoke passed: task={} exit_code=0 stdin=keyboard",
         user_task_id
     );
 }
@@ -212,7 +230,7 @@ fn run_initial_user_shell_until_exit(
 ) -> crate::kernel::task::UserTaskExit {
     loop {
         let exit = crate::kernel::task::run_user_task_once(frame_allocator, user_task_id)
-            .expect("initial user shell smoke task must exit after stdin EOF");
+            .expect("initial user shell smoke task must exit after keyboard stdin exit");
         if exit.task_id() == user_task_id {
             return exit;
         }
