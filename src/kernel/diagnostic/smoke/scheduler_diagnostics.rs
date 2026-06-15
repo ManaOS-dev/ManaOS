@@ -390,6 +390,8 @@ struct SchedulerTaskSnapshotCounters {
     fully_reclaimed_user_tasks: u64,
     user_vm_snapshots: u64,
     user_image_snapshots: u64,
+    published_execve_image_snapshots: u64,
+    unreplaced_user_image_snapshots: u64,
     anonymous_mapping_release_snapshots: u64,
     bootstrap_child_user_tasks: u64,
     user_spawned_child_user_tasks: u64,
@@ -406,6 +408,8 @@ impl SchedulerTaskSnapshotCounters {
             fully_reclaimed_user_tasks: 0,
             user_vm_snapshots: 0,
             user_image_snapshots: 0,
+            published_execve_image_snapshots: 0,
+            unreplaced_user_image_snapshots: 0,
             anonymous_mapping_release_snapshots: 0,
             bootstrap_child_user_tasks: 0,
             user_spawned_child_user_tasks: 0,
@@ -493,7 +497,19 @@ fn record_scheduler_user_task_snapshot(
         "finished user task snapshots must retain their last user resume path"
     );
     counters.resumed_user_task_snapshots = counters.resumed_user_task_snapshots.saturating_add(1);
-    verify_user_task_image_snapshot(snapshot);
+    match verify_user_task_image_snapshot(snapshot) {
+        crate::kernel::task::UserExecveReplacementStateDiagnostics::Published => {
+            counters.published_execve_image_snapshots =
+                counters.published_execve_image_snapshots.saturating_add(1);
+        }
+        crate::kernel::task::UserExecveReplacementStateDiagnostics::None => {
+            counters.unreplaced_user_image_snapshots =
+                counters.unreplaced_user_image_snapshots.saturating_add(1);
+        }
+        crate::kernel::task::UserExecveReplacementStateDiagnostics::CandidateDropped => {
+            panic!("user smoke snapshots must not report dropped execve candidates");
+        }
+    }
     counters.user_image_snapshots = counters.user_image_snapshots.saturating_add(1);
     let verification = verify_user_task_snapshot(snapshot);
     counters.user_vm_snapshots = counters.user_vm_snapshots.saturating_add(1);
@@ -535,10 +551,17 @@ fn verify_scheduler_task_snapshot_counts(
     counters: SchedulerTaskSnapshotCounters,
     expected_user_tasks: u64,
 ) {
+    // One bootstrap child starts file_demo directly for the spawn/wait marker
+    // path, so it has no execve replacement history.
+    const DIRECT_FILE_DEMO_PARENT_TASKS: u64 = 1;
     let expected_bootstrap_children = u64::try_from(USER_SMOKE_PARENT_TASK_COUNT)
         .expect("smoke parent task count must fit in u64");
     let expected_user_spawned_children =
         u64::try_from(USER_SMOKE_CHILD_TASK_COUNT).expect("smoke child task count must fit in u64");
+    let expected_published_execve_images =
+        expected_bootstrap_children.saturating_sub(DIRECT_FILE_DEMO_PARENT_TASKS);
+    let expected_unreplaced_user_images =
+        expected_user_spawned_children.saturating_add(DIRECT_FILE_DEMO_PARENT_TASKS);
     assert_eq!(
         counters.finished_user_tasks, expected_user_tasks,
         "scheduler snapshots must include every finished user smoke task"
@@ -554,6 +577,15 @@ fn verify_scheduler_task_snapshot_counts(
     assert_eq!(
         counters.user_image_snapshots, expected_user_tasks,
         "scheduler snapshots must include execve image diagnostics for every user task"
+    );
+    assert_eq!(
+        counters.published_execve_image_snapshots, expected_published_execve_images,
+        "scheduler snapshots must show smoke execve parents published replacements"
+    );
+    assert_eq!(
+        counters.unreplaced_user_image_snapshots,
+        expected_unreplaced_user_images,
+        "scheduler snapshots must show directly spawned file_demo tasks have no execve replacement history"
     );
     assert_eq!(
         counters.anonymous_mapping_release_snapshots, expected_user_tasks,
@@ -636,6 +668,14 @@ fn log_scheduler_task_snapshot_counters(
                 format_args!("{}", counters.user_image_snapshots),
             ),
             LogField::new(
+                "published_execve_image_snapshots",
+                format_args!("{}", counters.published_execve_image_snapshots),
+            ),
+            LogField::new(
+                "unreplaced_user_image_snapshots",
+                format_args!("{}", counters.unreplaced_user_image_snapshots),
+            ),
+            LogField::new(
                 "released_mmap_snapshots",
                 format_args!("{}", counters.anonymous_mapping_release_snapshots),
             ),
@@ -692,14 +732,18 @@ fn verify_user_task_snapshot(
     }
 }
 
-fn verify_user_task_image_snapshot(snapshot: &crate::kernel::task::SchedulerTaskSnapshot) {
+fn verify_user_task_image_snapshot(
+    snapshot: &crate::kernel::task::SchedulerTaskSnapshot,
+) -> crate::kernel::task::UserExecveReplacementStateDiagnostics {
     let user_image = snapshot
         .user_image()
         .expect("user task snapshots must include image diagnostics");
     if user_image_origin_matches(user_image, b"/disk/bin/smoke_demo") {
         verify_smoke_parent_image_snapshot(user_image);
+        crate::kernel::task::UserExecveReplacementStateDiagnostics::Published
     } else if user_image_origin_matches(user_image, b"/disk/bin/file_demo") {
         verify_file_demo_spawn_image_snapshot(user_image);
+        crate::kernel::task::UserExecveReplacementStateDiagnostics::None
     } else {
         panic!("user task image snapshot must retain a known smoke origin path");
     }
@@ -708,6 +752,11 @@ fn verify_user_task_image_snapshot(snapshot: &crate::kernel::task::SchedulerTask
 fn verify_smoke_parent_image_snapshot(
     user_image: &crate::kernel::task::UserImageDiagnosticsSnapshot,
 ) {
+    assert_eq!(
+        user_image.last_execve_state(),
+        crate::kernel::task::UserExecveReplacementStateDiagnostics::Published,
+        "user smoke parent tasks must report a published execve replacement state"
+    );
     assert_eq!(
         user_image.generation(),
         2,
@@ -733,6 +782,11 @@ fn verify_smoke_parent_image_snapshot(
 fn verify_file_demo_spawn_image_snapshot(
     user_image: &crate::kernel::task::UserImageDiagnosticsSnapshot,
 ) {
+    assert_eq!(
+        user_image.last_execve_state(),
+        crate::kernel::task::UserExecveReplacementStateDiagnostics::None,
+        "file_demo spawn task must not report an execve replacement state"
+    );
     assert_eq!(
         user_image.generation(),
         0,

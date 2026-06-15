@@ -43,6 +43,7 @@
 //! - [`record_current_user_interrupt_trap_frame`] - Save a timer interrupt user trap frame
 //! - [`replace_current_user_image`] - Replace the current user task image during `execve`
 //! - [`record_current_user_execve_reclaim`] - Save `execve` old-image reclaim diagnostics
+//! - [`record_current_user_execve_candidate_drop`] - Save `execve` candidate-drop diagnostics
 //! - [`get_kernel_stack_guard_fault`] - Classify a kernel stack guard fault
 //! - [`get_kernel_stack_guard_fault_diagnostic_sample`] - Probe guard-fault diagnostics
 
@@ -60,8 +61,9 @@ pub mod user_mode;
 pub use context::UserEntryArguments;
 pub use diagnostics::{
     PreemptionStateDiagnostics, SchedulerDiagnostics, SchedulerTaskSnapshot, TaskKindDiagnostics,
-    TaskProcessLifecycleDiagnostics, TaskStateDiagnostics, UserImageDiagnosticsSnapshot,
-    UserPreemptionReasonDiagnostics, UserResumePathDiagnostics, UserVirtualMemorySnapshot,
+    TaskProcessLifecycleDiagnostics, TaskStateDiagnostics, UserExecveReplacementStateDiagnostics,
+    UserImageDiagnosticsSnapshot, UserPreemptionReasonDiagnostics, UserResumePathDiagnostics,
+    UserVirtualMemorySnapshot,
 };
 #[allow(unused_imports)]
 pub use metadata::{TaskIdentifier, TaskMetadata};
@@ -76,11 +78,11 @@ pub use scheduler::{
     get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
     get_scheduler_task_snapshots, has_active_user_tasks, initialize, prepare_current_user_sleep,
     prepare_current_user_waitpid, process_current_user_break, process_current_user_mapping,
-    process_current_user_unmapping, process_timer_tick, record_current_user_execve_reclaim,
-    record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
-    replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
-    run_user_task_once, set_current_working_directory, set_preemption_enabled, spawn,
-    spawn_user_task, Task, UserMappingRequest,
+    process_current_user_unmapping, process_timer_tick, record_current_user_execve_candidate_drop,
+    record_current_user_execve_reclaim, record_current_user_interrupt_trap_frame,
+    record_current_user_trap_frame, replace_current_user_image, run_active_user_tasks_until_empty,
+    run_next_user_task_once, run_user_task_once, set_current_working_directory,
+    set_preemption_enabled, spawn, spawn_user_task, Task, UserMappingRequest,
 };
 #[allow(unused_imports)]
 pub use stack::{KernelStackFaultOwner, KernelStackGuardFault};

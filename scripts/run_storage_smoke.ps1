@@ -188,6 +188,8 @@ $expectedPatterns = @(
     "Wait status verified: parent=0 child=.* code=0 status=0",
     "Wait lifecycle smoke passed: parent=0 retained_children=4 collected_children=4 double_reap_prevented=true",
     "Bootstrap child wait collection verified: parent=0 children=4",
+    "published_execve_image_snapshots\s+= 3",
+    "unreplaced_user_image_snapshots\s+= 2",
     "Multi-user preemption smoke passed: tasks=4",
     "Scheduler diagnostics verified",
     "user_tasks\s+= 5",

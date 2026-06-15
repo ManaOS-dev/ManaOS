@@ -9,10 +9,6 @@ reviewable unit before implementing it.
 
 ## Phase 1: Process Lifecycle And User Program Execution
 
-### `execve` And Image Replacement
-
-- [ ] Add `execve` replacement-state diagnostics to the `tasks` console command once fallible candidate states exist.
-
 ### `waitpid`, Exit Status, And Reaping
 
 - [ ] Reparent orphaned children to a documented initial process policy.

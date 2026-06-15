@@ -41,6 +41,10 @@ bring-up.
 Scheduler diagnostics retain the spawned origin path separately from the current
 image path, so a later successful `execve` can change `path=` while `origin=`
 still identifies the program that created the task record.
+The `tasks` console command also reports the last observed `execve`
+replacement state for each user image, using `published` after a successful
+candidate publication and `candidate_dropped` if a prepared candidate is
+discarded before publication.
 
 General user-created process lifecycle is not complete yet. Current working
 directories are now task metadata, relative paths resolve through the current
@@ -375,6 +379,9 @@ Current runtime diagnostics cover the first successful replacement path:
   `execve image published` with old-image reclaim counts.
 - Scheduler smoke verifies that `execve` resets heap and private mapping
   bookkeeping before the post-exec image exits.
+- Scheduler smoke verifies that successful replacement updates the per-task
+  `last_execve_state` diagnostic to `published`, while spawned tasks with no
+  replacement history remain `none`.
 - Storage smoke verifies that `waitpid` returns `-ECHILD` when the current user
   task has no child and when a positive process identifier is not its child.
 - Storage smoke asserts the scheduler log line that retains a parent-keyed
@@ -389,15 +396,14 @@ Current runtime diagnostics cover the first successful replacement path:
 - Storage smoke asserts a stable wait lifecycle summary showing retained child
   count, collected child count, and double-reap prevention.
 - The `tasks` console command shows each user task's spawned origin path,
-  current image generation, retained image path, and last successful old-image
-  reclaim counts.
+  current image generation, retained image path, last `execve` replacement
+  state, and last successful old-image reclaim counts.
 
 Remaining runtime diagnostics should cover broader behavior:
 
-- `tasks` output should show replacement building and failed states once
-  candidate construction has fallible post-build failure points.
 - Failure smoke should prove any future post-candidate failure returns all
-  candidate frames and keeps the old image runnable.
+  candidate frames, records a dropped replacement state, and keeps the old
+  image runnable.
 
 These diagnostics should use stable serial log lines so future CI smoke can
 assert the process lifecycle without parsing interactive console output.

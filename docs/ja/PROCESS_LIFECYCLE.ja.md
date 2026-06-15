@@ -37,6 +37,9 @@ wrapper は、path-only compatibility と bounded `argv` / `envp` child launch s
 smoke と shell bring-up 向けに公開します。
 scheduler diagnostics は spawned origin path を current image path と別に保持するため、後続の
 successful `execve` で `path=` が変わっても、`origin=` は task record を作った program を示し続けます。
+`tasks` console command は user image ごとの最後に観測した `execve` replacement state も表示します。
+successful candidate publication 後は `published`、prepared candidate が publish 前に破棄された場合は
+`candidate_dropped` になります。
 
 一方で、一般的な user-created process lifecycle はまだ未完成です。current working directory は
 task metadata の所有になり、relative path は current task の directory から解決され、successful
@@ -319,6 +322,8 @@ unmarked descriptor は default で descriptor number と offset を保持し、
   記録します。
 - scheduler smoke は、post-exec image が exit する前に `execve` が heap と private mapping bookkeeping を
   reset することを検証します。
+- scheduler smoke は、successful replacement が per-task の `last_execve_state` diagnostic を
+  `published` に更新し、replacement history のない spawned task は `none` のまま残ることを検証します。
 - storage smoke は、current user task に child がない場合と、正の process identifier が child ではない場合に、
   `waitpid` が `-ECHILD` を返すことを検証します。
 - storage smoke は、parent-keyed child exit record を保持する scheduler log line と、その record を一度だけ
@@ -332,14 +337,12 @@ unmarked descriptor は default で descriptor number と offset を保持し、
 - storage smoke は retained child count、collected child count、double-reap prevention を示す stable な
   wait lifecycle summary も assert します。
 - `tasks` console command は、user task ごとの spawned origin path、current image generation、
-  retained image path、last successful old-image reclaim count を表示します。
+  retained image path、last `execve` replacement state、last successful old-image reclaim count を表示します。
 
 残りの runtime diagnostics では、より広い behavior を扱います。
 
-- `tasks` output は、candidate construction に fallible post-build failure point が入った後で、
-  replacement building / failed state を表示します。
-- future post-candidate failure smoke は candidate frame をすべて返し、old image を runnable のまま保つことを
-  証明します。
+- future post-candidate failure smoke は candidate frame をすべて返し、dropped replacement state を記録し、
+  old image を runnable のまま保つことを証明します。
 
 これらの diagnostics は、将来の CI smoke が interactive console output を parse せず検証できるよう、
 stable serial log line を使います。

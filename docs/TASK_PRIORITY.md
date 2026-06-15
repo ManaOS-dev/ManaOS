@@ -7,9 +7,8 @@ not on product value.
 ## Remaining High-Risk Order
 
 1. Full user process lifecycle
-   - Finish the remaining `execve` replacement-state diagnostics gap.
-   - Add user-visible `wait` or `waitpid`.
    - Add a minimal user shell process.
+   - Define file descriptor inheritance selection for general spawn.
    - Extend preemptive scheduling across general process lifecycle paths.
    - Reason: this crosses ELF loading, syscall ABI, address-space ownership,
      file descriptors, parent-child metadata, and scheduler cleanup.
@@ -58,14 +57,14 @@ The active selection is now full user process lifecycle work. The kernel-side
 `execve` contract, cleanup invariants, successful self-replacement path,
 current-directory preservation, argv/envp-capable `spawn`, nonblocking
 `waitpid(WNOHANG)`, and blocking `waitpid(WAIT_ANY)` child collection smoke,
-including nonzero child status encoding, are documented in
+including nonzero child status encoding, and `execve` replacement-state
+diagnostics in `tasks` output are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. close the remaining `execve` replacement-state diagnostics gap;
-2. define inherited file descriptor selection before broader general spawn;
-3. add a parent-exit-while-child-lives smoke before broader reparenting;
-4. update scheduler diagnostics whenever lifecycle state gains a new transition.
+1. define inherited file descriptor selection before broader general spawn;
+2. add a parent-exit-while-child-lives smoke before broader reparenting;
+3. update scheduler diagnostics whenever lifecycle state gains a new transition.
 
 Prefer docs, diagnostics, and narrow smoke assertions before broad syscall
 surface expansion.

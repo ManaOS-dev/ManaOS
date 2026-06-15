@@ -612,6 +612,14 @@ impl Scheduler {
         true
     }
 
+    pub(in crate::kernel::task) fn record_current_user_execve_candidate_drop(&mut self) -> bool {
+        let TaskKind::User(user_runtime) = &mut self.tasks[self.current_index].kind else {
+            return false;
+        };
+        user_runtime.image.record_candidate_drop();
+        true
+    }
+
     pub(in crate::kernel::task) fn can_schedule_task(
         &self,
         current_index: usize,

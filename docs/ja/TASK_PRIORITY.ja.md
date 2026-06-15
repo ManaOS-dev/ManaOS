@@ -7,9 +7,8 @@ kernel engineering 上の順序を示す文書です。
 ## 残っている高リスク作業の順序
 
 1. Full user process lifecycle
-   - `execve` の replacement-state diagnostics の残り gap を完了する。
-   - user-visible `wait` または `waitpid` を追加する。
    - minimal user shell process を追加する。
+   - general spawn の file descriptor inheritance selection を定義する。
    - general process lifecycle path へ preemptive scheduling を拡張する。
    - 理由: ELF loading、syscall ABI、address-space ownership、file descriptor、
      parent-child metadata、scheduler cleanup をまたぐため。
@@ -52,12 +51,12 @@ scheduler tick、spurious/unexpected external vector diagnostics は storage smo
 そのため次の大きな流れは、PIT route に依存しなくなった timer preemption の上で、
 full user process lifecycle を進めることです。`execve` の kernel-side contract、cleanup invariant、
 successful self-replacement path、current directory preservation、argv/envp-capable `spawn`、nonblocking
-`waitpid(WNOHANG)` と blocking `waitpid(WAIT_ANY)` child collection smoke、nonzero child status encoding は
+`waitpid(WNOHANG)` と blocking `waitpid(WAIT_ANY)` child collection smoke、nonzero child status encoding、
+`tasks` output の `execve` replacement-state diagnostics は
 [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。ここからは小さい runtime slice で進めます。
 
-1. `execve` の replacement-state diagnostics の残り gap を閉じる。
-2. broader general spawn の前に inherited file descriptor selection を定義する。
-3. broader reparenting の前に parent-exit-while-child-lives smoke を追加する。
-4. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
+1. broader general spawn の前に inherited file descriptor selection を定義する。
+2. broader reparenting の前に parent-exit-while-child-lives smoke を追加する。
+3. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
 
 広い syscall surface を一気に増やす前に、docs、diagnostics、narrow smoke assertion を優先します。

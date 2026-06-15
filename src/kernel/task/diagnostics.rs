@@ -192,6 +192,67 @@ impl UserResumePathDiagnostics {
     }
 }
 
+/// Last `execve` replacement lifecycle state reported for one user image.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum UserExecveReplacementStateDiagnostics {
+    /// No `execve` replacement candidate has been observed for this image.
+    #[default]
+    None,
+    /// The last replacement candidate was dropped before publication.
+    CandidateDropped,
+    /// The last replacement candidate was published as the active image.
+    Published,
+}
+
+impl UserExecveReplacementStateDiagnostics {
+    /// Return a stable label for console diagnostics.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::CandidateDropped => "candidate_dropped",
+            Self::Published => "published",
+        }
+    }
+}
+
+/// Snapshot of the last `execve` replacement diagnostics for one user image.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserExecveDiagnosticsSnapshot {
+    state: UserExecveReplacementStateDiagnostics,
+    old_user_pages: u64,
+    old_page_table_pages: u64,
+}
+
+impl UserExecveDiagnosticsSnapshot {
+    /// Create an `execve` replacement diagnostics snapshot.
+    pub(super) const fn new(
+        state: UserExecveReplacementStateDiagnostics,
+        old_user_pages: u64,
+        old_page_table_pages: u64,
+    ) -> Self {
+        Self {
+            state,
+            old_user_pages,
+            old_page_table_pages,
+        }
+    }
+
+    /// Return the last observed `execve` replacement lifecycle state.
+    pub const fn state(self) -> UserExecveReplacementStateDiagnostics {
+        self.state
+    }
+
+    /// Return the old user pages reclaimed by the last successful `execve`.
+    pub const fn old_user_pages(self) -> u64 {
+        self.old_user_pages
+    }
+
+    /// Return the old page-table pages reclaimed by the last successful `execve`.
+    pub const fn old_page_table_pages(self) -> u64 {
+        self.old_page_table_pages
+    }
+}
+
 /// Snapshot of one user task's current image diagnostics.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserImageDiagnosticsSnapshot {
@@ -200,8 +261,7 @@ pub struct UserImageDiagnosticsSnapshot {
     origin_path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
     path_len: usize,
     path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
-    last_execve_old_user_pages: u64,
-    last_execve_old_page_table_pages: u64,
+    last_execve: UserExecveDiagnosticsSnapshot,
 }
 
 impl UserImageDiagnosticsSnapshot {
@@ -212,8 +272,7 @@ impl UserImageDiagnosticsSnapshot {
         origin_path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
         path_len: usize,
         path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
-        last_execve_old_user_pages: u64,
-        last_execve_old_page_table_pages: u64,
+        last_execve: UserExecveDiagnosticsSnapshot,
     ) -> Self {
         Self {
             generation,
@@ -221,8 +280,7 @@ impl UserImageDiagnosticsSnapshot {
             origin_path_bytes,
             path_len,
             path_bytes,
-            last_execve_old_user_pages,
-            last_execve_old_page_table_pages,
+            last_execve,
         }
     }
 
@@ -251,14 +309,19 @@ impl UserImageDiagnosticsSnapshot {
         &self.path_bytes
     }
 
+    /// Return the last observed `execve` replacement lifecycle state.
+    pub const fn last_execve_state(&self) -> UserExecveReplacementStateDiagnostics {
+        self.last_execve.state()
+    }
+
     /// Return the old user pages reclaimed by the last successful `execve`.
     pub const fn last_execve_old_user_pages(&self) -> u64 {
-        self.last_execve_old_user_pages
+        self.last_execve.old_user_pages()
     }
 
     /// Return the old page-table pages reclaimed by the last successful `execve`.
     pub const fn last_execve_old_page_table_pages(&self) -> u64 {
-        self.last_execve_old_page_table_pages
+        self.last_execve.old_page_table_pages()
     }
 }
 

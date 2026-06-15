@@ -870,6 +870,7 @@ fn build_and_publish_execve_candidate(
                 current_address_space,
             );
         }
+        crate::kernel::task::record_current_user_execve_candidate_drop();
         crate::log_warn!(
             "syscall",
             "execve candidate dropped -> path={} user_pages={} page_table_pages={}",

@@ -138,11 +138,12 @@ fn push_user_image(
     let path_len = user_image.path_len();
     let image_path = path_diagnostic_text(path_bytes, path_len);
     output.push(format!(
-        "task_image: id={} generation={} origin={} path={} last_execve_old_user_pages={} last_execve_old_page_table_pages={}",
+        "task_image: id={} generation={} origin={} path={} last_execve_state={} last_execve_old_user_pages={} last_execve_old_page_table_pages={}",
         task_id,
         user_image.generation(),
         origin_path,
         image_path,
+        user_image.last_execve_state().as_str(),
         user_image.last_execve_old_user_pages(),
         user_image.last_execve_old_page_table_pages()
     ));

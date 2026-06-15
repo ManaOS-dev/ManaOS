@@ -5,10 +5,11 @@ use super::context::{TaskContext, TaskEntry, UserEntryArguments, UserTaskContext
 use super::diagnostics::{
     PreemptionStateDiagnostics, SchedulerDiagnostics, SchedulerTaskSnapshot,
     TaskExitStatusDiagnostics, TaskRuntimeDiagnosticsSnapshot, TaskStateDiagnostics,
-    TaskStatusDiagnosticsSnapshot, UserHeapDiagnosticsSnapshot, UserImageDiagnosticsSnapshot,
-    UserMappingActiveDiagnosticsSnapshot, UserMappingLifecycleDiagnosticsSnapshot,
-    UserPreemptionReasonDiagnostics, UserResumePathDiagnostics, UserVirtualMemorySnapshot,
-    USER_IMAGE_PATH_DIAGNOSTIC_BYTES,
+    TaskStatusDiagnosticsSnapshot, UserExecveDiagnosticsSnapshot,
+    UserExecveReplacementStateDiagnostics, UserHeapDiagnosticsSnapshot,
+    UserImageDiagnosticsSnapshot, UserMappingActiveDiagnosticsSnapshot,
+    UserMappingLifecycleDiagnosticsSnapshot, UserPreemptionReasonDiagnostics,
+    UserResumePathDiagnostics, UserVirtualMemorySnapshot, USER_IMAGE_PATH_DIAGNOSTIC_BYTES,
 };
 use super::metadata::{TaskIdentifier, TaskMetadata};
 use super::process_lifecycle::{self, UserTaskExit};
@@ -256,6 +257,7 @@ struct UserImageRuntime {
     origin_path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
     path_len: usize,
     path_bytes: [u8; USER_IMAGE_PATH_DIAGNOSTIC_BYTES],
+    last_execve_state: UserExecveReplacementStateDiagnostics,
     last_execve_old_user_pages: u64,
     last_execve_old_page_table_pages: u64,
 }
@@ -272,6 +274,7 @@ impl UserImageRuntime {
             origin_path_bytes,
             path_len,
             path_bytes,
+            last_execve_state: UserExecveReplacementStateDiagnostics::None,
             last_execve_old_user_pages: 0,
             last_execve_old_page_table_pages: 0,
         }
@@ -281,8 +284,13 @@ impl UserImageRuntime {
         self.generation = self.generation.saturating_add(1);
         self.path_bytes.fill(0);
         self.path_len = copy_path_to_diagnostic(path, &mut self.path_bytes);
+        self.last_execve_state = UserExecveReplacementStateDiagnostics::Published;
         self.last_execve_old_user_pages = 0;
         self.last_execve_old_page_table_pages = 0;
+    }
+
+    fn record_candidate_drop(&mut self) {
+        self.last_execve_state = UserExecveReplacementStateDiagnostics::CandidateDropped;
     }
 
     const fn snapshot(&self) -> UserImageDiagnosticsSnapshot {
@@ -292,8 +300,11 @@ impl UserImageRuntime {
             self.origin_path_bytes,
             self.path_len,
             self.path_bytes,
-            self.last_execve_old_user_pages,
-            self.last_execve_old_page_table_pages,
+            UserExecveDiagnosticsSnapshot::new(
+                self.last_execve_state,
+                self.last_execve_old_user_pages,
+                self.last_execve_old_page_table_pages,
+            ),
         )
     }
 
@@ -786,9 +797,9 @@ pub use facade::{
     get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
     get_scheduler_task_snapshots, has_active_user_tasks, initialize, prepare_current_user_sleep,
     prepare_current_user_waitpid, process_current_user_break, process_current_user_mapping,
-    process_current_user_unmapping, process_timer_tick, record_current_user_execve_reclaim,
-    record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
-    replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
-    run_user_task_once, set_current_working_directory, set_preemption_enabled, spawn,
-    spawn_user_task,
+    process_current_user_unmapping, process_timer_tick, record_current_user_execve_candidate_drop,
+    record_current_user_execve_reclaim, record_current_user_interrupt_trap_frame,
+    record_current_user_trap_frame, replace_current_user_image, run_active_user_tasks_until_empty,
+    run_next_user_task_once, run_user_task_once, set_current_working_directory,
+    set_preemption_enabled, spawn, spawn_user_task,
 };

@@ -401,6 +401,7 @@ pub fn verify_scheduler_console_command() -> bool {
             "task_image:",
             "origin=/disk/bin/smoke_demo",
             "path=/disk/bin/file_demo",
+            "last_execve_state=published",
             "last_execve_old_user_pages=9",
             "task_vm:",
             "task_mmap_lifecycle:",

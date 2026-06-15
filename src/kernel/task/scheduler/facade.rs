@@ -426,6 +426,14 @@ pub fn record_current_user_execve_reclaim(task_id: u64, reclaim: UserAddressSpac
         .is_some_and(|scheduler| scheduler.record_current_user_execve_reclaim(task_id, reclaim))
 }
 
+/// Record that the current user task dropped a prepared `execve` candidate.
+pub fn record_current_user_execve_candidate_drop() -> bool {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .is_some_and(Scheduler::record_current_user_execve_candidate_drop)
+}
+
 /// Return scheduler task counts and lifecycle accounting diagnostics.
 pub fn get_scheduler_diagnostics() -> Option<SchedulerDiagnostics> {
     SCHEDULER
