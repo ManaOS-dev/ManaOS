@@ -146,8 +146,11 @@ The scheduler-backed contract is:
 - Block the parent for option `0` when a matching child exists but no matching
   exited child is ready to reap.
 - Preserve each child exit status until exactly one successful reap consumes it.
-- Reclaim address-space and kernel-stack resources only after the exit record is
-  safe according to the scheduler-owned lifecycle policy.
+- Reclaim address-space and kernel-stack resources only after the scheduler has
+  retained the exit status, detached the task from the active user set, and
+  returned to the kernel address space.
+- Keep wait collection independent from reclaimed runtime resources: `waitpid`
+  may consume only scheduler metadata and child exit records.
 
 ## Parent-Child Lifecycle States
 
@@ -167,8 +170,10 @@ The current lifecycle states are:
   code once and marked the child exit record collected. A second collection for
   the same child returns no exit record.
 - Reclaimed child resources: the scheduler-owned cleanup path released the
-  finished child's user address space and kernel stack after the current smoke
-  lifecycle no longer needs to resume the child.
+  finished child's user address space and kernel stack after the child exit
+  record was retained and the task could no longer resume. The child may still
+  be waitable after this state because wait collection uses scheduler metadata
+  and child exit records rather than the reclaimed runtime resources.
 
 Scheduler diagnostics expose `zombie_user_tasks` for finished children whose
 exit status is still waitable and `reaped_user_tasks` for child exit records
@@ -406,8 +411,11 @@ Current runtime diagnostics cover the first successful replacement path:
   once.
 - Storage smoke starts a second userland parent that spawns a child and exits
   before the child finishes. The child continues to exit through the normal
-  user lifecycle, and the diagnostic collector proves the exit record is still
-  retained for the original parent rather than silently reparented.
+  user lifecycle, is reparented to task `0`, and is reaped through the initial
+  process.
+- Storage smoke verifies that a waitable child exit stays observable as
+  `lifecycle=zombie` after the finished child's address space and scheduler
+  kernel stack have already been reclaimed.
 - Storage smoke asserts the `sys_spawn` descriptor-inheritance snapshot emitted
   before the child image loader opens its temporary executable descriptor. The
   snapshot keeps the current global-table limitation visible until per-process

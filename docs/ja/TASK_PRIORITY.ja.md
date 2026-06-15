@@ -8,7 +8,7 @@ kernel engineering 上の順序を示す文書です。
 
 1. Full user process lifecycle
    - minimal user shell process を追加する。
-   - retained child exit record が waitable でなくなった後の safe resource reclamation を定義する。
+   - descriptor ownership を global filesystem state から process metadata へ移す。
    - general process lifecycle path へ preemptive scheduling を拡張する。
    - 理由: ELF loading、syscall ABI、address-space ownership、file descriptor、
      parent-child metadata、scheduler cleanup をまたぐため。
@@ -52,11 +52,12 @@ scheduler tick、spurious/unexpected external vector diagnostics は storage smo
 full user process lifecycle を進めることです。`execve` の kernel-side contract、cleanup invariant、
 successful self-replacement path、current directory preservation、argv/envp-capable `spawn`、nonblocking
 `waitpid(WNOHANG)` と blocking `waitpid(WAIT_ANY)` child collection smoke、nonzero child status encoding、
-orphaned child の initial-process reparenting、`tasks` output の `execve` replacement-state diagnostics は
+orphaned child の initial-process reparenting、exit record retention 後の safe finished-task resource
+reclamation、`tasks` output の `execve` replacement-state diagnostics は
 [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。ここからは小さい runtime slice で進めます。
 
-1. retained exit record を維持したまま、finished child の address space と kernel stack をいつ reclaim
-   できるか定義して検証する。
-2. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
+1. user file descriptor table を global filesystem state から process-owned metadata へ移す。
+2. process-owned descriptor table が入った後で spawn descriptor inheritance selection を enforce する。
+3. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
 
 広い syscall surface を一気に増やす前に、docs、diagnostics、narrow smoke assertion を優先します。

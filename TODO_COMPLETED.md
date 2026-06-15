@@ -62,6 +62,8 @@ active roadmap can list only unfinished work.
 - [x] Add a userland smoke program that verifies a nonzero child exit status.
 - [x] Support blocking wait for any child.
 - [x] Reparent orphaned children to a documented initial process policy.
+- [x] Reclaim finished child address spaces after the exit record is safe.
+- [x] Reclaim finished child kernel stacks after the exit record is safe.
 
 ### Spawn Model And Fork Decision
 

@@ -225,6 +225,11 @@ fn verify_parent_exit_child_live_smoke(
         "orphan smoke child exit must move away from the exited parent"
     );
     let initial_process_task_id = crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64();
+    verify_waitable_exit_survived_resource_reclaim(
+        initial_process_task_id,
+        child_exit.task_id(),
+        USER_SMOKE_ORPHAN_CHILD_EXIT_CODE,
+    );
     let retained_exit = crate::kernel::task::collect_waitable_child_exit(
         initial_process_task_id,
         Some(child_exit.task_id()),
@@ -242,6 +247,59 @@ fn verify_parent_exit_child_live_smoke(
         retained_exit.task_id(),
         retained_exit.wait_status(),
         initial_process_task_id
+    );
+}
+
+fn verify_waitable_exit_survived_resource_reclaim(
+    parent_task_id: u64,
+    child_task_id: u64,
+    expected_exit_code: u64,
+) {
+    let snapshots = crate::kernel::task::get_scheduler_task_snapshots()
+        .expect("scheduler task snapshots must be available after resource reclaim");
+    let snapshot = snapshots
+        .iter()
+        .find(|snapshot| snapshot.task_id() == child_task_id)
+        .expect("waitable child task must have a retained scheduler snapshot");
+    assert_eq!(
+        snapshot.parent_task_id(),
+        Some(parent_task_id),
+        "waitable child exit must remain associated with its current parent"
+    );
+    assert_eq!(
+        snapshot.state(),
+        crate::kernel::task::TaskState::Finished,
+        "waitable child must be finished after user exit"
+    );
+    assert_eq!(
+        snapshot.process_lifecycle(),
+        crate::kernel::task::TaskProcessLifecycleDiagnostics::Zombie,
+        "waitable child must stay zombie until parent collection"
+    );
+    assert_eq!(
+        snapshot.exit_code(),
+        Some(expected_exit_code),
+        "waitable child must retain its exit code after resource reclaim"
+    );
+    assert!(
+        !snapshot.wait_collected(),
+        "waitable child must not be marked collected before parent collection"
+    );
+    assert!(
+        !snapshot.address_space_owned(),
+        "finished child address space must be reclaimed before wait collection"
+    );
+    assert!(
+        !snapshot.kernel_stack_owned(),
+        "finished child kernel stack must be reclaimed before wait collection"
+    );
+    crate::log_info!(
+        "task",
+        "Waitable child exit retained after resource reclaim: parent={} child={} code={} address_space_owned=false kernel_stack_owned=false lifecycle={}",
+        parent_task_id,
+        child_task_id,
+        expected_exit_code,
+        snapshot.process_lifecycle().as_str()
     );
 }
 
@@ -382,6 +440,7 @@ fn verify_spawn_error(
 fn verify_bootstrap_child_exit_collection(user_task_ids: [u64; USER_SMOKE_PARENT_TASK_COUNT]) {
     let parent_task_id = crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64();
     let mut collected = [false; USER_SMOKE_PARENT_TASK_COUNT];
+    verify_waitable_exit_survived_resource_reclaim(parent_task_id, user_task_ids[0], 0);
     let selected_exit =
         crate::kernel::task::collect_waitable_child_exit(parent_task_id, Some(user_task_ids[0]))
             .expect("bootstrap parent must collect the selected user child exit");

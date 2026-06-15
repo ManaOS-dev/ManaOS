@@ -124,8 +124,10 @@ scheduler-backed contract:
 - `WNOHANG` で matching child は存在するが reap 可能な exited child がない場合は `0` を返します。
 - option `0` で matching child は存在するが reap 可能な exited child がない場合は parent を block します。
 - child exit status は、成功した reap がちょうど一度だけ消費するまで保持します。
-- address-space と kernel-stack resource は、scheduler-owned lifecycle policy 上で exit record が
-  安全になってから reclaim します。
+- address-space と kernel-stack resource は、scheduler が exit status を保持し、task を active user set から外し、
+  kernel address space へ戻った後に reclaim します。
+- wait collection は reclaimed runtime resource に依存しません。`waitpid` は scheduler metadata と child exit
+  record だけを消費します。
 
 ## parent-child lifecycle states
 
@@ -142,8 +144,9 @@ scheduler-backed contract:
 - Collected child: parent-side collection path が保持済み exit code を一度だけ消費済みです。
   child exit record は collected として mark され、同じ child に対する二度目の collection は
   exit record を返しません。
-- Reclaimed child resources: current smoke lifecycle が child を再開しなくなった後で、scheduler-owned
-  cleanup path が finished child の user address space と kernel stack を解放済みです。
+- Reclaimed child resources: child exit record が保持され、task が再開不能になった後で、scheduler-owned
+  cleanup path が finished child の user address space と kernel stack を解放済みです。この状態でも、
+  wait collection は scheduler metadata と child exit record を使うため、child はまだ waitable な場合があります。
 
 scheduler diagnostics は、exit status がまだ waitable な finished child を
 `zombie_user_tasks` として、記録済み parent が collection 済みの child exit record を
@@ -338,8 +341,10 @@ smoke coverage 用に記録し、general spawn で target policy を enforce す
   `waitpid(WNOHANG) == 0` になり、後で child exit status を nonzero status としてちょうど一度だけ
   collect できることを検証します。
 - storage smoke は、もう1つの userland parent が child を spawn して、その child が finish する前に
-  parent が exit する case も実行します。child は通常の user lifecycle で exit し、diagnostic collector が
-  exit record が silent reparent ではなく original parent に retained されていることを確認します。
+  parent が exit する case も実行します。child は通常の user lifecycle で exit し、task `0` へ reparent され、
+  initial process 経由で reap されることを確認します。
+- storage smoke は、finished child の address space と scheduler kernel stack が reclaim 済みでも、
+  waitable child exit が `lifecycle=zombie` として観測可能なまま残ることを検証します。
 - storage smoke は `sys_spawn` が child image loader の temporary executable descriptor を open する前に出す
   descriptor-inheritance snapshot を assert します。この snapshot により、per-process descriptor table が
   child-private selection を enforce するまでの global-table limitation を見える状態にします。

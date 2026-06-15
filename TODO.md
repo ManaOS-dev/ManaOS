@@ -9,11 +9,6 @@ reviewable unit before implementing it.
 
 ## Phase 1: Process Lifecycle And User Program Execution
 
-### `waitpid`, Exit Status, And Reaping
-
-- [ ] Reclaim finished child address spaces after the exit record is safe.
-- [ ] Reclaim finished child kernel stacks after the exit record is safe.
-
 ### Spawn Model And Fork Decision
 
 - [ ] Move user file descriptor tables from global filesystem state to process-owned metadata before general spawn.

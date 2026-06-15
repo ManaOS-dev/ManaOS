@@ -34,6 +34,7 @@ no-std `getcwd` wrapper、argv/envp-capable user-visible spawn wrapper、
 userland child wait smoke、nonzero child exit status smoke、blocking `waitpid(WAIT_ANY)` smoke、
 spawn descriptor inheritance selection policy と snapshot diagnostic、
 parent-exit-while-child-lives smoke、
+initial-process reparenting policy、exit record retention 後の finished child resource reclaim smoke、
 最小 no-std `user_shell` binary の build と storage smoke disk image 登録が
 完了済みです。user process scheduling は、5つの active parent user process と2つの user-spawned child を
 扱う storage smoke まで完了済みです。さらに、per-task の last preemption / last resume diagnostics と、preempted
