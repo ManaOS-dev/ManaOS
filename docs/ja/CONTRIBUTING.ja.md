@@ -130,6 +130,9 @@ just lint
 
 local で command を実行できない場合は、正確な理由と必要な follow-up validation を記録します。
 
+interactive QEMU check、serial milestone、現在の experimental user shell validation flow は
+[`MANUAL_QEMU_VALIDATION.ja.md`](MANUAL_QEMU_VALIDATION.ja.md) を参照してください。
+
 ---
 
 ## 🛠 設計原則 (拡張性とコントリビュートのしやすさ)

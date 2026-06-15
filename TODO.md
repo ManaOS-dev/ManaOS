@@ -9,10 +9,6 @@ reviewable unit before implementing it.
 
 ## Phase 1: Process Lifecycle And User Program Execution
 
-### Minimal User Shell
-
-- [ ] Document how to enter and leave the user shell in QEMU.
-
 ### User Process Scheduling
 
 - [ ] Extend timer preemption across general spawned user process lifecycles.
@@ -348,17 +344,10 @@ reviewable unit before implementing it.
 
 ### Local Developer Workflow
 
-- [ ] Refresh manual QEMU validation docs with current commands and serial milestones.
-- [ ] Link manual QEMU validation docs from `README.md`.
-- [ ] Link manual QEMU validation docs from `CONTRIBUTING.md`.
 - [ ] Add a one-command local pre-merge verification recipe.
-- [ ] Add troubleshooting notes for missing `OVMF.fd`.
-- [ ] Add troubleshooting notes for missing QEMU.
 - [ ] Add troubleshooting notes for missing nightly Rust components.
 - [ ] Add troubleshooting notes for PowerShell execution policy failures.
 - [ ] Add docs for regenerating and inspecting `disk.img`.
-- [ ] Add docs for reading serial output during manual QEMU runs.
-- [ ] Add docs for choosing between `just run` and `just storage-smoke`.
 
 ### Architecture Documentation
 

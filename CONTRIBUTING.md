@@ -133,6 +133,10 @@ runtime boundaries.
 If a command cannot be run locally, record the exact reason and the expected
 follow-up validation.
 
+For interactive QEMU checks, serial milestones, and the current experimental
+user shell validation flow, use
+[`docs/MANUAL_QEMU_VALIDATION.md`](docs/MANUAL_QEMU_VALIDATION.md).
+
 ---
 
 ## 🛠 Design Principles (Scalable & Contributor Friendly)

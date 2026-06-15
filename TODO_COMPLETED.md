@@ -108,6 +108,7 @@ active roadmap can list only unfinished work.
 - [x] Raise the userland image linker envelope for the experimental shell command loop.
 - [x] Connect keyboard-backed stdin to the smoke-started userland shell standard input.
 - [x] Keep the smoke-started userland shell alive while keyboard-backed stdin waits for input.
+- [x] Document how to observe the experimental user shell entering and leaving in QEMU.
 
 ### User Process Scheduling
 
@@ -294,3 +295,10 @@ active roadmap can list only unfinished work.
 - [x] Add syscall ABI tests for success and errno paths.
 - [x] Add architecture boundary checks that reject `arch` to `kernel` imports.
 - [x] Add docs for the direct maintainer branch workflow.
+- [x] Refresh manual QEMU validation docs with current commands and serial milestones.
+- [x] Link manual QEMU validation docs from `README.md`.
+- [x] Link manual QEMU validation docs from `CONTRIBUTING.md`.
+- [x] Add troubleshooting notes for missing `OVMF.fd`.
+- [x] Add troubleshooting notes for missing QEMU.
+- [x] Add docs for reading serial output during manual QEMU runs.
+- [x] Add docs for choosing between `just run` and `just storage-smoke`.

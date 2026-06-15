@@ -72,9 +72,12 @@ smoke, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. document how to enter and leave the experimental user shell in QEMU;
-2. extend timer preemption across general spawned user process lifecycles;
-3. update scheduler diagnostics whenever lifecycle state gains a new transition.
+1. extend timer preemption across general spawned user process lifecycles;
+2. update scheduler diagnostics whenever lifecycle state gains a new transition.
+
+Manual QEMU validation for observing the current smoke-owned experimental user
+shell entry and exit path is documented in
+[`MANUAL_QEMU_VALIDATION.md`](MANUAL_QEMU_VALIDATION.md).
 
 Prefer docs, diagnostics, and narrow smoke assertions before broad syscall
 surface expansion.
