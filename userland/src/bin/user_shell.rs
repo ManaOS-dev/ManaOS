@@ -12,13 +12,16 @@ const READY_MESSAGE: &[u8] = b"user shell ready\n";
 const TOKENIZER_OK_MESSAGE: &[u8] = b"user shell tokenizer ok\n";
 const FILE_DEMO_LAUNCH_MESSAGE: &[u8] = b"user shell launching file_demo\n";
 const FILE_DEMO_EXIT_MESSAGE: &[u8] = b"user shell file_demo exit ok\n";
+const RELATIVE_FILE_DEMO_LAUNCH_MESSAGE: &[u8] =
+    b"user shell launching relative file_demo\n";
+const RELATIVE_FILE_DEMO_EXIT_MESSAGE: &[u8] =
+    b"user shell relative file_demo exit ok\n";
 const STDIN_EOF_MESSAGE: &[u8] = b"user shell stdin eof\n";
 const READ_ERROR_MESSAGE: &[u8] = b"user shell read error\n";
 const INPUT_BUFFERED_MESSAGE: &[u8] = b"user shell input buffered\n";
 const EMPTY_COMMAND_MESSAGE: &[u8] = b"user shell empty command\n";
 const TOKEN_LIMIT_MESSAGE: &[u8] = b"user shell token limit reached\n";
 const EXECUTION_ERROR_MESSAGE: &[u8] = b"user shell execution error\n";
-const PATH_NOT_ABSOLUTE_MESSAGE: &[u8] = b"user shell path must be absolute\n";
 const PATH_TOO_LONG_MESSAGE: &[u8] = b"user shell argument buffer full\n";
 const SPAWN_BAD_ADDRESS_MESSAGE: &[u8] = b"user shell spawn bad address\n";
 const SPAWN_INVALID_ARGUMENT_MESSAGE: &[u8] = b"user shell spawn invalid argument\n";
@@ -94,7 +97,6 @@ struct CommandPath {
 enum CommandExecutionError {
     EmptyCommand,
     PathTooLong,
-    PathNotAbsolute,
     TooManyTokens,
     SpawnFailed,
     SpawnBadAddress,
@@ -114,7 +116,7 @@ extern "C" fn _start() -> ! {
         syscall::exit(2);
     }
     let _ = syscall::write(STDOUT, TOKENIZER_OK_MESSAGE);
-    if let Err(error) = verify_absolute_execution_smoke() {
+    if let Err(error) = verify_command_execution_smoke() {
         write_execution_error(error);
         syscall::exit(3);
     }
@@ -150,7 +152,7 @@ extern "C" fn _start() -> ! {
             syscall::exit(2);
         }
     }
-    if let Err(error) = execute_absolute_command(command_input) {
+    if let Err(error) = execute_command(command_input) {
         if error != CommandExecutionError::EmptyCommand {
             write_execution_error(error);
             syscall::exit(3);
@@ -223,17 +225,20 @@ fn verify_tokenizer_smoke() -> bool {
     )
 }
 
-fn verify_absolute_execution_smoke() -> Result<(), CommandExecutionError> {
+fn verify_command_execution_smoke() -> Result<(), CommandExecutionError> {
     if syscall::chdir(b"/disk\0") != 0 {
         return Err(CommandExecutionError::WorkingDirectoryFailed);
     }
     let _ = syscall::write(STDOUT, FILE_DEMO_LAUNCH_MESSAGE);
-    execute_absolute_command(b"/disk/bin/file_demo --shell-command-smoke")?;
+    execute_command(b"/disk/bin/file_demo --shell-command-smoke")?;
     let _ = syscall::write(STDOUT, FILE_DEMO_EXIT_MESSAGE);
+    let _ = syscall::write(STDOUT, RELATIVE_FILE_DEMO_LAUNCH_MESSAGE);
+    execute_command(b"bin/file_demo --shell-command-smoke")?;
+    let _ = syscall::write(STDOUT, RELATIVE_FILE_DEMO_EXIT_MESSAGE);
     Ok(())
 }
 
-fn execute_absolute_command(command: &[u8]) -> Result<(), CommandExecutionError> {
+fn execute_command(command: &[u8]) -> Result<(), CommandExecutionError> {
     let tokens = tokenize_command(command).map_err(|_| CommandExecutionError::TooManyTokens)?;
     if tokens.len() == 0 {
         return Err(CommandExecutionError::EmptyCommand);
@@ -283,7 +288,6 @@ fn write_execution_error(error: CommandExecutionError) {
     let message = match error {
         CommandExecutionError::EmptyCommand => EMPTY_COMMAND_MESSAGE,
         CommandExecutionError::PathTooLong => PATH_TOO_LONG_MESSAGE,
-        CommandExecutionError::PathNotAbsolute => PATH_NOT_ABSOLUTE_MESSAGE,
         CommandExecutionError::TooManyTokens => TOKEN_LIMIT_MESSAGE,
         CommandExecutionError::SpawnBadAddress => SPAWN_BAD_ADDRESS_MESSAGE,
         CommandExecutionError::SpawnInvalidArgument => SPAWN_INVALID_ARGUMENT_MESSAGE,
@@ -314,9 +318,6 @@ fn build_argument_vector(
             .get(token_index)
             .ok_or(CommandExecutionError::TooManyTokens)?;
         let token_bytes = token.as_bytes(command);
-        if token_index == 0 && !token_bytes.starts_with(b"/") {
-            return Err(CommandExecutionError::PathNotAbsolute);
-        }
         let token_end = storage_cursor
             .checked_add(token_bytes.len())
             .ok_or(CommandExecutionError::PathTooLong)?;

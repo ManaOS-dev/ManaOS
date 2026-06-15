@@ -62,16 +62,15 @@ retention, process-owned descriptor table inheritance, close-on-exec child
 filtering, `execve` replacement-state diagnostics in `tasks` output, and the
 post-smoke experimental `user_shell` launch with fixed-buffer stdin EOF handling
 and heap-free whitespace tokenization, fixed-buffer argv construction, and
-absolute path execution smoke are documented in
+absolute and relative path execution smoke are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
 1. keep the smoke-started userland shell alive once stdin is keyboard-backed;
-2. implement relative path execution using the current working directory;
-3. add bounded error messages for command failures;
-4. add shell smoke logs for a missing command;
-5. extend timer preemption across general spawned user process lifecycles;
-6. update scheduler diagnostics whenever lifecycle state gains a new transition.
+2. add bounded error messages for command failures;
+3. add shell smoke logs for a missing command;
+4. extend timer preemption across general spawned user process lifecycles;
+5. update scheduler diagnostics whenever lifecycle state gains a new transition.
 
 Prefer docs, diagnostics, and narrow smoke assertions before broad syscall
 surface expansion.

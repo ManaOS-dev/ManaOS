@@ -14,7 +14,7 @@ pub const USER_SMOKE_CHILD_TASK_COUNT: usize = 2;
 /// Number of post-gate user shell processes spawned by storage smoke.
 pub const USER_SMOKE_SHELL_TASK_COUNT: usize = 1;
 /// Number of child processes launched by the post-gate user shell smoke.
-pub const USER_SMOKE_SHELL_CHILD_TASK_COUNT: usize = 1;
+pub const USER_SMOKE_SHELL_CHILD_TASK_COUNT: usize = 2;
 /// Exit code used by the blocking user-spawned child status smoke.
 pub const USER_SMOKE_CHILD_EXIT_CODE: u64 = 7;
 /// Exit code used by the child whose parent exits before it does.

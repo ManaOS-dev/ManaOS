@@ -12,7 +12,6 @@ reviewable unit before implementing it.
 ### Minimal User Shell
 
 - [ ] Keep the smoke-started userland shell alive once stdin is keyboard-backed.
-- [ ] Implement relative path execution using the current working directory.
 - [ ] Implement `cd` through a user-visible syscall or runtime helper.
 - [ ] Implement `pwd` using the userland runtime path API.
 - [ ] Implement `exit` with a configurable status code.

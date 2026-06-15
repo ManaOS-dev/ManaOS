@@ -93,6 +93,7 @@ active roadmap can list only unfinished work.
 - [x] Implement fixed-buffer command reading from stdin.
 - [x] Implement whitespace tokenization without heap allocation.
 - [x] Implement absolute path execution for user programs.
+- [x] Implement relative path execution using the current working directory.
 - [x] Implement single-command execution without pipelines first.
 - [x] Add fixed-buffer argv construction for command execution.
 - [x] Add shell smoke logs for launching `file_demo`.
