@@ -78,17 +78,17 @@ fn nanosleep_duration_ticks(request: contract::UserTimespec) -> Option<u64> {
     second_ticks.checked_add(nanosecond_ticks)
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SyscallMappingSource {
     Anonymous,
     FilePrivate {
+        file_descriptors: crate::kernel::filesystem::FileDescriptorTable,
         file_descriptor: usize,
         offset: usize,
     },
 }
 
 impl SyscallMappingSource {
-    const fn user_mapping_source(self) -> UserMappingSource {
+    const fn user_mapping_source(&self) -> UserMappingSource {
         match self {
             Self::Anonymous => UserMappingSource::Anonymous,
             Self::FilePrivate { .. } => UserMappingSource::FilePrivate,
@@ -135,7 +135,7 @@ pub(super) fn sys_mmap(
                 request,
                 |page_index, page_buffer| {
                     initialize_mapping_page(
-                        mapping_source,
+                        &mapping_source,
                         page_index,
                         page_buffer,
                         &mut file_read_error,
@@ -153,7 +153,8 @@ pub(super) fn sys_mmap(
             if let SyscallMappingSource::FilePrivate {
                 file_descriptor,
                 offset,
-            } = mapping_source
+                ..
+            } = &mapping_source
             {
                 crate::log_info!(
                     "syscall",
@@ -250,10 +251,14 @@ fn mapping_source_from_arguments(
     let file_descriptor =
         usize::try_from(file_descriptor).map_err(|_| ERROR_BAD_FILE_DESCRIPTOR)?;
     let offset = usize::try_from(offset).map_err(|_| ERROR_INVALID_ARGUMENT)?;
-    let metadata = crate::kernel::filesystem::descriptor_metadata(file_descriptor)
+    let file_descriptors =
+        crate::kernel::task::clone_current_file_descriptor_table().ok_or(ERROR_NOT_IMPLEMENTED)?;
+    let metadata = file_descriptors
+        .metadata(file_descriptor)
         .map_err(filesystem_error_to_linux)?;
     match metadata.file_type {
         crate::kernel::filesystem::FileType::Regular => Ok(SyscallMappingSource::FilePrivate {
+            file_descriptors,
             file_descriptor,
             offset,
         }),
@@ -263,13 +268,14 @@ fn mapping_source_from_arguments(
 }
 
 fn initialize_mapping_page(
-    mapping_source: SyscallMappingSource,
+    mapping_source: &SyscallMappingSource,
     page_index: u64,
     page_buffer: &mut [u8],
     file_read_error: &mut Option<crate::kernel::filesystem::FileSystemError>,
     file_bytes_read: &mut usize,
 ) -> Result<(), UserMappingError> {
     let SyscallMappingSource::FilePrivate {
+        file_descriptors,
         file_descriptor,
         offset,
     } = mapping_source
@@ -281,10 +287,10 @@ fn initialize_mapping_page(
         .checked_mul(PAGE_SIZE)
         .and_then(|offset| usize::try_from(offset).ok())
         .ok_or(UserMappingError::InvalidRequest)?;
-    let read_offset = offset
+    let read_offset = (*offset)
         .checked_add(page_offset)
         .ok_or(UserMappingError::InvalidRequest)?;
-    match crate::kernel::filesystem::read_at(file_descriptor, read_offset, page_buffer) {
+    match file_descriptors.read_at(*file_descriptor, read_offset, page_buffer) {
         Ok(bytes_read) => {
             *file_bytes_read = file_bytes_read.saturating_add(bytes_read);
             Ok(())

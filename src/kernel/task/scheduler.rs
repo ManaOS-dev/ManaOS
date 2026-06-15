@@ -16,6 +16,7 @@ use super::process_lifecycle::{self, UserTaskExit};
 use super::reclaim::FinishedUserTaskReclaim;
 use super::stack::{KernelStack, KernelStackFaultOwner, KernelStackGuardFault, KernelStackReclaim};
 use super::state::TaskState;
+use crate::kernel::filesystem::{FileDescriptorTable, SpawnDescriptorInheritanceSnapshot};
 use crate::kernel::memory::address::UserVirtualAddress;
 use crate::kernel::memory::address::{UserVirtualRange, UserWritableRange};
 use crate::kernel::memory::address_space::{self, UserAddressSpace, UserAddressSpaceReclaim};
@@ -392,9 +393,7 @@ impl Task {
     }
 
     fn kernel(
-        identifier: TaskIdentifier,
-        parent_identifier: TaskIdentifier,
-        parent_current_working_directory: &str,
+        metadata: TaskMetadata,
         entry: TaskEntry,
         frame_allocator: &mut PhysicalFrameAllocator,
         kernel_stack_range_allocator: &mut KernelVirtualRangeAllocator,
@@ -412,11 +411,7 @@ impl Task {
         let context = unsafe { TaskContext::from_stack(stack_top, entry) };
 
         Self {
-            metadata: TaskMetadata::child(
-                identifier,
-                parent_identifier,
-                parent_current_working_directory,
-            ),
+            metadata,
             state: TaskState::Ready,
             kind: TaskKind::Kernel,
             context,
@@ -425,9 +420,7 @@ impl Task {
     }
 
     fn user(
-        identifier: TaskIdentifier,
-        parent_identifier: TaskIdentifier,
-        parent_current_working_directory: &str,
+        metadata: TaskMetadata,
         request: UserTaskSpawnRequest<'_>,
         user_context: UserTaskContext,
         frame_allocator: &mut PhysicalFrameAllocator,
@@ -441,11 +434,7 @@ impl Task {
             kernel_stack.writable_page_count() + 1
         );
         Self {
-            metadata: TaskMetadata::child(
-                identifier,
-                parent_identifier,
-                parent_current_working_directory,
-            ),
+            metadata,
             state: TaskState::Ready,
             kind: TaskKind::User(Box::new(UserTaskRuntime::new(
                 request.address_space,
@@ -634,10 +623,18 @@ impl Scheduler {
             .metadata
             .current_working_directory()
             .to_string();
-        let task = Task::kernel(
+        let child_file_descriptors = self.tasks[self.current_index]
+            .metadata
+            .file_descriptors()
+            .inherit_for_spawn();
+        let metadata = TaskMetadata::child(
             task_identifier,
             parent_identifier,
             &parent_current_working_directory,
+            child_file_descriptors,
+        );
+        let task = Task::kernel(
+            metadata,
             entry,
             frame_allocator,
             &mut self.kernel_stack_range_allocator,
@@ -690,6 +687,16 @@ impl Scheduler {
             .metadata
             .current_working_directory()
             .to_string();
+        let child_file_descriptors = self.tasks[self.current_index]
+            .metadata
+            .file_descriptors()
+            .inherit_for_spawn();
+        let metadata = TaskMetadata::child(
+            task_identifier,
+            parent_identifier,
+            &parent_current_working_directory,
+            child_file_descriptors,
+        );
         // SAFETY: The caller provides a mapped user entry point and user stack.
         let user_context = unsafe {
             UserTaskContext::new(
@@ -699,9 +706,7 @@ impl Scheduler {
             )
         };
         let task = Task::user(
-            task_identifier,
-            parent_identifier,
-            &parent_current_working_directory,
+            metadata,
             request,
             user_context,
             frame_allocator,
@@ -780,6 +785,46 @@ impl Scheduler {
             .set_current_working_directory(path);
     }
 
+    fn replace_current_file_descriptor_table(&mut self, file_descriptors: FileDescriptorTable) {
+        self.tasks[self.current_index]
+            .metadata
+            .replace_file_descriptors(file_descriptors);
+    }
+
+    fn with_current_file_descriptor_table<R>(
+        &mut self,
+        operation: impl FnOnce(&mut FileDescriptorTable) -> R,
+    ) -> R {
+        operation(
+            self.tasks[self.current_index]
+                .metadata
+                .file_descriptors_mut(),
+        )
+    }
+
+    fn clone_current_file_descriptor_table(&self) -> FileDescriptorTable {
+        self.tasks[self.current_index]
+            .metadata
+            .file_descriptors()
+            .clone()
+    }
+
+    fn close_current_file_descriptors_on_exec(&mut self) -> usize {
+        self.tasks[self.current_index]
+            .metadata
+            .file_descriptors_mut()
+            .close_on_exec_descriptors()
+    }
+
+    fn get_current_spawn_descriptor_inheritance_snapshot(
+        &self,
+    ) -> SpawnDescriptorInheritanceSnapshot {
+        self.tasks[self.current_index]
+            .metadata
+            .file_descriptors()
+            .get_spawn_descriptor_inheritance_snapshot()
+    }
+
     fn get_task_index(&self, task_id: u64) -> Option<usize> {
         self.tasks
             .iter()
@@ -799,16 +844,19 @@ mod user_memory;
 pub(in crate::kernel::task) use facade::complete_pending_user_waitpid_status;
 pub(super) use facade::install_user_task_kernel_stack;
 pub use facade::{
-    activate_user_task, block_current_user_after_syscall, close_user_return_preemption_window,
+    activate_user_task, block_current_user_after_syscall, clone_current_file_descriptor_table,
+    close_current_file_descriptors_on_exec, close_user_return_preemption_window,
     collect_waitable_child_exit, current_user_task_has_child, finish_current_task,
-    get_current_parent_task_id, get_current_task_id, get_current_user_address_space,
-    get_current_working_directory, get_kernel_stack_guard_fault,
-    get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
-    get_scheduler_task_snapshots, has_active_user_tasks, initialize, prepare_current_user_sleep,
-    prepare_current_user_waitpid, process_current_user_break, process_current_user_mapping,
-    process_current_user_unmapping, process_timer_tick, record_current_user_execve_candidate_drop,
-    record_current_user_execve_reclaim, record_current_user_interrupt_trap_frame,
-    record_current_user_trap_frame, replace_current_user_image, run_active_user_tasks_until_empty,
-    run_next_user_task_once, run_user_task_once, set_current_working_directory,
-    set_preemption_enabled, spawn, spawn_user_task,
+    get_current_parent_task_id, get_current_spawn_descriptor_inheritance_snapshot,
+    get_current_task_id, get_current_user_address_space, get_current_working_directory,
+    get_kernel_stack_guard_fault, get_kernel_stack_guard_fault_diagnostic_sample,
+    get_scheduler_diagnostics, get_scheduler_task_snapshots, has_active_user_tasks, initialize,
+    prepare_current_user_sleep, prepare_current_user_waitpid, process_current_user_break,
+    process_current_user_mapping, process_current_user_unmapping, process_timer_tick,
+    record_current_user_execve_candidate_drop, record_current_user_execve_reclaim,
+    record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
+    replace_current_file_descriptor_table, replace_current_user_image,
+    run_active_user_tasks_until_empty, run_next_user_task_once, run_user_task_once,
+    set_current_working_directory, set_preemption_enabled, spawn, spawn_user_task,
+    with_current_file_descriptor_table,
 };

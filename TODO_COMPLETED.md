@@ -83,6 +83,8 @@ active roadmap can list only unfinished work.
 - [x] Extend user-visible spawn beyond path-only launch with argv/envp vectors.
 - [x] Define how inherited file descriptors are selected for spawned processes.
 - [x] Add a smoke case for parent exit while child remains alive.
+- [x] Move user file descriptor tables from global filesystem state to process-owned metadata before general spawn.
+- [x] Enforce spawn descriptor inheritance selection with process-owned descriptor tables.
 
 ### Minimal User Shell
 

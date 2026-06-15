@@ -33,6 +33,7 @@ spawned process の current working directory inheritance、task-owned current d
 no-std `getcwd` wrapper、argv/envp-capable user-visible spawn wrapper、
 userland child wait smoke、nonzero child exit status smoke、blocking `waitpid(WAIT_ANY)` smoke、
 spawn descriptor inheritance selection policy と snapshot diagnostic、
+process-owned descriptor table migration、spawn descriptor inheritance enforcement、
 parent-exit-while-child-lives smoke、
 initial-process reparenting policy、exit record retention 後の finished child resource reclaim smoke、
 最小 no-std `user_shell` binary の build と storage smoke disk image 登録が

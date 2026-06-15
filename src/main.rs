@@ -46,6 +46,9 @@ fn initialize_scheduler(
     frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
 ) {
     kernel::task::initialize();
+    let bootstrap_file_descriptors = kernel::filesystem::create_standard_file_descriptor_table();
+    kernel::task::replace_current_file_descriptor_table(bootstrap_file_descriptors)
+        .expect("scheduler bootstrap task must accept standard file descriptors");
     kernel::task::spawn(frame_allocator, idle_task);
     let task_id = kernel::task::get_current_task_id()
         .expect("scheduler must expose a bootstrap task after initialization");

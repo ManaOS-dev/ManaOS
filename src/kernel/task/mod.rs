@@ -30,6 +30,11 @@
 //! - [`get_current_parent_task_id`] - Read the current parent task identifier
 //! - [`get_current_working_directory`] - Read the current working directory
 //! - [`set_current_working_directory`] - Replace the current working directory
+//! - [`replace_current_file_descriptor_table`] - Replace the current descriptor table
+//! - [`with_current_file_descriptor_table`] - Process the current descriptor table
+//! - [`clone_current_file_descriptor_table`] - Clone the current descriptor table
+//! - [`close_current_file_descriptors_on_exec`] - Close current close-on-exec descriptors
+//! - [`get_current_spawn_descriptor_inheritance_snapshot`] - Read spawn descriptor diagnostics
 //! - [`get_current_user_address_space`] - Read the current user task address space
 //! - [`collect_waitable_child_exit`] - Collect one retained child exit status
 //! - [`current_user_task_has_child`] - Check whether the current user task owns a matching child
@@ -71,18 +76,21 @@ pub use metadata::{TaskIdentifier, TaskMetadata};
 pub use process_lifecycle::UserTaskExit;
 #[allow(unused_imports)]
 pub use scheduler::{
-    activate_user_task, block_current_user_after_syscall, close_user_return_preemption_window,
+    activate_user_task, block_current_user_after_syscall, clone_current_file_descriptor_table,
+    close_current_file_descriptors_on_exec, close_user_return_preemption_window,
     collect_waitable_child_exit, current_user_task_has_child, finish_current_task,
-    get_current_parent_task_id, get_current_task_id, get_current_user_address_space,
-    get_current_working_directory, get_kernel_stack_guard_fault,
-    get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
-    get_scheduler_task_snapshots, has_active_user_tasks, initialize, prepare_current_user_sleep,
-    prepare_current_user_waitpid, process_current_user_break, process_current_user_mapping,
-    process_current_user_unmapping, process_timer_tick, record_current_user_execve_candidate_drop,
-    record_current_user_execve_reclaim, record_current_user_interrupt_trap_frame,
-    record_current_user_trap_frame, replace_current_user_image, run_active_user_tasks_until_empty,
-    run_next_user_task_once, run_user_task_once, set_current_working_directory,
-    set_preemption_enabled, spawn, spawn_user_task, Task, UserMappingRequest,
+    get_current_parent_task_id, get_current_spawn_descriptor_inheritance_snapshot,
+    get_current_task_id, get_current_user_address_space, get_current_working_directory,
+    get_kernel_stack_guard_fault, get_kernel_stack_guard_fault_diagnostic_sample,
+    get_scheduler_diagnostics, get_scheduler_task_snapshots, has_active_user_tasks, initialize,
+    prepare_current_user_sleep, prepare_current_user_waitpid, process_current_user_break,
+    process_current_user_mapping, process_current_user_unmapping, process_timer_tick,
+    record_current_user_execve_candidate_drop, record_current_user_execve_reclaim,
+    record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
+    replace_current_file_descriptor_table, replace_current_user_image,
+    run_active_user_tasks_until_empty, run_next_user_task_once, run_user_task_once,
+    set_current_working_directory, set_preemption_enabled, spawn, spawn_user_task,
+    with_current_file_descriptor_table, Task, UserMappingRequest,
 };
 #[allow(unused_imports)]
 pub use stack::{KernelStackFaultOwner, KernelStackGuardFault};

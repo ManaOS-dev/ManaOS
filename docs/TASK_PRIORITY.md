@@ -8,7 +8,6 @@ not on product value.
 
 1. Full user process lifecycle
    - Add a minimal user shell process.
-   - Move descriptor ownership from global filesystem state to process metadata.
    - Extend preemptive scheduling across general process lifecycle paths.
    - Reason: this crosses ELF loading, syscall ABI, address-space ownership,
      file descriptors, parent-child metadata, and scheduler cleanup.
@@ -59,15 +58,15 @@ current-directory preservation, argv/envp-capable `spawn`, nonblocking
 `waitpid(WNOHANG)`, and blocking `waitpid(WAIT_ANY)` child collection smoke,
 including nonzero child status encoding, initial-process reparenting for
 orphaned children, safe finished-task resource reclamation after exit record
-retention, and `execve` replacement-state diagnostics in `tasks` output are
+retention, process-owned descriptor table inheritance, close-on-exec child
+filtering, and `execve` replacement-state diagnostics in `tasks` output are
 documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. move user file descriptor tables from global filesystem state to
-   process-owned metadata;
-2. enforce spawn descriptor inheritance selection after process-owned
-   descriptor tables exist;
+1. start the minimal userland shell as the initial interactive process after
+   smoke gating;
+2. extend timer preemption across general spawned user process lifecycles;
 3. update scheduler diagnostics whenever lifecycle state gains a new transition.
 
 Prefer docs, diagnostics, and narrow smoke assertions before broad syscall

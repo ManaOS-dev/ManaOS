@@ -462,9 +462,11 @@ fn sys_write(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
         return ERROR_BAD_ADDRESS;
     };
 
-    match crate::kernel::filesystem::write(file_descriptor, buffer) {
+    match with_current_file_descriptor_table(|file_descriptors| {
+        file_descriptors.write(file_descriptor, buffer)
+    }) {
         Ok(bytes_written) => u64::try_from(bytes_written).unwrap_or(u64::MAX),
-        Err(error) => filesystem_error_to_linux(error),
+        Err(error) => error,
     }
 }
 
@@ -486,9 +488,15 @@ fn sys_open(user_path_pointer: u64, flags: u64, mode: u64) -> u64 {
         return ERROR_NOT_IMPLEMENTED;
     };
 
-    match crate::kernel::filesystem::open_with_close_on_exec(&path, close_on_exec) {
+    match with_current_file_descriptor_table(|file_descriptors| {
+        crate::kernel::filesystem::open_with_close_on_exec_in(
+            file_descriptors,
+            &path,
+            close_on_exec,
+        )
+    }) {
         Ok(file_descriptor) => u64::try_from(file_descriptor).unwrap_or(u64::MAX),
-        Err(error) => filesystem_error_to_linux(error),
+        Err(error) => error,
     }
 }
 
@@ -503,6 +511,16 @@ fn sys_openat(
     }
 
     sys_open(user_path_pointer, flags, mode)
+}
+
+fn with_current_file_descriptor_table<R>(
+    operation: impl FnOnce(
+        &mut crate::kernel::filesystem::FileDescriptorTable,
+    ) -> crate::kernel::filesystem::FileSystemResult<R>,
+) -> Result<R, u64> {
+    crate::kernel::task::with_current_file_descriptor_table(operation)
+        .ok_or(ERROR_NOT_IMPLEMENTED)?
+        .map_err(filesystem_error_to_linux)
 }
 
 fn sys_chdir(user_path_pointer: u64) -> u64 {
@@ -558,8 +576,11 @@ fn sys_spawn(
         .collect::<Vec<_>>();
     let entry_vectors =
         crate::kernel::process::UserProgramEntryVectors::new(argument_values, &environment_values);
-    let descriptor_inheritance =
-        crate::kernel::filesystem::get_spawn_descriptor_inheritance_snapshot();
+    let Some(descriptor_inheritance) =
+        crate::kernel::task::get_current_spawn_descriptor_inheritance_snapshot()
+    else {
+        return ERROR_NOT_IMPLEMENTED;
+    };
     let request = crate::kernel::process::UserProgramSpawnRequest::new(
         &staging.path,
         entry_vectors,
@@ -590,7 +611,7 @@ fn sys_spawn(
     );
     crate::log_info!(
         "syscall",
-        "spawn descriptor inheritance selected -> child={} inherited={} standard={} close_on_exec={} global_table=true",
+        "spawn descriptor inheritance selected -> child={} inherited={} standard={} close_on_exec={} process_table=true",
         child_task_id,
         descriptor_inheritance.inherited_descriptors(),
         descriptor_inheritance.standard_descriptors(),
@@ -646,9 +667,11 @@ fn sys_close(file_descriptor: u64) -> u64 {
         return ERROR_BAD_FILE_DESCRIPTOR;
     };
 
-    match crate::kernel::filesystem::close(file_descriptor) {
+    match with_current_file_descriptor_table(|file_descriptors| {
+        file_descriptors.close(file_descriptor)
+    }) {
         Ok(()) => 0,
-        Err(error) => filesystem_error_to_linux(error),
+        Err(error) => error,
     }
 }
 
@@ -664,7 +687,9 @@ fn sys_fstat(file_descriptor: u64, user_stat_pointer: u64) -> u64 {
         return ERROR_BAD_ADDRESS;
     };
 
-    match crate::kernel::filesystem::descriptor_metadata(file_descriptor) {
+    match with_current_file_descriptor_table(|file_descriptors| {
+        file_descriptors.metadata(file_descriptor)
+    }) {
         Ok(metadata) => {
             write_user_file_stat(buffer, metadata);
             crate::log_info!(
@@ -677,7 +702,7 @@ fn sys_fstat(file_descriptor: u64, user_stat_pointer: u64) -> u64 {
             );
             0
         }
-        Err(error) => filesystem_error_to_linux(error),
+        Err(error) => error,
     }
 }
 
@@ -690,9 +715,11 @@ fn sys_read(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
         return ERROR_BAD_ADDRESS;
     };
 
-    match crate::kernel::filesystem::read(file_descriptor, buffer) {
+    match with_current_file_descriptor_table(|file_descriptors| {
+        file_descriptors.read(file_descriptor, buffer)
+    }) {
         Ok(bytes_read) => u64::try_from(bytes_read).unwrap_or(u64::MAX),
-        Err(error) => filesystem_error_to_linux(error),
+        Err(error) => error,
     }
 }
 
@@ -715,7 +742,9 @@ fn sys_getdents64(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
     let mut bytes_written = 0;
     let mut entries_written = 0;
     while bytes_written + USER_DIRECTORY_ENTRY_BYTES <= buffer.len() {
-        match crate::kernel::filesystem::read_directory(file_descriptor) {
+        match with_current_file_descriptor_table(|file_descriptors| {
+            file_descriptors.read_directory(file_descriptor)
+        }) {
             Ok(Some(entry)) => {
                 write_user_directory_entry(
                     &mut buffer[bytes_written..bytes_written + USER_DIRECTORY_ENTRY_BYTES],
@@ -735,7 +764,7 @@ fn sys_getdents64(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
                 );
                 break;
             }
-            Err(error) => return filesystem_error_to_linux(error),
+            Err(error) => return error,
         }
     }
 
@@ -762,7 +791,9 @@ fn sys_lseek(file_descriptor: u64, offset: u64, whence: u64) -> u64 {
         _ => return ERROR_INVALID_ARGUMENT,
     };
 
-    match crate::kernel::filesystem::seek_from(file_descriptor, offset, whence) {
+    match with_current_file_descriptor_table(|file_descriptors| {
+        file_descriptors.seek_from(file_descriptor, offset, whence)
+    }) {
         Ok(next_offset) => {
             crate::log_info!(
                 "syscall",
@@ -774,7 +805,7 @@ fn sys_lseek(file_descriptor: u64, offset: u64, whence: u64) -> u64 {
             );
             u64::try_from(next_offset).unwrap_or(u64::MAX)
         }
-        Err(error) => filesystem_error_to_linux(error),
+        Err(error) => error,
     }
 }
 
@@ -899,7 +930,8 @@ fn build_and_publish_execve_candidate(
         crate::kernel::task::record_current_user_execve_reclaim(task_id, reclaim),
         "published execve task must retain reclaim diagnostics"
     );
-    let closed_descriptors = crate::kernel::filesystem::close_on_exec_descriptors();
+    let closed_descriptors = crate::kernel::task::close_current_file_descriptors_on_exec()
+        .expect("published execve task must retain a file descriptor table");
     if closed_descriptors > 0 {
         crate::log_info!(
             "syscall",

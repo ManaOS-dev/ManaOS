@@ -1,10 +1,8 @@
 //! Filesystem service state and public facade functions.
 
-use super::descriptor::{
-    FileDescriptor, FileDescriptorTable, SeekWhence, SpawnDescriptorInheritanceSnapshot,
-};
+use super::descriptor::{FileDescriptor, FileDescriptorTable};
 use super::namespace::VirtualFileSystem;
-use super::node::{normalize_path, DirectoryEntry, FileMetadata, FileSystemResult};
+use super::node::{normalize_path, DirectoryEntry, FileMetadata, FileNode, FileSystemResult};
 use alloc::format;
 use alloc::sync::Arc;
 use spin::{LazyLock, Mutex};
@@ -32,21 +30,28 @@ pub fn initialize() {
         }
     }
 
-    let input = VIRTUAL_FILE_SYSTEM
+    *FILE_DESCRIPTORS.lock() = create_standard_file_descriptor_table();
+}
+
+/// Create a descriptor table with standard input, output, and error installed.
+///
+/// # Panics
+///
+/// Panics if required built-in device nodes cannot be found after mounting.
+pub fn create_standard_file_descriptor_table() -> FileDescriptorTable {
+    let input = get_required_node("/dev/null", "standard input");
+    let output = get_required_node("/dev/console", "standard output");
+    let error = get_required_node("/dev/console", "standard error");
+    let mut file_descriptors = FileDescriptorTable::new();
+    file_descriptors.initialize_standard_descriptors(input, output, error);
+    file_descriptors
+}
+
+fn get_required_node(path: &str, description: &str) -> Arc<dyn FileNode> {
+    VIRTUAL_FILE_SYSTEM
         .lock()
-        .get_node("/dev/null")
-        .expect("standard input device must exist");
-    let output = VIRTUAL_FILE_SYSTEM
-        .lock()
-        .get_node("/dev/console")
-        .expect("standard output device must exist");
-    let error = VIRTUAL_FILE_SYSTEM
-        .lock()
-        .get_node("/dev/console")
-        .expect("standard error device must exist");
-    FILE_DESCRIPTORS
-        .lock()
-        .initialize_standard_descriptors(input, output, error);
+        .get_node(path)
+        .unwrap_or_else(|_| panic!("{description} device must exist at {path}"))
 }
 
 /// Mount a memory-backed file at an absolute path.
@@ -81,8 +86,7 @@ pub fn mount_fat32_file(path: &str, size: usize, context: usize, read: BackendRe
 
 /// Open a path and return a file descriptor.
 pub fn open(path: &str) -> FileSystemResult<FileDescriptor> {
-    let node = VIRTUAL_FILE_SYSTEM.lock().get_node(path)?;
-    FILE_DESCRIPTORS.lock().open(node)
+    open_with_close_on_exec(path, false)
 }
 
 /// Open a path with close-on-exec metadata and return a file descriptor.
@@ -90,10 +94,22 @@ pub fn open_with_close_on_exec(
     path: &str,
     close_on_exec: bool,
 ) -> FileSystemResult<FileDescriptor> {
+    let mut file_descriptors = FILE_DESCRIPTORS.lock();
+    open_with_close_on_exec_in(&mut file_descriptors, path, close_on_exec)
+}
+
+/// Open a path in the provided descriptor table.
+pub fn open_with_close_on_exec_in(
+    file_descriptors: &mut FileDescriptorTable,
+    path: &str,
+    close_on_exec: bool,
+) -> FileSystemResult<FileDescriptor> {
     let node = VIRTUAL_FILE_SYSTEM.lock().get_node(path)?;
-    FILE_DESCRIPTORS
-        .lock()
-        .open_with_close_on_exec(node, close_on_exec)
+    if close_on_exec {
+        file_descriptors.open_with_close_on_exec(node, true)
+    } else {
+        file_descriptors.open(node)
+    }
 }
 
 /// Close an open file descriptor.
@@ -101,30 +117,9 @@ pub fn close(descriptor: FileDescriptor) -> FileSystemResult<()> {
     FILE_DESCRIPTORS.lock().close(descriptor)
 }
 
-/// Close descriptors marked close-on-exec and return the number closed.
-pub fn close_on_exec_descriptors() -> usize {
-    FILE_DESCRIPTORS.lock().close_on_exec_descriptors()
-}
-
-/// Return the current descriptor set selected for spawn inheritance.
-pub fn get_spawn_descriptor_inheritance_snapshot() -> SpawnDescriptorInheritanceSnapshot {
-    FILE_DESCRIPTORS
-        .lock()
-        .get_spawn_descriptor_inheritance_snapshot()
-}
-
 /// Read bytes from an open file descriptor.
 pub fn read(descriptor: FileDescriptor, buffer: &mut [u8]) -> FileSystemResult<usize> {
     FILE_DESCRIPTORS.lock().read(descriptor, buffer)
-}
-
-/// Read bytes from an open file descriptor without changing its current offset.
-pub fn read_at(
-    descriptor: FileDescriptor,
-    offset: usize,
-    buffer: &mut [u8],
-) -> FileSystemResult<usize> {
-    FILE_DESCRIPTORS.lock().read_at(descriptor, offset, buffer)
 }
 
 /// Write bytes to an open file descriptor.
@@ -135,17 +130,6 @@ pub fn write(descriptor: FileDescriptor, buffer: &[u8]) -> FileSystemResult<usiz
 /// Seek an open file descriptor to an absolute offset.
 pub fn seek(descriptor: FileDescriptor, offset: usize) -> FileSystemResult<usize> {
     FILE_DESCRIPTORS.lock().seek(descriptor, offset)
-}
-
-/// Seek an open file descriptor relative to a base position.
-pub fn seek_from(
-    descriptor: FileDescriptor,
-    offset: i64,
-    whence: SeekWhence,
-) -> FileSystemResult<usize> {
-    FILE_DESCRIPTORS
-        .lock()
-        .seek_from(descriptor, offset, whence)
 }
 
 /// Return metadata for a filesystem path.

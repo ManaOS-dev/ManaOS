@@ -9,11 +9,6 @@ reviewable unit before implementing it.
 
 ## Phase 1: Process Lifecycle And User Program Execution
 
-### Spawn Model And Fork Decision
-
-- [ ] Move user file descriptor tables from global filesystem state to process-owned metadata before general spawn.
-- [ ] Enforce spawn descriptor inheritance selection after process-owned descriptor tables replace the global table.
-
 ### Minimal User Shell
 
 - [ ] Start the userland shell as the initial interactive process after smoke gating.

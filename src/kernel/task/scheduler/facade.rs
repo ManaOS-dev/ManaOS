@@ -8,6 +8,7 @@ use super::{
     UserTaskExit, UserTaskSpawnRequest, UserTrapFrame, UserTrapFrameSource, UserVirtualAddress,
     PREEMPTION_STATE, SCHEDULER, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
+use crate::kernel::filesystem::{FileDescriptorTable, SpawnDescriptorInheritanceSnapshot};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::sync::atomic::Ordering;
@@ -395,6 +396,49 @@ pub fn set_current_working_directory(path: String) -> Option<()> {
     scheduler.as_mut().map(|scheduler| {
         scheduler.set_current_working_directory(path);
     })
+}
+
+/// Replace the currently selected task's file descriptor table.
+pub fn replace_current_file_descriptor_table(file_descriptors: FileDescriptorTable) -> Option<()> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler.as_mut().map(|scheduler| {
+        scheduler.replace_current_file_descriptor_table(file_descriptors);
+    })
+}
+
+/// Process the currently selected task's file descriptor table.
+pub fn with_current_file_descriptor_table<R>(
+    operation: impl FnOnce(&mut FileDescriptorTable) -> R,
+) -> Option<R> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .map(|scheduler| scheduler.with_current_file_descriptor_table(operation))
+}
+
+/// Clone the currently selected task's file descriptor table.
+pub fn clone_current_file_descriptor_table() -> Option<FileDescriptorTable> {
+    let scheduler = SCHEDULER.lock();
+    scheduler
+        .as_ref()
+        .map(Scheduler::clone_current_file_descriptor_table)
+}
+
+/// Close current task descriptors marked close-on-exec.
+pub fn close_current_file_descriptors_on_exec() -> Option<usize> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .map(Scheduler::close_current_file_descriptors_on_exec)
+}
+
+/// Return the current task's spawn descriptor inheritance snapshot.
+pub fn get_current_spawn_descriptor_inheritance_snapshot(
+) -> Option<SpawnDescriptorInheritanceSnapshot> {
+    let scheduler = SCHEDULER.lock();
+    scheduler
+        .as_ref()
+        .map(Scheduler::get_current_spawn_descriptor_inheritance_snapshot)
 }
 
 /// Return the currently selected user task address space.

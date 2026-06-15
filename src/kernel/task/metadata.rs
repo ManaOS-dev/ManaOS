@@ -1,5 +1,6 @@
-//! Task identity metadata used before process ownership exists.
+//! Task identity and process metadata owned by the scheduler.
 
+use crate::kernel::filesystem::FileDescriptorTable;
 use alloc::string::{String, ToString};
 
 /// A scheduler-local task identifier.
@@ -32,6 +33,7 @@ pub struct TaskMetadata {
     parent_identifier: Option<TaskIdentifier>,
     exit_status: Option<TaskExitStatus>,
     current_working_directory: String,
+    file_descriptors: FileDescriptorTable,
 }
 
 impl TaskMetadata {
@@ -41,6 +43,7 @@ impl TaskMetadata {
             parent_identifier: None,
             exit_status: None,
             current_working_directory: String::from("/"),
+            file_descriptors: FileDescriptorTable::new(),
         }
     }
 
@@ -48,12 +51,14 @@ impl TaskMetadata {
         identifier: TaskIdentifier,
         parent_identifier: TaskIdentifier,
         parent_current_working_directory: &str,
+        file_descriptors: FileDescriptorTable,
     ) -> Self {
         Self {
             identifier,
             parent_identifier: Some(parent_identifier),
             exit_status: None,
             current_working_directory: parent_current_working_directory.to_string(),
+            file_descriptors,
         }
     }
 
@@ -117,6 +122,18 @@ impl TaskMetadata {
 
     pub(super) fn set_current_working_directory(&mut self, path: String) {
         self.current_working_directory = path;
+    }
+
+    pub(super) fn file_descriptors(&self) -> &FileDescriptorTable {
+        &self.file_descriptors
+    }
+
+    pub(super) fn file_descriptors_mut(&mut self) -> &mut FileDescriptorTable {
+        &mut self.file_descriptors
+    }
+
+    pub(super) fn replace_file_descriptors(&mut self, file_descriptors: FileDescriptorTable) {
+        self.file_descriptors = file_descriptors;
     }
 }
 

@@ -11,12 +11,13 @@ metadata can be verified one slice at a time.
 - `kernel::memory::user_pointer` owns copying user pointers into kernel-owned
   staging data before lifecycle state is mutated.
 - `kernel::filesystem` owns path normalization, namespace lookup, file
-  metadata, descriptor tables, and filesystem error values.
+  metadata, descriptor table operations, and filesystem error values.
 - `kernel::elf` owns ELF validation and segment mapping policy for user images.
 - `kernel::memory` owns user address-space construction, publication,
   rollback, and frame reclamation.
 - `kernel::task` owns process identifiers, parent-child metadata, scheduler
-  state, trap frames, exit records, and lifecycle diagnostics.
+  state, trap frames, process-owned descriptor table instances, exit records,
+  and lifecycle diagnostics.
 - `main.rs` remains the composition root for boot-time smoke wiring only; it
   must not become the owner of process replacement policy.
 
@@ -56,14 +57,15 @@ parent's current working directory at task creation. The current user-visible
 bounded `argv` / `envp` vectors, records the current descriptor inheritance
 selection, and activates the child immediately. Blocking `waitpid` now sleeps
 the parent task until a matching child exit record is retained. Descriptor
-inheritance selection is documented now, but child-private enforcement still
-depends on moving descriptor tables out of global filesystem state.
+tables are now process-owned task metadata, so user file descriptor syscalls
+operate on the current task's table and spawned children receive a filtered
+copy of the parent table.
 Storage smoke also covers the orphan boundary where a parent exits while its
 child remains alive. The current runtime reparents that child relationship to
 the initial process, task `0`, before the child exit is reaped.
 Descriptor close-on-exec
 metadata and successful-`execve` close
-behavior exist for the current global descriptor table. The `waitpid` syscall
+behavior apply to the execing process descriptor table. The `waitpid` syscall
 number, option constants, no-std userland wrapper, selector validation,
 no-child `ECHILD` path, and scheduler-owned child exit records keyed by parent
 task identifier are in place now so later child-exit work has a stable ABI
@@ -344,15 +346,16 @@ marked close-on-exec. Storage smoke now opens the executable file in the old
 image as the first non-standard descriptor and verifies that the new image can
 close the same descriptor number.
 
-The current descriptor table records close-on-exec metadata per open file. The
-user-visible `OPEN_CLOSE_ON_EXEC` flag marks a descriptor for successful
-`execve` cleanup. Unmarked descriptors keep their descriptor numbers and offsets
-by default, while marked descriptors are closed only after the new image is
-ready to run.
+Each process-owned descriptor table records close-on-exec metadata per open
+file. The user-visible `OPEN_CLOSE_ON_EXEC` flag marks a descriptor for
+successful `execve` cleanup. Unmarked descriptors keep their descriptor numbers
+and offsets by default, while marked descriptors are closed only after the new
+image is ready to run.
 
-The current table is still global rather than per-process, so this is the
-minimum metadata needed for the smoke lifecycle. Future per-process descriptor
-tables must preserve the same rule but apply it only to the execing process.
+The kernel still keeps a separate descriptor table for boot-time diagnostics,
+console commands, and temporary executable image loading. User-facing
+descriptor syscalls operate on the current task's process table instead of that
+kernel table.
 
 Spawn descriptor inheritance uses a stricter target policy before broader
 general spawn:
@@ -372,12 +375,10 @@ general spawn:
   duplication, or selective close lists. Those belong to later shell redirection
   and descriptor-surface work.
 
-Because the current descriptor table is global, the kernel cannot yet enforce
-child-only filtering without also changing the parent's descriptor set. The
-current runtime therefore records a filesystem-owned spawn inheritance snapshot
-for diagnostics and smoke coverage, while process-owned descriptor tables remain
-the required implementation step before general spawn can enforce the target
-policy.
+The current runtime records a task-owned spawn inheritance snapshot before the
+child image loader opens its temporary executable descriptor. The scheduler then
+builds the child task with a process-owned descriptor table cloned from the
+parent snapshot and with close-on-exec descriptors removed.
 
 ## Diagnostics And Smoke Coverage
 
@@ -418,8 +419,8 @@ Current runtime diagnostics cover the first successful replacement path:
   kernel stack have already been reclaimed.
 - Storage smoke asserts the `sys_spawn` descriptor-inheritance snapshot emitted
   before the child image loader opens its temporary executable descriptor. The
-  snapshot keeps the current global-table limitation visible until per-process
-  descriptor tables enforce child-private selection.
+  snapshot is emitted from the parent process table and marks the process-table
+  path explicitly.
 - Storage smoke asserts that `tasks` output retains the original spawn path as
   `origin=` after the same task successfully replaces its current image through
   `execve`.

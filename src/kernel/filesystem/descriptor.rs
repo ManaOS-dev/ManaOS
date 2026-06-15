@@ -84,7 +84,8 @@ impl SpawnDescriptorInheritanceSnapshot {
     }
 }
 
-/// Per-kernel open file descriptor table.
+/// Open file descriptor table owned by one kernel or process context.
+#[derive(Clone)]
 pub struct FileDescriptorTable {
     entries: Vec<Option<OpenFile>>,
 }
@@ -191,6 +192,21 @@ impl FileDescriptorTable {
         )
     }
 
+    /// Create a child descriptor table using the current spawn inheritance policy.
+    pub fn inherit_for_spawn(&self) -> Self {
+        let entries = self
+            .entries
+            .iter()
+            .map(|entry| {
+                entry
+                    .as_ref()
+                    .filter(|open_file| !open_file.close_on_exec)
+                    .cloned()
+            })
+            .collect();
+        Self { entries }
+    }
+
     /// Read from an open file descriptor at its current offset.
     pub fn read(
         &mut self,
@@ -249,8 +265,8 @@ impl FileDescriptorTable {
     }
 
     /// Return metadata for an open file descriptor.
-    pub fn metadata(&mut self, descriptor: FileDescriptor) -> FileSystemResult<FileMetadata> {
-        let open_file = self.get_open_file_mut(descriptor)?;
+    pub fn metadata(&self, descriptor: FileDescriptor) -> FileSystemResult<FileMetadata> {
+        let open_file = self.get_open_file(descriptor)?;
         Ok(open_file.node.metadata())
     }
 
