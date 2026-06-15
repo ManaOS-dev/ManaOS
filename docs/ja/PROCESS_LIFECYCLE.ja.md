@@ -59,7 +59,9 @@ descriptor table に適用されます。`waitpid` の syscall number、option c
 selector validation、no-child `ECHILD` path、parent task identifier で key 付けされた
 scheduler-owned child exit record は実装済みなので、後続の child-exit 実装は安定した ABI target に
 向けて進められます。最小 no-std `user_shell` binary は userland target set に入り、storage smoke disk
-image に `/disk/bin/user_shell` として含まれていますが、まだ initial interactive process ではありません。
+image に `/disk/bin/user_shell` として含まれ、storage smoke lifecycle gate の後に起動されます。
+現在の shell は stdin を固定バッファへ1回読み、standard input がまだ `/dev/null` なので EOF を検出して
+正常終了します。keyboard-backed stdin で interactive lifetime を持たせる作業は未完了です。
 
 ## first stable process model
 
@@ -356,7 +358,8 @@ inheritance snapshot を記録します。その後 scheduler は、parent snaps
 - storage smoke は post-exec smoke image を `/disk/bin/file_demo` へ置き換えることで、replacement が
   self-`execve` に限定されないことを検証します。
 - storage smoke は experimental `user_shell` ELF が disk image に存在し、`/disk/bin/user_shell` として
-  登録されることを検証します。
+  登録され、lifecycle gate 後に起動され、stdin EOF 後に initial process 経由で collect されることを
+  検証します。
 - serial log は `User image replaced by execve` と `execve image published` を old-image reclaim count 付きで
   記録します。
 - scheduler smoke は、post-exec image が exit する前に `execve` が heap と private mapping bookkeeping を

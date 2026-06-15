@@ -11,8 +11,7 @@ reviewable unit before implementing it.
 
 ### Minimal User Shell
 
-- [ ] Start the userland shell as the initial interactive process after smoke gating.
-- [ ] Implement fixed-buffer command reading from stdin.
+- [ ] Keep the smoke-started userland shell alive once stdin is keyboard-backed.
 - [ ] Implement whitespace tokenization without heap allocation.
 - [ ] Implement absolute path execution for user programs.
 - [ ] Implement relative path execution using the current working directory.

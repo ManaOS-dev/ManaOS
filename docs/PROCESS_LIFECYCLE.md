@@ -70,8 +70,11 @@ number, option constants, no-std userland wrapper, selector validation,
 no-child `ECHILD` path, and scheduler-owned child exit records keyed by parent
 task identifier are in place now so later child-exit work has a stable ABI
 target. A minimal no-std `user_shell` binary is built into the userland target
-set and included in the storage smoke disk image as `/disk/bin/user_shell`, but
-it is not yet the initial interactive process.
+set, included in the storage smoke disk image as `/disk/bin/user_shell`, and
+started after the storage smoke lifecycle gate. The shell currently performs
+one fixed-buffer read from stdin and exits cleanly on EOF because standard input
+is still backed by `/dev/null`; keyboard-backed interactive lifetime remains
+future work.
 
 ## First Stable Process Model
 
@@ -431,7 +434,8 @@ Current runtime diagnostics cover the first successful replacement path:
 - Storage smoke verifies that replacement is not limited to self-`execve` by
   replacing the post-exec smoke image with `/disk/bin/file_demo`.
 - Storage smoke verifies that the experimental `user_shell` ELF is present in
-  the disk image and registered as `/disk/bin/user_shell`.
+  the disk image, registered as `/disk/bin/user_shell`, spawned after the
+  lifecycle gate, and collected through the initial process after stdin EOF.
 - Serial logs record `User image replaced by execve` and
   `execve image published` with old-image reclaim counts.
 - Scheduler smoke verifies that `execve` resets heap and private mapping

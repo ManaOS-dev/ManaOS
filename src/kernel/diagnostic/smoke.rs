@@ -11,13 +11,19 @@ pub use scheduler_diagnostics::{
 pub const USER_SMOKE_PARENT_TASK_COUNT: usize = 5;
 /// Number of user-spawned child processes created by marked smoke parents.
 pub const USER_SMOKE_CHILD_TASK_COUNT: usize = 2;
+/// Number of post-gate user shell processes spawned by storage smoke.
+pub const USER_SMOKE_SHELL_TASK_COUNT: usize = 1;
 /// Exit code used by the blocking user-spawned child status smoke.
 pub const USER_SMOKE_CHILD_EXIT_CODE: u64 = 7;
 /// Exit code used by the child whose parent exits before it does.
 pub const USER_SMOKE_ORPHAN_CHILD_EXIT_CODE: u64 = 43;
 /// Number of user tasks expected after the full storage smoke lifecycle.
-pub const USER_SMOKE_TASK_COUNT: usize = USER_SMOKE_PARENT_TASK_COUNT + USER_SMOKE_CHILD_TASK_COUNT;
+pub const USER_SMOKE_TASK_COUNT: usize =
+    USER_LIFECYCLE_SMOKE_TASK_COUNT + USER_SMOKE_SHELL_TASK_COUNT;
 
+const USER_LIFECYCLE_SMOKE_TASK_COUNT: usize =
+    USER_SMOKE_PARENT_TASK_COUNT + USER_SMOKE_CHILD_TASK_COUNT;
+const USER_SHELL_ELF_PATH: &str = "/disk/bin/user_shell";
 const SPAWN_WAIT_PARENT_TASK_INDEX: usize = 3;
 const ORPHAN_PARENT_TASK_INDEX: usize = 4;
 
@@ -77,6 +83,25 @@ fn spawn_file_demo_marker_task(
         .expect("user file demo marker smoke program must spawn from /disk/bin")
 }
 
+fn spawn_user_shell_smoke_task(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    user_stack_pages: u64,
+) -> u64 {
+    let user_entry_arguments: [&[u8]; 1] = [USER_SHELL_ELF_PATH.as_bytes()];
+    let user_entry_environment: [&[u8]; 1] = [b"MANAOS_BOOT=user-shell-smoke"];
+    let user_entry_vectors = crate::kernel::process::UserProgramEntryVectors::new(
+        &user_entry_arguments,
+        &user_entry_environment,
+    );
+    let request = crate::kernel::process::UserProgramSpawnRequest::new(
+        USER_SHELL_ELF_PATH,
+        user_entry_vectors,
+        user_stack_pages,
+    );
+    crate::kernel::process::spawn_user_program(frame_allocator, request)
+        .expect("user shell smoke program must spawn from /disk/bin")
+}
+
 /// Run the boot-time userland scheduler and syscall smoke demo.
 pub fn run_user_smoke_demo(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
@@ -128,7 +153,7 @@ pub fn run_user_smoke_demo(
     let exits = drain_user_smoke_tasks(frame_allocator, user_task_ids);
     assert_eq!(
         exits.len(),
-        USER_SMOKE_TASK_COUNT,
+        USER_LIFECYCLE_SMOKE_TASK_COUNT,
         "active user lifecycle drain must return every smoke task exit"
     );
 
@@ -138,7 +163,72 @@ pub fn run_user_smoke_demo(
         "Multi-user preemption smoke passed: tasks={}",
         user_task_ids.len()
     );
+    run_initial_user_shell_smoke(frame_allocator, user_stack_pages);
     crate::kernel::task::set_preemption_enabled(true);
+}
+
+fn run_initial_user_shell_smoke(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    user_stack_pages: u64,
+) {
+    let user_task_id = spawn_user_shell_smoke_task(frame_allocator, user_stack_pages);
+    assert!(
+        crate::kernel::task::activate_user_task(user_task_id),
+        "spawned user shell task must be activatable"
+    );
+    crate::log_info!(
+        "task",
+        "Initial user shell smoke started: task={} path={}",
+        user_task_id,
+        USER_SHELL_ELF_PATH
+    );
+    let exit = crate::kernel::task::run_user_task_once(frame_allocator, user_task_id)
+        .expect("initial user shell smoke task must exit after stdin EOF");
+    assert_eq!(
+        exit.task_id(),
+        user_task_id,
+        "initial user shell smoke must return the shell task exit"
+    );
+    assert_eq!(
+        exit.exit_code(),
+        0,
+        "initial user shell smoke must exit cleanly after stdin EOF"
+    );
+    verify_initial_user_shell_exit_collection(exit);
+    crate::log_info!(
+        "task",
+        "Initial user shell smoke passed: task={} exit_code=0 stdin=eof",
+        user_task_id
+    );
+}
+
+fn verify_initial_user_shell_exit_collection(exit: crate::kernel::task::UserTaskExit) {
+    let initial_process_task_id = crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64();
+    let retained_exit = crate::kernel::task::collect_waitable_child_exit(
+        initial_process_task_id,
+        Some(exit.task_id()),
+    )
+    .expect("initial shell exit must be retained for the initial process");
+    assert_eq!(
+        retained_exit.exit_code(),
+        0,
+        "initial shell exit code must be retained for collection"
+    );
+    assert!(
+        crate::kernel::task::collect_waitable_child_exit(
+            initial_process_task_id,
+            Some(exit.task_id()),
+        )
+        .is_none(),
+        "initial shell exit must not be collectable twice"
+    );
+    crate::log_info!(
+        "task",
+        "Initial user shell exit collected: parent={} child={} status={}",
+        initial_process_task_id,
+        retained_exit.task_id(),
+        retained_exit.wait_status()
+    );
 }
 
 fn verify_user_smoke_exits(

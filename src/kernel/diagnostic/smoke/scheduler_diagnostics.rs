@@ -2,7 +2,7 @@
 
 use super::{
     USER_SMOKE_CHILD_EXIT_CODE, USER_SMOKE_CHILD_TASK_COUNT, USER_SMOKE_ORPHAN_CHILD_EXIT_CODE,
-    USER_SMOKE_PARENT_TASK_COUNT,
+    USER_SMOKE_PARENT_TASK_COUNT, USER_SMOKE_SHELL_TASK_COUNT,
 };
 use crate::kernel::diagnostic::log::{LogField, LogLevel};
 
@@ -77,14 +77,22 @@ fn verify_scheduler_reclaim_diagnostics(
     // pages. The old heap and private mappings are reclaimed during execve
     // publication, before the task exits.
     const SMOKE_RECLAIMED_USER_PAGES_PER_TASK: u64 = 8;
+    // The shell smoke image has a smaller two-segment ELF image and the same
+    // four-page user stack, so it reclaims fewer user-owned mapped pages.
+    const SHELL_RECLAIMED_USER_PAGES_PER_TASK: u64 = 6;
     // The post-exec image touches only the program and stack windows, leaving
     // seven page-table frames to reclaim with the PML4.
     const SMOKE_RECLAIMED_PAGE_TABLE_PAGES_PER_TASK: u64 = 7;
     // User smoke tasks use the current default guarded kernel stack: four
     // writable pages plus one reserved guard page.
+    let expected_shell_tasks =
+        u64::try_from(USER_SMOKE_SHELL_TASK_COUNT).expect("shell smoke task count must fit in u64");
+    let expected_lifecycle_tasks = expected_user_tasks.saturating_sub(expected_shell_tasks);
     let expected_reclaimed_user_kernel_stack_writable_pages = expected_user_tasks * 4;
     let expected_reclaimed_user_kernel_stack_virtual_pages = expected_user_tasks * 5;
-    let expected_reclaimed_user_pages = expected_user_tasks * SMOKE_RECLAIMED_USER_PAGES_PER_TASK;
+    let expected_reclaimed_user_pages = expected_lifecycle_tasks
+        * SMOKE_RECLAIMED_USER_PAGES_PER_TASK
+        + expected_shell_tasks * SHELL_RECLAIMED_USER_PAGES_PER_TASK;
     let expected_reclaimed_user_page_table_pages =
         expected_user_tasks * SMOKE_RECLAIMED_PAGE_TABLE_PAGES_PER_TASK;
     assert_eq!(
@@ -561,10 +569,13 @@ fn verify_scheduler_task_snapshot_counts(
     // parent-exit marker paths, so they have no execve replacement history.
     const DIRECT_FILE_DEMO_PARENT_TASKS: u64 = 2;
     let expected_reparented_orphan_children = 1_u64;
+    let expected_shell_tasks =
+        u64::try_from(USER_SMOKE_SHELL_TASK_COUNT).expect("shell smoke task count must fit in u64");
     let expected_bootstrap_parent_tasks = u64::try_from(USER_SMOKE_PARENT_TASK_COUNT)
         .expect("smoke parent task count must fit in u64");
-    let expected_bootstrap_children =
-        expected_bootstrap_parent_tasks.saturating_add(expected_reparented_orphan_children);
+    let expected_bootstrap_children = expected_bootstrap_parent_tasks
+        .saturating_add(expected_reparented_orphan_children)
+        .saturating_add(expected_shell_tasks);
     let expected_user_spawned_children = u64::try_from(USER_SMOKE_CHILD_TASK_COUNT)
         .expect("smoke child task count must fit in u64")
         .saturating_sub(expected_reparented_orphan_children);
@@ -572,7 +583,8 @@ fn verify_scheduler_task_snapshot_counts(
         expected_bootstrap_parent_tasks.saturating_sub(DIRECT_FILE_DEMO_PARENT_TASKS);
     let expected_unreplaced_user_images = u64::try_from(USER_SMOKE_CHILD_TASK_COUNT)
         .expect("smoke child task count must fit in u64")
-        .saturating_add(DIRECT_FILE_DEMO_PARENT_TASKS);
+        .saturating_add(DIRECT_FILE_DEMO_PARENT_TASKS)
+        .saturating_add(expected_shell_tasks);
     assert_eq!(
         counters.finished_user_tasks, expected_user_tasks,
         "scheduler snapshots must include every finished user smoke task"
@@ -753,7 +765,10 @@ fn verify_user_task_image_snapshot(
         verify_smoke_parent_image_snapshot(user_image);
         crate::kernel::task::UserExecveReplacementStateDiagnostics::Published
     } else if user_image_origin_matches(user_image, b"/disk/bin/file_demo") {
-        verify_file_demo_spawn_image_snapshot(user_image);
+        verify_direct_spawn_image_snapshot(user_image, b"/disk/bin/file_demo");
+        crate::kernel::task::UserExecveReplacementStateDiagnostics::None
+    } else if user_image_origin_matches(user_image, b"/disk/bin/user_shell") {
+        verify_direct_spawn_image_snapshot(user_image, b"/disk/bin/user_shell");
         crate::kernel::task::UserExecveReplacementStateDiagnostics::None
     } else {
         panic!("user task image snapshot must retain a known smoke origin path");
@@ -790,33 +805,34 @@ fn verify_smoke_parent_image_snapshot(
     );
 }
 
-fn verify_file_demo_spawn_image_snapshot(
+fn verify_direct_spawn_image_snapshot(
     user_image: &crate::kernel::task::UserImageDiagnosticsSnapshot,
+    expected_path: &[u8],
 ) {
     assert_eq!(
         user_image.last_execve_state(),
         crate::kernel::task::UserExecveReplacementStateDiagnostics::None,
-        "file_demo spawn task must not report an execve replacement state"
+        "directly spawned user tasks must not report an execve replacement state"
     );
     assert_eq!(
         user_image.generation(),
         0,
-        "file_demo spawn task must not report an execve generation"
+        "directly spawned user tasks must not report an execve generation"
     );
     assert_user_image_path(
         user_image,
-        b"/disk/bin/file_demo",
-        "file_demo spawn task must retain its spawn image path",
+        expected_path,
+        "directly spawned user tasks must retain their spawn image path",
     );
     assert_eq!(
         user_image.last_execve_old_user_pages(),
         0,
-        "file_demo spawn task must not report execve reclaim pages"
+        "directly spawned user tasks must not report execve reclaim pages"
     );
     assert_eq!(
         user_image.last_execve_old_page_table_pages(),
         0,
-        "file_demo spawn task must not report execve page-table reclaim"
+        "directly spawned user tasks must not report execve page-table reclaim"
     );
 }
 
