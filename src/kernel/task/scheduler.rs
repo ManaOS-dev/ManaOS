@@ -220,6 +220,9 @@ struct UserTaskRuntime {
     runtime_trap_frame_restore_count: u64,
     last_preemption_reason: UserPreemptionReasonDiagnostics,
     last_resume_path: UserResumePathDiagnostics,
+    resume_handoff_count: u64,
+    last_resume_address_space_root: u64,
+    last_resume_kernel_stack_top: u64,
 }
 
 impl UserTaskRuntime {
@@ -251,6 +254,9 @@ impl UserTaskRuntime {
             runtime_trap_frame_restore_count: 0,
             last_preemption_reason: UserPreemptionReasonDiagnostics::None,
             last_resume_path: UserResumePathDiagnostics::None,
+            resume_handoff_count: 0,
+            last_resume_address_space_root: 0,
+            last_resume_kernel_stack_top: 0,
         }
     }
 
@@ -264,6 +270,13 @@ impl UserTaskRuntime {
 
     fn has_recorded_runtime_trap_frame(&self) -> bool {
         self.syscall_frame_recorded || self.interrupt_frame_recorded
+    }
+
+    fn record_resume_handoff(&mut self, address_space: UserAddressSpace, kernel_stack_top: usize) {
+        self.last_resume_address_space_root = address_space.level_4_frame().as_u64();
+        self.last_resume_kernel_stack_top =
+            u64::try_from(kernel_stack_top).expect("user task kernel stack top must fit in u64");
+        self.resume_handoff_count = self.resume_handoff_count.saturating_add(1);
     }
 }
 

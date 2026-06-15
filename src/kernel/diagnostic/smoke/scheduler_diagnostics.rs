@@ -440,6 +440,9 @@ struct SchedulerTaskSnapshotCounters {
     full_restored_trap_frame_snapshots: u64,
     runtime_trap_frame_restore_snapshots: u64,
     resumed_user_task_snapshots: u64,
+    resume_handoff_snapshots: u64,
+    resume_address_space_root_snapshots: u64,
+    resume_kernel_stack_snapshots: u64,
 }
 
 impl SchedulerTaskSnapshotCounters {
@@ -462,6 +465,9 @@ impl SchedulerTaskSnapshotCounters {
             full_restored_trap_frame_snapshots: 0,
             runtime_trap_frame_restore_snapshots: 0,
             resumed_user_task_snapshots: 0,
+            resume_handoff_snapshots: 0,
+            resume_address_space_root_snapshots: 0,
+            resume_kernel_stack_snapshots: 0,
         }
     }
 }
@@ -526,6 +532,38 @@ fn record_scheduler_user_task_snapshot(
         counters.collected_user_exit_snapshots.saturating_add(1);
     counters.reaped_user_task_snapshots = counters.reaped_user_task_snapshots.saturating_add(1);
     counters.finished_user_tasks = counters.finished_user_tasks.saturating_add(1);
+    record_trap_frame_snapshot(snapshot, counters);
+    record_resume_handoff_snapshot(snapshot, counters);
+    match verify_user_task_image_snapshot(snapshot) {
+        crate::kernel::task::UserExecveReplacementStateDiagnostics::Published => {
+            counters.published_execve_image_snapshots =
+                counters.published_execve_image_snapshots.saturating_add(1);
+        }
+        crate::kernel::task::UserExecveReplacementStateDiagnostics::None => {
+            counters.unreplaced_user_image_snapshots =
+                counters.unreplaced_user_image_snapshots.saturating_add(1);
+        }
+        crate::kernel::task::UserExecveReplacementStateDiagnostics::CandidateDropped => {
+            panic!("user smoke snapshots must not report dropped execve candidates");
+        }
+    }
+    counters.user_image_snapshots = counters.user_image_snapshots.saturating_add(1);
+    let verification = verify_user_task_snapshot(snapshot);
+    counters.user_vm_snapshots = counters.user_vm_snapshots.saturating_add(1);
+    if verification.released_mappings {
+        counters.anonymous_mapping_release_snapshots = counters
+            .anonymous_mapping_release_snapshots
+            .saturating_add(1);
+    }
+    if verification.fully_reclaimed {
+        counters.fully_reclaimed_user_tasks = counters.fully_reclaimed_user_tasks.saturating_add(1);
+    }
+}
+
+fn record_trap_frame_snapshot(
+    snapshot: &crate::kernel::task::SchedulerTaskSnapshot,
+    counters: &mut SchedulerTaskSnapshotCounters,
+) {
     if snapshot.syscall_frame_recorded() || snapshot.interrupt_frame_recorded() {
         assert!(
             snapshot.runtime_trap_frame_record_count() > 0,
@@ -556,11 +594,6 @@ fn record_scheduler_user_task_snapshot(
             "timer-preempted user task snapshots must show a runtime trap frame restore"
         );
     }
-    assert_ne!(
-        snapshot.last_resume_path(),
-        crate::kernel::task::UserResumePathDiagnostics::None,
-        "finished user task snapshots must retain their last user resume path"
-    );
     assert_eq!(
         snapshot.restored_user_trap_frame_bytes(),
         core::mem::size_of::<UserTrapFrame>(),
@@ -575,30 +608,37 @@ fn record_scheduler_user_task_snapshot(
             .saturating_add(1);
     }
     counters.resumed_user_task_snapshots = counters.resumed_user_task_snapshots.saturating_add(1);
-    match verify_user_task_image_snapshot(snapshot) {
-        crate::kernel::task::UserExecveReplacementStateDiagnostics::Published => {
-            counters.published_execve_image_snapshots =
-                counters.published_execve_image_snapshots.saturating_add(1);
-        }
-        crate::kernel::task::UserExecveReplacementStateDiagnostics::None => {
-            counters.unreplaced_user_image_snapshots =
-                counters.unreplaced_user_image_snapshots.saturating_add(1);
-        }
-        crate::kernel::task::UserExecveReplacementStateDiagnostics::CandidateDropped => {
-            panic!("user smoke snapshots must not report dropped execve candidates");
-        }
-    }
-    counters.user_image_snapshots = counters.user_image_snapshots.saturating_add(1);
-    let verification = verify_user_task_snapshot(snapshot);
-    counters.user_vm_snapshots = counters.user_vm_snapshots.saturating_add(1);
-    if verification.released_mappings {
-        counters.anonymous_mapping_release_snapshots = counters
-            .anonymous_mapping_release_snapshots
-            .saturating_add(1);
-    }
-    if verification.fully_reclaimed {
-        counters.fully_reclaimed_user_tasks = counters.fully_reclaimed_user_tasks.saturating_add(1);
-    }
+}
+
+fn record_resume_handoff_snapshot(
+    snapshot: &crate::kernel::task::SchedulerTaskSnapshot,
+    counters: &mut SchedulerTaskSnapshotCounters,
+) {
+    assert_ne!(
+        snapshot.last_resume_path(),
+        crate::kernel::task::UserResumePathDiagnostics::None,
+        "finished user task snapshots must retain their last user resume path"
+    );
+    assert!(
+        snapshot.resume_handoff_count() > 0,
+        "finished user task snapshots must retain a scheduler resume handoff"
+    );
+    assert_ne!(
+        snapshot.last_resume_address_space_root(),
+        0,
+        "finished user task snapshots must retain their last resume address-space root"
+    );
+    assert_ne!(
+        snapshot.last_resume_kernel_stack_top(),
+        0,
+        "finished user task snapshots must retain their last resume kernel stack top"
+    );
+    counters.resume_handoff_snapshots = counters.resume_handoff_snapshots.saturating_add(1);
+    counters.resume_address_space_root_snapshots = counters
+        .resume_address_space_root_snapshots
+        .saturating_add(1);
+    counters.resume_kernel_stack_snapshots =
+        counters.resume_kernel_stack_snapshots.saturating_add(1);
 }
 
 fn verify_user_task_exit_code(snapshot: &crate::kernel::task::SchedulerTaskSnapshot) {
@@ -733,6 +773,25 @@ fn verify_scheduler_task_snapshot_counts(
         counters.resumed_user_task_snapshots, expected_user_tasks,
         "scheduler snapshots must show every user task was entered or resumed"
     );
+    verify_resume_handoff_snapshot_counts(counters, expected_user_tasks);
+}
+
+fn verify_resume_handoff_snapshot_counts(
+    counters: SchedulerTaskSnapshotCounters,
+    expected_user_tasks: u64,
+) {
+    assert_eq!(
+        counters.resume_handoff_snapshots, expected_user_tasks,
+        "scheduler snapshots must show every user task retained a resume handoff"
+    );
+    assert_eq!(
+        counters.resume_address_space_root_snapshots, expected_user_tasks,
+        "scheduler snapshots must show every user task retained a resume address-space root"
+    );
+    assert_eq!(
+        counters.resume_kernel_stack_snapshots, expected_user_tasks,
+        "scheduler snapshots must show every user task retained a resume kernel stack top"
+    );
 }
 
 fn log_scheduler_task_snapshot_counters(
@@ -788,6 +847,18 @@ fn log_scheduler_task_snapshot_counters(
             LogField::new(
                 "resumed_user_task_snapshots",
                 format_args!("{}", counters.resumed_user_task_snapshots),
+            ),
+            LogField::new(
+                "resume_handoff_snapshots",
+                format_args!("{}", counters.resume_handoff_snapshots),
+            ),
+            LogField::new(
+                "resume_address_space_root_snapshots",
+                format_args!("{}", counters.resume_address_space_root_snapshots),
+            ),
+            LogField::new(
+                "resume_kernel_stack_snapshots",
+                format_args!("{}", counters.resume_kernel_stack_snapshots),
             ),
             LogField::new(
                 "fully_reclaimed_user_tasks",

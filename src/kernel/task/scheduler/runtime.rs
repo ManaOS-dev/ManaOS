@@ -86,6 +86,7 @@ impl Scheduler {
         self.one_shot_user_entry_count = self.one_shot_user_entry_count.saturating_add(1);
         if let TaskKind::User(user_runtime) = &mut self.tasks[task_index].kind {
             user_runtime.last_resume_path = UserResumePathDiagnostics::LifecycleEntry;
+            user_runtime.record_resume_handoff(address_space, kernel_stack_top);
             user_runtime.record_user_trap_frame_restore();
         }
         Some(OneShotUserTask {
@@ -756,6 +757,9 @@ impl Scheduler {
         user_runtime.runtime_trap_frame_record_count = 0;
         user_runtime.restored_user_trap_frame_bytes = 0;
         user_runtime.runtime_trap_frame_restore_count = 0;
+        user_runtime.resume_handoff_count = 0;
+        user_runtime.last_resume_address_space_root = 0;
+        user_runtime.last_resume_kernel_stack_top = 0;
         current_task.context.clear();
 
         crate::log_info!(
@@ -874,82 +878,165 @@ impl Scheduler {
 
         let current_task_id = self.tasks[current_index].get_id();
         let next_task_id = self.tasks[next_index].get_id();
-        let current_task_is_user = matches!(self.tasks[current_index].kind, TaskKind::User(_));
-        if current_task_is_user {
-            self.timer_preemption_count = self.timer_preemption_count.saturating_add(1);
-            if let TaskKind::User(user_runtime) = &mut self.tasks[current_index].kind {
-                user_runtime.last_preemption_reason = UserPreemptionReasonDiagnostics::Timer;
-            }
-            if !self.preemption_switch_logged {
-                crate::log_info!(
-                    "task",
-                    "User task preempted by timer: current={} next={} context_saved=true",
-                    current_task_id,
-                    next_task_id
-                );
-                self.preemption_switch_logged = true;
-            }
-        }
+        let current_task_is_user =
+            self.record_current_timer_preemption(current_index, current_task_id, next_task_id);
 
         let current_context = self.tasks[current_index].context.as_mut_pointer();
-        let next_user_kernel_stack_top = self.user_kernel_stack_top(next_index);
-        let next_user_address_space = self.user_address_space(next_index);
-        let next_context_is_empty = self.tasks[next_index].context.is_empty();
         if matches!(self.tasks[next_index].kind, TaskKind::User(_)) {
-            if next_context_is_empty {
-                self.user_entry_count = self.user_entry_count.saturating_add(1);
-                self.timer_user_entry_count = self.timer_user_entry_count.saturating_add(1);
-                if current_task_is_user {
-                    self.timer_user_entry_from_preempted_user_count = self
-                        .timer_user_entry_from_preempted_user_count
-                        .saturating_add(1);
-                    crate::log_info!(
-                        "task",
-                        "User task entered from preempted user timer context: current={} next={} first_entry=true",
-                        current_task_id,
-                        next_task_id
-                    );
-                }
-                let TaskKind::User(user_runtime) = &mut self.tasks[next_index].kind else {
-                    unreachable!("user task kind checked before timer entry");
-                };
-                user_runtime.last_resume_path = UserResumePathDiagnostics::TimerEntry;
-                user_runtime.record_user_trap_frame_restore();
-                return Some(SwitchAction::EnterUser {
-                    current_context,
-                    task_id: next_task_id,
-                    trap_frame: user_runtime.saved_frame,
-                    kernel_stack_top: next_user_kernel_stack_top
-                        .expect("user tasks must own a kernel stack before entry"),
-                    address_space: next_user_address_space
-                        .expect("user tasks must own an address space before entry"),
-                });
-            }
-            let TaskKind::User(user_runtime) = &mut self.tasks[next_index].kind else {
-                unreachable!("user task kind checked before timer resume");
-            };
-            user_runtime.last_resume_path = UserResumePathDiagnostics::TimerResume;
-            user_runtime.record_user_trap_frame_restore();
-            if !self.user_resume_logged {
-                crate::log_info!(
-                    "task",
-                    "User task resumed from timer context: task={} kernel_stack_top={:#x}",
-                    next_task_id,
-                    next_user_kernel_stack_top
-                        .expect("user tasks must own a kernel stack before resume")
-                );
-                self.user_resume_logged = true;
-            }
-            self.user_resume_count = self.user_resume_count.saturating_add(1);
+            return Some(self.prepare_next_user_switch(
+                current_context,
+                current_task_id,
+                next_index,
+                current_task_is_user,
+            ));
         }
 
         let next_context = self.tasks[next_index].context.as_pointer();
         Some(SwitchAction::SwitchKernel {
             current_context,
             next_context,
-            next_user_kernel_stack_top,
-            next_user_address_space,
+            next_user_kernel_stack_top: None,
+            next_user_address_space: None,
         })
+    }
+
+    fn record_current_timer_preemption(
+        &mut self,
+        current_index: usize,
+        current_task_id: u64,
+        next_task_id: u64,
+    ) -> bool {
+        let current_task_is_user = matches!(self.tasks[current_index].kind, TaskKind::User(_));
+        if !current_task_is_user {
+            return false;
+        }
+
+        self.timer_preemption_count = self.timer_preemption_count.saturating_add(1);
+        if let TaskKind::User(user_runtime) = &mut self.tasks[current_index].kind {
+            user_runtime.last_preemption_reason = UserPreemptionReasonDiagnostics::Timer;
+        }
+        if !self.preemption_switch_logged {
+            crate::log_info!(
+                "task",
+                "User task preempted by timer: current={} next={} context_saved=true",
+                current_task_id,
+                next_task_id
+            );
+            self.preemption_switch_logged = true;
+        }
+        true
+    }
+
+    fn prepare_next_user_switch(
+        &mut self,
+        current_context: *mut u64,
+        current_task_id: u64,
+        next_index: usize,
+        current_task_is_user: bool,
+    ) -> SwitchAction {
+        let next_task_id = self.tasks[next_index].get_id();
+        let kernel_stack_top = self
+            .user_kernel_stack_top(next_index)
+            .expect("user tasks must own a kernel stack before entry or resume");
+        let address_space = self
+            .user_address_space(next_index)
+            .expect("user tasks must own an address space before entry or resume");
+
+        if self.tasks[next_index].context.is_empty() {
+            self.record_timer_user_entry(current_task_id, next_task_id, current_task_is_user);
+            return self.prepare_timer_user_entry_switch(
+                current_context,
+                next_index,
+                next_task_id,
+                kernel_stack_top,
+                address_space,
+            );
+        }
+
+        self.prepare_timer_user_resume_switch(
+            current_context,
+            next_index,
+            next_task_id,
+            kernel_stack_top,
+            address_space,
+        )
+    }
+
+    fn record_timer_user_entry(
+        &mut self,
+        current_task_id: u64,
+        next_task_id: u64,
+        current_task_is_user: bool,
+    ) {
+        self.user_entry_count = self.user_entry_count.saturating_add(1);
+        self.timer_user_entry_count = self.timer_user_entry_count.saturating_add(1);
+        if current_task_is_user {
+            self.timer_user_entry_from_preempted_user_count = self
+                .timer_user_entry_from_preempted_user_count
+                .saturating_add(1);
+            crate::log_info!(
+                "task",
+                "User task entered from preempted user timer context: current={} next={} first_entry=true",
+                current_task_id,
+                next_task_id
+            );
+        }
+    }
+
+    fn prepare_timer_user_entry_switch(
+        &mut self,
+        current_context: *mut u64,
+        next_index: usize,
+        next_task_id: u64,
+        kernel_stack_top: usize,
+        address_space: UserAddressSpace,
+    ) -> SwitchAction {
+        let TaskKind::User(user_runtime) = &mut self.tasks[next_index].kind else {
+            unreachable!("user task kind checked before timer entry");
+        };
+        user_runtime.last_resume_path = UserResumePathDiagnostics::TimerEntry;
+        user_runtime.record_resume_handoff(address_space, kernel_stack_top);
+        user_runtime.record_user_trap_frame_restore();
+        SwitchAction::EnterUser {
+            current_context,
+            task_id: next_task_id,
+            trap_frame: user_runtime.saved_frame,
+            kernel_stack_top,
+            address_space,
+        }
+    }
+
+    fn prepare_timer_user_resume_switch(
+        &mut self,
+        current_context: *mut u64,
+        next_index: usize,
+        next_task_id: u64,
+        kernel_stack_top: usize,
+        address_space: UserAddressSpace,
+    ) -> SwitchAction {
+        let next_context = self.tasks[next_index].context.as_pointer();
+        let TaskKind::User(user_runtime) = &mut self.tasks[next_index].kind else {
+            unreachable!("user task kind checked before timer resume");
+        };
+        user_runtime.last_resume_path = UserResumePathDiagnostics::TimerResume;
+        user_runtime.record_resume_handoff(address_space, kernel_stack_top);
+        user_runtime.record_user_trap_frame_restore();
+        if !self.user_resume_logged {
+            crate::log_info!(
+                "task",
+                "User task resumed from timer context: task={} kernel_stack_top={:#x}",
+                next_task_id,
+                kernel_stack_top
+            );
+            self.user_resume_logged = true;
+        }
+        self.user_resume_count = self.user_resume_count.saturating_add(1);
+        SwitchAction::SwitchKernel {
+            current_context,
+            next_context,
+            next_user_kernel_stack_top: Some(kernel_stack_top),
+            next_user_address_space: Some(address_space),
+        }
     }
 
     pub(in crate::kernel::task) fn get_next_ready_index(

@@ -120,6 +120,8 @@ active roadmap can list only unfinished work.
 - [x] Save the full runtime user trap frame for every preempted user process.
 - [x] Restore the full runtime user trap frame for resumed user processes.
 - [x] Cover syscall return frames and timer interrupt frames with one scheduler path.
+- [x] Verify that each user task resumes with its own address-space root.
+- [x] Verify that each user task resumes with its own kernel stack.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

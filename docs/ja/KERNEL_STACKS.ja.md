@@ -69,6 +69,8 @@ policy:
 - user task は ELF / stack mapping 用の separate address space を所有します。
 - user task に入る前、または resume する前に、scheduler はその task の kernel stack top を
   architecture task provider へ install し、CR3 を task の user address space へ切り替えます。
+  scheduler はこの handoff を retained task snapshot に記録し、smoke は各 finished user task の
+  nonzero resume handoff、address-space root、kernel stack top を確認します。
 - x86_64 では、TSS `privilege_stack_table[0]` を architecture-owned API 経由で更新します。
 - Ring 3 interrupt entry は install 済み TSS privilege stack を使うため、timer interrupt は
   current task の guarded kernel stack に入ります。
@@ -100,5 +102,6 @@ double-fault handling は最小限に保ちます。IST stack を使用したこ
 6. known guard page を検出する page-fault diagnostics を追加する。
 7. full user trap frame と per-task kernel stack switching が検証されるまで user preemption を有効化しない。
 8. user address space を task record に接続し、Ring 3 entry / timer-context resume 前に CR3 を切り替える。
+   one-shot と timer-resume smoke path では、resume handoff diagnostics まで完了済みです。
 9. `SYS_EXIT` 後に finished user task kernel stack を reclaim する。
 10. reclaim accounting を scheduler diagnostics と console overlay へ公開する。

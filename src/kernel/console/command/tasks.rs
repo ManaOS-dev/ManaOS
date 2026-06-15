@@ -104,7 +104,7 @@ pub(super) fn run(
 
 fn push_task_snapshot(output: &mut CommandOutput, snapshot: &SchedulerTaskSnapshot) {
     output.push(format!(
-        "task: id={} parent={} kind={} state={} lifecycle={} active={} address_space_owned={} kernel_stack_owned={} saved_trap_frame_bytes={} runtime_trap_frame_records={} restored_trap_frame_bytes={} runtime_trap_frame_restores={} syscall_frame_saved={} interrupt_frame_saved={} exit_code={} wait_collected={} last_preemption_reason={} last_resume_path={}",
+        "task: id={} parent={} kind={} state={} lifecycle={} active={} address_space_owned={} kernel_stack_owned={} resume_handoffs={} last_resume_address_space_root={:#x} last_resume_kernel_stack_top={:#x} saved_trap_frame_bytes={} runtime_trap_frame_records={} restored_trap_frame_bytes={} runtime_trap_frame_restores={} syscall_frame_saved={} interrupt_frame_saved={} exit_code={} wait_collected={} last_preemption_reason={} last_resume_path={}",
         snapshot.task_id(),
         snapshot
             .parent_task_id()
@@ -115,6 +115,9 @@ fn push_task_snapshot(output: &mut CommandOutput, snapshot: &SchedulerTaskSnapsh
         snapshot.active(),
         snapshot.address_space_owned(),
         snapshot.kernel_stack_owned(),
+        snapshot.resume_handoff_count(),
+        snapshot.last_resume_address_space_root(),
+        snapshot.last_resume_kernel_stack_top(),
         snapshot.saved_user_trap_frame_bytes(),
         snapshot.runtime_trap_frame_record_count(),
         snapshot.restored_user_trap_frame_bytes(),

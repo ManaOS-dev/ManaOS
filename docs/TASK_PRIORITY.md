@@ -72,9 +72,10 @@ smoke, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. verify that each resumed user task uses its own address-space root and kernel
-   stack;
-2. keep scheduler diagnostics synchronized whenever lifecycle state gains a new
+1. prevent scheduling a task while its address space is being reclaimed;
+2. add scheduler assertions for impossible active, finished, and reclaiming
+   transitions;
+3. keep scheduler diagnostics synchronized whenever lifecycle state gains a new
    transition.
 
 Manual QEMU validation for observing the current smoke-owned experimental user

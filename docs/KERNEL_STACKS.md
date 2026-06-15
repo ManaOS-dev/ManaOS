@@ -94,7 +94,9 @@ Policy:
   address reuse is introduced.
 - Before entering or resuming a user task, the scheduler must install that
   task's kernel stack top into the architecture task provider and switch CR3 to
-  the task's user address space.
+  the task's user address space. The scheduler records that handoff in retained
+  task snapshots so smoke can assert every finished user task had a nonzero
+  resume handoff, address-space root, and kernel stack top.
 - On x86_64, installing the user task kernel stack means updating TSS
   `privilege_stack_table[0]` through an architecture-owned API registered from
   `main.rs`.
@@ -158,9 +160,10 @@ classification remains pending because those stacks are not yet represented by
    kernel stack switching are both verified. This is complete for x86_64 PIT
    timer preemption and resume across the current two-task user smoke path.
 8. Attach user address spaces to user task records and switch CR3 before Ring 3
-   entry or timer-context resume. This is complete for the current one-shot
-   smoke path, including finished-task address-space destruction and scheduler
-   diagnostics for retained task records.
+   entry or timer-context resume. This is complete for the current one-shot and
+   timer-resume smoke paths, including finished-task address-space destruction,
+   resume handoff diagnostics, and scheduler diagnostics for retained task
+   records.
 9. Reclaim finished user task kernel stacks after `SYS_EXIT`. This is complete
    for scheduler-owned user task stacks; bootstrap, kernel task, and
    architecture-owned stacks remain outside this lifecycle path.

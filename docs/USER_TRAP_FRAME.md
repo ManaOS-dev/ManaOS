@@ -126,9 +126,11 @@ User task preemption stays disabled until all of the following are true:
   for smoke assertions.
 - Per-task kernel stacks exist and are installed before entering or resuming a
   user task. This is complete for first entry, syscall entry, and timer-context
-  resume on the current scheduler path.
+  resume on the current scheduler path. Scheduler snapshots retain the last
+  resume handoff count, selected address-space root, and selected kernel stack
+  top for smoke assertions.
 - User tasks own separate page-table roots for ELF and stack mappings. This is
-  complete for the current one-shot smoke path.
+  complete for the current one-shot and timer-resume smoke paths.
 - Timer interrupt routing can distinguish user-mode frames from kernel-mode
   frames without depending on `kernel::task` from `arch/`. This is complete for
   the current Local APIC timer path.
@@ -141,7 +143,8 @@ User task preemption stays disabled until all of the following are true:
 - The `tasks` console command shows the same scheduler and preemption counters
   on the interactive console overlay, then lists one row per retained task with
   kind, lifecycle state, active scheduling membership, user address-space
-  ownership, and scheduler-managed kernel stack ownership.
+  ownership, scheduler-managed kernel stack ownership, and the last user resume
+  address-space/kernel-stack handoff.
 - The console overlay status strip now keeps the scheduler and preemption
   counters visible even before a command is submitted.
 - `just storage-smoke` still proves the one-shot user path and now asserts that
@@ -150,8 +153,10 @@ User task preemption stays disabled until all of the following are true:
   that own separate stack slots, separate address spaces, and lifecycle
   diagnostics. It also asserts that finished user task snapshots use the unified
   trap-frame record path, retain a full restored trap-frame size, and that
-  timer-preempted snapshots record a runtime trap-frame restore. Finished user
-  exits are now reported through a scheduler-owned
+  timer-preempted snapshots record a runtime trap-frame restore. It also asserts
+  that every finished user task retained a nonzero resume handoff count,
+  address-space root, and kernel stack top. Finished user exits are now reported
+  through a scheduler-owned
   exit queue instead of a
   global single-result latch, so lifecycle cleanup can drain task-specific exit
   records before asking the scheduler for one aggregate resource-reclaim pass

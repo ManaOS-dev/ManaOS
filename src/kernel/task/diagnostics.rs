@@ -500,6 +500,9 @@ pub(super) struct TaskRuntimeDiagnosticsSnapshot {
     active: bool,
     address_space_owned: bool,
     kernel_stack_owned: bool,
+    resume_handoff_count: u64,
+    last_resume_address_space_root: u64,
+    last_resume_kernel_stack_top: u64,
     trap_frame: UserTrapFrameDiagnosticsSnapshot,
 }
 
@@ -541,12 +544,18 @@ impl TaskRuntimeDiagnosticsSnapshot {
         active: bool,
         address_space_owned: bool,
         kernel_stack_owned: bool,
+        resume_handoff_count: u64,
+        last_resume_address_space_root: u64,
+        last_resume_kernel_stack_top: u64,
         trap_frame: UserTrapFrameDiagnosticsSnapshot,
     ) -> Self {
         Self {
             active,
             address_space_owned,
             kernel_stack_owned,
+            resume_handoff_count,
+            last_resume_address_space_root,
+            last_resume_kernel_stack_top,
             trap_frame,
         }
     }
@@ -705,6 +714,21 @@ impl SchedulerTaskSnapshot {
     /// Return whether this task still owns a scheduler-managed kernel stack.
     pub const fn kernel_stack_owned(&self) -> bool {
         self.status.runtime.kernel_stack_owned
+    }
+
+    /// Return the number of scheduler handoffs that entered or resumed this user task.
+    pub const fn resume_handoff_count(&self) -> u64 {
+        self.status.runtime.resume_handoff_count
+    }
+
+    /// Return the last user address-space root selected before entry or resume.
+    pub const fn last_resume_address_space_root(&self) -> u64 {
+        self.status.runtime.last_resume_address_space_root
+    }
+
+    /// Return the last kernel stack top selected before user entry or resume.
+    pub const fn last_resume_kernel_stack_top(&self) -> u64 {
+        self.status.runtime.last_resume_kernel_stack_top
     }
 
     /// Return the byte size of the saved user trap frame, or zero for kernel tasks.
