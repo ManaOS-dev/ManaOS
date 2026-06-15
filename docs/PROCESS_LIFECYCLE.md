@@ -75,10 +75,10 @@ started after the storage smoke lifecycle gate. The shell currently performs
 one fixed-buffer read from stdin, validates heap-free whitespace tokenization,
 builds fixed-buffer `argv`, runs `/disk/bin/file_demo --shell-command-smoke`
 and `bin/file_demo --shell-command-smoke` through `spawn` plus `waitpid`, and
-executes `pwd` through the userland `getcwd` wrapper. It also verifies bounded
-command error messages for empty input, token overflow, argument-buffer
-exhaustion, and `bin/missing_shell_command` before exiting cleanly on EOF
-because standard input is still backed by `/dev/null`;
+executes `help` from a compiled-in command list and `pwd` through the userland
+`getcwd` wrapper. It also verifies bounded command error messages for empty
+input, token overflow, argument-buffer exhaustion, and `bin/missing_shell_command`
+before exiting cleanly on EOF because standard input is still backed by `/dev/null`;
 keyboard-backed interactive lifetime remains future work.
 
 ## First Stable Process Model
@@ -443,9 +443,10 @@ Current runtime diagnostics cover the first successful replacement path:
   lifecycle gate, validates whitespace tokenization, launches
   `/disk/bin/file_demo --shell-command-smoke` and
   `bin/file_demo --shell-command-smoke` through absolute and relative path
-  execution, waits for both children, executes `pwd` through the userland
-  `getcwd` wrapper, verifies bounded error messages for an empty command,
-  token-limit overflow, argument-buffer exhaustion, and
+  execution, waits for both children, executes `help` from a compiled-in command
+  list and `pwd` through the userland `getcwd` wrapper, verifies bounded error
+  messages for an empty command, token-limit overflow, argument-buffer
+  exhaustion, and
   `bin/missing_shell_command`, and is collected through the initial process
   after stdin EOF.
 - Serial logs record `User image replaced by execve` and

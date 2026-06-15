@@ -8,9 +8,12 @@ const STDOUT: usize = 1;
 const COMMAND_BUFFER_BYTES: usize = 128;
 const MAX_COMMAND_TOKENS: usize = 8;
 const MAX_COMMAND_ARGUMENT_POINTERS: usize = MAX_COMMAND_TOKENS + 1;
+const HELP_COMMAND: &[u8] = b"help";
 const PWD_COMMAND: &[u8] = b"pwd";
 const READY_MESSAGE: &[u8] = b"user shell ready\n";
 const TOKENIZER_OK_MESSAGE: &[u8] = b"user shell tokenizer ok\n";
+const HELP_OUTPUT: &[u8] = b"builtins: help pwd\n";
+const HELP_OK_MESSAGE: &[u8] = b"user shell help ok\n";
 const PWD_OK_MESSAGE: &[u8] = b"user shell pwd ok\n";
 const FILE_DEMO_LAUNCH_MESSAGE: &[u8] = b"user shell launching file_demo\n";
 const FILE_DEMO_EXIT_MESSAGE: &[u8] = b"user shell file_demo exit ok\n";
@@ -231,6 +234,7 @@ fn verify_command_execution_smoke() -> Result<(), CommandExecutionError> {
     if syscall::chdir(b"/disk\0") != 0 {
         return Err(CommandExecutionError::WorkingDirectoryFailed);
     }
+    verify_help_builtin_smoke()?;
     verify_pwd_builtin_smoke()?;
     let _ = syscall::write(STDOUT, FILE_DEMO_LAUNCH_MESSAGE);
     execute_command(b"/disk/bin/file_demo --shell-command-smoke")?;
@@ -239,6 +243,12 @@ fn verify_command_execution_smoke() -> Result<(), CommandExecutionError> {
     execute_command(b"bin/file_demo --shell-command-smoke")?;
     let _ = syscall::write(STDOUT, RELATIVE_FILE_DEMO_EXIT_MESSAGE);
     verify_bounded_error_message_smoke()?;
+    Ok(())
+}
+
+fn verify_help_builtin_smoke() -> Result<(), CommandExecutionError> {
+    execute_command(b"help")?;
+    let _ = syscall::write(STDOUT, HELP_OK_MESSAGE);
     Ok(())
 }
 
@@ -325,7 +335,15 @@ fn execute_builtin_command(
     command: &[u8],
 ) -> Result<bool, CommandExecutionError> {
     let command_token = tokens.get(0).ok_or(CommandExecutionError::EmptyCommand)?;
-    if command_token.as_bytes(command) != PWD_COMMAND {
+    let command_name = command_token.as_bytes(command);
+    if command_name == HELP_COMMAND {
+        if tokens.len() != 1 {
+            return Err(CommandExecutionError::TooManyTokens);
+        }
+        write_help();
+        return Ok(true);
+    }
+    if command_name != PWD_COMMAND {
         return Ok(false);
     }
     if tokens.len() != 1 {
@@ -333,6 +351,10 @@ fn execute_builtin_command(
     }
     write_current_working_directory()?;
     Ok(true)
+}
+
+fn write_help() {
+    let _ = syscall::write(STDOUT, HELP_OUTPUT);
 }
 
 fn write_current_working_directory() -> Result<(), CommandExecutionError> {
