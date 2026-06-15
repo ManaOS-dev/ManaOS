@@ -17,6 +17,7 @@ pub const STANDARD_OUTPUT: FileDescriptor = 1;
 pub const STANDARD_ERROR: FileDescriptor = 2;
 
 const MAX_OPEN_FILES: usize = 64;
+const STANDARD_DESCRIPTOR_COUNT: usize = STANDARD_ERROR + 1;
 
 /// Starting point for a seek operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -43,6 +44,43 @@ impl OpenFile {
             offset: 0,
             close_on_exec,
         }
+    }
+}
+
+/// Snapshot of the current spawn descriptor inheritance selection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SpawnDescriptorInheritanceSnapshot {
+    inherited: usize,
+    standard: usize,
+    close_on_exec: usize,
+}
+
+impl SpawnDescriptorInheritanceSnapshot {
+    const fn new(
+        inherited_descriptors: usize,
+        standard_descriptors: usize,
+        close_on_exec_descriptors: usize,
+    ) -> Self {
+        Self {
+            inherited: inherited_descriptors,
+            standard: standard_descriptors,
+            close_on_exec: close_on_exec_descriptors,
+        }
+    }
+
+    /// Return the number of open descriptors selected for the current spawn policy.
+    pub const fn inherited_descriptors(self) -> usize {
+        self.inherited
+    }
+
+    /// Return the number of selected descriptors in the standard `0..=2` range.
+    pub const fn standard_descriptors(self) -> usize {
+        self.standard
+    }
+
+    /// Return the number of open descriptors excluded because they are close-on-exec.
+    pub const fn close_on_exec_descriptors(self) -> usize {
+        self.close_on_exec
     }
 }
 
@@ -126,6 +164,31 @@ impl FileDescriptorTable {
             }
         }
         closed_count
+    }
+
+    /// Return the current descriptor set selected for spawn inheritance.
+    pub fn get_spawn_descriptor_inheritance_snapshot(&self) -> SpawnDescriptorInheritanceSnapshot {
+        let mut inherited_descriptors = 0_usize;
+        let mut standard_descriptors = 0_usize;
+        let mut close_on_exec_descriptors = 0_usize;
+        for (descriptor, entry) in self.entries.iter().enumerate() {
+            let Some(open_file) = entry.as_ref() else {
+                continue;
+            };
+            if open_file.close_on_exec {
+                close_on_exec_descriptors = close_on_exec_descriptors.saturating_add(1);
+                continue;
+            }
+            inherited_descriptors = inherited_descriptors.saturating_add(1);
+            if descriptor < STANDARD_DESCRIPTOR_COUNT {
+                standard_descriptors = standard_descriptors.saturating_add(1);
+            }
+        }
+        SpawnDescriptorInheritanceSnapshot::new(
+            inherited_descriptors,
+            standard_descriptors,
+            close_on_exec_descriptors,
+        )
     }
 
     /// Read from an open file descriptor at its current offset.

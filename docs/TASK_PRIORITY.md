@@ -8,7 +8,7 @@ not on product value.
 
 1. Full user process lifecycle
    - Add a minimal user shell process.
-   - Define file descriptor inheritance selection for general spawn.
+   - Add parent-exit-while-child-lives coverage before broader reparenting.
    - Extend preemptive scheduling across general process lifecycle paths.
    - Reason: this crosses ELF loading, syscall ABI, address-space ownership,
      file descriptors, parent-child metadata, and scheduler cleanup.
@@ -62,9 +62,8 @@ diagnostics in `tasks` output are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. define inherited file descriptor selection before broader general spawn;
-2. add a parent-exit-while-child-lives smoke before broader reparenting;
-3. update scheduler diagnostics whenever lifecycle state gains a new transition.
+1. add a parent-exit-while-child-lives smoke before broader reparenting;
+2. update scheduler diagnostics whenever lifecycle state gains a new transition.
 
 Prefer docs, diagnostics, and narrow smoke assertions before broad syscall
 surface expansion.

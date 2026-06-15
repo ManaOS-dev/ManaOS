@@ -144,6 +144,7 @@ $expectedPatterns = @(
     "user entry arguments ok",
     "User program spawned from filesystem: task=.* path=/disk/bin/file_demo argc=2",
     "spawn -> child=.* path=/disk/bin/file_demo argc=2 envc=1 stack_pages=4",
+    "spawn descriptor inheritance selected -> child=.* inherited=[1-9][0-9]* standard=3 close_on_exec=[0-9]+ global_table=true",
     "user spawn vectors ok",
     "User task exited: code=7",
     "User task exit status retained: parent=[1-9][0-9]* child=.* code=7 waitable=true",

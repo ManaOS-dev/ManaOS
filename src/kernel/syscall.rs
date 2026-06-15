@@ -558,6 +558,8 @@ fn sys_spawn(
         .collect::<Vec<_>>();
     let entry_vectors =
         crate::kernel::process::UserProgramEntryVectors::new(argument_values, &environment_values);
+    let descriptor_inheritance =
+        crate::kernel::filesystem::get_spawn_descriptor_inheritance_snapshot();
     let request = crate::kernel::process::UserProgramSpawnRequest::new(
         &staging.path,
         entry_vectors,
@@ -585,6 +587,14 @@ fn sys_spawn(
         entry_vectors.argument_count(),
         entry_vectors.environment_count(),
         SPAWN_USER_STACK_PAGES
+    );
+    crate::log_info!(
+        "syscall",
+        "spawn descriptor inheritance selected -> child={} inherited={} standard={} close_on_exec={} global_table=true",
+        child_task_id,
+        descriptor_inheritance.inherited_descriptors(),
+        descriptor_inheritance.standard_descriptors(),
+        descriptor_inheritance.close_on_exec_descriptors()
     );
     child_task_id
 }

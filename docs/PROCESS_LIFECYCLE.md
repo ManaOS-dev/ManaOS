@@ -53,9 +53,11 @@ replacement. The `chdir` and `getcwd` syscall wrappers expose that task-owned
 directory to no-std userland code. Scheduler-spawned child tasks copy the
 parent's current working directory at task creation. The current user-visible
 `spawn` surface resolves one executable path using that directory, stages
-bounded `argv` / `envp` vectors, and activates the child immediately. Blocking
-`waitpid` now sleeps the parent task until a matching child exit record is
-retained. Full descriptor inheritance policy is still future work.
+bounded `argv` / `envp` vectors, records the current descriptor inheritance
+selection, and activates the child immediately. Blocking `waitpid` now sleeps
+the parent task until a matching child exit record is retained. Descriptor
+inheritance selection is documented now, but child-private enforcement still
+depends on moving descriptor tables out of global filesystem state.
 Descriptor close-on-exec
 metadata and successful-`execve` close
 behavior exist for the current global descriptor table. The `waitpid` syscall
@@ -335,6 +337,31 @@ The current table is still global rather than per-process, so this is the
 minimum metadata needed for the smoke lifecycle. Future per-process descriptor
 tables must preserve the same rule but apply it only to the execing process.
 
+Spawn descriptor inheritance uses a stricter target policy before broader
+general spawn:
+
+- A child inherits descriptors from the parent descriptor table snapshot taken
+  before the child executable is opened for image loading.
+- Standard descriptors `0`, `1`, and `2` are inherited when they are open.
+  Initializing missing standard descriptors for spawned programs remains a
+  separate file-descriptor surface TODO.
+- Non-standard descriptors are inherited by default only when they are not
+  marked close-on-exec.
+- Inherited descriptors keep their descriptor numbers, file offsets, file
+  metadata, and writable/read-only capability.
+- The temporary descriptor used by the kernel to read the child executable is
+  never part of the inherited set.
+- The first spawn syscall surface does not expose file-actions, descriptor
+  duplication, or selective close lists. Those belong to later shell redirection
+  and descriptor-surface work.
+
+Because the current descriptor table is global, the kernel cannot yet enforce
+child-only filtering without also changing the parent's descriptor set. The
+current runtime therefore records a filesystem-owned spawn inheritance snapshot
+for diagnostics and smoke coverage, while process-owned descriptor tables remain
+the required implementation step before general spawn can enforce the target
+policy.
+
 ## Diagnostics And Smoke Coverage
 
 Current runtime diagnostics cover the first successful replacement path:
@@ -364,6 +391,10 @@ Current runtime diagnostics cover the first successful replacement path:
   in the child image, observing `waitpid(WNOHANG) == 0` while that child is
   still running, and later collecting the nonzero child exit status exactly
   once.
+- Storage smoke asserts the `sys_spawn` descriptor-inheritance snapshot emitted
+  before the child image loader opens its temporary executable descriptor. The
+  snapshot keeps the current global-table limitation visible until per-process
+  descriptor tables enforce child-private selection.
 - Storage smoke asserts that `tasks` output retains the original spawn path as
   `origin=` after the same task successfully replaces its current image through
   `execve`.

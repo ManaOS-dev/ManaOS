@@ -47,9 +47,10 @@ task metadata の所有になり、relative path は current task の directory 
 wrapper は、この task-owned directory を no-std userland code に公開します。scheduler-spawned child task は、
 task creation 時点の parent current working directory をコピーします。現在の user-visible `spawn`
 surface は、その directory で executable path を1つ解決し、bounded `argv` / `envp` vectors を
-stage してから child を即座に active set へ入れます。blocking `waitpid` は、matching child exit
-record が retained されるまで parent task を sleep させます。完全な descriptor inheritance policy は
-今後の作業です。
+stage し、現在の descriptor inheritance selection を記録してから child を即座に active set へ入れます。
+blocking `waitpid` は、matching child exit record が retained されるまで parent task を sleep させます。
+descriptor inheritance selection は文書化済みですが、child-private enforcement は descriptor table を
+global filesystem state から process-owned metadata へ移す作業に依存します。
 descriptor close-on-exec metadata と successful-`execve` close behavior は、現在の global descriptor
 table 向けに実装済みです。`waitpid` の syscall number、option constant、no-std userland wrapper、
 selector validation、no-child `ECHILD` path、parent task identifier で key 付けされた
@@ -284,6 +285,23 @@ unmarked descriptor は default で descriptor number と offset を保持し、
 将来の per-process descriptor table でも同じ rule を維持しつつ、exec している process の descriptor にだけ
 適用する必要があります。
 
+spawn descriptor inheritance は、broader general spawn の前に次の target policy を使います。
+
+- child は、child executable を image loading 用に open する前に取得した parent descriptor table snapshot から
+  descriptor を継承します。
+- standard descriptor `0`, `1`, `2` は open されていれば継承します。spawned program で欠けた
+  standard descriptor を初期化する作業は別の file-descriptor surface TODO です。
+- non-standard descriptor は close-on-exec が mark されていない場合だけ default で継承します。
+- inherited descriptor は descriptor number、file offset、file metadata、read/write capability を保持します。
+- child executable を読むために kernel が一時的に開く descriptor は inherited set に入りません。
+- 最初の spawn syscall surface は file-actions、descriptor duplication、selective close list を公開しません。
+  それらは後続の shell redirection と descriptor-surface work に属します。
+
+現在の descriptor table は global なので、kernel は parent descriptor set まで変更せずに child-only filtering を
+強制できません。そのため現在の runtime は filesystem-owned spawn inheritance snapshot を diagnostics と
+smoke coverage 用に記録し、general spawn で target policy を enforce する作業は process-owned descriptor table
+への移行後に残します。
+
 ## diagnostics and smoke coverage
 
 現在の runtime diagnostics は、最初の successful replacement path を対象にしています。
@@ -308,6 +326,9 @@ unmarked descriptor は default で descriptor number と offset を保持し、
   spawn し、child image 内で `argv` / `envp` を検証して、その child が実行中の間は
   `waitpid(WNOHANG) == 0` になり、後で child exit status を nonzero status としてちょうど一度だけ
   collect できることを検証します。
+- storage smoke は `sys_spawn` が child image loader の temporary executable descriptor を open する前に出す
+  descriptor-inheritance snapshot を assert します。この snapshot により、per-process descriptor table が
+  child-private selection を enforce するまでの global-table limitation を見える状態にします。
 - storage smoke は、同じ task が `execve` で current image を置き換えた後も、`tasks` output が
   original spawn path を `origin=` として保持することを assert します。
 - storage smoke は successful self-`execve` で継承された unmarked descriptor が new image でも使えることを

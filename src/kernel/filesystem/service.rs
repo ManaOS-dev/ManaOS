@@ -1,6 +1,8 @@
 //! Filesystem service state and public facade functions.
 
-use super::descriptor::{FileDescriptor, FileDescriptorTable, SeekWhence};
+use super::descriptor::{
+    FileDescriptor, FileDescriptorTable, SeekWhence, SpawnDescriptorInheritanceSnapshot,
+};
 use super::namespace::VirtualFileSystem;
 use super::node::{normalize_path, DirectoryEntry, FileMetadata, FileSystemResult};
 use alloc::format;
@@ -102,6 +104,13 @@ pub fn close(descriptor: FileDescriptor) -> FileSystemResult<()> {
 /// Close descriptors marked close-on-exec and return the number closed.
 pub fn close_on_exec_descriptors() -> usize {
     FILE_DESCRIPTORS.lock().close_on_exec_descriptors()
+}
+
+/// Return the current descriptor set selected for spawn inheritance.
+pub fn get_spawn_descriptor_inheritance_snapshot() -> SpawnDescriptorInheritanceSnapshot {
+    FILE_DESCRIPTORS
+        .lock()
+        .get_spawn_descriptor_inheritance_snapshot()
 }
 
 /// Read bytes from an open file descriptor.
