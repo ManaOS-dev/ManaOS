@@ -28,22 +28,12 @@ const RELATIVE_FILE_DEMO_LAUNCH_MESSAGE: &[u8] = b"user shell launching relative
 const RELATIVE_FILE_DEMO_EXIT_MESSAGE: &[u8] = b"user shell relative file_demo exit ok\n";
 const MISSING_COMMAND_OK_MESSAGE: &[u8] = b"user shell missing command not found ok\n";
 const BOUNDED_ERRORS_OK_MESSAGE: &[u8] = b"user shell bounded errors ok\n";
-const STDIN_EOF_MESSAGE: &[u8] = b"user shell stdin eof\n";
-const READ_ERROR_MESSAGE: &[u8] = b"user shell read error\n";
-const INPUT_BUFFERED_MESSAGE: &[u8] = b"user shell input buffered\n";
+const STDIN_EOF_MESSAGE: &[u8] = b"user shell loop eof\n";
 const EMPTY_COMMAND_MESSAGE: &[u8] = b"user shell empty command\n";
 const TOKEN_LIMIT_MESSAGE: &[u8] = b"user shell token limit reached\n";
 const EXECUTION_ERROR_MESSAGE: &[u8] = b"user shell execution error\n";
 const PATH_TOO_LONG_MESSAGE: &[u8] = b"user shell argument buffer full\n";
-const SPAWN_BAD_ADDRESS_MESSAGE: &[u8] = b"user shell spawn bad address\n";
-const SPAWN_INVALID_ARGUMENT_MESSAGE: &[u8] = b"user shell spawn invalid argument\n";
 const SPAWN_NOT_FOUND_MESSAGE: &[u8] = b"user shell spawn not found\n";
-const SPAWN_UNSUPPORTED_MESSAGE: &[u8] = b"user shell spawn unsupported\n";
-const WAIT_FAILED_MESSAGE: &[u8] = b"user shell wait failed\n";
-const CHILD_FAILED_MESSAGE: &[u8] = b"user shell child failed\n";
-const INVALID_ARGUMENT_MESSAGE: &[u8] = b"user shell invalid argument\n";
-const CHANGE_DIRECTORY_FAILED_MESSAGE: &[u8] = b"user shell cd failed\n";
-const WORKING_DIRECTORY_FAILED_MESSAGE: &[u8] = b"user shell cwd failed\n";
 
 #[derive(Clone, Copy)]
 struct CommandToken {
@@ -134,7 +124,7 @@ enum CommandExecutionOutcome {
 extern "C" fn _start() -> ! {
     let _ = syscall::write(STDOUT, READY_MESSAGE);
     if !verify_tokenizer_smoke() {
-        let _ = syscall::write(STDOUT, READ_ERROR_MESSAGE);
+        let _ = syscall::write(STDOUT, EXECUTION_ERROR_MESSAGE);
         syscall::exit(2);
     }
     let _ = syscall::write(STDOUT, TOKENIZER_OK_MESSAGE);
@@ -143,46 +133,40 @@ extern "C" fn _start() -> ! {
         syscall::exit(3);
     }
 
-    let mut command_buffer = [0_u8; COMMAND_BUFFER_BYTES];
-    let bytes_read = syscall::read(STDIN, &mut command_buffer);
-    if bytes_read < 0 {
-        let _ = syscall::write(STDOUT, READ_ERROR_MESSAGE);
-        syscall::exit(1);
-    }
-    if bytes_read == 0 {
-        let _ = syscall::write(STDOUT, STDIN_EOF_MESSAGE);
-        syscall::exit(0);
-    }
-    let bytes_read = bytes_read as usize;
-    if bytes_read > command_buffer.len() {
-        let _ = syscall::write(STDOUT, READ_ERROR_MESSAGE);
-        syscall::exit(1);
-    }
-    let Some(command_input) = command_buffer.get(..bytes_read) else {
-        let _ = syscall::write(STDOUT, READ_ERROR_MESSAGE);
-        syscall::exit(1);
-    };
-    match tokenize_command(command_input) {
-        Ok(tokens) if tokens.len() == 0 => {
-            let _ = syscall::write(STDOUT, EMPTY_COMMAND_MESSAGE);
+    loop {
+        let mut command_buffer = [0_u8; COMMAND_BUFFER_BYTES];
+        let bytes_read = syscall::read(STDIN, &mut command_buffer);
+        if bytes_read < 0 {
+            let _ = syscall::write(STDOUT, EXECUTION_ERROR_MESSAGE);
+            syscall::exit(1);
         }
-        Ok(_) => {
-            let _ = syscall::write(STDOUT, INPUT_BUFFERED_MESSAGE);
+        if bytes_read == 0 {
+            let _ = syscall::write(STDOUT, STDIN_EOF_MESSAGE);
+            syscall::exit(0);
         }
-        Err(TokenizeError::TooManyTokens) => {
-            let _ = syscall::write(STDOUT, TOKEN_LIMIT_MESSAGE);
-            syscall::exit(2);
+        let bytes_read = bytes_read as usize;
+        let command_input = &command_buffer[..bytes_read];
+
+        match tokenize_command(command_input) {
+            Ok(tokens) if tokens.len() == 0 => {
+                let _ = syscall::write(STDOUT, EMPTY_COMMAND_MESSAGE);
+                continue;
+            }
+            Ok(_) => {}
+            Err(TokenizeError::TooManyTokens) => {
+                let _ = syscall::write(STDOUT, TOKEN_LIMIT_MESSAGE);
+                syscall::exit(2);
+            }
         }
-    }
-    match execute_command(command_input) {
-        Ok(CommandExecutionOutcome::Continue) | Err(CommandExecutionError::EmptyCommand) => {}
-        Ok(CommandExecutionOutcome::Exit(exit_status)) => syscall::exit(exit_status),
-        Err(error) => {
-            write_execution_error(error);
-            syscall::exit(3);
+        match execute_command(command_input) {
+            Ok(CommandExecutionOutcome::Continue) | Err(CommandExecutionError::EmptyCommand) => {}
+            Ok(CommandExecutionOutcome::Exit(exit_status)) => syscall::exit(exit_status),
+            Err(error) => {
+                write_execution_error(error);
+                syscall::exit(3);
+            }
         }
     }
-    syscall::exit(0);
 }
 
 fn tokenize_command(command: &[u8]) -> Result<CommandTokens, TokenizeError> {
@@ -509,16 +493,8 @@ fn write_execution_error(error: CommandExecutionError) {
         CommandExecutionError::EmptyCommand => EMPTY_COMMAND_MESSAGE,
         CommandExecutionError::PathTooLong => PATH_TOO_LONG_MESSAGE,
         CommandExecutionError::TooManyTokens => TOKEN_LIMIT_MESSAGE,
-        CommandExecutionError::SpawnBadAddress => SPAWN_BAD_ADDRESS_MESSAGE,
-        CommandExecutionError::SpawnInvalidArgument => SPAWN_INVALID_ARGUMENT_MESSAGE,
         CommandExecutionError::SpawnNotFound => SPAWN_NOT_FOUND_MESSAGE,
-        CommandExecutionError::SpawnUnsupported => SPAWN_UNSUPPORTED_MESSAGE,
-        CommandExecutionError::InvalidArgument => INVALID_ARGUMENT_MESSAGE,
-        CommandExecutionError::ChangeDirectoryFailed => CHANGE_DIRECTORY_FAILED_MESSAGE,
-        CommandExecutionError::WorkingDirectoryFailed => WORKING_DIRECTORY_FAILED_MESSAGE,
-        CommandExecutionError::SpawnFailed => EXECUTION_ERROR_MESSAGE,
-        CommandExecutionError::WaitFailed => WAIT_FAILED_MESSAGE,
-        CommandExecutionError::ChildFailed => CHILD_FAILED_MESSAGE,
+        _ => EXECUTION_ERROR_MESSAGE,
     };
     let _ = syscall::write(STDOUT, message);
 }

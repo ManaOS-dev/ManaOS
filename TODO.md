@@ -11,6 +11,7 @@ reviewable unit before implementing it.
 
 ### Minimal User Shell
 
+- [ ] Connect keyboard-backed stdin to the smoke-started userland shell standard input.
 - [ ] Keep the smoke-started userland shell alive once stdin is keyboard-backed.
 - [ ] Document how to enter and leave the user shell in QEMU.
 

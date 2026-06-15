@@ -104,6 +104,8 @@ active roadmap can list only unfinished work.
 - [x] Add bounded error messages for command failures.
 - [x] Add shell smoke logs for a missing command.
 - [x] Keep the kernel console available while the user shell is experimental.
+- [x] Run the experimental user shell stdin path through a command loop until EOF or `exit`.
+- [x] Raise the userland image linker envelope for the experimental shell command loop.
 
 ### User Process Scheduling
 

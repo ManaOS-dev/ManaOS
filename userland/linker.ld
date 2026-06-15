@@ -2,6 +2,8 @@ ENTRY(_start)
 
 USER_PROGRAM_BASE = 0x0000400000000000;
 PAGE_SIZE = 0x1000;
+/* The shell now carries built-in smoke commands plus a real EOF/exit input loop. */
+USER_IMAGE_MAX_PAGES = 5;
 
 PHDRS
 {
@@ -35,7 +37,7 @@ SECTIONS
     } :data
 
     . = ALIGN(PAGE_SIZE);
-    ASSERT(. <= USER_PROGRAM_BASE + (PAGE_SIZE * 4), "userland image must fit in four pages")
+    ASSERT(. <= USER_PROGRAM_BASE + (PAGE_SIZE * USER_IMAGE_MAX_PAGES), "userland image must fit in five pages")
 
     /DISCARD/ : {
         *(.comment*)

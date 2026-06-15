@@ -39,8 +39,10 @@ initial-process reparenting policy、exit record retention 後の finished child
 最小 no-std `user_shell` binary の build、storage smoke disk image 登録、post-smoke 起動、
 fixed-buffer stdin read、heap-free whitespace tokenization、fixed-buffer argv construction、absolute path execution、
 relative path execution、`file_demo` launch smoke、missing-command not-found smoke、
-`cd` / `exit` / `help` / `pwd` built-in smoke、bounded command error message smoke、EOF 終了 smoke が
-完了済みです。post-shell kernel console availability smoke も完了済みです。user process scheduling は、
+`cd` / `exit` / `help` / `pwd` built-in smoke、bounded command error message smoke、
+shell-loop EOF smoke、EOF 終了 smoke が完了済みです。post-shell kernel console availability smoke も
+完了済みです。experimental shell command loop のための userland image linker envelope 拡張も完了済みです。
+user process scheduling は、
 5つの active parent user process と2つの user-spawned child を
 扱う storage smoke まで完了済みです。さらに、per-task の last preemption / last resume diagnostics と、preempted
 process の exit 後も別の active process が継続する storage smoke も完了済みです。正本は英語版の

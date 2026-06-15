@@ -63,9 +63,10 @@ address-space copy plan ができるまで defer します。
 最小 no-std `user_shell` binary は userland build と storage smoke disk image に入り、storage smoke 後に
 実行されます。fixed-buffer stdin read、heap-free whitespace tokenization、fixed-buffer argv construction、
 absolute path execution、relative path execution、`file_demo` launch smoke、missing-command not-found smoke、
-`cd` / `exit` / `help` / `pwd` built-in smoke、bounded command error message smoke、EOF 終了 smoke は完了済みです。
-post-shell kernel console availability smoke も完了済みです。残りは keyboard-backed stdin で動き続ける
-interactive lifetime と、QEMU 上で experimental user shell に入って抜ける手順の documentation です。
+`cd` / `exit` / `help` / `pwd` built-in smoke、bounded command error message smoke、shell-loop EOF smoke、
+EOF 終了 smoke は完了済みです。post-shell kernel console availability smoke も完了済みです。
+残りは keyboard-backed stdin を user shell standard input へ接続すること、keyboard-backed read 中の
+interactive lifetime、QEMU 上で experimental user shell に入って抜ける手順の documentation です。
 user process scheduling は、5つの active parent user process と2つの user-spawned child を扱う storage smoke
 まで完了済みです。
 per-task の last preemption / last resume diagnostics と、preempted process の exit 後も別の
