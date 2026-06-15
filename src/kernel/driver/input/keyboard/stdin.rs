@@ -44,3 +44,8 @@ pub(super) fn get_bytes(buffer: &mut [u8]) -> usize {
     }
     bytes_read
 }
+
+/// Return the number of queued keyboard-backed standard input bytes.
+pub(super) fn get_byte_count() -> usize {
+    STDIN_QUEUE.len()
+}

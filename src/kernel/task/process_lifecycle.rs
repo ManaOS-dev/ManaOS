@@ -60,11 +60,36 @@ pub fn run_user_task_once(
     }
 }
 
+/// Run active user-space tasks until `task_id` blocks in `read`.
+///
+/// # Panics
+///
+/// Panics if the scheduler has not been initialized.
+pub fn run_user_task_until_read_block(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    task_id: u64,
+) -> Option<()> {
+    let mut next_task_id = task_id;
+    loop {
+        run_user_task_until_kernel_return(frame_allocator, next_task_id)?;
+        if let Some(exit) = reclaim_one_finished_user_task(frame_allocator) {
+            if exit.task_id() == task_id {
+                return None;
+            }
+        }
+        if super::scheduler::is_user_task_blocked_for_read(task_id) {
+            return Some(());
+        }
+
+        next_task_id = wait_for_next_active_user_task()?;
+    }
+}
+
 fn run_user_task_until_kernel_return(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
     task_id: u64,
 ) -> Option<()> {
-    let user_task = {
+    let mut user_task = {
         let mut scheduler = super::scheduler::SCHEDULER.lock();
         scheduler
             .as_mut()
@@ -73,6 +98,9 @@ fn run_user_task_until_kernel_return(
     };
     crate::kernel::memory::address_space::switch_to_user_address_space(user_task.address_space);
     super::scheduler::complete_pending_user_waitpid_status(task_id);
+    if let Some(read_result) = crate::kernel::syscall::complete_pending_user_read(task_id) {
+        user_task.trap_frame.rax = read_result;
+    }
     super::scheduler::install_user_task_kernel_stack(user_task.kernel_stack_top);
     crate::log_info!(
         "task",

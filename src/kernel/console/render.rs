@@ -178,7 +178,7 @@ fn scheduler_status_line() -> String {
     };
     let states = diagnostics.states();
     format!(
-        "tasks total={} user={} active_users={} active_spaces={} pending_exits={} preemption_state={} preemption_enabled={} return_closes={} sleep={}/{} states R{} Run{} B{} F{} preempt={} resume={}",
+        "tasks total={} user={} active_users={} active_spaces={} pending_exits={} preemption_state={} preemption_enabled={} return_closes={} sleep={}/{} read={}/{} states R{} Run{} B{} F{} preempt={} resume={}",
         diagnostics.total_tasks(),
         diagnostics.user_tasks(),
         diagnostics.active_user_tasks(),
@@ -189,6 +189,8 @@ fn scheduler_status_line() -> String {
         diagnostics.user_return_preemption_window_closes(),
         diagnostics.user_sleep_blocks(),
         diagnostics.user_sleep_wakes(),
+        diagnostics.user_read_blocks(),
+        diagnostics.user_read_wakes(),
         states.ready(),
         states.running(),
         states.blocked(),

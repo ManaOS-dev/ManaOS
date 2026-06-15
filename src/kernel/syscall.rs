@@ -63,6 +63,7 @@ const ERROR_NOT_FOUND: u64 = linux_error(2);
 const ERROR_ARGUMENT_LIST_TOO_LONG: u64 = linux_error(7);
 const ERROR_BAD_FILE_DESCRIPTOR: u64 = linux_error(9);
 const ERROR_NO_CHILD: u64 = linux_error(10);
+const ERROR_TRY_AGAIN: u64 = linux_error(11);
 const ERROR_OUT_OF_MEMORY: u64 = linux_error(12);
 const ERROR_BAD_ADDRESS: u64 = linux_error(14);
 const ERROR_FILE_EXISTS: u64 = linux_error(17);
@@ -719,6 +720,37 @@ fn sys_read(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
         file_descriptors.read(file_descriptor, buffer)
     }) {
         Ok(bytes_read) => u64::try_from(bytes_read).unwrap_or(u64::MAX),
+        Err(ERROR_TRY_AGAIN) => {
+            if crate::kernel::task::prepare_current_user_read(
+                crate::kernel::task::UserReadRequest::new(file_descriptor, user_pointer, length),
+            )
+            .is_none()
+            {
+                return ERROR_TRY_AGAIN;
+            }
+            USER_BLOCK_SENTINEL
+        }
+        Err(error) => error,
+    }
+}
+
+/// Complete a pending user `read` request after switching to the task address space.
+pub fn complete_pending_user_read(task_id: u64) -> Option<u64> {
+    let request = crate::kernel::task::take_current_user_read_request(task_id)?;
+    let result = complete_user_read_request(request);
+    let _ = crate::kernel::task::complete_current_user_read(task_id, result);
+    Some(result)
+}
+
+fn complete_user_read_request(request: crate::kernel::task::UserReadRequest) -> u64 {
+    let Some(buffer) = copy_output_buffer(request.user_pointer(), request.byte_len()) else {
+        return ERROR_BAD_ADDRESS;
+    };
+
+    match with_current_file_descriptor_table(|file_descriptors| {
+        file_descriptors.read(request.file_descriptor(), buffer)
+    }) {
+        Ok(bytes_read) => u64::try_from(bytes_read).unwrap_or(u64::MAX),
         Err(error) => error,
     }
 }
@@ -1309,5 +1341,6 @@ fn filesystem_error_to_linux(error: crate::kernel::filesystem::FileSystemError) 
         | crate::kernel::filesystem::FileSystemError::InvalidArgument => ERROR_INVALID_ARGUMENT,
         crate::kernel::filesystem::FileSystemError::NotDirectory => ERROR_NOT_DIRECTORY,
         crate::kernel::filesystem::FileSystemError::IsDirectory => ERROR_IS_DIRECTORY,
+        crate::kernel::filesystem::FileSystemError::WouldBlock => ERROR_TRY_AGAIN,
     }
 }

@@ -15,6 +15,7 @@
 //! - [`push_stdin_bytes`] - Seed keyboard stdin bytes for smoke setup
 //! - [`clear_stdin_buffer`] - Clear queued keyboard stdin bytes for smoke setup
 //! - [`get_stdin_bytes`] - Drain decoded keyboard stdin bytes
+//! - [`get_stdin_byte_count`] - Read queued keyboard stdin byte count
 
 mod console;
 mod decoder;
@@ -44,4 +45,9 @@ pub fn clear_stdin_buffer() {
 /// Drain queued keyboard-backed standard input bytes into `buffer`.
 pub fn get_stdin_bytes(buffer: &mut [u8]) -> usize {
     stdin::get_bytes(buffer)
+}
+
+/// Return the number of queued keyboard-backed standard input bytes.
+pub fn get_stdin_byte_count() -> usize {
+    stdin::get_byte_count()
 }

@@ -6,6 +6,7 @@ use mana_userland::syscall;
 const STDIN: usize = 0;
 const STDOUT: usize = 1;
 const COMMAND_BUFFER_BYTES: usize = 128;
+const STDIN_RETRY_NANOSECONDS: u64 = 1_000_000;
 const MAX_COMMAND_TOKENS: usize = 8;
 const MAX_COMMAND_ARGUMENT_POINTERS: usize = MAX_COMMAND_TOKENS + 1;
 // Shell exit codes are reported through the low 8 bits in wait status.
@@ -136,6 +137,10 @@ extern "C" fn _start() -> ! {
     loop {
         let mut command_buffer = [0_u8; COMMAND_BUFFER_BYTES];
         let bytes_read = syscall::read(STDIN, &mut command_buffer);
+        if bytes_read == syscall::ERROR_TRY_AGAIN {
+            sleep_before_stdin_retry();
+            continue;
+        }
         if bytes_read < 0 {
             let _ = syscall::write(STDOUT, EXECUTION_ERROR_MESSAGE);
             syscall::exit(1);
@@ -167,6 +172,14 @@ extern "C" fn _start() -> ! {
             }
         }
     }
+}
+
+fn sleep_before_stdin_retry() {
+    let duration = syscall::Timespec {
+        seconds: 0,
+        nanoseconds: STDIN_RETRY_NANOSECONDS,
+    };
+    let _ = syscall::nanosleep(&duration);
 }
 
 fn tokenize_command(command: &[u8]) -> Result<CommandTokens, TokenizeError> {

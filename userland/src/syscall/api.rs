@@ -91,6 +91,8 @@ pub const ERROR_ARGUMENT_LIST_TOO_LONG: isize = contract::ERROR_ARGUMENT_LIST_TO
 pub const ERROR_BAD_FILE_DESCRIPTOR: isize = contract::ERROR_BAD_FILE_DESCRIPTOR;
 /// Linux-compatible no-child-process error as a signed syscall result.
 pub const ERROR_NO_CHILD: isize = contract::ERROR_NO_CHILD;
+/// Linux-compatible try-again error as a signed syscall result.
+pub const ERROR_TRY_AGAIN: isize = contract::ERROR_TRY_AGAIN;
 /// Linux-compatible out-of-memory error as a signed syscall result.
 pub const ERROR_OUT_OF_MEMORY: isize = contract::ERROR_OUT_OF_MEMORY;
 /// Bad address error return value as a signed syscall result.

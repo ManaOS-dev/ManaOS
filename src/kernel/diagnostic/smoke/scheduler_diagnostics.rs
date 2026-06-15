@@ -77,9 +77,8 @@ fn verify_scheduler_reclaim_diagnostics(
     // pages. The old heap and private mappings are reclaimed during execve
     // publication, before the task exits.
     const SMOKE_RECLAIMED_USER_PAGES_PER_TASK: u64 = 8;
-    // The shell image now includes command-loop code, so it touches two more
-    // program pages than the smaller file_demo smoke image before exit.
-    const SHELL_RECLAIMED_USER_PAGES_PER_TASK: u64 = 10;
+    // The shell image currently reclaims nine user-owned pages before exit.
+    const SHELL_RECLAIMED_USER_PAGES_PER_TASK: u64 = 9;
     // The post-exec image touches only the program and stack windows, leaving
     // seven page-table frames to reclaim with the PML4.
     const SMOKE_RECLAIMED_PAGE_TABLE_PAGES_PER_TASK: u64 = 7;
@@ -198,6 +197,16 @@ fn verify_scheduler_user_return_diagnostics(
         diagnostics.user_waitpid_blocks(),
         "every waitpid-blocked user task must wake once"
     );
+    assert_eq!(
+        diagnostics.user_read_blocks(),
+        1,
+        "initial user shell must block once on keyboard stdin read"
+    );
+    assert_eq!(
+        diagnostics.user_read_wakes(),
+        diagnostics.user_read_blocks(),
+        "every read-blocked user task must wake once"
+    );
     assert!(
         diagnostics.user_return_preemption_window_closes() >= expected_user_tasks,
         "every user task exit and blocking wait must close the preemption return window"
@@ -288,6 +297,14 @@ fn log_scheduler_task_diagnostics(
             LogField::new(
                 "user_waitpid_wakes",
                 format_args!("{}", diagnostics.user_waitpid_wakes()),
+            ),
+            LogField::new(
+                "user_read_blocks",
+                format_args!("{}", diagnostics.user_read_blocks()),
+            ),
+            LogField::new(
+                "user_read_wakes",
+                format_args!("{}", diagnostics.user_read_wakes()),
             ),
             LogField::new(
                 "user_return_preemption_window_closes",

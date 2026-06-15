@@ -15,16 +15,20 @@
 //! - [`spawn`] - Add a runnable kernel task
 //! - [`spawn_user_task`] - Add a runnable user task
 //! - [`run_user_task_once`] - Run one user task until `SYS_EXIT`
+//! - [`run_user_task_until_read_block`] - Run one user task until it blocks in `read`
 //! - [`run_next_user_task_once`] - Run the next active user task until one exits
 //! - [`run_active_user_tasks_until_empty`] - Drain active user tasks until none remain
 //! - [`UserTaskExit`] - User task exit result
 //! - [`UserMappingRequest`] - Syscall-time private mapping request
+//! - [`UserReadRequest`] - Syscall-time read wait request
 //! - [`process_current_user_break`] - Process a user heap break request
 //! - [`process_current_user_mapping`] - Process a private user mapping request
 //! - [`process_current_user_unmapping`] - Process a private user unmapping request
 //! - [`prepare_current_user_sleep`] - Prepare the current user task to sleep
 //! - [`prepare_current_user_waitpid`] - Prepare the current user task to wait for a child
+//! - [`prepare_current_user_read`] - Prepare the current user task to wait for input
 //! - [`block_current_user_after_syscall`] - Block the current user task after saving its syscall frame
+//! - [`wake_keyboard_readers`] - Wake a user task blocked on keyboard input
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
 //! - [`get_current_parent_task_id`] - Read the current parent task identifier
@@ -78,19 +82,22 @@ pub use process_lifecycle::UserTaskExit;
 pub use scheduler::{
     activate_user_task, block_current_user_after_syscall, clone_current_file_descriptor_table,
     close_current_file_descriptors_on_exec, close_user_return_preemption_window,
-    collect_waitable_child_exit, current_user_task_has_child, finish_current_task,
-    get_current_parent_task_id, get_current_spawn_descriptor_inheritance_snapshot,
-    get_current_task_id, get_current_user_address_space, get_current_working_directory,
-    get_kernel_stack_guard_fault, get_kernel_stack_guard_fault_diagnostic_sample,
-    get_scheduler_diagnostics, get_scheduler_task_snapshots, has_active_user_tasks, initialize,
-    prepare_current_user_sleep, prepare_current_user_waitpid, process_current_user_break,
-    process_current_user_mapping, process_current_user_unmapping, process_timer_tick,
-    record_current_user_execve_candidate_drop, record_current_user_execve_reclaim,
-    record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
-    replace_current_file_descriptor_table, replace_current_user_image,
-    run_active_user_tasks_until_empty, run_next_user_task_once, run_user_task_once,
-    set_current_working_directory, set_preemption_enabled, spawn, spawn_user_task,
-    with_current_file_descriptor_table, Task, UserMappingRequest,
+    collect_waitable_child_exit, complete_current_user_read, current_user_task_has_child,
+    finish_current_task, get_current_parent_task_id,
+    get_current_spawn_descriptor_inheritance_snapshot, get_current_task_id,
+    get_current_user_address_space, get_current_working_directory, get_kernel_stack_guard_fault,
+    get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
+    get_scheduler_task_snapshots, has_active_user_tasks, initialize, is_user_task_blocked_for_read,
+    prepare_current_user_read, prepare_current_user_sleep, prepare_current_user_waitpid,
+    process_current_user_break, process_current_user_mapping, process_current_user_unmapping,
+    process_timer_tick, record_current_user_execve_candidate_drop,
+    record_current_user_execve_reclaim, record_current_user_interrupt_trap_frame,
+    record_current_user_trap_frame, replace_current_file_descriptor_table,
+    replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
+    run_user_task_once, run_user_task_until_read_block, set_current_working_directory,
+    set_preemption_enabled, spawn, spawn_user_task, take_current_user_read_request,
+    wake_keyboard_readers, with_current_file_descriptor_table, Task, UserMappingRequest,
+    UserReadRequest,
 };
 #[allow(unused_imports)]
 pub use stack::{KernelStackFaultOwner, KernelStackGuardFault};

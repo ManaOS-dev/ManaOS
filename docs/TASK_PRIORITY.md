@@ -60,8 +60,9 @@ including nonzero child status encoding, initial-process reparenting for
 orphaned children, safe finished-task resource reclamation after exit record
 retention, process-owned descriptor table inheritance, close-on-exec child
 filtering, `execve` replacement-state diagnostics in `tasks` output, and the
-post-smoke experimental `user_shell` launch with fixed-buffer stdin EOF handling
-and heap-free whitespace tokenization, fixed-buffer argv construction, and
+post-smoke experimental `user_shell` launch with fixed-buffer stdin EOF handling,
+keyboard-backed stdin wait/wake handling, heap-free whitespace tokenization,
+fixed-buffer argv construction, and
 absolute and relative path execution smoke, `cd` and `pwd` execution through
 the userland runtime path API, compiled-in `help` output, configurable `exit`
 status parsing, plus bounded command error smoke for empty input, token
@@ -71,10 +72,9 @@ smoke, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. keep the shell task alive across keyboard-backed reads until `exit` or EOF;
-2. document how to enter and leave the experimental user shell in QEMU;
-3. extend timer preemption across general spawned user process lifecycles;
-4. update scheduler diagnostics whenever lifecycle state gains a new transition.
+1. document how to enter and leave the experimental user shell in QEMU;
+2. extend timer preemption across general spawned user process lifecycles;
+3. update scheduler diagnostics whenever lifecycle state gains a new transition.
 
 Prefer docs, diagnostics, and narrow smoke assertions before broad syscall
 surface expansion.

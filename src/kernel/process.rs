@@ -378,7 +378,8 @@ fn map_filesystem_spawn_error(error: FileSystemError) -> UserProgramSpawnError {
         FileSystemError::InvalidFileDescriptor
         | FileSystemError::TooManyOpenFiles
         | FileSystemError::AlreadyInitialized
-        | FileSystemError::NotDirectory => UserProgramSpawnError::ReadFailed,
+        | FileSystemError::NotDirectory
+        | FileSystemError::WouldBlock => UserProgramSpawnError::ReadFailed,
     }
 }
 

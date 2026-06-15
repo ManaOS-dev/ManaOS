@@ -54,16 +54,16 @@ successful self-replacement path、current directory preservation、argv/envp-ca
 orphaned child の initial-process reparenting、exit record retention 後の safe finished-task resource
 reclamation、process-owned descriptor table inheritance、close-on-exec child filtering、
 `tasks` output の `execve` replacement-state diagnostics、post-smoke experimental `user_shell`
-launch、fixed-buffer stdin EOF handling、heap-free whitespace tokenization、fixed-buffer argv construction、
+launch、fixed-buffer stdin EOF handling、keyboard-backed stdin wait/wake handling、
+heap-free whitespace tokenization、fixed-buffer argv construction、
 absolute and relative path execution smoke、userland runtime path API 経由の `cd` / `pwd` execution、
 compiled-in `help` output、configurable `exit` status parsing、empty input、token overflow、argument-buffer exhaustion、
 missing command の bounded command error smoke、shell-loop EOF smoke、直後の
 post-shell kernel console availability smoke は
 [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。ここからは小さい runtime slice で進めます。
 
-1. keyboard-backed read の間も `exit` または EOF まで shell task を維持する。
-2. experimental user shell に QEMU で入る方法と抜ける方法を document する。
-3. general spawned user process lifecycle へ timer preemption を拡張する。
-4. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
+1. experimental user shell に QEMU で入る方法と抜ける方法を document する。
+2. general spawned user process lifecycle へ timer preemption を拡張する。
+3. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
 
 広い syscall surface を一気に増やす前に、docs、diagnostics、narrow smoke assertion を優先します。

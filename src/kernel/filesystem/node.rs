@@ -27,6 +27,8 @@ pub enum FileSystemError {
     InvalidPath,
     /// The caller supplied an invalid argument.
     InvalidArgument,
+    /// The operation would block until new data is available.
+    WouldBlock,
 }
 
 /// File node kind.

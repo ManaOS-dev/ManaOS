@@ -722,6 +722,8 @@ pub struct SchedulerDiagnostics {
     pub(super) user_sleep_wakes: u64,
     pub(super) user_waitpid_blocks: u64,
     pub(super) user_waitpid_wakes: u64,
+    pub(super) user_read_blocks: u64,
+    pub(super) user_read_wakes: u64,
     pub(super) finished_tasks: u64,
     pub(super) pending_user_exits: u64,
     pub(super) retained_user_exit_statuses: u64,
@@ -821,6 +823,16 @@ impl SchedulerDiagnostics {
     /// Return the number of user tasks woken after matching child exits.
     pub const fn user_waitpid_wakes(self) -> u64 {
         self.user_waitpid_wakes
+    }
+
+    /// Return the number of user tasks blocked by read syscalls.
+    pub const fn user_read_blocks(self) -> u64 {
+        self.user_read_blocks
+    }
+
+    /// Return the number of user tasks woken after readable input arrived.
+    pub const fn user_read_wakes(self) -> u64 {
+        self.user_read_wakes
     }
 
     /// Return the number of tasks marked finished through the scheduler.

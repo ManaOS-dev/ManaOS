@@ -4,9 +4,9 @@ use super::{
     address_space, FinishedUserTaskReclaim, KernelStackReclaim, OneShotUserTask,
     PhysicalFrameAllocator, Scheduler, SwitchAction, TaskIdentifier, TaskKind, TaskState,
     UserAddressSpace, UserAddressSpaceReclaim, UserHeap, UserMappings,
-    UserPreemptionReasonDiagnostics, UserResumePathDiagnostics, UserTaskExit, UserTrapFrame,
-    UserTrapFrameSource, UserVirtualAddress, UserVirtualRange, UserWaitpidCompletion,
-    UserWaitpidRequest, UserWritableRange, USER_TASK_PREEMPTION_ENABLED,
+    UserPreemptionReasonDiagnostics, UserReadRequest, UserResumePathDiagnostics, UserTaskExit,
+    UserTrapFrame, UserTrapFrameSource, UserVirtualAddress, UserVirtualRange,
+    UserWaitpidCompletion, UserWaitpidRequest, UserWritableRange, USER_TASK_PREEMPTION_ENABLED,
 };
 use crate::kernel::memory::user_pointer;
 
@@ -334,6 +334,36 @@ impl Scheduler {
         Some(task_id)
     }
 
+    pub(in crate::kernel::task) fn prepare_current_user_read(
+        &mut self,
+        request: UserReadRequest,
+    ) -> Option<u64> {
+        let current_task = &mut self.tasks[self.current_index];
+        let task_id = current_task.get_id();
+        let TaskKind::User(user_runtime) = &mut current_task.kind else {
+            return None;
+        };
+        if user_runtime.address_space.is_none()
+            || current_task.state != TaskState::Running
+            || user_runtime.sleep_wake_tick.is_some()
+            || user_runtime.waitpid_request.is_some()
+            || user_runtime.waitpid_completion.is_some()
+            || user_runtime.read_request.is_some()
+        {
+            return None;
+        }
+
+        user_runtime.read_request = Some(request);
+        crate::log_info!(
+            "task",
+            "User task read requested: task={} fd={} bytes={}",
+            task_id,
+            request.file_descriptor(),
+            request.byte_len()
+        );
+        Some(task_id)
+    }
+
     pub(in crate::kernel::task) fn block_current_user_after_syscall(&mut self) -> Option<u64> {
         let task_id = self.tasks[self.current_index].get_id();
         let TaskKind::User(user_runtime) = &self.tasks[self.current_index].kind else {
@@ -341,7 +371,8 @@ impl Scheduler {
         };
         let wake_tick = user_runtime.sleep_wake_tick;
         let waitpid_request = user_runtime.waitpid_request;
-        if wake_tick.is_none() && waitpid_request.is_none() {
+        let read_request = user_runtime.read_request;
+        if wake_tick.is_none() && waitpid_request.is_none() && read_request.is_none() {
             return None;
         }
         if !self.tasks[self.current_index].state.prepare_to_block() {
@@ -377,8 +408,87 @@ impl Scheduler {
                     task_id
                 ),
             }
+        } else if let Some(request) = read_request {
+            self.user_read_block_count = self.user_read_block_count.saturating_add(1);
+            crate::log_info!(
+                "task",
+                "User task blocked for read: task={} fd={} bytes={}",
+                task_id,
+                request.file_descriptor(),
+                request.byte_len()
+            );
         }
         Some(task_id)
+    }
+
+    pub(in crate::kernel::task) fn wake_keyboard_readers(&mut self) -> Option<u64> {
+        for task in &mut self.tasks {
+            let task_id = task.get_id();
+            let TaskKind::User(user_runtime) = &mut task.kind else {
+                continue;
+            };
+            let Some(request) = user_runtime.read_request else {
+                continue;
+            };
+            if !task.state.wake_blocked() {
+                continue;
+            }
+            self.user_read_wake_count = self.user_read_wake_count.saturating_add(1);
+            crate::log_info!(
+                "task",
+                "User task read woke: task={} fd={} bytes={}",
+                task_id,
+                request.file_descriptor(),
+                request.byte_len()
+            );
+            return Some(task_id);
+        }
+
+        None
+    }
+
+    pub(in crate::kernel::task) fn is_user_task_blocked_for_read(&self, task_id: u64) -> bool {
+        let Some(task_index) = self.get_task_index(task_id) else {
+            return false;
+        };
+        let TaskKind::User(user_runtime) = &self.tasks[task_index].kind else {
+            return false;
+        };
+        self.tasks[task_index].state == TaskState::Blocked && user_runtime.read_request.is_some()
+    }
+
+    pub(in crate::kernel::task) fn take_current_user_read_request(
+        &mut self,
+        task_id: u64,
+    ) -> Option<UserReadRequest> {
+        if self.tasks[self.current_index].get_id() != task_id {
+            return None;
+        }
+        let TaskKind::User(user_runtime) = &mut self.tasks[self.current_index].kind else {
+            return None;
+        };
+        user_runtime.read_request.take()
+    }
+
+    pub(in crate::kernel::task) fn complete_current_user_read(
+        &mut self,
+        task_id: u64,
+        result: u64,
+    ) -> Option<()> {
+        if self.tasks[self.current_index].get_id() != task_id {
+            return None;
+        }
+        let TaskKind::User(user_runtime) = &mut self.tasks[self.current_index].kind else {
+            return None;
+        };
+        user_runtime.saved_frame.rax = result;
+        crate::log_info!(
+            "task",
+            "User task read completed: task={} result={}",
+            task_id,
+            result
+        );
+        Some(())
     }
 
     fn wake_waiting_parent_for_child_exit(&mut self, parent_task_id: u64, child_task_id: u64) {
@@ -636,6 +746,7 @@ impl Scheduler {
         user_runtime.sleep_wake_tick = None;
         user_runtime.waitpid_request = None;
         user_runtime.waitpid_completion = None;
+        user_runtime.read_request = None;
         user_runtime.syscall_frame_recorded = false;
         user_runtime.interrupt_frame_recorded = false;
         current_task.context.clear();

@@ -22,6 +22,9 @@ pub fn get_fps() -> u64 {
 /// Run one iteration of the main loop.
 pub fn tick() {
     kernel::driver::input::keyboard::process_input();
+    if kernel::driver::input::keyboard::get_stdin_byte_count() > 0 {
+        let _ = kernel::task::wake_keyboard_readers();
+    }
     kernel::driver::input::mouse::process_packets();
     kernel::console::render_if_dirty();
 

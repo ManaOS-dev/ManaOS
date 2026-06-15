@@ -5,8 +5,8 @@ use super::{
     KernelStackGuardFault, PhysicalFrameAllocator, PreemptionStateDiagnostics, Scheduler,
     SchedulerDiagnostics, SchedulerTaskSnapshot, SwitchAction, TaskEntry, UserAddressSpace,
     UserAddressSpaceReclaim, UserEntryArguments, UserMappingError, UserMappingRequest,
-    UserTaskExit, UserTaskSpawnRequest, UserTrapFrame, UserTrapFrameSource, UserVirtualAddress,
-    PREEMPTION_STATE, SCHEDULER, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
+    UserReadRequest, UserTaskExit, UserTaskSpawnRequest, UserTrapFrame, UserTrapFrameSource,
+    UserVirtualAddress, PREEMPTION_STATE, SCHEDULER, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
 use crate::kernel::filesystem::{FileDescriptorTable, SpawnDescriptorInheritanceSnapshot};
 use alloc::string::String;
@@ -107,6 +107,18 @@ pub fn run_user_task_once(
     process_lifecycle::run_user_task_once(frame_allocator, task_id)
 }
 
+/// Run active user-space tasks until one selected task blocks in `read`.
+///
+/// # Panics
+///
+/// Panics if the scheduler has not been initialized.
+pub fn run_user_task_until_read_block(
+    frame_allocator: &mut PhysicalFrameAllocator,
+    task_id: u64,
+) -> Option<()> {
+    process_lifecycle::run_user_task_until_read_block(frame_allocator, task_id)
+}
+
 /// Run the next active user task until one active user task exits.
 ///
 /// # Panics
@@ -175,6 +187,14 @@ pub fn prepare_current_user_waitpid(
         .and_then(|scheduler| scheduler.prepare_current_user_waitpid(child_task_id, status_pointer))
 }
 
+/// Prepare the current user task to block in `read`.
+pub fn prepare_current_user_read(request: UserReadRequest) -> Option<u64> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .and_then(|scheduler| scheduler.prepare_current_user_read(request))
+}
+
 /// Return whether the current user task owns a matching child task.
 pub fn current_user_task_has_child(child_task_id: Option<u64>) -> Option<bool> {
     let scheduler = SCHEDULER.lock();
@@ -232,6 +252,38 @@ pub fn block_current_user_after_syscall() -> Option<u64> {
     scheduler
         .as_mut()
         .and_then(Scheduler::block_current_user_after_syscall)
+}
+
+/// Wake one user task blocked on keyboard-backed `read`.
+pub fn wake_keyboard_readers() -> Option<u64> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .and_then(Scheduler::wake_keyboard_readers)
+}
+
+/// Return whether a user task is blocked on `read`.
+pub fn is_user_task_blocked_for_read(task_id: u64) -> bool {
+    let scheduler = SCHEDULER.lock();
+    scheduler
+        .as_ref()
+        .is_some_and(|scheduler| scheduler.is_user_task_blocked_for_read(task_id))
+}
+
+/// Take the current user task's pending `read` request.
+pub fn take_current_user_read_request(task_id: u64) -> Option<UserReadRequest> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .and_then(|scheduler| scheduler.take_current_user_read_request(task_id))
+}
+
+/// Complete the current user task's pending `read` result.
+pub fn complete_current_user_read(task_id: u64, result: u64) -> Option<()> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .and_then(|scheduler| scheduler.complete_current_user_read(task_id, result))
 }
 
 /// Complete pending `waitpid` user status writes after switching address space.
@@ -341,12 +393,15 @@ pub fn process_timer_tick(interrupted_user_mode: bool) {
         SwitchAction::EnterUser {
             current_context,
             task_id,
-            trap_frame,
+            mut trap_frame,
             kernel_stack_top,
             address_space,
         } => {
             address_space::switch_to_user_address_space(address_space);
             complete_pending_user_waitpid_status(task_id);
+            if let Some(read_result) = crate::kernel::syscall::complete_pending_user_read(task_id) {
+                trap_frame.rax = read_result;
+            }
             install_user_task_kernel_stack(kernel_stack_top);
             crate::log_info!(
                 "task",

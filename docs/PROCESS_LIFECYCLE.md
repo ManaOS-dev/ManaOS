@@ -72,19 +72,18 @@ task identifier are in place now so later child-exit work has a stable ABI
 target. A minimal no-std `user_shell` binary is built into the userland target
 set, included in the storage smoke disk image as `/disk/bin/user_shell`, and
 started after the storage smoke lifecycle gate. The shell currently performs
-fixed-buffer reads from stdin until EOF or `exit`, validates heap-free
-whitespace tokenization, builds fixed-buffer `argv`, runs
+fixed-buffer reads from stdin until EOF or `exit`, retries transient try-again
+reads, validates heap-free whitespace tokenization, builds fixed-buffer `argv`, runs
 `/disk/bin/file_demo --shell-command-smoke` and
 `bin/file_demo --shell-command-smoke` through `spawn` plus `waitpid`, and
 executes `cd` through the userland `chdir` wrapper, `help` from a compiled-in
 command list, `pwd` through the userland `getcwd` wrapper, and `exit` status
 parsing for default and nonzero codes. It also verifies bounded command error
 messages for empty input, token overflow, argument-buffer exhaustion,
-`bin/missing_shell_command`, and the shell-loop EOF path because standard input
-can still return EOF when no bytes are queued. The storage smoke-started shell
-now inherits `/dev/keyboard` as standard input, seeds `exit\n` through the
-keyboard stdin queue, and verifies the keyboard-backed exit path. Keeping the
-shell alive while waiting for later keyboard bytes remains future work.
+`bin/missing_shell_command`, and the historical shell-loop EOF path. The storage
+smoke-started shell now inherits `/dev/keyboard` as standard input, blocks
+instead of seeing EOF while the keyboard stdin queue is empty, wakes after
+`exit\n` is injected, and verifies the keyboard-backed exit path.
 The shared userland linker envelope is now five 4 KiB pages so the experimental
 shell can carry the command loop and built-in smoke coverage without changing
 the ELF loader contract.
@@ -456,9 +455,10 @@ Current runtime diagnostics cover the first successful replacement path:
   the userland `getcwd` wrapper, validates `exit` status parsing for default
   and nonzero codes, verifies bounded error messages for an empty command,
   token-limit overflow, argument-buffer exhaustion, and
-  `bin/missing_shell_command`, enters the command loop, reaches stdin EOF, and
-  is collected through the initial process. Immediately after that collection,
-  storage smoke runs the kernel console `pwd` command through the
+  `bin/missing_shell_command`, enters the command loop, blocks once on empty
+  keyboard-backed stdin, wakes when `exit\n` is queued, and is collected
+  through the initial process. Immediately after that collection, storage
+  smoke runs the kernel console `pwd` command through the
   non-interactive console smoke path to prove the experimental shell did not
   take over kernel console command availability.
 - Serial logs record `User image replaced by execve` and

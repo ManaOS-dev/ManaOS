@@ -54,6 +54,40 @@ pub struct UserMappingRequest {
     flags: u64,
 }
 
+/// Pending user read syscall state that waits for device input.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserReadRequest {
+    file_descriptor: usize,
+    user_pointer: u64,
+    byte_len: u64,
+}
+
+impl UserReadRequest {
+    /// Create a pending user read request.
+    pub const fn new(file_descriptor: usize, user_pointer: u64, byte_len: u64) -> Self {
+        Self {
+            file_descriptor,
+            user_pointer,
+            byte_len,
+        }
+    }
+
+    /// Return the file descriptor being read.
+    pub const fn file_descriptor(self) -> usize {
+        self.file_descriptor
+    }
+
+    /// Return the destination user pointer.
+    pub const fn user_pointer(self) -> u64 {
+        self.user_pointer
+    }
+
+    /// Return the requested byte length.
+    pub const fn byte_len(self) -> u64 {
+        self.byte_len
+    }
+}
+
 impl UserMappingRequest {
     /// Create a private user mapping request.
     pub const fn new(
@@ -177,6 +211,7 @@ struct UserTaskRuntime {
     sleep_wake_tick: Option<u64>,
     waitpid_request: Option<UserWaitpidRequest>,
     waitpid_completion: Option<UserWaitpidCompletion>,
+    read_request: Option<UserReadRequest>,
     syscall_frame_recorded: bool,
     interrupt_frame_recorded: bool,
     last_preemption_reason: UserPreemptionReasonDiagnostics,
@@ -204,6 +239,7 @@ impl UserTaskRuntime {
             sleep_wake_tick: None,
             waitpid_request: None,
             waitpid_completion: None,
+            read_request: None,
             syscall_frame_recorded: false,
             interrupt_frame_recorded: false,
             last_preemption_reason: UserPreemptionReasonDiagnostics::None,
@@ -573,6 +609,8 @@ pub(super) struct Scheduler {
     user_sleep_wake_count: u64,
     user_waitpid_block_count: u64,
     user_waitpid_wake_count: u64,
+    user_read_block_count: u64,
+    user_read_wake_count: u64,
     finished_task_count: u64,
     reclaimed_user_resource_record_count: u64,
     reclaimed_user_address_space_count: u64,
@@ -605,6 +643,8 @@ impl Scheduler {
             user_sleep_wake_count: 0,
             user_waitpid_block_count: 0,
             user_waitpid_wake_count: 0,
+            user_read_block_count: 0,
+            user_read_wake_count: 0,
             finished_task_count: 0,
             reclaimed_user_resource_record_count: 0,
             reclaimed_user_address_space_count: 0,
@@ -846,17 +886,19 @@ pub(super) use facade::install_user_task_kernel_stack;
 pub use facade::{
     activate_user_task, block_current_user_after_syscall, clone_current_file_descriptor_table,
     close_current_file_descriptors_on_exec, close_user_return_preemption_window,
-    collect_waitable_child_exit, current_user_task_has_child, finish_current_task,
-    get_current_parent_task_id, get_current_spawn_descriptor_inheritance_snapshot,
-    get_current_task_id, get_current_user_address_space, get_current_working_directory,
-    get_kernel_stack_guard_fault, get_kernel_stack_guard_fault_diagnostic_sample,
-    get_scheduler_diagnostics, get_scheduler_task_snapshots, has_active_user_tasks, initialize,
-    prepare_current_user_sleep, prepare_current_user_waitpid, process_current_user_break,
-    process_current_user_mapping, process_current_user_unmapping, process_timer_tick,
-    record_current_user_execve_candidate_drop, record_current_user_execve_reclaim,
-    record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
-    replace_current_file_descriptor_table, replace_current_user_image,
-    run_active_user_tasks_until_empty, run_next_user_task_once, run_user_task_once,
-    set_current_working_directory, set_preemption_enabled, spawn, spawn_user_task,
-    with_current_file_descriptor_table,
+    collect_waitable_child_exit, complete_current_user_read, current_user_task_has_child,
+    finish_current_task, get_current_parent_task_id,
+    get_current_spawn_descriptor_inheritance_snapshot, get_current_task_id,
+    get_current_user_address_space, get_current_working_directory, get_kernel_stack_guard_fault,
+    get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
+    get_scheduler_task_snapshots, has_active_user_tasks, initialize, is_user_task_blocked_for_read,
+    prepare_current_user_read, prepare_current_user_sleep, prepare_current_user_waitpid,
+    process_current_user_break, process_current_user_mapping, process_current_user_unmapping,
+    process_timer_tick, record_current_user_execve_candidate_drop,
+    record_current_user_execve_reclaim, record_current_user_interrupt_trap_frame,
+    record_current_user_trap_frame, replace_current_file_descriptor_table,
+    replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
+    run_user_task_once, run_user_task_until_read_block, set_current_working_directory,
+    set_preemption_enabled, spawn, spawn_user_task, take_current_user_read_request,
+    wake_keyboard_readers, with_current_file_descriptor_table,
 };

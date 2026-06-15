@@ -98,13 +98,6 @@ fn spawn_user_shell_smoke_task(
     user_stack_pages: u64,
 ) -> u64 {
     crate::kernel::driver::input::keyboard::clear_stdin_buffer();
-    crate::kernel::driver::input::keyboard::push_stdin_bytes(USER_SHELL_KEYBOARD_STDIN);
-    crate::log_info!(
-        "keyboard",
-        "Initial user shell keyboard stdin prepared: bytes={}",
-        USER_SHELL_KEYBOARD_STDIN.len()
-    );
-
     let original_file_descriptors = crate::kernel::task::clone_current_file_descriptor_table()
         .expect("scheduler must be initialized before user shell smoke spawn");
     crate::kernel::task::replace_current_file_descriptor_table(
@@ -209,6 +202,8 @@ fn run_initial_user_shell_smoke(
         user_task_id,
         USER_SHELL_ELF_PATH
     );
+    run_initial_user_shell_until_stdin_wait(frame_allocator, user_task_id);
+    prepare_initial_user_shell_keyboard_exit(user_task_id);
     let exit = run_initial_user_shell_until_exit(frame_allocator, user_task_id);
     assert_eq!(
         exit.exit_code(),
@@ -221,6 +216,40 @@ fn run_initial_user_shell_smoke(
         "task",
         "Initial user shell smoke passed: task={} exit_code=0 stdin=keyboard",
         user_task_id
+    );
+}
+
+fn run_initial_user_shell_until_stdin_wait(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    user_task_id: u64,
+) {
+    crate::kernel::task::run_user_task_until_read_block(frame_allocator, user_task_id)
+        .expect("initial user shell smoke task must block on keyboard stdin read");
+    crate::log_info!(
+        "task",
+        "Initial user shell keyboard stdin wait verified: task={} blocked=true",
+        user_task_id
+    );
+}
+
+fn prepare_initial_user_shell_keyboard_exit(user_task_id: u64) {
+    crate::kernel::driver::input::keyboard::push_stdin_bytes(USER_SHELL_KEYBOARD_STDIN);
+    crate::log_info!(
+        "keyboard",
+        "Initial user shell keyboard stdin prepared: bytes={}",
+        USER_SHELL_KEYBOARD_STDIN.len()
+    );
+    let woken_task_id = crate::kernel::task::wake_keyboard_readers()
+        .expect("initial user shell keyboard input must wake one read waiter");
+    assert_eq!(
+        woken_task_id, user_task_id,
+        "keyboard stdin wake must target the initial user shell"
+    );
+    crate::log_info!(
+        "task",
+        "Initial user shell keyboard stdin wake verified: task={} bytes={}",
+        user_task_id,
+        USER_SHELL_KEYBOARD_STDIN.len()
     );
 }
 

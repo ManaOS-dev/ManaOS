@@ -53,9 +53,16 @@ impl KeyboardInputDevice {
 
 impl FileNode for KeyboardInputDevice {
     fn read_at(&self, _offset: usize, buffer: &mut [u8]) -> FileSystemResult<usize> {
-        Ok(crate::kernel::driver::input::keyboard::get_stdin_bytes(
-            buffer,
-        ))
+        if buffer.is_empty() {
+            return Ok(0);
+        }
+
+        let bytes_read = crate::kernel::driver::input::keyboard::get_stdin_bytes(buffer);
+        if bytes_read == 0 {
+            return Err(FileSystemError::WouldBlock);
+        }
+
+        Ok(bytes_read)
     }
 
     fn write_at(&self, _offset: usize, _buffer: &[u8]) -> FileSystemResult<usize> {
