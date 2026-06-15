@@ -17,7 +17,11 @@ SYSCALL entry path switches onto the current task's guarded kernel stack,
 captures a runtime `UserTrapFrame`, and stores returning syscall frames on the
 current user task. The x86_64 timer interrupt entry also captures a complete
 general-purpose register snapshot for Ring 3 timer frames and records it on the
-current user task. The scheduler can now preempt a Ring 3 task from the timer
+current user task. Scheduler task snapshots and the `tasks` command expose
+whether syscall and timer interrupt frames have been recorded, plus the saved
+`UserTrapFrame` byte size. Storage smoke asserts that every timer-preempted
+user task snapshot has a recorded interrupt frame with the full frame size.
+The scheduler can now preempt a Ring 3 task from the timer
 path, run another schedulable task, and resume the preempted user task through
 the saved timer interrupt context. User tasks also carry a `UserAddressSpace`
 root; the lifecycle path switches CR3 before Ring 3 entry and restores the
@@ -106,7 +110,8 @@ User task preemption stays disabled until all of the following are true:
 - User-mode interrupt and syscall entries save a complete `UserTrapFrame`.
 - User task metadata owns the saved trap frame and exposes it only through task
   lifecycle helpers. This is complete for returning syscalls and the current
-  Local APIC timer interrupt path.
+  Local APIC timer interrupt path, and scheduler snapshots now expose recorded
+  frame flags and the full saved frame byte size for smoke assertions.
 - Per-task kernel stacks exist and are installed before entering or resuming a
   user task. This is complete for first entry, syscall entry, and timer-context
   resume on the current scheduler path.

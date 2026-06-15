@@ -11,7 +11,6 @@ reviewable unit before implementing it.
 
 ### User Process Scheduling
 
-- [ ] Save the full runtime user trap frame for every preempted user process.
 - [ ] Restore the full runtime user trap frame for resumed user processes.
 - [ ] Cover syscall return frames and timer interrupt frames with one scheduler path.
 - [ ] Verify that each user task resumes with its own address-space root.

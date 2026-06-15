@@ -269,6 +269,7 @@ $expectedPatterns = @(
     "bootstrap_child_user_tasks\s+= 7",
     "user_spawned_child_user_tasks\s+= 3",
     "preempted_user_task_snapshots\s+= [1-9][0-9]*",
+    "full_timer_trap_frame_snapshots\s+= [1-9][0-9]*",
     "resumed_user_task_snapshots\s+= 10",
     "fully_reclaimed_user_tasks\s+= 10",
     "user_image_snapshots\s+= 10",

@@ -500,6 +500,30 @@ pub(super) struct TaskRuntimeDiagnosticsSnapshot {
     active: bool,
     address_space_owned: bool,
     kernel_stack_owned: bool,
+    trap_frame: UserTrapFrameDiagnosticsSnapshot,
+}
+
+/// Snapshot of saved user trap frame state for one scheduler task.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct UserTrapFrameDiagnosticsSnapshot {
+    saved_user_trap_frame_bytes: usize,
+    syscall_frame_recorded: bool,
+    interrupt_frame_recorded: bool,
+}
+
+impl UserTrapFrameDiagnosticsSnapshot {
+    /// Create a saved user trap frame diagnostics snapshot.
+    pub(super) const fn new(
+        saved_user_trap_frame_bytes: usize,
+        syscall_frame_recorded: bool,
+        interrupt_frame_recorded: bool,
+    ) -> Self {
+        Self {
+            saved_user_trap_frame_bytes,
+            syscall_frame_recorded,
+            interrupt_frame_recorded,
+        }
+    }
 }
 
 impl TaskRuntimeDiagnosticsSnapshot {
@@ -508,11 +532,13 @@ impl TaskRuntimeDiagnosticsSnapshot {
         active: bool,
         address_space_owned: bool,
         kernel_stack_owned: bool,
+        trap_frame: UserTrapFrameDiagnosticsSnapshot,
     ) -> Self {
         Self {
             active,
             address_space_owned,
             kernel_stack_owned,
+            trap_frame,
         }
     }
 }
@@ -670,6 +696,21 @@ impl SchedulerTaskSnapshot {
     /// Return whether this task still owns a scheduler-managed kernel stack.
     pub const fn kernel_stack_owned(&self) -> bool {
         self.status.runtime.kernel_stack_owned
+    }
+
+    /// Return the byte size of the saved user trap frame, or zero for kernel tasks.
+    pub const fn saved_user_trap_frame_bytes(&self) -> usize {
+        self.status.runtime.trap_frame.saved_user_trap_frame_bytes
+    }
+
+    /// Return whether a returning syscall frame has been recorded for this task.
+    pub const fn syscall_frame_recorded(&self) -> bool {
+        self.status.runtime.trap_frame.syscall_frame_recorded
+    }
+
+    /// Return whether a timer interrupt frame has been recorded for this task.
+    pub const fn interrupt_frame_recorded(&self) -> bool {
+        self.status.runtime.trap_frame.interrupt_frame_recorded
     }
 
     /// Return the retained exit code for finished task records.

@@ -72,8 +72,8 @@ smoke, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. save the full runtime user trap frame for every preempted user process;
-2. restore the full runtime user trap frame for resumed user processes;
+1. restore the full runtime user trap frame for resumed user processes;
+2. cover syscall return frames and timer interrupt frames with one scheduler path;
 3. keep scheduler diagnostics synchronized whenever lifecycle state gains a new
    transition.
 

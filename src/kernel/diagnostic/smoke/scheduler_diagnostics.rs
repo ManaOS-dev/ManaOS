@@ -5,6 +5,7 @@ use super::{
     USER_SMOKE_PARENT_TASK_COUNT, USER_SMOKE_SHELL_CHILD_TASK_COUNT, USER_SMOKE_SHELL_TASK_COUNT,
 };
 use crate::kernel::diagnostic::log::{LogField, LogLevel};
+use crate::kernel::task::context::UserTrapFrame;
 
 /// Verify scheduler accounting after the userland smoke demo.
 pub fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
@@ -434,6 +435,7 @@ struct SchedulerTaskSnapshotCounters {
     collected_user_exit_snapshots: u64,
     reaped_user_task_snapshots: u64,
     preempted_user_task_snapshots: u64,
+    full_timer_trap_frame_snapshots: u64,
     resumed_user_task_snapshots: u64,
 }
 
@@ -452,6 +454,7 @@ impl SchedulerTaskSnapshotCounters {
             collected_user_exit_snapshots: 0,
             reaped_user_task_snapshots: 0,
             preempted_user_task_snapshots: 0,
+            full_timer_trap_frame_snapshots: 0,
             resumed_user_task_snapshots: 0,
         }
     }
@@ -520,8 +523,19 @@ fn record_scheduler_user_task_snapshot(
     if snapshot.last_preemption_reason()
         == crate::kernel::task::UserPreemptionReasonDiagnostics::Timer
     {
+        assert!(
+            snapshot.interrupt_frame_recorded(),
+            "timer-preempted user task snapshots must retain an interrupt trap frame"
+        );
+        assert_eq!(
+            snapshot.saved_user_trap_frame_bytes(),
+            core::mem::size_of::<UserTrapFrame>(),
+            "timer-preempted user task snapshots must retain a complete user trap frame"
+        );
         counters.preempted_user_task_snapshots =
             counters.preempted_user_task_snapshots.saturating_add(1);
+        counters.full_timer_trap_frame_snapshots =
+            counters.full_timer_trap_frame_snapshots.saturating_add(1);
     }
     assert_ne!(
         snapshot.last_resume_path(),
@@ -668,6 +682,10 @@ fn verify_scheduler_task_snapshot_counts(
         "scheduler snapshots must show at least one timer-preempted user task"
     );
     assert_eq!(
+        counters.full_timer_trap_frame_snapshots, counters.preempted_user_task_snapshots,
+        "every timer-preempted user task snapshot must retain a complete interrupt trap frame"
+    );
+    assert_eq!(
         counters.resumed_user_task_snapshots, expected_user_tasks,
         "scheduler snapshots must show every user task was entered or resumed"
     );
@@ -706,6 +724,10 @@ fn log_scheduler_task_snapshot_counters(
             LogField::new(
                 "preempted_user_task_snapshots",
                 format_args!("{}", counters.preempted_user_task_snapshots),
+            ),
+            LogField::new(
+                "full_timer_trap_frame_snapshots",
+                format_args!("{}", counters.full_timer_trap_frame_snapshots),
             ),
             LogField::new(
                 "resumed_user_task_snapshots",

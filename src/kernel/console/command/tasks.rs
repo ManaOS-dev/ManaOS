@@ -104,7 +104,7 @@ pub(super) fn run(
 
 fn push_task_snapshot(output: &mut CommandOutput, snapshot: &SchedulerTaskSnapshot) {
     output.push(format!(
-        "task: id={} parent={} kind={} state={} lifecycle={} active={} address_space_owned={} kernel_stack_owned={} exit_code={} wait_collected={} last_preemption_reason={} last_resume_path={}",
+        "task: id={} parent={} kind={} state={} lifecycle={} active={} address_space_owned={} kernel_stack_owned={} saved_trap_frame_bytes={} syscall_frame_saved={} interrupt_frame_saved={} exit_code={} wait_collected={} last_preemption_reason={} last_resume_path={}",
         snapshot.task_id(),
         snapshot
             .parent_task_id()
@@ -115,6 +115,9 @@ fn push_task_snapshot(output: &mut CommandOutput, snapshot: &SchedulerTaskSnapsh
         snapshot.active(),
         snapshot.address_space_owned(),
         snapshot.kernel_stack_owned(),
+        snapshot.saved_user_trap_frame_bytes(),
+        snapshot.syscall_frame_recorded(),
+        snapshot.interrupt_frame_recorded(),
         snapshot
             .exit_code()
             .map_or_else(|| "-".to_string(), |exit_code| exit_code.to_string()),

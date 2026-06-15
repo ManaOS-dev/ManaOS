@@ -6,9 +6,10 @@ use super::{
     TaskKind, TaskRuntimeDiagnosticsSnapshot, TaskState, TaskStateDiagnostics,
     TaskStatusDiagnosticsSnapshot, UserHeapDiagnosticsSnapshot,
     UserMappingActiveDiagnosticsSnapshot, UserMappingLifecycleDiagnosticsSnapshot,
-    UserPreemptionReasonDiagnostics, UserResumePathDiagnostics, UserVirtualMemorySnapshot,
-    USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
+    UserPreemptionReasonDiagnostics, UserResumePathDiagnostics, UserTrapFrameDiagnosticsSnapshot,
+    UserVirtualMemorySnapshot, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
+use crate::kernel::task::context::UserTrapFrame;
 use alloc::vec::Vec;
 use core::sync::atomic::Ordering;
 impl Scheduler {
@@ -129,6 +130,7 @@ impl Scheduler {
                                 active,
                                 false,
                                 task.kernel_stack.is_some(),
+                                UserTrapFrameDiagnosticsSnapshot::new(0, false, false),
                             ),
                             task_exit_status_diagnostics(task),
                             UserPreemptionReasonDiagnostics::None,
@@ -166,6 +168,11 @@ impl Scheduler {
                                     active,
                                     user_runtime.address_space.is_some(),
                                     task.kernel_stack.is_some(),
+                                    UserTrapFrameDiagnosticsSnapshot::new(
+                                        core::mem::size_of::<UserTrapFrame>(),
+                                        user_runtime.syscall_frame_recorded,
+                                        user_runtime.interrupt_frame_recorded,
+                                    ),
                                 ),
                                 task_exit_status_diagnostics(task),
                                 user_runtime.last_preemption_reason,

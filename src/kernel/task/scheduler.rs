@@ -9,7 +9,8 @@ use super::diagnostics::{
     UserExecveReplacementStateDiagnostics, UserHeapDiagnosticsSnapshot,
     UserImageDiagnosticsSnapshot, UserMappingActiveDiagnosticsSnapshot,
     UserMappingLifecycleDiagnosticsSnapshot, UserPreemptionReasonDiagnostics,
-    UserResumePathDiagnostics, UserVirtualMemorySnapshot, USER_IMAGE_PATH_DIAGNOSTIC_BYTES,
+    UserResumePathDiagnostics, UserTrapFrameDiagnosticsSnapshot, UserVirtualMemorySnapshot,
+    USER_IMAGE_PATH_DIAGNOSTIC_BYTES,
 };
 use super::metadata::{TaskIdentifier, TaskMetadata};
 use super::process_lifecycle::{self, UserTaskExit};
