@@ -37,7 +37,7 @@ process-owned descriptor table migration、spawn descriptor inheritance enforcem
 parent-exit-while-child-lives smoke、
 initial-process reparenting policy、exit record retention 後の finished child resource reclaim smoke、
 最小 no-std `user_shell` binary の build、storage smoke disk image 登録、post-smoke 起動、
-fixed-buffer stdin read と EOF 終了 smoke が
+fixed-buffer stdin read、heap-free whitespace tokenization、EOF 終了 smoke が
 完了済みです。user process scheduling は、5つの active parent user process と2つの user-spawned child を
 扱う storage smoke まで完了済みです。さらに、per-task の last preemption / last resume diagnostics と、preempted
 process の exit 後も別の active process が継続する storage smoke も完了済みです。正本は英語版の

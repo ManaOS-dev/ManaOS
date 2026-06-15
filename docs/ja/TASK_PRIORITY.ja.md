@@ -54,12 +54,13 @@ successful self-replacement path、current directory preservation、argv/envp-ca
 orphaned child の initial-process reparenting、exit record retention 後の safe finished-task resource
 reclamation、process-owned descriptor table inheritance、close-on-exec child filtering、
 `tasks` output の `execve` replacement-state diagnostics、post-smoke experimental `user_shell`
-launch と fixed-buffer stdin EOF handling は
+launch、fixed-buffer stdin EOF handling、heap-free whitespace tokenization は
 [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。ここからは小さい runtime slice で進めます。
 
 1. smoke-started userland shell を stdin が keyboard-backed になった後も動かし続ける。
-2. heap allocation なしで whitespace tokenization を実装する。
-3. general spawned user process lifecycle へ timer preemption を拡張する。
-4. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
+2. user program の absolute path execution を実装する。
+3. command execution 用の fixed-buffer argv construction を追加する。
+4. general spawned user process lifecycle へ timer preemption を拡張する。
+5. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
 
 広い syscall surface を一気に増やす前に、docs、diagnostics、narrow smoke assertion を優先します。

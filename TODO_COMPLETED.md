@@ -91,6 +91,7 @@ active roadmap can list only unfinished work.
 - [x] Add a minimal userland shell binary to the userland build.
 - [x] Start the experimental userland shell after storage smoke gating.
 - [x] Implement fixed-buffer command reading from stdin.
+- [x] Implement whitespace tokenization without heap allocation.
 
 ### User Process Scheduling
 

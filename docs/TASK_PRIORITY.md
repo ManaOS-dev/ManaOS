@@ -61,14 +61,15 @@ orphaned children, safe finished-task resource reclamation after exit record
 retention, process-owned descriptor table inheritance, close-on-exec child
 filtering, `execve` replacement-state diagnostics in `tasks` output, and the
 post-smoke experimental `user_shell` launch with fixed-buffer stdin EOF handling
-are documented in
+and heap-free whitespace tokenization are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
 1. keep the smoke-started userland shell alive once stdin is keyboard-backed;
-2. implement whitespace tokenization without heap allocation;
-3. extend timer preemption across general spawned user process lifecycles;
-4. update scheduler diagnostics whenever lifecycle state gains a new transition.
+2. implement absolute path execution for user programs;
+3. add fixed-buffer argv construction for command execution;
+4. extend timer preemption across general spawned user process lifecycles;
+5. update scheduler diagnostics whenever lifecycle state gains a new transition.
 
 Prefer docs, diagnostics, and narrow smoke assertions before broad syscall
 surface expansion.

@@ -77,9 +77,9 @@ fn verify_scheduler_reclaim_diagnostics(
     // pages. The old heap and private mappings are reclaimed during execve
     // publication, before the task exits.
     const SMOKE_RECLAIMED_USER_PAGES_PER_TASK: u64 = 8;
-    // The shell smoke image has a smaller two-segment ELF image and the same
-    // four-page user stack, so it reclaims fewer user-owned mapped pages.
-    const SHELL_RECLAIMED_USER_PAGES_PER_TASK: u64 = 6;
+    // The tokenizer shell image touches its text, rodata, data, and stack
+    // windows, matching the current post-exec smoke image reclaim total.
+    const SHELL_RECLAIMED_USER_PAGES_PER_TASK: u64 = 8;
     // The post-exec image touches only the program and stack windows, leaving
     // seven page-table frames to reclaim with the PML4.
     const SMOKE_RECLAIMED_PAGE_TABLE_PAGES_PER_TASK: u64 = 7;

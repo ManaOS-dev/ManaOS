@@ -12,7 +12,6 @@ reviewable unit before implementing it.
 ### Minimal User Shell
 
 - [ ] Keep the smoke-started userland shell alive once stdin is keyboard-backed.
-- [ ] Implement whitespace tokenization without heap allocation.
 - [ ] Implement absolute path execution for user programs.
 - [ ] Implement relative path execution using the current working directory.
 - [ ] Implement `cd` through a user-visible syscall or runtime helper.
