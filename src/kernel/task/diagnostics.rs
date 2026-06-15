@@ -509,6 +509,7 @@ pub(super) struct UserTrapFrameDiagnosticsSnapshot {
     saved_user_trap_frame_bytes: usize,
     syscall_frame_recorded: bool,
     interrupt_frame_recorded: bool,
+    runtime_trap_frame_record_count: u64,
     restored_user_trap_frame_bytes: usize,
     runtime_trap_frame_restore_count: u64,
 }
@@ -519,6 +520,7 @@ impl UserTrapFrameDiagnosticsSnapshot {
         saved_user_trap_frame_bytes: usize,
         syscall_frame_recorded: bool,
         interrupt_frame_recorded: bool,
+        runtime_trap_frame_record_count: u64,
         restored_user_trap_frame_bytes: usize,
         runtime_trap_frame_restore_count: u64,
     ) -> Self {
@@ -526,6 +528,7 @@ impl UserTrapFrameDiagnosticsSnapshot {
             saved_user_trap_frame_bytes,
             syscall_frame_recorded,
             interrupt_frame_recorded,
+            runtime_trap_frame_record_count,
             restored_user_trap_frame_bytes,
             runtime_trap_frame_restore_count,
         }
@@ -717,6 +720,14 @@ impl SchedulerTaskSnapshot {
     /// Return whether a timer interrupt frame has been recorded for this task.
     pub const fn interrupt_frame_recorded(&self) -> bool {
         self.status.runtime.trap_frame.interrupt_frame_recorded
+    }
+
+    /// Return the number of captured runtime user trap frames recorded by the scheduler.
+    pub const fn runtime_trap_frame_record_count(&self) -> u64 {
+        self.status
+            .runtime
+            .trap_frame
+            .runtime_trap_frame_record_count
     }
 
     /// Return the byte size of the last restored user trap frame, or zero before entry.

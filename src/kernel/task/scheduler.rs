@@ -215,6 +215,7 @@ struct UserTaskRuntime {
     read_request: Option<UserReadRequest>,
     syscall_frame_recorded: bool,
     interrupt_frame_recorded: bool,
+    runtime_trap_frame_record_count: u64,
     restored_user_trap_frame_bytes: usize,
     runtime_trap_frame_restore_count: u64,
     last_preemption_reason: UserPreemptionReasonDiagnostics,
@@ -245,6 +246,7 @@ impl UserTaskRuntime {
             read_request: None,
             syscall_frame_recorded: false,
             interrupt_frame_recorded: false,
+            runtime_trap_frame_record_count: 0,
             restored_user_trap_frame_bytes: 0,
             runtime_trap_frame_restore_count: 0,
             last_preemption_reason: UserPreemptionReasonDiagnostics::None,
@@ -380,9 +382,12 @@ fn copy_path_to_diagnostic(
     path_len
 }
 
-#[derive(Clone, Copy)]
-enum UserTrapFrameSource {
+/// Source of a captured runtime user trap frame.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UserTrapFrameSource {
+    /// Trap frame captured by the SYSCALL return path.
     Syscall,
+    /// Trap frame captured by the timer interrupt path.
     TimerInterrupt,
 }
 
@@ -914,10 +919,10 @@ pub use facade::{
     prepare_current_user_read, prepare_current_user_sleep, prepare_current_user_waitpid,
     process_current_user_break, process_current_user_mapping, process_current_user_unmapping,
     process_timer_tick, record_current_user_execve_candidate_drop,
-    record_current_user_execve_reclaim, record_current_user_interrupt_trap_frame,
-    record_current_user_trap_frame, replace_current_file_descriptor_table,
-    replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
-    run_user_task_once, run_user_task_until_read_block, set_current_working_directory,
-    set_preemption_enabled, spawn, spawn_user_task, take_current_user_read_request,
-    wake_keyboard_readers, with_current_file_descriptor_table,
+    record_current_user_execve_reclaim, record_current_user_trap_frame,
+    replace_current_file_descriptor_table, replace_current_user_image,
+    run_active_user_tasks_until_empty, run_next_user_task_once, run_user_task_once,
+    run_user_task_until_read_block, set_current_working_directory, set_preemption_enabled, spawn,
+    spawn_user_task, take_current_user_read_request, wake_keyboard_readers,
+    with_current_file_descriptor_table,
 };

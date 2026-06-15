@@ -667,6 +667,9 @@ impl Scheduler {
 
         let should_log = source.should_log(user_runtime);
         user_runtime.saved_frame = trap_frame;
+        user_runtime.runtime_trap_frame_record_count = user_runtime
+            .runtime_trap_frame_record_count
+            .saturating_add(1);
         source.mark_recorded(user_runtime);
 
         if !should_log {
@@ -750,6 +753,7 @@ impl Scheduler {
         user_runtime.read_request = None;
         user_runtime.syscall_frame_recorded = false;
         user_runtime.interrupt_frame_recorded = false;
+        user_runtime.runtime_trap_frame_record_count = 0;
         user_runtime.restored_user_trap_frame_bytes = 0;
         user_runtime.runtime_trap_frame_restore_count = 0;
         current_task.context.clear();

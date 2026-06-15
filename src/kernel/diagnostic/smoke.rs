@@ -759,6 +759,7 @@ pub fn verify_scheduler_console_command() -> bool {
             "task_vm:",
             "task_mmap_lifecycle:",
             "saved_trap_frame_bytes=",
+            "runtime_trap_frame_records=",
             "restored_trap_frame_bytes=",
             "runtime_trap_frame_restores=",
             "syscall_frame_saved=",

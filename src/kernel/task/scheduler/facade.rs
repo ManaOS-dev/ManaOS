@@ -295,29 +295,14 @@ pub(in crate::kernel::task) fn complete_pending_user_waitpid_status(task_id: u64
 }
 
 /// Save a captured user trap frame for the currently running user task.
-pub fn record_current_user_trap_frame(trap_frame: UserTrapFrame, trap_frame_storage_address: u64) {
-    let mut scheduler = SCHEDULER.lock();
-    if let Some(scheduler) = scheduler.as_mut() {
-        scheduler.record_current_user_trap_frame(
-            trap_frame,
-            trap_frame_storage_address,
-            UserTrapFrameSource::Syscall,
-        );
-    }
-}
-
-/// Save a timer-interrupt user trap frame for the currently running user task.
-pub fn record_current_user_interrupt_trap_frame(
+pub fn record_current_user_trap_frame(
     trap_frame: UserTrapFrame,
     trap_frame_storage_address: u64,
+    source: UserTrapFrameSource,
 ) {
     let mut scheduler = SCHEDULER.lock();
     if let Some(scheduler) = scheduler.as_mut() {
-        scheduler.record_current_user_trap_frame(
-            trap_frame,
-            trap_frame_storage_address,
-            UserTrapFrameSource::TimerInterrupt,
-        );
+        scheduler.record_current_user_trap_frame(trap_frame, trap_frame_storage_address, source);
     }
 }
 

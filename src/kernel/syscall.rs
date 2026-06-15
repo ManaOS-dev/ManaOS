@@ -45,7 +45,7 @@ use crate::kernel::memory::{
     address::{UserCString, UserReadableRange, UserVirtualRange, UserWritableRange},
     user_pointer,
 };
-use crate::kernel::task::context::UserTrapFrame;
+use crate::kernel::task::{context::UserTrapFrame, UserTrapFrameSource};
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 #[allow(dead_code)]
@@ -437,6 +437,7 @@ pub unsafe extern "C" fn syscall_dispatch_from_trap_frame(trap_frame: *mut UserT
         crate::kernel::task::record_current_user_trap_frame(
             *trap_frame,
             trap_frame_storage_address,
+            UserTrapFrameSource::Syscall,
         );
         let task_id = crate::kernel::task::block_current_user_after_syscall()
             .expect("prepared blocking syscall must block after saving the syscall frame");
@@ -449,6 +450,7 @@ pub unsafe extern "C" fn syscall_dispatch_from_trap_frame(trap_frame: *mut UserT
         crate::kernel::task::record_current_user_trap_frame(
             *trap_frame,
             trap_frame_storage_address,
+            UserTrapFrameSource::Syscall,
         );
     }
     result

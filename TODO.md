@@ -11,7 +11,6 @@ reviewable unit before implementing it.
 
 ### User Process Scheduling
 
-- [ ] Cover syscall return frames and timer interrupt frames with one scheduler path.
 - [ ] Verify that each user task resumes with its own address-space root.
 - [ ] Verify that each user task resumes with its own kernel stack.
 - [ ] Prevent scheduling a task while its address space is being reclaimed.

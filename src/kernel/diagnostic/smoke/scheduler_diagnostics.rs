@@ -434,6 +434,7 @@ struct SchedulerTaskSnapshotCounters {
     user_spawned_child_user_tasks: u64,
     collected_user_exit_snapshots: u64,
     reaped_user_task_snapshots: u64,
+    runtime_trap_frame_record_snapshots: u64,
     preempted_user_task_snapshots: u64,
     full_timer_trap_frame_snapshots: u64,
     full_restored_trap_frame_snapshots: u64,
@@ -455,6 +456,7 @@ impl SchedulerTaskSnapshotCounters {
             user_spawned_child_user_tasks: 0,
             collected_user_exit_snapshots: 0,
             reaped_user_task_snapshots: 0,
+            runtime_trap_frame_record_snapshots: 0,
             preempted_user_task_snapshots: 0,
             full_timer_trap_frame_snapshots: 0,
             full_restored_trap_frame_snapshots: 0,
@@ -524,6 +526,15 @@ fn record_scheduler_user_task_snapshot(
         counters.collected_user_exit_snapshots.saturating_add(1);
     counters.reaped_user_task_snapshots = counters.reaped_user_task_snapshots.saturating_add(1);
     counters.finished_user_tasks = counters.finished_user_tasks.saturating_add(1);
+    if snapshot.syscall_frame_recorded() || snapshot.interrupt_frame_recorded() {
+        assert!(
+            snapshot.runtime_trap_frame_record_count() > 0,
+            "recorded syscall or timer frames must pass through the unified scheduler trap-frame path"
+        );
+        counters.runtime_trap_frame_record_snapshots = counters
+            .runtime_trap_frame_record_snapshots
+            .saturating_add(1);
+    }
     if snapshot.last_preemption_reason()
         == crate::kernel::task::UserPreemptionReasonDiagnostics::Timer
     {
@@ -698,6 +709,10 @@ fn verify_scheduler_task_snapshot_counts(
         counters.reaped_user_task_snapshots, expected_user_tasks,
         "scheduler snapshots must show reaped user process lifecycle states"
     );
+    assert_eq!(
+        counters.runtime_trap_frame_record_snapshots, expected_user_tasks,
+        "scheduler snapshots must show every user smoke task used the unified trap-frame record path"
+    );
     assert!(
         counters.preempted_user_task_snapshots > 0,
         "scheduler snapshots must show at least one timer-preempted user task"
@@ -749,6 +764,10 @@ fn log_scheduler_task_snapshot_counters(
             LogField::new(
                 "reaped_user_task_snapshots",
                 format_args!("{}", counters.reaped_user_task_snapshots),
+            ),
+            LogField::new(
+                "runtime_trap_frame_record_snapshots",
+                format_args!("{}", counters.runtime_trap_frame_record_snapshots),
             ),
             LogField::new(
                 "preempted_user_task_snapshots",

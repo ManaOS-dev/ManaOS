@@ -17,7 +17,7 @@
 //! - [`set_syscall_kernel_stack_top`] - Install the next SYSCALL kernel stack
 //! - [`syscall_entry`] - Ring 3 syscall entry
 
-use crate::kernel::task::context::UserTrapFrame;
+use crate::kernel::task::{context::UserTrapFrame, UserTrapFrameSource};
 use crate::shared::TimerInterruptFrame;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
@@ -30,9 +30,10 @@ static USER_TIMER_FRAME_REPORTED: AtomicBool = AtomicBool::new(false);
 pub fn process_timer_tick(frame: &TimerInterruptFrame) {
     let interrupted_user_mode = frame.is_user_mode();
     if interrupted_user_mode {
-        crate::kernel::task::record_current_user_interrupt_trap_frame(
+        crate::kernel::task::record_current_user_trap_frame(
             timer_frame_to_user_trap_frame(frame),
             frame.frame_storage_address,
+            UserTrapFrameSource::TimerInterrupt,
         );
         report_user_timer_frame_once(frame);
     }

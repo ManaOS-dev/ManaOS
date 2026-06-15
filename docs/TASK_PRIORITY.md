@@ -72,10 +72,9 @@ smoke, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. cover syscall return frames and timer interrupt frames with one scheduler path;
-2. verify that each resumed user task uses its own address-space root and kernel
+1. verify that each resumed user task uses its own address-space root and kernel
    stack;
-3. keep scheduler diagnostics synchronized whenever lifecycle state gains a new
+2. keep scheduler diagnostics synchronized whenever lifecycle state gains a new
    transition.
 
 Manual QEMU validation for observing the current smoke-owned experimental user

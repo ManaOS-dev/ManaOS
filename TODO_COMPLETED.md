@@ -119,6 +119,7 @@ active roadmap can list only unfinished work.
 - [x] Extend timer preemption across general spawned user process lifecycles.
 - [x] Save the full runtime user trap frame for every preempted user process.
 - [x] Restore the full runtime user trap frame for resumed user processes.
+- [x] Cover syscall return frames and timer interrupt frames with one scheduler path.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 
