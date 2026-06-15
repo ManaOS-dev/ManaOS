@@ -6,7 +6,13 @@ use mana_userland::syscall;
 const STDOUT: usize = 1;
 const BUFFER_LENGTH: usize = 64;
 const USER_SPAWN_CHILD_DELAY_NANOS: u64 = 5_000_000;
+// The spawn/wait child sleeps longer than the parent spin so the smoke can
+// prove both pending `waitpid(WNOHANG)` and blocking wait wake-up behavior.
+const USER_SPAWN_WAIT_CHILD_DELAY_NANOS: u64 = 500_000_000;
 const ORPHAN_CHILD_DELAY_NANOS: u64 = 8_000_000;
+// The spawn/wait parent must remain runnable long enough for a 1 kHz timer
+// tick to enter the newly spawned child before the parent blocks in waitpid.
+const USER_SPAWN_PARENT_SPIN_ITERATIONS: usize = 500_000;
 // Nonzero by design so waitpid status encoding cannot pass by treating all
 // child exits as success.
 const USER_SPAWN_CHILD_EXIT_CODE: usize = 7;
@@ -114,6 +120,8 @@ fn delay_when_user_spawned_child(
 
     let nanoseconds = if is_orphaned_child {
         ORPHAN_CHILD_DELAY_NANOS
+    } else if spawned_child_requested(argument_count, argument_values) {
+        USER_SPAWN_WAIT_CHILD_DELAY_NANOS
     } else {
         USER_SPAWN_CHILD_DELAY_NANOS
     };
@@ -190,6 +198,7 @@ fn verify_spawn_child_waitpid() {
     if wait_status != -1 {
         syscall::exit(17);
     }
+    spin_after_spawning_child_for_timer_preemption();
 
     let wait_result = syscall::waitpid(syscall::WAIT_ANY, &mut wait_status as *mut i32, 0);
     if wait_result != child_task_id {
@@ -199,6 +208,14 @@ fn verify_spawn_child_waitpid() {
         syscall::exit(19);
     }
     let _ = syscall::write(STDOUT, SPAWN_WAIT_MESSAGE);
+}
+
+fn spin_after_spawning_child_for_timer_preemption() {
+    let mut remaining = USER_SPAWN_PARENT_SPIN_ITERATIONS;
+    while remaining > 0 {
+        core::hint::spin_loop();
+        remaining -= 1;
+    }
 }
 
 fn exit_after_spawning_orphan_child() -> ! {

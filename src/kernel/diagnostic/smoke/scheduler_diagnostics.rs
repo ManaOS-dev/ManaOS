@@ -149,6 +149,10 @@ fn verify_scheduler_user_return_diagnostics(
         diagnostics.timer_user_entries() > 0,
         "user smoke must enter at least one user task from timer scheduling"
     );
+    assert!(
+        diagnostics.timer_user_entries_from_preempted_user() > 0,
+        "user smoke must enter a spawned user task from a preempted user task"
+    );
     assert_eq!(
         diagnostics.user_entries(),
         diagnostics
@@ -393,6 +397,10 @@ fn log_scheduler_switch_diagnostics(diagnostics: &crate::kernel::task::Scheduler
             LogField::new(
                 "timer_user_entries",
                 format_args!("{}", diagnostics.timer_user_entries()),
+            ),
+            LogField::new(
+                "timer_user_entries_from_preempted_user",
+                format_args!("{}", diagnostics.timer_user_entries_from_preempted_user()),
             ),
             LogField::new(
                 "user_resumes",

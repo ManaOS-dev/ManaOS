@@ -48,7 +48,8 @@ read wait/wake smoke、QEMU 上で smoke-owned experimental user shell の entry
 user process scheduling は、
 5つの active parent user process と2つの user-spawned child を
 扱う storage smoke まで完了済みです。さらに、per-task の last preemption / last resume diagnostics と、preempted
-process の exit 後も別の active process が継続する storage smoke も完了済みです。正本は英語版の
+process の exit 後も別の active process が継続する storage smoke、preempted user task から
+spawned child を timer scheduling で初回 entry する coverage も完了済みです。正本は英語版の
 `TODO_COMPLETED.md` と [`PROCESS_LIFECYCLE.md`](../PROCESS_LIFECYCLE.md) です。
 
 ### Immediate Priorities

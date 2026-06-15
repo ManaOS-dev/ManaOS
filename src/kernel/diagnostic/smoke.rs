@@ -749,6 +749,7 @@ pub fn verify_scheduler_console_command() -> bool {
             "lifecycle=reaped",
             "one_shot_user_entries=",
             "timer_user_entries=",
+            "timer_user_entries_from_preempted_user=",
             "user_vm_layout:",
             "task_image:",
             "origin=/disk/bin/smoke_demo",

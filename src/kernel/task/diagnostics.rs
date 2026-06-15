@@ -717,6 +717,7 @@ pub struct SchedulerDiagnostics {
     pub(super) user_entries: u64,
     pub(super) one_shot_user_entries: u64,
     pub(super) timer_user_entries: u64,
+    pub(super) timer_user_entries_from_preempted_user: u64,
     pub(super) user_resumes: u64,
     pub(super) user_sleep_blocks: u64,
     pub(super) user_sleep_wakes: u64,
@@ -798,6 +799,11 @@ impl SchedulerDiagnostics {
     /// Return the number of first user entries started by timer scheduling.
     pub const fn timer_user_entries(self) -> u64 {
         self.timer_user_entries
+    }
+
+    /// Return the number of timer-started user entries from a preempted user task.
+    pub const fn timer_user_entries_from_preempted_user(self) -> u64 {
+        self.timer_user_entries_from_preempted_user
     }
 
     /// Return the number of resumes into an already-started user task.

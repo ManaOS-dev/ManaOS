@@ -72,8 +72,10 @@ smoke, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. extend timer preemption across general spawned user process lifecycles;
-2. update scheduler diagnostics whenever lifecycle state gains a new transition.
+1. save the full runtime user trap frame for every preempted user process;
+2. restore the full runtime user trap frame for resumed user processes;
+3. keep scheduler diagnostics synchronized whenever lifecycle state gains a new
+   transition.
 
 Manual QEMU validation for observing the current smoke-owned experimental user
 shell entry and exit path is documented in

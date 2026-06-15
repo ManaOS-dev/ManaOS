@@ -116,6 +116,7 @@ active roadmap can list only unfinished work.
 - [x] Add diagnostics for last preemption reason per task.
 - [x] Add diagnostics for last resume path per task.
 - [x] Add a storage smoke case where one preempted process exits while another continues.
+- [x] Extend timer preemption across general spawned user process lifecycles.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

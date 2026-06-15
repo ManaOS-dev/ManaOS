@@ -74,6 +74,7 @@ impl Scheduler {
             user_entries: self.user_entry_count,
             one_shot_user_entries: self.one_shot_user_entry_count,
             timer_user_entries: self.timer_user_entry_count,
+            timer_user_entries_from_preempted_user: self.timer_user_entry_from_preempted_user_count,
             user_resumes: self.user_resume_count,
             user_sleep_blocks: self.user_sleep_block_count,
             user_sleep_wakes: self.user_sleep_wake_count,

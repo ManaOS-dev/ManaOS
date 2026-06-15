@@ -790,7 +790,7 @@ impl Scheduler {
 
     pub(in crate::kernel::task) fn can_schedule_task(
         &self,
-        current_index: usize,
+        _current_index: usize,
         candidate_index: usize,
     ) -> bool {
         if !self.tasks[candidate_index].state.is_ready() {
@@ -806,9 +806,7 @@ impl Scheduler {
                     return false;
                 }
 
-                let current_is_user = matches!(self.tasks[current_index].kind, TaskKind::User(_));
-                let candidate_needs_first_entry = self.tasks[candidate_index].context.is_empty();
-                !(current_is_user && candidate_needs_first_entry)
+                true
             }
         }
     }
@@ -869,7 +867,8 @@ impl Scheduler {
 
         let current_task_id = self.tasks[current_index].get_id();
         let next_task_id = self.tasks[next_index].get_id();
-        if matches!(self.tasks[current_index].kind, TaskKind::User(_)) {
+        let current_task_is_user = matches!(self.tasks[current_index].kind, TaskKind::User(_));
+        if current_task_is_user {
             self.timer_preemption_count = self.timer_preemption_count.saturating_add(1);
             if let TaskKind::User(user_runtime) = &mut self.tasks[current_index].kind {
                 user_runtime.last_preemption_reason = UserPreemptionReasonDiagnostics::Timer;
@@ -893,6 +892,17 @@ impl Scheduler {
             if next_context_is_empty {
                 self.user_entry_count = self.user_entry_count.saturating_add(1);
                 self.timer_user_entry_count = self.timer_user_entry_count.saturating_add(1);
+                if current_task_is_user {
+                    self.timer_user_entry_from_preempted_user_count = self
+                        .timer_user_entry_from_preempted_user_count
+                        .saturating_add(1);
+                    crate::log_info!(
+                        "task",
+                        "User task entered from preempted user timer context: current={} next={} first_entry=true",
+                        current_task_id,
+                        next_task_id
+                    );
+                }
                 let TaskKind::User(user_runtime) = &mut self.tasks[next_index].kind else {
                     unreachable!("user task kind checked before timer entry");
                 };

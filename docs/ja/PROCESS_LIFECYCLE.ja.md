@@ -127,6 +127,8 @@ ManaOS にはまだ user interrupt policy がないため、この syscall は `
 no-std userland wrapper 経由で no-child と明示的な non-child selector path、explicit `argv` / `envp`
 付き spawned child に対する pending `waitpid(WNOHANG) == 0`、その後の blocking `waitpid(WAIT_ANY)` reap と
 nonzero status encoding を検証します。
+spawn/wait smoke parent は child 作成後もしばらく runnable のまま残り、scheduler diagnostics は
+preempted user task から spawned child を timer scheduling で初回 entry できることも assert します。
 
 scheduler-backed contract:
 

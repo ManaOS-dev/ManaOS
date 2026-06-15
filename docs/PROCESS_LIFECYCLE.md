@@ -152,6 +152,9 @@ user interrupt policy yet. Storage smoke covers the no-child and explicit
 non-child selector paths through the no-std userland wrapper, a spawned child
 with explicit `argv` / `envp` whose pending `waitpid(WNOHANG)` returns `0`, and
 the later blocking `waitpid(WAIT_ANY)` reap with nonzero status encoding.
+The spawn/wait smoke parent now stays runnable after creating the child, and
+scheduler diagnostics assert that timer scheduling can first-enter the spawned
+child directly from a preempted user task.
 
 The scheduler-backed contract is:
 

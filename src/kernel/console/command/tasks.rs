@@ -40,7 +40,7 @@ pub(super) fn run(
         states.finished()
     ));
     output.push(format!(
-        "preemption: state={} enabled={} switches={} timer_user_preemptions={} user_entries={} one_shot_user_entries={} timer_user_entries={} user_resumes={} user_sleep_blocks={} user_sleep_wakes={} user_waitpid_blocks={} user_waitpid_wakes={} user_read_blocks={} user_read_wakes={} finished={} pending_user_exits={} return_window_closes={}",
+        "preemption: state={} enabled={} switches={} timer_user_preemptions={} user_entries={} one_shot_user_entries={} timer_user_entries={} timer_user_entries_from_preempted_user={} user_resumes={} user_sleep_blocks={} user_sleep_wakes={} user_waitpid_blocks={} user_waitpid_wakes={} user_read_blocks={} user_read_wakes={} finished={} pending_user_exits={} return_window_closes={}",
         diagnostics.preemption_state().as_str(),
         diagnostics.preemption_enabled(),
         diagnostics.context_switches(),
@@ -48,6 +48,7 @@ pub(super) fn run(
         diagnostics.user_entries(),
         diagnostics.one_shot_user_entries(),
         diagnostics.timer_user_entries(),
+        diagnostics.timer_user_entries_from_preempted_user(),
         diagnostics.user_resumes(),
         diagnostics.user_sleep_blocks(),
         diagnostics.user_sleep_wakes(),
