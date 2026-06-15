@@ -95,6 +95,7 @@ active roadmap can list only unfinished work.
 - [x] Implement absolute path execution for user programs.
 - [x] Implement relative path execution using the current working directory.
 - [x] Implement `cd` through a user-visible syscall or runtime helper.
+- [x] Implement `exit` with a configurable status code.
 - [x] Implement `pwd` using the userland runtime path API.
 - [x] Implement `help` with commands compiled into the shell.
 - [x] Implement single-command execution without pipelines first.

@@ -8,14 +8,18 @@ const STDOUT: usize = 1;
 const COMMAND_BUFFER_BYTES: usize = 128;
 const MAX_COMMAND_TOKENS: usize = 8;
 const MAX_COMMAND_ARGUMENT_POINTERS: usize = MAX_COMMAND_TOKENS + 1;
+// Shell exit codes are reported through the low 8 bits in wait status.
+const MAX_EXIT_STATUS: usize = 255;
 const CD_COMMAND: &[u8] = b"cd";
+const EXIT_COMMAND: &[u8] = b"exit";
 const HELP_COMMAND: &[u8] = b"help";
 const PWD_COMMAND: &[u8] = b"pwd";
 const READY_MESSAGE: &[u8] = b"user shell ready\n";
 const TOKENIZER_OK_MESSAGE: &[u8] = b"user shell tokenizer ok\n";
-const HELP_OUTPUT: &[u8] = b"builtins: cd help pwd\n";
+const HELP_OUTPUT: &[u8] = b"builtins: cd exit help pwd\n";
 const CD_ROOT_OK_MESSAGE: &[u8] = b"user shell cd root ok\n";
 const CD_DISK_OK_MESSAGE: &[u8] = b"user shell cd disk ok\n";
+const EXIT_OK_MESSAGE: &[u8] = b"user shell exit status ok\n";
 const HELP_OK_MESSAGE: &[u8] = b"user shell help ok\n";
 const PWD_OK_MESSAGE: &[u8] = b"user shell pwd ok\n";
 const FILE_DEMO_LAUNCH_MESSAGE: &[u8] = b"user shell launching file_demo\n";
@@ -120,6 +124,12 @@ enum CommandExecutionError {
     ChildFailed,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum CommandExecutionOutcome {
+    Continue,
+    Exit(usize),
+}
+
 #[no_mangle]
 extern "C" fn _start() -> ! {
     let _ = syscall::write(STDOUT, READY_MESSAGE);
@@ -164,8 +174,10 @@ extern "C" fn _start() -> ! {
             syscall::exit(2);
         }
     }
-    if let Err(error) = execute_command(command_input) {
-        if error != CommandExecutionError::EmptyCommand {
+    match execute_command(command_input) {
+        Ok(CommandExecutionOutcome::Continue) | Err(CommandExecutionError::EmptyCommand) => {}
+        Ok(CommandExecutionOutcome::Exit(exit_status)) => syscall::exit(exit_status),
+        Err(error) => {
             write_execution_error(error);
             syscall::exit(3);
         }
@@ -244,6 +256,7 @@ fn verify_command_execution_smoke() -> Result<(), CommandExecutionError> {
     verify_help_builtin_smoke()?;
     verify_pwd_builtin_smoke()?;
     verify_cd_builtin_smoke()?;
+    verify_exit_builtin_smoke()?;
     let _ = syscall::write(STDOUT, FILE_DEMO_LAUNCH_MESSAGE);
     execute_command(b"/disk/bin/file_demo --shell-command-smoke")?;
     let _ = syscall::write(STDOUT, FILE_DEMO_EXIT_MESSAGE);
@@ -273,6 +286,17 @@ fn verify_cd_builtin_smoke() -> Result<(), CommandExecutionError> {
     execute_command(b"cd /disk")?;
     execute_command(b"pwd")?;
     let _ = syscall::write(STDOUT, CD_DISK_OK_MESSAGE);
+    Ok(())
+}
+
+fn verify_exit_builtin_smoke() -> Result<(), CommandExecutionError> {
+    if execute_command(b"exit")? != CommandExecutionOutcome::Exit(0) {
+        return Err(CommandExecutionError::InvalidArgument);
+    }
+    if execute_command(b"exit 7")? != CommandExecutionOutcome::Exit(7) {
+        return Err(CommandExecutionError::InvalidArgument);
+    }
+    let _ = syscall::write(STDOUT, EXIT_OK_MESSAGE);
     Ok(())
 }
 
@@ -309,13 +333,13 @@ fn verify_expected_command_error(
     Ok(())
 }
 
-fn execute_command(command: &[u8]) -> Result<(), CommandExecutionError> {
+fn execute_command(command: &[u8]) -> Result<CommandExecutionOutcome, CommandExecutionError> {
     let tokens = tokenize_command(command).map_err(|_| CommandExecutionError::TooManyTokens)?;
     if tokens.len() == 0 {
         return Err(CommandExecutionError::EmptyCommand);
     }
-    if execute_builtin_command(&tokens, command)? {
-        return Ok(());
+    if let Some(outcome) = execute_builtin_command(&tokens, command)? {
+        return Ok(outcome);
     }
     let mut argument_storage = [0_u8; COMMAND_BUFFER_BYTES];
     let mut argument_pointers = [core::ptr::null(); MAX_COMMAND_ARGUMENT_POINTERS];
@@ -345,13 +369,13 @@ fn execute_command(command: &[u8]) -> Result<(), CommandExecutionError> {
     if wait_status != 0 {
         return Err(CommandExecutionError::ChildFailed);
     }
-    Ok(())
+    Ok(CommandExecutionOutcome::Continue)
 }
 
 fn execute_builtin_command(
     tokens: &CommandTokens,
     command: &[u8],
-) -> Result<bool, CommandExecutionError> {
+) -> Result<Option<CommandExecutionOutcome>, CommandExecutionError> {
     let command_token = tokens.get(0).ok_or(CommandExecutionError::EmptyCommand)?;
     let command_name = command_token.as_bytes(command);
     if command_name == CD_COMMAND {
@@ -362,23 +386,28 @@ fn execute_builtin_command(
             .get(1)
             .ok_or(CommandExecutionError::InvalidArgument)?;
         change_current_directory(directory_token.as_bytes(command))?;
-        return Ok(true);
+        return Ok(Some(CommandExecutionOutcome::Continue));
+    }
+    if command_name == EXIT_COMMAND {
+        return Ok(Some(CommandExecutionOutcome::Exit(parse_exit_status(
+            tokens, command,
+        )?)));
     }
     if command_name == HELP_COMMAND {
         if tokens.len() != 1 {
             return Err(CommandExecutionError::TooManyTokens);
         }
         write_help();
-        return Ok(true);
+        return Ok(Some(CommandExecutionOutcome::Continue));
     }
     if command_name != PWD_COMMAND {
-        return Ok(false);
+        return Ok(None);
     }
     if tokens.len() != 1 {
         return Err(CommandExecutionError::TooManyTokens);
     }
     write_current_working_directory()?;
-    Ok(true)
+    Ok(Some(CommandExecutionOutcome::Continue))
 }
 
 fn change_current_directory(directory_path: &[u8]) -> Result<(), CommandExecutionError> {
@@ -397,6 +426,42 @@ fn change_current_directory(directory_path: &[u8]) -> Result<(), CommandExecutio
         return Err(CommandExecutionError::ChangeDirectoryFailed);
     }
     Ok(())
+}
+
+fn parse_exit_status(
+    tokens: &CommandTokens,
+    command: &[u8],
+) -> Result<usize, CommandExecutionError> {
+    if tokens.len() == 1 {
+        return Ok(0);
+    }
+    if tokens.len() != 2 {
+        return Err(CommandExecutionError::InvalidArgument);
+    }
+    let status_token = tokens
+        .get(1)
+        .ok_or(CommandExecutionError::InvalidArgument)?;
+    parse_decimal_exit_status(status_token.as_bytes(command))
+}
+
+fn parse_decimal_exit_status(status_bytes: &[u8]) -> Result<usize, CommandExecutionError> {
+    if status_bytes.is_empty() {
+        return Err(CommandExecutionError::InvalidArgument);
+    }
+    let mut status = 0_usize;
+    for byte in status_bytes {
+        if !byte.is_ascii_digit() {
+            return Err(CommandExecutionError::InvalidArgument);
+        }
+        status = status
+            .checked_mul(10)
+            .and_then(|value| value.checked_add(usize::from(*byte - b'0')))
+            .ok_or(CommandExecutionError::InvalidArgument)?;
+        if status > MAX_EXIT_STATUS {
+            return Err(CommandExecutionError::InvalidArgument);
+        }
+    }
+    Ok(status)
 }
 
 fn write_help() {
