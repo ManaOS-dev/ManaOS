@@ -16,18 +16,16 @@ reviewable unit before implementing it.
 ### `waitpid`, Exit Status, And Reaping
 
 - [ ] Support blocking wait for any child.
-- [ ] Support nonblocking wait with a minimal `WNOHANG` equivalent.
 - [ ] Reparent orphaned children to a documented initial process policy.
 - [ ] Reclaim finished child address spaces after the exit record is safe.
 - [ ] Reclaim finished child kernel stacks after the exit record is safe.
-- [ ] Add a userland smoke program that spawns a child and waits for exit.
 - [ ] Add a userland smoke program that verifies a nonzero child exit status.
 
 ### Spawn Model And Fork Decision
 
 - [ ] Move user file descriptor tables from global filesystem state to process-owned metadata before general spawn.
 - [ ] Define how inherited file descriptors are selected for spawned processes.
-- [ ] Add a userland runtime helper for launching a child program.
+- [ ] Extend user-visible spawn beyond path-only launch with argv/envp vectors.
 - [ ] Add a smoke case for parent exit while child remains alive.
 
 ### Minimal User Shell

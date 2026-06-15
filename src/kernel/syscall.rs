@@ -37,6 +37,7 @@
 //! - [`SYS_GETPPID`] - Linux-compatible get-parent-process-identifier syscall number
 //! - [`SYS_OPENAT`] - Linux-compatible open-at syscall number
 //! - [`SYS_CHDIR`] - Linux-compatible change-directory syscall number
+//! - [`SYS_SPAWN`] - ManaOS-specific path-only spawn syscall number
 
 use alloc::{string::String, vec::Vec};
 
@@ -55,7 +56,7 @@ mod memory;
 pub use contract::{
     SYS_BRK, SYS_CHDIR, SYS_CLOSE, SYS_EXECVE, SYS_EXIT, SYS_EXIT_GROUP, SYS_FSTAT, SYS_GETCWD,
     SYS_GETDENTS64, SYS_GETPID, SYS_GETPPID, SYS_LSEEK, SYS_MMAP, SYS_MUNMAP, SYS_NANOSLEEP,
-    SYS_OPEN, SYS_OPENAT, SYS_READ, SYS_WAITPID, SYS_WRITE,
+    SYS_OPEN, SYS_OPENAT, SYS_READ, SYS_SPAWN, SYS_WAITPID, SYS_WRITE,
 };
 
 const ERROR_NOT_FOUND: u64 = linux_error(2);
@@ -83,6 +84,7 @@ const MAX_EXECVE_ARGUMENT_COUNT: usize = 8;
 const MAX_EXECVE_ENVIRONMENT_COUNT: usize = 8;
 const MAX_EXECVE_COPIED_STRING_BYTES: usize = 4096;
 const EXECVE_USER_STACK_PAGES: u64 = 4;
+const SPAWN_USER_STACK_PAGES: u64 = 4;
 const PAGE_SIZE: u64 = 4096;
 const NANOSECONDS_PER_SECOND: u64 = 1_000_000_000;
 const NANOSECONDS_PER_TIMER_TICK: u64 =
@@ -229,6 +231,7 @@ fn dispatch_syscall(syscall_number: u64, arguments: [u64; 6]) -> u64 {
         SYS_GETPID => sys_getpid(),
         SYS_GETPPID => sys_getppid(),
         SYS_CHDIR => sys_chdir(first_argument),
+        SYS_SPAWN => sys_spawn(first_argument),
         _ => ERROR_NOT_IMPLEMENTED,
     }
 }
@@ -509,6 +512,58 @@ fn sys_chdir(user_path_pointer: u64) -> u64 {
         }
         Ok(_) => ERROR_NOT_DIRECTORY,
         Err(error) => filesystem_error_to_linux(error),
+    }
+}
+
+fn sys_spawn(user_path_pointer: u64) -> u64 {
+    let Some(path) = copy_path_argument(user_path_pointer) else {
+        return ERROR_BAD_ADDRESS;
+    };
+    let Some(path) = resolve_current_process_path(&path) else {
+        return ERROR_NOT_IMPLEMENTED;
+    };
+    let arguments = [path.as_str()];
+    let environment = [];
+    let entry_vectors =
+        crate::kernel::process::UserProgramEntryVectors::new(&arguments, &environment);
+    let request = crate::kernel::process::UserProgramSpawnRequest::new(
+        &path,
+        entry_vectors,
+        SPAWN_USER_STACK_PAGES,
+    );
+
+    let Some(result) = crate::kernel::memory::runtime_allocator::with_user_runtime_frame_allocator(
+        |frame_allocator| crate::kernel::process::spawn_user_program(frame_allocator, request),
+    ) else {
+        return ERROR_NOT_IMPLEMENTED;
+    };
+    let child_task_id = match result {
+        Ok(child_task_id) => child_task_id,
+        Err(error) => return spawn_error_to_linux(error),
+    };
+    if !crate::kernel::task::activate_user_task(child_task_id) {
+        return ERROR_NOT_IMPLEMENTED;
+    }
+
+    crate::log_info!(
+        "syscall",
+        "spawn -> child={} path={} stack_pages={}",
+        child_task_id,
+        path,
+        SPAWN_USER_STACK_PAGES
+    );
+    child_task_id
+}
+
+fn spawn_error_to_linux(error: crate::kernel::process::UserProgramSpawnError) -> u64 {
+    match error {
+        crate::kernel::process::UserProgramSpawnError::NotFound => ERROR_NOT_FOUND,
+        crate::kernel::process::UserProgramSpawnError::InvalidPath
+        | crate::kernel::process::UserProgramSpawnError::ReadFailed
+        | crate::kernel::process::UserProgramSpawnError::InvalidImage => ERROR_INVALID_ARGUMENT,
+        crate::kernel::process::UserProgramSpawnError::OutOfMemory => ERROR_OUT_OF_MEMORY,
+        crate::kernel::process::UserProgramSpawnError::DirectoryTarget => ERROR_IS_DIRECTORY,
+        crate::kernel::process::UserProgramSpawnError::UnsupportedTarget => ERROR_NOT_SUPPORTED,
     }
 }
 

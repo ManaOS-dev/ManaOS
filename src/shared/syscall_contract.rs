@@ -32,6 +32,8 @@ pub const SYS_WAITPID: u64 = 61;
 pub const SYS_GETCWD: u64 = 79;
 /// Linux-compatible change-directory syscall number.
 pub const SYS_CHDIR: u64 = 80;
+/// ManaOS-specific path-only spawn syscall number.
+pub const SYS_SPAWN: u64 = 400;
 /// Linux-compatible get-parent-process-identifier syscall number.
 pub const SYS_GETPPID: u64 = 110;
 /// Linux-compatible get-directory-entries syscall number.

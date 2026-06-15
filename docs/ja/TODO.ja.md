@@ -51,22 +51,24 @@ successful `execve` across current working directory preservation は
 contract、shared number/constants、no-std wrapper、selector validation、no-child `ECHILD`
 path、parent-child lifecycle state documentation、scheduler-owned child exit record model、
 zombie/reaped diagnostics、`tasks` command の per-task lifecycle output、already-exited child の
-scheduler-backed `waitpid` reap、filesystem path から user task を作る kernel-internal spawn helper
-と spawned process origin diagnostics、2つの concurrently spawned user program smoke、spawn 前の
-argv/envp entry vector 表現、spawn path lookup failure と memory allocation failure の errno
-mapping まで完了済みです。
+scheduler-backed `waitpid` reap、nonblocking `WNOHANG` smoke、filesystem path から user task を
+作る kernel-internal spawn helper と spawned process origin diagnostics、2つの concurrently spawned
+user program smoke、spawn 前の argv/envp entry vector 表現、spawn path lookup failure と memory
+allocation failure の errno mapping、path-only user-visible spawn wrapper と userland child wait
+smoke まで完了済みです。
 spawned process の current working directory inheritance も完了済みです。
 最初の stable process model は `spawn + execve` として決定済みで、minimal `fork` は Phase 2 の
 address-space copy plan ができるまで defer します。
 最小 no-std `user_shell` binary は userland build と storage smoke disk image に入っていますが、
 initial interactive process 化と command 実装は未完了です。
-user process scheduling は、3つの active user process を同時に扱う storage smoke まで完了済みです。
+user process scheduling は、4つの active parent user process と user-spawned child を扱う storage smoke
+まで完了済みです。
 per-task の last preemption / last resume diagnostics と、preempted process の exit 後も別の
 active process が継続する storage smoke も完了済みです。
 `execve` は current working directory preservation と close-on-exec behavior まで完了済みなので、
 no-std userland から current working directory を読む `getcwd` wrapper も入っています。
-残りは replacement-state diagnostics です。次は user-visible `waitpid` behavior と
-reaping state を小さい branch に分けて進めます。
+残りは replacement-state diagnostics、blocking `waitpid`、argv/envp 付き spawn、reaping state です。
+次も小さい branch に分けて進めます。
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

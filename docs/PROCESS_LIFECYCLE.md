@@ -34,8 +34,9 @@ metadata remain owned by their existing modules.
 `kernel::process::UserProgramEntryVectors` is the named pre-stack
 representation for borrowed `argv` and `envp` slices used by spawned programs.
 The spawn helper now classifies executable path lookup failures and image-buffer
-allocation failures with stable errno-facing results before a future
-user-visible spawn syscall is added.
+allocation failures with stable errno-facing results before any task record is
+created. A minimal user-visible `spawn` syscall and no-std wrapper expose a
+path-only child launch surface for smoke and shell bring-up.
 Scheduler diagnostics retain the spawned origin path separately from the current
 image path, so a later successful `execve` can change `path=` while `origin=`
 still identifies the program that created the task record.
@@ -45,9 +46,11 @@ directories are now task metadata, relative paths resolve through the current
 task's directory, and successful `execve` preserves that directory across image
 replacement. The `chdir` and `getcwd` syscall wrappers expose that task-owned
 directory to no-std userland code. Scheduler-spawned child tasks copy the
-parent's current working directory at task creation. User-visible child
-creation and the scheduler-backed `waitpid` wait/reap state machine are still
-future work. Descriptor close-on-exec metadata and successful-`execve` close
+parent's current working directory at task creation. The current user-visible
+`spawn` surface launches one executable path using that directory and activates
+the child immediately. Blocking `waitpid`, argv/envp-bearing spawn, and full
+descriptor inheritance policy are still future work. Descriptor close-on-exec
+metadata and successful-`execve` close
 behavior exist for the current global descriptor table. The `waitpid` syscall
 number, option constants, no-std userland wrapper, selector validation,
 no-child `ECHILD` path, and scheduler-owned child exit records keyed by parent
@@ -113,9 +116,9 @@ normal wait status word when the status pointer is non-null. `WNOHANG` returns
 Blocking wait still returns `-ENOSYS` until waiting parents can sleep and wake
 through the scheduler. The syscall does not return `-EINTR` because ManaOS has
 no documented user interrupt policy yet. Storage smoke covers the no-child and
-explicit non-child selector paths through the no-std userland wrapper, plus the
-scheduler-owned selected-child reap path, so later behavior changes are
-explicit.
+explicit non-child selector paths through the no-std userland wrapper, a
+path-only `spawn` child whose pending `waitpid(WNOHANG)` returns `0`, and the
+later one-shot child reap with zero status.
 
 The remaining scheduler-backed contract is:
 
@@ -341,8 +344,12 @@ Current runtime diagnostics cover the first successful replacement path:
 - Storage smoke asserts stable spawn errno mappings for missing, relative,
   directory, device, non-ELF, and image-buffer allocation failures before
   successful spawn task creation.
-- Storage smoke asserts three distinct user tasks spawned from the same
-  filesystem path before all are activated together.
+- Storage smoke asserts three distinct `smoke_demo` parent tasks plus one
+  marker-driven `file_demo` spawn/wait parent before all are activated together.
+- Storage smoke verifies the user-visible path-only `spawn` wrapper by spawning
+  a child from no-std userland, observing `waitpid(WNOHANG) == 0` while that
+  child is still running, and later collecting the child exit status exactly
+  once.
 - Storage smoke asserts that `tasks` output retains the original spawn path as
   `origin=` after the same task successfully replaces its current image through
   `execve`.

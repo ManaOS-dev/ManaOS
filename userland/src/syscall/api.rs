@@ -36,6 +36,8 @@ pub const SYS_WAITPID: usize = contract::SYS_WAITPID as usize;
 pub const SYS_GETCWD: usize = contract::SYS_GETCWD as usize;
 /// Linux-compatible change-directory syscall number.
 pub const SYS_CHDIR: usize = contract::SYS_CHDIR as usize;
+/// ManaOS-specific path-only spawn syscall number.
+pub const SYS_SPAWN: usize = contract::SYS_SPAWN as usize;
 /// Linux-compatible get-parent-process-identifier syscall number.
 pub const SYS_GETPPID: usize = contract::SYS_GETPPID as usize;
 /// Linux-compatible get-directory-entries syscall number.
@@ -275,6 +277,12 @@ pub fn getpid() -> isize {
 #[inline(always)]
 pub fn getppid() -> isize {
     syscall1(SYS_GETPPID, 0)
+}
+
+/// Spawn a child user program from a null-terminated path.
+#[inline(always)]
+pub fn spawn(path: &[u8]) -> isize {
+    syscall1(SYS_SPAWN, path.as_ptr() as usize)
 }
 
 /// Wait for a child process and optionally store its wait status.

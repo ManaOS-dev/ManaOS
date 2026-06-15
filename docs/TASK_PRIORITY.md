@@ -55,16 +55,15 @@ timer calibration, periodic Local APIC scheduler ticks, and spurious/unexpected
 external vector diagnostics are proven by storage smoke.
 
 The active selection is now full user process lifecycle work. The kernel-side
-`execve` contract, cleanup invariants, successful self-replacement path, and
-current-directory preservation are documented in
+`execve` contract, cleanup invariants, successful self-replacement path,
+current-directory preservation, path-only `spawn`, and nonblocking
+`waitpid(WNOHANG)` child collection smoke are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
 1. close the remaining `execve` replacement-state diagnostics gap;
-2. wire user-visible `waitpid` behavior to the scheduler-owned child exit
-   records;
-3. extend smoke coverage for multiple spawned user processes before introducing
-   a broader user shell;
+2. add blocking `waitpid` behavior once waiting parents can sleep and wake;
+3. extend user-visible spawn beyond path-only launch with argv/envp vectors;
 4. update scheduler diagnostics whenever lifecycle state gains a new transition.
 
 Prefer docs, diagnostics, and narrow smoke assertions before broad syscall

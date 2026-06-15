@@ -24,15 +24,16 @@ number/constants、no-std userland wrapper、
 selector validation、no-child `ECHILD` path、non-child negative smoke、parent-child lifecycle state
 documentation、scheduler-owned child exit record model、double-reap prevention、wait lifecycle serial
 assertions、zombie/reaped diagnostics、`tasks` command の per-task lifecycle output、
-already-exited child の scheduler-backed `waitpid` reap、first stable model を `spawn + execve` とする
-decision、copy-on-write `fork` defer policy、kernel-internal spawn helper、
+already-exited child の scheduler-backed `waitpid` reap、nonblocking `WNOHANG` smoke、first stable
+model を `spawn + execve` とする decision、copy-on-write `fork` defer policy、kernel-internal spawn helper、
 spawned process origin diagnostics、2つの concurrently spawned user program smoke、
 spawn 前の argv/envp entry vector 表現、spawn path lookup failure と memory allocation failure の
 errno mapping、
 spawned process の current working directory inheritance、task-owned current directory を読む
-no-std `getcwd` wrapper、最小 no-std `user_shell` binary の build と storage smoke disk image 登録が
-完了済みです。user process scheduling は、3つの active user process を同時に扱う storage smoke まで
-完了済みです。さらに、per-task の last preemption / last resume diagnostics と、preempted
+no-std `getcwd` wrapper、path-only user-visible spawn wrapper と userland child wait smoke、
+最小 no-std `user_shell` binary の build と storage smoke disk image 登録が
+完了済みです。user process scheduling は、4つの active parent user process と user-spawned child を
+扱う storage smoke まで完了済みです。さらに、per-task の last preemption / last resume diagnostics と、preempted
 process の exit 後も別の active process が継続する storage smoke も完了済みです。正本は英語版の
 `TODO_COMPLETED.md` と [`PROCESS_LIFECYCLE.md`](../PROCESS_LIFECYCLE.md) です。
 

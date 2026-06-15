@@ -56,6 +56,8 @@ active roadmap can list only unfinished work.
 - [x] Expose zombie and reaped counts in scheduler diagnostics.
 - [x] Add `tasks` output for waiting, zombie, and reaped states.
 - [x] Reap an already-exited child through scheduler-backed `waitpid`.
+- [x] Support nonblocking wait with a minimal `WNOHANG` equivalent.
+- [x] Add a userland smoke program that spawns a child and waits for exit.
 
 ### Spawn Model And Fork Decision
 
@@ -71,6 +73,7 @@ active roadmap can list only unfinished work.
 - [x] Add docs that compare the selected model with POSIX `fork` expectations.
 - [x] Add TODO links from deferred `fork` work to the address-space copy plan.
 - [x] Add errno mappings for spawn memory allocation failures.
+- [x] Add a userland runtime helper for launching a child program.
 
 ### Minimal User Shell
 

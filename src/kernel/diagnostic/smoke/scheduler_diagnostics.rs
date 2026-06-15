@@ -1,5 +1,6 @@
 //! Scheduler and frame allocator smoke diagnostics.
 
+use super::{USER_SMOKE_CHILD_TASK_COUNT, USER_SMOKE_PARENT_TASK_COUNT};
 use crate::kernel::diagnostic::log::{LogField, LogLevel};
 
 /// Verify scheduler accounting after the userland smoke demo.
@@ -69,10 +70,10 @@ fn verify_scheduler_reclaim_diagnostics(
     diagnostics: &crate::kernel::task::SchedulerDiagnostics,
     expected_user_tasks: u64,
 ) {
-    // The final file_demo image reclaims two ELF pages and four user stack
+    // The final file_demo image reclaims four ELF pages and four user stack
     // pages. The old heap and private mappings are reclaimed during execve
     // publication, before the task exits.
-    const SMOKE_RECLAIMED_USER_PAGES_PER_TASK: u64 = 6;
+    const SMOKE_RECLAIMED_USER_PAGES_PER_TASK: u64 = 8;
     // The post-exec image touches only the program and stack windows, leaving
     // seven page-table frames to reclaim with the PML4.
     const SMOKE_RECLAIMED_PAGE_TABLE_PAGES_PER_TASK: u64 = 7;
@@ -124,14 +125,15 @@ fn verify_scheduler_user_return_diagnostics(
     diagnostics: &crate::kernel::task::SchedulerDiagnostics,
     expected_user_tasks: u64,
 ) {
-    let expected_user_stops = expected_user_tasks * 2;
     assert!(
         diagnostics.timer_preemptions() > 0,
         "user smoke must record timer preemption accounting"
     );
     assert!(
-        diagnostics.one_shot_user_entries() >= expected_user_tasks,
-        "user smoke must enter user tasks through the lifecycle path"
+        diagnostics.one_shot_user_entries()
+            >= u64::try_from(USER_SMOKE_PARENT_TASK_COUNT)
+                .expect("smoke parent task count must fit in u64"),
+        "parent smoke tasks must enter through the lifecycle path"
     );
     assert!(
         diagnostics.timer_user_entries() > 0,
@@ -162,30 +164,30 @@ fn verify_scheduler_user_return_diagnostics(
         crate::kernel::task::PreemptionStateDiagnostics::Enabled,
         "preemption state must be enabled after active user lifecycle drain"
     );
-    assert_eq!(
-        diagnostics.user_sleep_blocks(),
-        expected_user_tasks,
-        "every user smoke task must block once in nanosleep"
+    assert!(
+        diagnostics.user_sleep_blocks()
+            >= u64::try_from(USER_SMOKE_PARENT_TASK_COUNT)
+                .expect("smoke parent task count must fit in u64"),
+        "parent smoke tasks and spawned child waits must block in nanosleep"
     );
     assert_eq!(
         diagnostics.user_sleep_wakes(),
-        expected_user_tasks,
+        diagnostics.user_sleep_blocks(),
         "every sleeping user smoke task must wake once"
     );
-    assert_eq!(
-        diagnostics.user_return_preemption_window_closes(),
-        expected_user_stops,
-        "every user smoke sleep and exit must close the preemption return window"
+    assert!(
+        diagnostics.user_return_preemption_window_closes() >= expected_user_tasks,
+        "every user task exit and blocking wait must close the preemption return window"
     );
     assert_eq!(
         diagnostics.user_return_stack_sets(),
-        expected_user_stops,
-        "returnable user stacks must be stored once per user stop"
+        diagnostics.user_return_stack_takes(),
+        "returnable user stacks must be stored and consumed in pairs"
     );
     assert_eq!(
-        diagnostics.user_return_stack_takes(),
-        expected_user_stops,
-        "returnable user stacks must be consumed once per user stop"
+        diagnostics.user_return_preemption_window_closes(),
+        diagnostics.user_return_stack_sets(),
+        "user return window closes must match stored return stacks"
     );
 }
 
@@ -370,6 +372,7 @@ struct SchedulerTaskSnapshotCounters {
     user_image_snapshots: u64,
     anonymous_mapping_release_snapshots: u64,
     bootstrap_child_user_tasks: u64,
+    user_spawned_child_user_tasks: u64,
     collected_user_exit_snapshots: u64,
     reaped_user_task_snapshots: u64,
     preempted_user_task_snapshots: u64,
@@ -385,6 +388,7 @@ impl SchedulerTaskSnapshotCounters {
             user_image_snapshots: 0,
             anonymous_mapping_release_snapshots: 0,
             bootstrap_child_user_tasks: 0,
+            user_spawned_child_user_tasks: 0,
             collected_user_exit_snapshots: 0,
             reaped_user_task_snapshots: 0,
             preempted_user_task_snapshots: 0,
@@ -438,11 +442,7 @@ fn record_scheduler_user_task_snapshot(
         crate::kernel::task::TaskState::Finished,
         "user smoke task snapshots must be finished"
     );
-    assert_eq!(
-        snapshot.parent_task_id(),
-        Some(crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64()),
-        "user smoke task snapshots must retain the bootstrap parent task"
-    );
+    record_parentage_snapshot(snapshot, counters);
     assert_eq!(
         snapshot.exit_code(),
         Some(0),
@@ -460,7 +460,6 @@ fn record_scheduler_user_task_snapshot(
     counters.collected_user_exit_snapshots =
         counters.collected_user_exit_snapshots.saturating_add(1);
     counters.reaped_user_task_snapshots = counters.reaped_user_task_snapshots.saturating_add(1);
-    counters.bootstrap_child_user_tasks = counters.bootstrap_child_user_tasks.saturating_add(1);
     counters.finished_user_tasks = counters.finished_user_tasks.saturating_add(1);
     if snapshot.last_preemption_reason()
         == crate::kernel::task::UserPreemptionReasonDiagnostics::Timer
@@ -488,10 +487,30 @@ fn record_scheduler_user_task_snapshot(
     }
 }
 
+fn record_parentage_snapshot(
+    snapshot: &crate::kernel::task::SchedulerTaskSnapshot,
+    counters: &mut SchedulerTaskSnapshotCounters,
+) {
+    if snapshot.parent_task_id() == Some(crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64()) {
+        counters.bootstrap_child_user_tasks = counters.bootstrap_child_user_tasks.saturating_add(1);
+    } else {
+        assert!(
+            snapshot.parent_task_id().is_some(),
+            "user-spawned child snapshots must retain a user parent task"
+        );
+        counters.user_spawned_child_user_tasks =
+            counters.user_spawned_child_user_tasks.saturating_add(1);
+    }
+}
+
 fn verify_scheduler_task_snapshot_counts(
     counters: SchedulerTaskSnapshotCounters,
     expected_user_tasks: u64,
 ) {
+    let expected_bootstrap_children = u64::try_from(USER_SMOKE_PARENT_TASK_COUNT)
+        .expect("smoke parent task count must fit in u64");
+    let expected_user_spawned_children =
+        u64::try_from(USER_SMOKE_CHILD_TASK_COUNT).expect("smoke child task count must fit in u64");
     assert_eq!(
         counters.finished_user_tasks, expected_user_tasks,
         "scheduler snapshots must include every finished user smoke task"
@@ -513,8 +532,12 @@ fn verify_scheduler_task_snapshot_counts(
         "scheduler snapshots must show anonymous mmap records released"
     );
     assert_eq!(
-        counters.bootstrap_child_user_tasks, expected_user_tasks,
-        "scheduler snapshots must show every user task as a bootstrap child"
+        counters.bootstrap_child_user_tasks, expected_bootstrap_children,
+        "scheduler snapshots must show every smoke parent as a bootstrap child"
+    );
+    assert_eq!(
+        counters.user_spawned_child_user_tasks, expected_user_spawned_children,
+        "scheduler snapshots must show the user-spawned child task"
     );
     assert_eq!(
         counters.collected_user_exit_snapshots, expected_user_tasks,
@@ -551,6 +574,10 @@ fn log_scheduler_task_snapshot_counters(
             LogField::new(
                 "bootstrap_child_user_tasks",
                 format_args!("{}", counters.bootstrap_child_user_tasks),
+            ),
+            LogField::new(
+                "user_spawned_child_user_tasks",
+                format_args!("{}", counters.user_spawned_child_user_tasks),
             ),
             LogField::new(
                 "collected_user_exit_snapshots",
@@ -641,16 +668,27 @@ fn verify_user_task_image_snapshot(snapshot: &crate::kernel::task::SchedulerTask
     let user_image = snapshot
         .user_image()
         .expect("user task snapshots must include image diagnostics");
+    if user_image_origin_matches(user_image, b"/disk/bin/smoke_demo") {
+        verify_smoke_parent_image_snapshot(user_image);
+    } else if user_image_origin_matches(user_image, b"/disk/bin/file_demo") {
+        verify_file_demo_spawn_image_snapshot(user_image);
+    } else {
+        panic!("user task image snapshot must retain a known smoke origin path");
+    }
+}
+
+fn verify_smoke_parent_image_snapshot(
+    user_image: &crate::kernel::task::UserImageDiagnosticsSnapshot,
+) {
     assert_eq!(
         user_image.generation(),
         2,
-        "user smoke tasks must record two successful execve generations"
+        "user smoke parent tasks must record two successful execve generations"
     );
-    let path_bytes = user_image.path_bytes();
-    assert_eq!(
-        &path_bytes[..user_image.path_len()],
+    assert_user_image_path(
+        user_image,
         b"/disk/bin/file_demo",
-        "user smoke tasks must record the post-exec image path"
+        "user smoke parent tasks must record the post-exec image path",
     );
     assert_eq!(
         user_image.last_execve_old_user_pages(),
@@ -661,6 +699,52 @@ fn verify_user_task_image_snapshot(snapshot: &crate::kernel::task::SchedulerTask
         user_image.last_execve_old_page_table_pages(),
         7,
         "execve diagnostics must record old page-table reclaim count"
+    );
+}
+
+fn verify_file_demo_spawn_image_snapshot(
+    user_image: &crate::kernel::task::UserImageDiagnosticsSnapshot,
+) {
+    assert_eq!(
+        user_image.generation(),
+        0,
+        "file_demo spawn task must not report an execve generation"
+    );
+    assert_user_image_path(
+        user_image,
+        b"/disk/bin/file_demo",
+        "file_demo spawn task must retain its spawn image path",
+    );
+    assert_eq!(
+        user_image.last_execve_old_user_pages(),
+        0,
+        "file_demo spawn task must not report execve reclaim pages"
+    );
+    assert_eq!(
+        user_image.last_execve_old_page_table_pages(),
+        0,
+        "file_demo spawn task must not report execve page-table reclaim"
+    );
+}
+
+fn user_image_origin_matches(
+    user_image: &crate::kernel::task::UserImageDiagnosticsSnapshot,
+    expected_path: &[u8],
+) -> bool {
+    let origin_path_bytes = user_image.origin_path_bytes();
+    &origin_path_bytes[..user_image.origin_path_len()] == expected_path
+}
+
+fn assert_user_image_path(
+    user_image: &crate::kernel::task::UserImageDiagnosticsSnapshot,
+    expected_path: &[u8],
+    message: &str,
+) {
+    let path_bytes = user_image.path_bytes();
+    assert_eq!(
+        &path_bytes[..user_image.path_len()],
+        expected_path,
+        "{message}"
     );
 }
 
