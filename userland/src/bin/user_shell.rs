@@ -12,10 +12,9 @@ const READY_MESSAGE: &[u8] = b"user shell ready\n";
 const TOKENIZER_OK_MESSAGE: &[u8] = b"user shell tokenizer ok\n";
 const FILE_DEMO_LAUNCH_MESSAGE: &[u8] = b"user shell launching file_demo\n";
 const FILE_DEMO_EXIT_MESSAGE: &[u8] = b"user shell file_demo exit ok\n";
-const RELATIVE_FILE_DEMO_LAUNCH_MESSAGE: &[u8] =
-    b"user shell launching relative file_demo\n";
-const RELATIVE_FILE_DEMO_EXIT_MESSAGE: &[u8] =
-    b"user shell relative file_demo exit ok\n";
+const RELATIVE_FILE_DEMO_LAUNCH_MESSAGE: &[u8] = b"user shell launching relative file_demo\n";
+const RELATIVE_FILE_DEMO_EXIT_MESSAGE: &[u8] = b"user shell relative file_demo exit ok\n";
+const MISSING_COMMAND_OK_MESSAGE: &[u8] = b"user shell missing command not found ok\n";
 const STDIN_EOF_MESSAGE: &[u8] = b"user shell stdin eof\n";
 const READ_ERROR_MESSAGE: &[u8] = b"user shell read error\n";
 const INPUT_BUFFERED_MESSAGE: &[u8] = b"user shell input buffered\n";
@@ -235,6 +234,19 @@ fn verify_command_execution_smoke() -> Result<(), CommandExecutionError> {
     let _ = syscall::write(STDOUT, RELATIVE_FILE_DEMO_LAUNCH_MESSAGE);
     execute_command(b"bin/file_demo --shell-command-smoke")?;
     let _ = syscall::write(STDOUT, RELATIVE_FILE_DEMO_EXIT_MESSAGE);
+    verify_missing_command_smoke()?;
+    Ok(())
+}
+
+fn verify_missing_command_smoke() -> Result<(), CommandExecutionError> {
+    let error = execute_command(b"bin/missing_shell_command")
+        .err()
+        .ok_or(CommandExecutionError::SpawnFailed)?;
+    if error != CommandExecutionError::SpawnNotFound {
+        return Err(error);
+    }
+    write_execution_error(error);
+    let _ = syscall::write(STDOUT, MISSING_COMMAND_OK_MESSAGE);
     Ok(())
 }
 
@@ -309,10 +321,8 @@ fn build_argument_vector(
 ) -> Result<CommandPath, CommandExecutionError> {
     let mut storage_cursor: usize = 0;
     let mut command_path = CommandPath { start: 0, end: 0 };
-    for (token_index, argument_pointer) in argument_pointers
-        .iter_mut()
-        .enumerate()
-        .take(tokens.len())
+    for (token_index, argument_pointer) in
+        argument_pointers.iter_mut().enumerate().take(tokens.len())
     {
         let token = tokens
             .get(token_index)
@@ -342,12 +352,7 @@ fn build_argument_vector(
     Ok(command_path)
 }
 
-fn token_equals(
-    tokens: &CommandTokens,
-    command: &[u8],
-    index: usize,
-    expected: &[u8],
-) -> bool {
+fn token_equals(tokens: &CommandTokens, command: &[u8], index: usize, expected: &[u8]) -> bool {
     tokens
         .get(index)
         .is_some_and(|token| token.as_bytes(command) == expected)

@@ -62,7 +62,8 @@ scheduler-owned child exit record は実装済みなので、後続の child-exi
 image に `/disk/bin/user_shell` として含まれ、storage smoke lifecycle gate の後に起動されます。
 現在の shell は stdin を固定バッファへ1回読み、heap-free whitespace tokenization を検証し、fixed-buffer
 `argv` を構築し、`/disk/bin/file_demo --shell-command-smoke` と
-`bin/file_demo --shell-command-smoke` を `spawn` と `waitpid` で実行します。standard input はまだ
+`bin/file_demo --shell-command-smoke` を `spawn` と `waitpid` で実行し、
+`bin/missing_shell_command` が bounded not-found shell message を返すことも検証します。standard input はまだ
 `/dev/null` なので EOF を検出して正常終了します。keyboard-backed stdin で interactive lifetime を
 持たせる作業は未完了です。
 
@@ -363,7 +364,8 @@ inheritance snapshot を記録します。その後 scheduler は、parent snaps
 - storage smoke は experimental `user_shell` ELF が disk image に存在し、`/disk/bin/user_shell` として
   登録され、lifecycle gate 後に起動され、whitespace tokenization を検証し、
   `/disk/bin/file_demo --shell-command-smoke` と `bin/file_demo --shell-command-smoke` を absolute and relative
-  path execution で起動して wait し、stdin EOF 後に initial process 経由で collect されることを検証します。
+  path execution で起動して wait し、`bin/missing_shell_command` が bounded not-found shell message を
+  返すことを検証し、stdin EOF 後に initial process 経由で collect されることを検証します。
 - serial log は `User image replaced by execve` と `execve image published` を old-image reclaim count 付きで
   記録します。
 - scheduler smoke は、post-exec image が exit する前に `execve` が heap と private mapping bookkeeping を

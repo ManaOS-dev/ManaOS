@@ -210,6 +210,8 @@ $expectedPatterns = @(
     "user shell file_demo exit ok",
     "user shell launching relative file_demo",
     "user shell relative file_demo exit ok",
+    "user shell spawn not found",
+    "user shell missing command not found ok",
     "user shell stdin eof",
     "Initial user shell exit collected: parent=0 child=.* status=0",
     "Initial user shell smoke passed: task=.* exit_code=0 stdin=eof",

@@ -17,7 +17,6 @@ reviewable unit before implementing it.
 - [ ] Implement `exit` with a configurable status code.
 - [ ] Implement `help` with commands compiled into the shell.
 - [ ] Add bounded error messages for command failures.
-- [ ] Add shell smoke logs for a missing command.
 - [ ] Keep the kernel console available while the user shell is experimental.
 - [ ] Document how to enter and leave the user shell in QEMU.
 

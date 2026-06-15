@@ -75,8 +75,9 @@ started after the storage smoke lifecycle gate. The shell currently performs
 one fixed-buffer read from stdin, validates heap-free whitespace tokenization,
 builds fixed-buffer `argv`, runs `/disk/bin/file_demo --shell-command-smoke`
 and `bin/file_demo --shell-command-smoke` through `spawn` plus `waitpid`, and
-exits cleanly on EOF because standard input is still backed by `/dev/null`;
-keyboard-backed interactive lifetime remains future work.
+verifies that `bin/missing_shell_command` returns the bounded not-found shell
+message before exiting cleanly on EOF because standard input is still backed by
+`/dev/null`; keyboard-backed interactive lifetime remains future work.
 
 ## First Stable Process Model
 
@@ -440,8 +441,9 @@ Current runtime diagnostics cover the first successful replacement path:
   lifecycle gate, validates whitespace tokenization, launches
   `/disk/bin/file_demo --shell-command-smoke` and
   `bin/file_demo --shell-command-smoke` through absolute and relative path
-  execution, waits for both children, and is collected through the initial
-  process after stdin EOF.
+  execution, waits for both children, verifies that
+  `bin/missing_shell_command` returns the bounded not-found shell message, and
+  is collected through the initial process after stdin EOF.
 - Serial logs record `User image replaced by execve` and
   `execve image published` with old-image reclaim counts.
 - Scheduler smoke verifies that `execve` resets heap and private mapping
