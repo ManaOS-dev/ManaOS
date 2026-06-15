@@ -75,6 +75,7 @@ active roadmap can list only unfinished work.
 - [x] Add TODO links from deferred `fork` work to the address-space copy plan.
 - [x] Add errno mappings for spawn memory allocation failures.
 - [x] Add a userland runtime helper for launching a child program.
+- [x] Extend user-visible spawn beyond path-only launch with argv/envp vectors.
 
 ### Minimal User Shell
 

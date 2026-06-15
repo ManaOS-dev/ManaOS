@@ -37,7 +37,7 @@
 //! - [`SYS_GETPPID`] - Linux-compatible get-parent-process-identifier syscall number
 //! - [`SYS_OPENAT`] - Linux-compatible open-at syscall number
 //! - [`SYS_CHDIR`] - Linux-compatible change-directory syscall number
-//! - [`SYS_SPAWN`] - ManaOS-specific path-only spawn syscall number
+//! - [`SYS_SPAWN`] - ManaOS-specific spawn syscall number
 
 use alloc::{string::String, vec::Vec};
 
@@ -80,9 +80,9 @@ const USER_TIMESPEC_BYTES: usize = core::mem::size_of::<contract::UserTimespec>(
 const USER_WAIT_STATUS_BYTES: u64 = core::mem::size_of::<i32>() as u64;
 const USER_POINTER_BYTES_U64: u64 = core::mem::size_of::<u64>() as u64;
 const MAX_USER_STRING_LENGTH: usize = 256;
-const MAX_EXECVE_ARGUMENT_COUNT: usize = 8;
-const MAX_EXECVE_ENVIRONMENT_COUNT: usize = 8;
-const MAX_EXECVE_COPIED_STRING_BYTES: usize = 4096;
+const MAX_USER_ENTRY_ARGUMENT_COUNT: usize = 8;
+const MAX_USER_ENTRY_ENVIRONMENT_COUNT: usize = 8;
+const MAX_USER_ENTRY_COPIED_STRING_BYTES: usize = 4096;
 const EXECVE_USER_STACK_PAGES: u64 = 4;
 const SPAWN_USER_STACK_PAGES: u64 = 4;
 const PAGE_SIZE: u64 = 4096;
@@ -231,7 +231,7 @@ fn dispatch_syscall(syscall_number: u64, arguments: [u64; 6]) -> u64 {
         SYS_GETPID => sys_getpid(),
         SYS_GETPPID => sys_getppid(),
         SYS_CHDIR => sys_chdir(first_argument),
-        SYS_SPAWN => sys_spawn(first_argument),
+        SYS_SPAWN => sys_spawn(first_argument, second_argument, third_argument),
         _ => ERROR_NOT_IMPLEMENTED,
     }
 }
@@ -515,19 +515,40 @@ fn sys_chdir(user_path_pointer: u64) -> u64 {
     }
 }
 
-fn sys_spawn(user_path_pointer: u64) -> u64 {
-    let Some(path) = copy_path_argument(user_path_pointer) else {
-        return ERROR_BAD_ADDRESS;
+fn sys_spawn(
+    user_path_pointer: u64,
+    user_argument_values_pointer: u64,
+    user_environment_values_pointer: u64,
+) -> u64 {
+    let staging = match copy_user_program_entry_staging(
+        user_path_pointer,
+        user_argument_values_pointer,
+        user_environment_values_pointer,
+    ) {
+        Ok(staging) => staging,
+        Err(error) => return error,
     };
-    let Some(path) = resolve_current_process_path(&path) else {
-        return ERROR_NOT_IMPLEMENTED;
+
+    let copied_argument_values = staging
+        .argument_values
+        .iter()
+        .map(Vec::as_slice)
+        .collect::<Vec<_>>();
+    let default_argument_values = [staging.path.as_bytes()];
+    let argument_values = if copied_argument_values.is_empty() {
+        &default_argument_values[..]
+    } else {
+        copied_argument_values.as_slice()
     };
-    let arguments = [path.as_str()];
-    let environment = [];
+    let environment_values = staging
+        .environment_values
+        .iter()
+        .map(Vec::as_slice)
+        .collect::<Vec<_>>();
     let entry_vectors =
-        crate::kernel::process::UserProgramEntryVectors::new(&arguments, &environment);
+        crate::kernel::process::UserProgramEntryVectors::new(argument_values, &environment_values);
     let request = crate::kernel::process::UserProgramSpawnRequest::new(
-        &path,
+        &staging.path,
         entry_vectors,
         SPAWN_USER_STACK_PAGES,
     );
@@ -547,9 +568,11 @@ fn sys_spawn(user_path_pointer: u64) -> u64 {
 
     crate::log_info!(
         "syscall",
-        "spawn -> child={} path={} stack_pages={}",
+        "spawn -> child={} path={} argc={} envc={} stack_pages={}",
         child_task_id,
-        path,
+        staging.path,
+        entry_vectors.argument_count(),
+        entry_vectors.environment_count(),
         SPAWN_USER_STACK_PAGES
     );
     child_task_id
@@ -740,7 +763,7 @@ fn sys_execve(
     user_environment_values_pointer: u64,
     replacement_trap_frame: Option<&mut UserTrapFrame>,
 ) -> u64 {
-    let staging = match copy_execve_staging(
+    let staging = match copy_user_program_entry_staging(
         user_path_pointer,
         user_argument_values_pointer,
         user_environment_values_pointer,
@@ -816,7 +839,7 @@ struct ExecvePublishedImage {
 
 fn build_and_publish_execve_candidate(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
-    staging: &ExecveStaging,
+    staging: &UserProgramEntryStaging,
     executable_image: &[u8],
 ) -> Option<ExecvePublishedImage> {
     let current_address_space = crate::kernel::task::get_current_user_address_space();
@@ -878,7 +901,7 @@ fn build_and_publish_execve_candidate(
 
 fn build_execve_candidate(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
-    staging: &ExecveStaging,
+    staging: &UserProgramEntryStaging,
     executable_image: &[u8],
 ) -> ExecveImageCandidate {
     let candidate_address_space =
@@ -935,18 +958,18 @@ fn build_execve_candidate(
     }
 }
 
-struct ExecveStaging {
+struct UserProgramEntryStaging {
     path: String,
     argument_values: Vec<Vec<u8>>,
     environment_values: Vec<Vec<u8>>,
     copied_string_bytes: usize,
 }
 
-fn copy_execve_staging(
+fn copy_user_program_entry_staging(
     user_path_pointer: u64,
     user_argument_values_pointer: u64,
     user_environment_values_pointer: u64,
-) -> Result<ExecveStaging, u64> {
+) -> Result<UserProgramEntryStaging, u64> {
     let Some(path) = copy_path_argument(user_path_pointer) else {
         return Err(ERROR_BAD_ADDRESS);
     };
@@ -955,18 +978,18 @@ fn copy_execve_staging(
     };
 
     let mut copied_string_bytes = 0;
-    let argument_values = copy_execve_string_vector(
+    let argument_values = copy_user_entry_string_vector(
         user_argument_values_pointer,
-        MAX_EXECVE_ARGUMENT_COUNT,
+        MAX_USER_ENTRY_ARGUMENT_COUNT,
         &mut copied_string_bytes,
     )?;
-    let environment_values = copy_execve_string_vector(
+    let environment_values = copy_user_entry_string_vector(
         user_environment_values_pointer,
-        MAX_EXECVE_ENVIRONMENT_COUNT,
+        MAX_USER_ENTRY_ENVIRONMENT_COUNT,
         &mut copied_string_bytes,
     )?;
 
-    Ok(ExecveStaging {
+    Ok(UserProgramEntryStaging {
         path,
         argument_values,
         environment_values,
@@ -1025,7 +1048,7 @@ fn read_execve_descriptor_image(file_descriptor: usize, byte_len: usize) -> Resu
     Ok(image)
 }
 
-fn copy_execve_string_vector(
+fn copy_user_entry_string_vector(
     user_pointer_array: u64,
     max_values: usize,
     copied_string_bytes: &mut usize,
@@ -1036,7 +1059,7 @@ fn copy_execve_string_vector(
 
     let mut values = Vec::new();
     for index in 0..=max_values {
-        let string_pointer = copy_execve_pointer_array_slot(user_pointer_array, index)?;
+        let string_pointer = copy_user_entry_pointer_array_slot(user_pointer_array, index)?;
         if string_pointer == 0 {
             return Ok(values);
         }
@@ -1044,7 +1067,7 @@ fn copy_execve_string_vector(
             return Err(ERROR_ARGUMENT_LIST_TOO_LONG);
         }
 
-        values.push(copy_execve_string_value(
+        values.push(copy_user_entry_string_value(
             string_pointer,
             copied_string_bytes,
         )?);
@@ -1053,7 +1076,7 @@ fn copy_execve_string_vector(
     Ok(values)
 }
 
-fn copy_execve_pointer_array_slot(user_pointer_array: u64, index: usize) -> Result<u64, u64> {
+fn copy_user_entry_pointer_array_slot(user_pointer_array: u64, index: usize) -> Result<u64, u64> {
     let offset = u64::try_from(index)
         .ok()
         .and_then(|index| index.checked_mul(USER_POINTER_BYTES_U64))
@@ -1068,14 +1091,14 @@ fn copy_execve_pointer_array_slot(user_pointer_array: u64, index: usize) -> Resu
     Ok(read_user_u64(buffer, 0))
 }
 
-fn copy_execve_string_value(
+fn copy_user_entry_string_value(
     user_string_pointer: u64,
     copied_string_bytes: &mut usize,
 ) -> Result<Vec<u8>, u64> {
     let range = UserVirtualRange::from_syscall_arguments(
         user_string_pointer,
-        u64::try_from(MAX_EXECVE_COPIED_STRING_BYTES)
-            .expect("max execve string bytes must fit in u64"),
+        u64::try_from(MAX_USER_ENTRY_COPIED_STRING_BYTES)
+            .expect("max user entry string bytes must fit in u64"),
     )
     .ok_or(ERROR_BAD_ADDRESS)?;
     let Some(bytes) = user_pointer::copy_from_user(UserReadableRange::new(range)) else {
@@ -1090,7 +1113,7 @@ fn copy_execve_string_value(
                 .checked_add(1)
                 .and_then(|length| copied_string_bytes.checked_add(length))
                 .ok_or(ERROR_ARGUMENT_LIST_TOO_LONG)?;
-            if next_string_bytes > MAX_EXECVE_COPIED_STRING_BYTES {
+            if next_string_bytes > MAX_USER_ENTRY_COPIED_STRING_BYTES {
                 return Err(ERROR_ARGUMENT_LIST_TOO_LONG);
             }
 

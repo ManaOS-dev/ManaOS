@@ -42,6 +42,7 @@ The implementation entry point is `kernel::memory::user_pointer`.
 | `munmap(addr, len)` | none | none | none | Private mapping range unmap only; `addr` must be page-aligned, the range must stay inside tracked private mapping records, and no user buffer is copied. |
 | `nanosleep(req, rem)` | `req`, optional `rem` | user to kernel, kernel to user | `copy_from_user`, `copy_to_user` | `req` is exactly `UserTimespec`; non-zero `rem` is exactly `UserTimespec` and is zero-filled because signal interruption is not implemented. |
 | `execve(path, argv, envp)` | `path`, `argv`, `envp` | user to kernel | `copy_cstr_from_user`, `copy_from_user` | Path is capped by `MAX_USER_STRING_LENGTH`. `argv == NULL` and `envp == NULL` are accepted as empty vectors. Argument and environment vectors are capped at 8 entries each and 4096 total copied string bytes including NUL terminators. Invalid pointers return `-EFAULT`; limit overflow returns `-E2BIG`. A valid ELF image replaces the current user image and does not return to the old instruction pointer. |
+| `spawn(path, argv, envp)` | `path`, `argv`, `envp` | user to kernel | `copy_cstr_from_user`, `copy_from_user` | Path is capped by `MAX_USER_STRING_LENGTH`. `argv == NULL` or an empty vector uses the resolved path as the default `argv[0]`; `envp == NULL` is accepted as an empty vector. Argument and environment vectors use the same 8-entry and 4096-byte copied string limits as `execve`. Invalid pointers return `-EFAULT`; limit overflow returns `-E2BIG`. |
 | `exit(code)` / `exit_group(code)` | none | none | none | No user pointer validation. |
 | `getpid()` / `getppid()` | none | none | none | No user pointer validation. |
 
@@ -53,6 +54,8 @@ missing paths, bad file descriptors, unsupported `openat`, invalid
 `nanosleep` pointers. It also verifies `execve` validation for valid
 `argv`/`envp`, bad pointer arrays, argument-count overflow, missing paths,
 directory targets, non-ELF files, and a no-return successful self-`execve`.
+The userland spawn smoke passes explicit `argv`/`envp` vectors and validates
+them in the spawned child image.
 
 ## Current Enforcement Gaps
 

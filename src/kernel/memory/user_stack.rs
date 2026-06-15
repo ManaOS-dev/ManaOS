@@ -155,47 +155,6 @@ pub fn allocate_user_stack(
     }
 }
 
-/// Place `argv` and environment strings on the mapped user stack.
-///
-/// Returns the adjusted stack pointer and user virtual addresses for the
-/// null-terminated pointer arrays.
-///
-/// # Panics
-///
-/// Panics if the stack is invalid, the fixed argument limits are exceeded, or
-/// the argument block does not fit in the mapped stack range.
-pub fn prepare_initial_stack(
-    address_space: UserAddressSpace,
-    stack: AllocatedUserStack,
-    arguments: &[&str],
-    environment: &[&str],
-) -> PreparedUserStack {
-    assert!(
-        arguments.len() <= MAX_USER_ENTRY_ARGUMENTS,
-        "too many user entry arguments"
-    );
-    assert!(
-        environment.len() <= MAX_USER_ENTRY_ENVIRONMENT,
-        "too many user entry environment entries"
-    );
-
-    let mut argument_bytes = [&[][..]; MAX_USER_ENTRY_ARGUMENTS];
-    for (index, value) in arguments.iter().enumerate() {
-        argument_bytes[index] = value.as_bytes();
-    }
-    let mut environment_bytes = [&[][..]; MAX_USER_ENTRY_ENVIRONMENT];
-    for (index, value) in environment.iter().enumerate() {
-        environment_bytes[index] = value.as_bytes();
-    }
-
-    prepare_initial_stack_bytes(
-        address_space,
-        stack,
-        &argument_bytes[..arguments.len()],
-        &environment_bytes[..environment.len()],
-    )
-}
-
 /// Place byte-preserving `argv` and environment strings on the mapped user stack.
 ///
 /// Returns the adjusted stack pointer and user virtual addresses for the

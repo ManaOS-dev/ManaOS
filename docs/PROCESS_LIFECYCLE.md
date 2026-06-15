@@ -35,8 +35,9 @@ metadata remain owned by their existing modules.
 representation for borrowed `argv` and `envp` slices used by spawned programs.
 The spawn helper now classifies executable path lookup failures and image-buffer
 allocation failures with stable errno-facing results before any task record is
-created. A minimal user-visible `spawn` syscall and no-std wrapper expose a
-path-only child launch surface for smoke and shell bring-up.
+created. A user-visible `spawn` syscall and no-std wrappers expose path-only
+compatibility plus bounded `argv` / `envp` child launch for smoke and shell
+bring-up.
 Scheduler diagnostics retain the spawned origin path separately from the current
 image path, so a later successful `execve` can change `path=` while `origin=`
 still identifies the program that created the task record.
@@ -47,9 +48,10 @@ task's directory, and successful `execve` preserves that directory across image
 replacement. The `chdir` and `getcwd` syscall wrappers expose that task-owned
 directory to no-std userland code. Scheduler-spawned child tasks copy the
 parent's current working directory at task creation. The current user-visible
-`spawn` surface launches one executable path using that directory and activates
-the child immediately. Blocking `waitpid`, argv/envp-bearing spawn, and full
-descriptor inheritance policy are still future work. Descriptor close-on-exec
+`spawn` surface resolves one executable path using that directory, stages
+bounded `argv` / `envp` vectors, and activates the child immediately. Blocking
+`waitpid` and full descriptor inheritance policy are still future work.
+Descriptor close-on-exec
 metadata and successful-`execve` close
 behavior exist for the current global descriptor table. The `waitpid` syscall
 number, option constants, no-std userland wrapper, selector validation,
@@ -62,7 +64,7 @@ it is not yet the initial interactive process.
 ## First Stable Process Model
 
 ManaOS will use `spawn` plus `execve` as the first stable user process model.
-The initial user-visible launch operation should create a child task directly
+The initial user-visible launch operation creates a child task directly
 from an executable path, bounded `argv` / `envp` staging, inherited process
 metadata, and a freshly constructed address space. The child may later replace
 itself through `execve` without changing its process identifier, parent
@@ -116,9 +118,9 @@ normal wait status word when the status pointer is non-null. `WNOHANG` returns
 Blocking wait still returns `-ENOSYS` until waiting parents can sleep and wake
 through the scheduler. The syscall does not return `-EINTR` because ManaOS has
 no documented user interrupt policy yet. Storage smoke covers the no-child and
-explicit non-child selector paths through the no-std userland wrapper, a
-path-only `spawn` child whose pending `waitpid(WNOHANG)` returns `0`, and the
-later one-shot child reap with nonzero status encoding.
+explicit non-child selector paths through the no-std userland wrapper, an
+argv/envp-bearing `spawn` child whose pending `waitpid(WNOHANG)` returns `0`,
+and the later one-shot child reap with nonzero status encoding.
 
 The remaining scheduler-backed contract is:
 
@@ -346,10 +348,11 @@ Current runtime diagnostics cover the first successful replacement path:
   successful spawn task creation.
 - Storage smoke asserts three distinct `smoke_demo` parent tasks plus one
   marker-driven `file_demo` spawn/wait parent before all are activated together.
-- Storage smoke verifies the user-visible path-only `spawn` wrapper by spawning
-  a child from no-std userland, observing `waitpid(WNOHANG) == 0` while that
-  child is still running, and later collecting the nonzero child exit status
-  exactly once.
+- Storage smoke verifies the user-visible `spawn_with_vectors` wrapper by
+  spawning a child from no-std userland, validating the child's `argv` / `envp`
+  in the child image, observing `waitpid(WNOHANG) == 0` while that child is
+  still running, and later collecting the nonzero child exit status exactly
+  once.
 - Storage smoke asserts that `tasks` output retains the original spawn path as
   `origin=` after the same task successfully replaces its current image through
   `execve`.

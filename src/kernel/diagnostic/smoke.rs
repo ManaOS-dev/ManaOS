@@ -21,8 +21,8 @@ fn spawn_user_smoke_task(
     user_elf_path: &str,
     user_stack_pages: u64,
 ) -> u64 {
-    let user_entry_arguments = [user_elf_path, "--storage-smoke"];
-    let user_entry_environment = ["MANAOS_BOOT=storage-smoke"];
+    let user_entry_arguments: [&[u8]; 2] = [user_elf_path.as_bytes(), b"--storage-smoke"];
+    let user_entry_environment: [&[u8]; 1] = [b"MANAOS_BOOT=storage-smoke"];
     let user_entry_vectors = crate::kernel::process::UserProgramEntryVectors::new(
         &user_entry_arguments,
         &user_entry_environment,
@@ -42,8 +42,8 @@ fn spawn_wait_user_smoke_task(
     user_stack_pages: u64,
 ) -> u64 {
     let user_elf_path = "/disk/bin/file_demo";
-    let user_entry_arguments = [user_elf_path, "--spawn-wait-smoke"];
-    let user_entry_environment = ["MANAOS_BOOT=storage-smoke"];
+    let user_entry_arguments: [&[u8]; 2] = [user_elf_path.as_bytes(), b"--spawn-wait-smoke"];
+    let user_entry_environment: [&[u8]; 1] = [b"MANAOS_BOOT=storage-smoke"];
     let user_entry_vectors = crate::kernel::process::UserProgramEntryVectors::new(
         &user_entry_arguments,
         &user_entry_environment,
@@ -273,8 +273,8 @@ fn verify_spawn_error(
     user_stack_pages: u64,
     expected_error: crate::kernel::process::UserProgramSpawnError,
 ) -> isize {
-    let entry_arguments = [];
-    let entry_environment = [];
+    let entry_arguments: [&[u8]; 0] = [];
+    let entry_environment: [&[u8]; 0] = [];
     let entry_vectors =
         crate::kernel::process::UserProgramEntryVectors::new(&entry_arguments, &entry_environment);
     let request =

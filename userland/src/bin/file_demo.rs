@@ -15,15 +15,23 @@ const SPAWN_WAIT_RETRY_COUNT: usize = 16;
 const NON_CHILD_PROCESS_IDENTIFIER: isize = 9999;
 const WAITPID_MESSAGE: &[u8] = b"user waitpid no child ok\n";
 const SPAWN_WAIT_MESSAGE: &[u8] = b"user spawn waitpid nonzero ok\n";
+const SPAWN_VECTORS_MESSAGE: &[u8] = b"user spawn vectors ok\n";
 const SPAWN_WAIT_ARGUMENT: &[u8] = b"--spawn-wait-smoke";
+const SPAWNED_CHILD_ARGUMENT: &[u8] = b"--spawned-child";
+const SPAWNED_CHILD_ENVIRONMENT: &[u8] = b"MANAOS_CHILD=spawn";
 
 #[no_mangle]
-extern "C" fn _start(argument_count: usize, argument_values: *const *const u8) -> ! {
+extern "C" fn _start(
+    argument_count: usize,
+    argument_values: *const *const u8,
+    environment_values: *const *const u8,
+) -> ! {
     if syscall::getpid() <= 0 {
         syscall::exit(4);
     }
     let parent_task_id = syscall::getppid();
     delay_when_user_spawned_child(parent_task_id);
+    verify_spawned_child_vectors(argument_count, argument_values, environment_values);
     let run_spawn_wait = spawn_wait_requested(argument_count, argument_values);
     if run_spawn_wait {
         change_to_disk_directory();
@@ -110,7 +118,20 @@ fn spawn_wait_requested(argument_count: usize, argument_values: *const *const u8
 
 fn verify_spawn_child_waitpid() {
     let child_path = b"bin/file_demo\0";
-    let child_task_id = syscall::spawn(child_path);
+    let child_argument0 = b"bin/file_demo\0";
+    let child_argument1 = b"--spawned-child\0";
+    let child_arguments: [*const u8; 3] = [
+        child_argument0.as_ptr(),
+        child_argument1.as_ptr(),
+        core::ptr::null(),
+    ];
+    let child_environment0 = b"MANAOS_CHILD=spawn\0";
+    let child_environment: [*const u8; 2] = [child_environment0.as_ptr(), core::ptr::null()];
+    let child_task_id = syscall::spawn_with_vectors(
+        child_path,
+        child_arguments.as_ptr(),
+        child_environment.as_ptr(),
+    );
     if child_task_id <= 0 || child_task_id == syscall::getpid() {
         syscall::exit(15);
     }
@@ -176,6 +197,42 @@ fn verify_waitpid_no_child() {
     }
 
     let _ = syscall::write(STDOUT, WAITPID_MESSAGE);
+}
+
+fn verify_spawned_child_vectors(
+    argument_count: usize,
+    argument_values: *const *const u8,
+    environment_values: *const *const u8,
+) {
+    if !spawned_child_requested(argument_count, argument_values) {
+        return;
+    }
+    if argument_count != 2 || argument_values.is_null() || environment_values.is_null() {
+        syscall::exit(23);
+    }
+    if !argument_equals(argument_values, 0, b"bin/file_demo") {
+        syscall::exit(24);
+    }
+    if !argument_equals(argument_values, 1, SPAWNED_CHILD_ARGUMENT) {
+        syscall::exit(25);
+    }
+    if read_argument_pointer(argument_values, 2).is_some() {
+        syscall::exit(26);
+    }
+    if !argument_equals(environment_values, 0, SPAWNED_CHILD_ENVIRONMENT) {
+        syscall::exit(27);
+    }
+    if read_argument_pointer(environment_values, 1).is_some() {
+        syscall::exit(28);
+    }
+
+    let _ = syscall::write(STDOUT, SPAWN_VECTORS_MESSAGE);
+}
+
+fn spawned_child_requested(argument_count: usize, argument_values: *const *const u8) -> bool {
+    argument_count == 2
+        && !argument_values.is_null()
+        && argument_equals(argument_values, 1, SPAWNED_CHILD_ARGUMENT)
 }
 
 fn argument_equals(arguments: *const *const u8, index: usize, expected: &[u8]) -> bool {

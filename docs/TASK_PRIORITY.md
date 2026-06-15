@@ -56,7 +56,7 @@ external vector diagnostics are proven by storage smoke.
 
 The active selection is now full user process lifecycle work. The kernel-side
 `execve` contract, cleanup invariants, successful self-replacement path,
-current-directory preservation, path-only `spawn`, and nonblocking
+current-directory preservation, argv/envp-capable `spawn`, and nonblocking
 `waitpid(WNOHANG)` child collection smoke, including nonzero child status
 encoding, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
@@ -64,7 +64,7 @@ slices:
 
 1. close the remaining `execve` replacement-state diagnostics gap;
 2. add blocking `waitpid` behavior once waiting parents can sleep and wake;
-3. extend user-visible spawn beyond path-only launch with argv/envp vectors;
+3. define inherited file descriptor selection before broader general spawn;
 4. update scheduler diagnostics whenever lifecycle state gains a new transition.
 
 Prefer docs, diagnostics, and narrow smoke assertions before broad syscall

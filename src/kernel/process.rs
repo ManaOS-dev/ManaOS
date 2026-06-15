@@ -71,16 +71,16 @@ impl<'a> UserProgramSpawnRequest<'a> {
     }
 }
 
-/// User program argument and environment vectors before stack construction.
+/// User program argument and environment byte vectors before stack construction.
 #[derive(Clone, Copy)]
 pub struct UserProgramEntryVectors<'a> {
-    arguments: &'a [&'a str],
-    environment: &'a [&'a str],
+    arguments: &'a [&'a [u8]],
+    environment: &'a [&'a [u8]],
 }
 
 impl<'a> UserProgramEntryVectors<'a> {
-    /// Create user entry vectors from borrowed argument and environment slices.
-    pub const fn new(arguments: &'a [&'a str], environment: &'a [&'a str]) -> Self {
+    /// Create user entry vectors from borrowed argument and environment bytes.
+    pub const fn new(arguments: &'a [&'a [u8]], environment: &'a [&'a [u8]]) -> Self {
         Self {
             arguments,
             environment,
@@ -88,12 +88,12 @@ impl<'a> UserProgramEntryVectors<'a> {
     }
 
     /// Return the argument vector used to build the initial user stack.
-    pub const fn arguments(self) -> &'a [&'a str] {
+    pub const fn arguments(self) -> &'a [&'a [u8]] {
         self.arguments
     }
 
     /// Return the environment vector used to build the initial user stack.
-    pub const fn environment(self) -> &'a [&'a str] {
+    pub const fn environment(self) -> &'a [&'a [u8]] {
         self.environment
     }
 
@@ -295,7 +295,7 @@ fn prepare_user_entry_stack(
     user_stack: AllocatedUserStack,
     entry_vectors: UserProgramEntryVectors<'_>,
 ) -> PreparedUserStack {
-    let prepared_user_stack = user_stack::prepare_initial_stack(
+    let prepared_user_stack = user_stack::prepare_initial_stack_bytes(
         user_address_space,
         user_stack,
         entry_vectors.arguments(),

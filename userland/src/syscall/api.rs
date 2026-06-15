@@ -36,7 +36,7 @@ pub const SYS_WAITPID: usize = contract::SYS_WAITPID as usize;
 pub const SYS_GETCWD: usize = contract::SYS_GETCWD as usize;
 /// Linux-compatible change-directory syscall number.
 pub const SYS_CHDIR: usize = contract::SYS_CHDIR as usize;
-/// ManaOS-specific path-only spawn syscall number.
+/// ManaOS-specific spawn syscall number.
 pub const SYS_SPAWN: usize = contract::SYS_SPAWN as usize;
 /// Linux-compatible get-parent-process-identifier syscall number.
 pub const SYS_GETPPID: usize = contract::SYS_GETPPID as usize;
@@ -282,7 +282,26 @@ pub fn getppid() -> isize {
 /// Spawn a child user program from a null-terminated path.
 #[inline(always)]
 pub fn spawn(path: &[u8]) -> isize {
-    syscall1(SYS_SPAWN, path.as_ptr() as usize)
+    spawn_with_vectors(path, core::ptr::null(), core::ptr::null())
+}
+
+/// Spawn a child user program with explicit null-terminated argument vectors.
+///
+/// `path` must point to a NUL-terminated path. `arguments` and `environment`
+/// must point to NUL-terminated pointer arrays, or be null for default spawn
+/// arguments and an empty environment.
+#[inline(always)]
+pub fn spawn_with_vectors(
+    path: &[u8],
+    arguments: *const *const u8,
+    environment: *const *const u8,
+) -> isize {
+    syscall3(
+        SYS_SPAWN,
+        path.as_ptr() as usize,
+        arguments as usize,
+        environment as usize,
+    )
 }
 
 /// Wait for a child process and optionally store its wait status.
