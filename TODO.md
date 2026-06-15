@@ -11,7 +11,7 @@ reviewable unit before implementing it.
 
 ### Typed Address Boundaries
 
-- [ ] Replace raw physical address parameters with `PhysAddr` in remaining memory APIs.
+- [ ] Replace remaining raw physical address parameters with `PhysAddr` in memory APIs beyond `PhysicalFrameStart` construction.
 - [ ] Replace raw virtual address parameters with `VirtAddr` in remaining memory APIs.
 - [ ] Add typed page-aligned address wrappers where alignment is required by construction.
 - [ ] Add typed page count wrappers for APIs that distinguish bytes from pages.

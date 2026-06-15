@@ -8,7 +8,7 @@ pub use verification::{
     verify_contiguous_allocation_boundaries, verify_duplicate_allocation_rejection,
     verify_explicit_owner_coverage, verify_owner_tracking, verify_released_frame_reuse,
     verify_reserved_range_exclusion, verify_reserved_used_and_free_range_tracking,
-    verify_zero_address_skip_for_multi_frame_allocations,
+    verify_typed_physical_frame_start, verify_zero_address_skip_for_multi_frame_allocations,
 };
 
 const MAX_REGIONS: usize = 128;
@@ -219,7 +219,7 @@ impl PhysicalFrameAllocator {
                 pages: n,
             };
             if self.mark_range_used(candidate_region, owner) {
-                let start = PhysicalFrameStart::new(candidate_region.start)
+                let start = PhysicalFrameStart::new(PhysAddr::new(candidate_region.start))
                     .expect("frame allocator returned an unaligned physical frame");
                 return PhysicalFrameRange::new(start, n);
             }

@@ -128,6 +128,10 @@ active roadmap can list only unfinished work.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 
+### Typed Address Boundaries
+
+- [x] Make `PhysicalFrameStart` construction require `PhysAddr`.
+
 ### Address Space Lifecycle
 
 - [x] Publish successful `execve` image replacement through one scheduler-owned transition.

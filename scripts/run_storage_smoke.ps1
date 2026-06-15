@@ -45,6 +45,7 @@ $expectedPatterns = @(
     "ManaOS Kernel is alive\.",
     "Invalid ELF rejection smoke passed",
     "Frame allocator self-checks passed: .*released_frame_reuse=true",
+    "Frame allocator self-checks passed: .*typed_frame_start=true",
     "Kernel virtual range allocator self-checks passed: non_overlapping_reuse=true exhaustion_rejection=true",
     "ACPI parser self-check passed: rsdp=true root_table=true madt=true",
     "ACPI root table verified",

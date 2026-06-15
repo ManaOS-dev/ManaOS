@@ -32,6 +32,8 @@ physical frame allocator は、以下の前提に依存します。
 - `ExitBootServices` 前に UEFI `CONVENTIONAL` memory だけを登録します。
 - memory registration API は `PhysAddr` start を受け取り、virtual address を physical range model
   に渡せないようにします。
+- `PhysicalFrameStart` construction は `PhysAddr` だけを受け取るため、hardware register や
+  page table から読んだ raw address は境界で physical address として分類してから渡します。
 - registered range は 4 KiB page に正規化し、physical address zero を避けます。
 - registered range は sort し、隣接 range は merge します。
 - allocation は tracked free range を scan し、owner が release するまで同じ physical frame を

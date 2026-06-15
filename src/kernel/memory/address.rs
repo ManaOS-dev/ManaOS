@@ -237,12 +237,12 @@ impl FramebufferPhysicalRange {
 
 /// A 4 KiB-aligned physical frame start address.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PhysicalFrameStart(u64);
+pub struct PhysicalFrameStart(PhysAddr);
 
 impl PhysicalFrameStart {
     /// Create a physical frame start address if `address` is 4 KiB-aligned.
-    pub const fn new(address: u64) -> Option<Self> {
-        if address.is_multiple_of(PAGE_SIZE) {
+    pub const fn new(address: PhysAddr) -> Option<Self> {
+        if address.as_u64().is_multiple_of(PAGE_SIZE) {
             Some(Self(address))
         } else {
             None
@@ -251,17 +251,17 @@ impl PhysicalFrameStart {
 
     /// Return the raw physical address as a `u64`.
     pub const fn as_u64(self) -> u64 {
-        self.0
+        self.0.as_u64()
     }
 
     /// Return this frame start as a physical byte address.
     pub const fn as_address(self) -> PhysAddr {
-        PhysAddr::new(self.0)
+        self.0
     }
 
     /// Return this identity-mapped frame start as a kernel virtual address.
     pub const fn as_identity_mapped_kernel_address(self) -> KernelVirtualAddress {
-        KernelVirtualAddress::new(VirtAddr::new(self.0))
+        KernelVirtualAddress::new(VirtAddr::new(self.0.as_u64()))
     }
 
     /// Return this frame start as a DMA physical byte address.
@@ -275,7 +275,7 @@ impl PhysicalFrameStart {
     ///
     /// Panics if the physical address does not fit in `usize`.
     pub fn as_usize(self) -> usize {
-        usize::try_from(self.0).expect("physical frame address must fit in usize")
+        self.0.as_usize()
     }
 }
 

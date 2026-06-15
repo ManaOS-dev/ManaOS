@@ -1,7 +1,7 @@
 //! User address-space page-table ownership.
 
 use super::{
-    address::{PhysicalFrameRange, PhysicalFrameStart, UserVirtualAddress, VirtAddr},
+    address::{PhysAddr, PhysicalFrameRange, PhysicalFrameStart, UserVirtualAddress, VirtAddr},
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
 };
 use core::sync::atomic::{AtomicU64, Ordering};
@@ -125,7 +125,7 @@ impl UserAddressSpace {
         };
         flush.flush();
 
-        let physical_start = PhysicalFrameStart::new(frame.start_address().as_u64())
+        let physical_start = PhysicalFrameStart::new(PhysAddr::new(frame.start_address().as_u64()))
             .expect("unmapped user page frame must be 4KiB aligned");
         let physical_range =
             PhysicalFrameRange::new(physical_start, 1).expect("single-frame range must be valid");
@@ -310,8 +310,8 @@ pub fn switch_to_user_address_space(address_space: UserAddressSpace) {
 /// Panics if paging has not recorded the kernel address-space root.
 pub fn switch_to_kernel_address_space() {
     let raw_frame = KERNEL_LEVEL_4_FRAME.load(Ordering::Acquire);
-    let level_4_frame =
-        PhysicalFrameStart::new(raw_frame).expect("kernel address space must be initialized");
+    let level_4_frame = PhysicalFrameStart::new(PhysAddr::new(raw_frame))
+        .expect("kernel address space must be initialized");
     switch_to_level_4(level_4_frame);
 }
 
@@ -497,7 +497,7 @@ fn entry_frame_start(entry: &PageTableEntry) -> PhysicalFrameStart {
     let frame = entry
         .frame()
         .expect("present user address-space entry must reference a 4KiB frame");
-    PhysicalFrameStart::new(frame.start_address().as_u64())
+    PhysicalFrameStart::new(PhysAddr::new(frame.start_address().as_u64()))
         .expect("page-table entry frame must be 4KiB aligned")
 }
 

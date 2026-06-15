@@ -4,7 +4,7 @@ use super::{
     FrameAllocatorOwnerStatistics, FrameAllocatorStatistics, FrameRangeOwner,
     PhysicalFrameAllocator, FRAME_SIZE,
 };
-use crate::kernel::memory::address::PhysAddr;
+use crate::kernel::memory::address::{PhysAddr, PhysicalFrameStart};
 
 /// Verify the frame-zero skip behavior for multi-frame allocations.
 #[allow(dead_code)]
@@ -16,6 +16,17 @@ pub fn verify_zero_address_skip_for_multi_frame_allocations() -> bool {
         .allocate_frames(2)
         .map(|range| range.start().as_u64())
         == Some(FRAME_SIZE)
+}
+
+/// Verify that physical frame starts are created only from typed physical addresses.
+#[allow(dead_code)]
+pub fn verify_typed_physical_frame_start() -> bool {
+    let aligned_frame_start = PhysicalFrameStart::new(PhysAddr::new(FRAME_SIZE));
+    let unaligned_frame_start = PhysicalFrameStart::new(PhysAddr::new(FRAME_SIZE + 1));
+
+    aligned_frame_start.is_some_and(|frame_start| {
+        frame_start.as_address() == PhysAddr::new(FRAME_SIZE) && frame_start.as_u64() == FRAME_SIZE
+    }) && unaligned_frame_start.is_none()
 }
 
 /// Verify reserved, used, and free frame range tracking.

@@ -131,7 +131,7 @@ pub fn allocate_user_stack(
         let physical_start = PhysicalFrameStart::new(
             physical_range
                 .start()
-                .as_u64()
+                .as_address()
                 .checked_add(offset)
                 .expect("user stack physical address overflowed"),
         )

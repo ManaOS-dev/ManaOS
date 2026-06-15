@@ -74,7 +74,7 @@ current lifecycle TODO set is complete. Continue with small Phase 2 typed
 address-boundary slices:
 
 1. replace raw physical address parameters with `PhysAddr` in a narrow
-   remaining memory API surface;
+   remaining memory API surface beyond `PhysicalFrameStart` construction;
 2. replace raw virtual address parameters with `VirtAddr` in a narrow remaining
    memory API surface.
 

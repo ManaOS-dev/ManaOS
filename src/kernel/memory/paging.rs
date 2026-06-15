@@ -65,7 +65,7 @@ pub unsafe fn init<'a>(
         Cr3::write(pml4_frame, x86_64::registers::control::Cr3Flags::empty());
     }
     crate::kernel::memory::address_space::initialize_kernel_address_space(
-        PhysicalFrameStart::new(pml4_frame.start_address().as_u64())
+        PhysicalFrameStart::new(KernelPhysAddr::new(pml4_frame.start_address().as_u64()))
             .expect("kernel PML4 frame must be 4KiB-aligned"),
     );
     crate::log_info!("paging", "Identity mapping complete.");
@@ -237,8 +237,9 @@ pub fn unmap_kernel_range_and_free_frames(
             .expect("failed to unmap kernel dynamic page");
         flush.flush();
 
-        let physical_start = PhysicalFrameStart::new(frame.start_address().as_u64())
-            .expect("unmapped physical frame must be 4KiB-aligned");
+        let physical_start =
+            PhysicalFrameStart::new(KernelPhysAddr::new(frame.start_address().as_u64()))
+                .expect("unmapped physical frame must be 4KiB-aligned");
         let physical_range = PhysicalFrameRange::new(physical_start, 1)
             .expect("single unmapped frame range must be valid");
         assert!(

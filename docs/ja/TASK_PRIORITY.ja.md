@@ -64,7 +64,7 @@ post-shell kernel console availability smoke は
 scheduler invariant も同じ文書に整理済みです。Phase 1 の current lifecycle TODO set は完了したため、
 ここからは Phase 2 の typed address boundary を小さい slice で進めます。
 
-1. 残っている memory API の狭い範囲で raw physical address parameter を `PhysAddr` に置き換える。
+1. `PhysicalFrameStart` construction 以外に残る memory API の狭い範囲で raw physical address parameter を `PhysAddr` に置き換える。
 2. 残っている memory API の狭い範囲で raw virtual address parameter を `VirtAddr` に置き換える。
 
 現在の smoke-owned experimental user shell の entry / exit path を QEMU で観察する手順は
