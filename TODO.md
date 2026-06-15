@@ -16,7 +16,6 @@ reviewable unit before implementing it.
 - [ ] Implement `pwd` using the userland runtime path API.
 - [ ] Implement `exit` with a configurable status code.
 - [ ] Implement `help` with commands compiled into the shell.
-- [ ] Add bounded error messages for command failures.
 - [ ] Keep the kernel console available while the user shell is experimental.
 - [ ] Document how to enter and leave the user shell in QEMU.
 

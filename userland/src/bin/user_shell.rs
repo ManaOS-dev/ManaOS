@@ -15,6 +15,7 @@ const FILE_DEMO_EXIT_MESSAGE: &[u8] = b"user shell file_demo exit ok\n";
 const RELATIVE_FILE_DEMO_LAUNCH_MESSAGE: &[u8] = b"user shell launching relative file_demo\n";
 const RELATIVE_FILE_DEMO_EXIT_MESSAGE: &[u8] = b"user shell relative file_demo exit ok\n";
 const MISSING_COMMAND_OK_MESSAGE: &[u8] = b"user shell missing command not found ok\n";
+const BOUNDED_ERRORS_OK_MESSAGE: &[u8] = b"user shell bounded errors ok\n";
 const STDIN_EOF_MESSAGE: &[u8] = b"user shell stdin eof\n";
 const READ_ERROR_MESSAGE: &[u8] = b"user shell read error\n";
 const INPUT_BUFFERED_MESSAGE: &[u8] = b"user shell input buffered\n";
@@ -234,19 +235,40 @@ fn verify_command_execution_smoke() -> Result<(), CommandExecutionError> {
     let _ = syscall::write(STDOUT, RELATIVE_FILE_DEMO_LAUNCH_MESSAGE);
     execute_command(b"bin/file_demo --shell-command-smoke")?;
     let _ = syscall::write(STDOUT, RELATIVE_FILE_DEMO_EXIT_MESSAGE);
+    verify_bounded_error_message_smoke()?;
+    Ok(())
+}
+
+fn verify_bounded_error_message_smoke() -> Result<(), CommandExecutionError> {
+    verify_expected_command_error(b" \t\r\n", CommandExecutionError::EmptyCommand)?;
+    verify_expected_command_error(b"0 1 2 3 4 5 6 7 8", CommandExecutionError::TooManyTokens)?;
+    let long_command = [b'a'; COMMAND_BUFFER_BYTES];
+    verify_expected_command_error(&long_command, CommandExecutionError::PathTooLong)?;
     verify_missing_command_smoke()?;
+    let _ = syscall::write(STDOUT, BOUNDED_ERRORS_OK_MESSAGE);
     Ok(())
 }
 
 fn verify_missing_command_smoke() -> Result<(), CommandExecutionError> {
-    let error = execute_command(b"bin/missing_shell_command")
+    verify_expected_command_error(
+        b"bin/missing_shell_command",
+        CommandExecutionError::SpawnNotFound,
+    )?;
+    let _ = syscall::write(STDOUT, MISSING_COMMAND_OK_MESSAGE);
+    Ok(())
+}
+
+fn verify_expected_command_error(
+    command: &[u8],
+    expected: CommandExecutionError,
+) -> Result<(), CommandExecutionError> {
+    let error = execute_command(command)
         .err()
         .ok_or(CommandExecutionError::SpawnFailed)?;
-    if error != CommandExecutionError::SpawnNotFound {
+    if error != expected {
         return Err(error);
     }
     write_execution_error(error);
-    let _ = syscall::write(STDOUT, MISSING_COMMAND_OK_MESSAGE);
     Ok(())
 }
 

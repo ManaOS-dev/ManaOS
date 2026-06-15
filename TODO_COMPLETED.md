@@ -97,6 +97,7 @@ active roadmap can list only unfinished work.
 - [x] Implement single-command execution without pipelines first.
 - [x] Add fixed-buffer argv construction for command execution.
 - [x] Add shell smoke logs for launching `file_demo`.
+- [x] Add bounded error messages for command failures.
 - [x] Add shell smoke logs for a missing command.
 
 ### User Process Scheduling
