@@ -532,6 +532,14 @@ pub fn get_scheduler_task_snapshots() -> Option<Vec<SchedulerTaskSnapshot>> {
         .and_then(|scheduler| scheduler.as_ref().map(Scheduler::get_task_snapshots))
 }
 
+/// Verify scheduler transition invariants for active, finished, and reclaiming user tasks.
+pub fn verify_scheduler_transition_invariants() -> bool {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .is_some_and(Scheduler::verify_transition_invariants)
+}
+
 /// Return guard-fault diagnostics when `fault_address` is inside a known kernel
 /// stack guard page.
 pub fn get_kernel_stack_guard_fault(fault_address: u64) -> Option<KernelStackGuardFault> {

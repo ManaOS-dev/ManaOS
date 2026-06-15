@@ -106,6 +106,7 @@ impl Scheduler {
             reclaimed_user_kernel_stack_virtual_pages: self
                 .reclaimed_user_kernel_stack_virtual_pages,
             address_space_reclaim_guard_checks: self.address_space_reclaim_guard_check_count,
+            scheduler_transition_invariant_checks: self.transition_invariant_check_count,
         }
     }
 

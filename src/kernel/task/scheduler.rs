@@ -662,6 +662,7 @@ pub(super) struct Scheduler {
     reclaimed_user_kernel_stack_writable_pages: u64,
     reclaimed_user_kernel_stack_virtual_pages: u64,
     address_space_reclaim_guard_check_count: u64,
+    transition_invariant_check_count: u64,
 }
 
 impl Scheduler {
@@ -698,6 +699,7 @@ impl Scheduler {
             reclaimed_user_kernel_stack_writable_pages: 0,
             reclaimed_user_kernel_stack_virtual_pages: 0,
             address_space_reclaim_guard_check_count: 0,
+            transition_invariant_check_count: 0,
         }
     }
 
@@ -944,6 +946,6 @@ pub use facade::{
     replace_current_file_descriptor_table, replace_current_user_image,
     run_active_user_tasks_until_empty, run_next_user_task_once, run_user_task_once,
     run_user_task_until_read_block, set_current_working_directory, set_preemption_enabled, spawn,
-    spawn_user_task, take_current_user_read_request, wake_keyboard_readers,
-    with_current_file_descriptor_table,
+    spawn_user_task, take_current_user_read_request, verify_scheduler_transition_invariants,
+    wake_keyboard_readers, with_current_file_descriptor_table,
 };

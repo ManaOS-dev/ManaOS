@@ -44,6 +44,7 @@
 //! - [`current_user_task_has_child`] - Check whether the current user task owns a matching child
 //! - [`get_scheduler_diagnostics`] - Read scheduler accounting diagnostics
 //! - [`get_scheduler_task_snapshots`] - Read retained task rows for diagnostics
+//! - [`verify_scheduler_transition_invariants`] - Check scheduler transition invariants
 //! - [`activate_user_task`] - Add a user task to the active scheduling set
 //! - [`has_active_user_tasks`] - Check whether active user task records remain
 //! - [`set_preemption_enabled`] - Enable or disable timer-driven task switching
@@ -95,9 +96,9 @@ pub use scheduler::{
     replace_current_file_descriptor_table, replace_current_user_image,
     run_active_user_tasks_until_empty, run_next_user_task_once, run_user_task_once,
     run_user_task_until_read_block, set_current_working_directory, set_preemption_enabled, spawn,
-    spawn_user_task, take_current_user_read_request, wake_keyboard_readers,
-    with_current_file_descriptor_table, Task, UserMappingRequest, UserReadRequest,
-    UserTrapFrameSource,
+    spawn_user_task, take_current_user_read_request, verify_scheduler_transition_invariants,
+    wake_keyboard_readers, with_current_file_descriptor_table, Task, UserMappingRequest,
+    UserReadRequest, UserTrapFrameSource,
 };
 #[allow(unused_imports)]
 pub use stack::{KernelStackFaultOwner, KernelStackGuardFault};

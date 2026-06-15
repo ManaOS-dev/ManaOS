@@ -11,7 +11,6 @@ reviewable unit before implementing it.
 
 ### User Process Scheduling
 
-- [ ] Add scheduler assertions for impossible active, finished, and reclaiming transitions.
 - [ ] Document scheduler invariants for active, waiting, zombie, and reaped tasks.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening

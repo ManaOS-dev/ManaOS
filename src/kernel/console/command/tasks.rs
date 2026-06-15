@@ -61,7 +61,7 @@ pub(super) fn run(
         diagnostics.user_return_preemption_window_closes()
     ));
     output.push(format!(
-        "resources: reclaimed_user_resource_records={} reclaimed_user_address_spaces={} reclaimed_user_pages={} reclaimed_user_page_table_pages={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} address_space_reclaim_guard_checks={}",
+        "resources: reclaimed_user_resource_records={} reclaimed_user_address_spaces={} reclaimed_user_pages={} reclaimed_user_page_table_pages={} reclaimed_user_kernel_stacks={} reclaimed_kernel_stack_writable_pages={} reclaimed_kernel_stack_virtual_pages={} address_space_reclaim_guard_checks={} scheduler_transition_invariant_checks={}",
         diagnostics.reclaimed_user_resource_records(),
         diagnostics.reclaimed_user_address_spaces(),
         diagnostics.reclaimed_user_pages(),
@@ -69,7 +69,8 @@ pub(super) fn run(
         diagnostics.reclaimed_user_kernel_stacks(),
         diagnostics.reclaimed_user_kernel_stack_writable_pages(),
         diagnostics.reclaimed_user_kernel_stack_virtual_pages(),
-        diagnostics.address_space_reclaim_guard_checks()
+        diagnostics.address_space_reclaim_guard_checks(),
+        diagnostics.scheduler_transition_invariant_checks()
     ));
     output.push(format!(
         "user_return: stack_sets={} stack_takes={}",

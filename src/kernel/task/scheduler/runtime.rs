@@ -27,6 +27,7 @@ impl Scheduler {
         if !self.is_user_task_active(task_id) {
             self.active_user_task_identifiers.push(task_id);
         }
+        self.assert_transition_invariants();
         true
     }
 
@@ -53,6 +54,7 @@ impl Scheduler {
     pub(in crate::kernel::task) fn deactivate_user_task(&mut self, task_id: u64) {
         self.active_user_task_identifiers
             .retain(|active_task_id| *active_task_id != task_id);
+        self.assert_transition_invariants();
     }
 
     pub(in crate::kernel::task) fn prepare_one_shot_user_task(
@@ -95,6 +97,7 @@ impl Scheduler {
             user_runtime.record_resume_handoff(address_space, kernel_stack_top);
             user_runtime.record_user_trap_frame_restore();
         }
+        self.assert_transition_invariants();
         Some(OneShotUserTask {
             trap_frame,
             kernel_stack_top,
@@ -157,6 +160,7 @@ impl Scheduler {
             exit_code
         );
         self.wake_waiting_parent_for_child_exit(parent_task_id, task_id);
+        self.assert_transition_invariants();
         Some(exit)
     }
 
@@ -620,6 +624,7 @@ impl Scheduler {
             self.reclaimed_user_resource_record_count =
                 self.reclaimed_user_resource_record_count.saturating_add(1);
         }
+        self.assert_transition_invariants();
         Some(reclaim)
     }
 
@@ -666,6 +671,7 @@ impl Scheduler {
         self.address_space_reclaim_guard_check_count = self
             .address_space_reclaim_guard_check_count
             .saturating_add(1);
+        self.assert_transition_invariants();
         Some(())
     }
 
@@ -674,6 +680,7 @@ impl Scheduler {
             return;
         };
         user_runtime.address_space_reclaiming = false;
+        self.assert_transition_invariants();
     }
 
     pub(in crate::kernel::task) fn reclaim_finished_user_kernel_stack_at_index(
@@ -817,7 +824,110 @@ impl Scheduler {
             heap_start.as_u64()
         );
 
+        self.assert_transition_invariants();
         Some((task_id, old_address_space))
+    }
+
+    pub(in crate::kernel::task) fn verify_transition_invariants(&mut self) -> bool {
+        self.assert_transition_invariants();
+        self.transition_invariant_check_count =
+            self.transition_invariant_check_count.saturating_add(1);
+        true
+    }
+
+    fn assert_transition_invariants(&self) {
+        self.assert_active_user_task_invariants();
+        self.assert_user_task_lifecycle_invariants();
+    }
+
+    fn assert_active_user_task_invariants(&self) {
+        for (active_index, active_task_identifier) in self
+            .active_user_task_identifiers
+            .iter()
+            .copied()
+            .enumerate()
+        {
+            assert!(
+                !self.active_user_task_identifiers[..active_index]
+                    .contains(&active_task_identifier),
+                "active user task set must not contain duplicate task identifiers"
+            );
+            let task_index = self
+                .get_task_index(active_task_identifier)
+                .expect("active user task must reference a retained task");
+            let task = &self.tasks[task_index];
+            let TaskKind::User(user_runtime) = &task.kind else {
+                panic!("active user task must reference a user task");
+            };
+            assert_ne!(
+                task.state,
+                TaskState::Finished,
+                "active user task must not be finished"
+            );
+            assert!(
+                !user_runtime.address_space_reclaiming,
+                "active user task must not be reclaiming an address space"
+            );
+            assert!(
+                user_runtime.address_space.is_some(),
+                "active user task must own an address space"
+            );
+            assert!(
+                user_runtime.has_schedulable_address_space(),
+                "active user task must have a schedulable address space"
+            );
+        }
+    }
+
+    fn assert_user_task_lifecycle_invariants(&self) {
+        for task in &self.tasks {
+            let TaskKind::User(user_runtime) = &task.kind else {
+                continue;
+            };
+            let task_identifier = task.get_id();
+
+            if task.state == TaskState::Running {
+                assert!(
+                    self.is_user_task_active(task_identifier),
+                    "running user task must remain in the active set"
+                );
+                assert!(
+                    user_runtime.has_schedulable_address_space(),
+                    "running user task must have a schedulable address space"
+                );
+            }
+            if task.state == TaskState::Finished {
+                assert!(
+                    !self.is_user_task_active(task_identifier),
+                    "finished user task must not remain in the active set"
+                );
+            }
+            if user_runtime.address_space_reclaiming {
+                assert_eq!(
+                    task.state,
+                    TaskState::Finished,
+                    "reclaiming address space must belong to a finished user task"
+                );
+                assert!(
+                    !self.is_user_task_active(task_identifier),
+                    "reclaiming user task must not remain in the active set"
+                );
+                assert!(
+                    user_runtime.address_space.is_some(),
+                    "reclaiming user task must still own its address space"
+                );
+                assert!(
+                    !user_runtime.has_schedulable_address_space(),
+                    "reclaiming user task must not have a schedulable address space"
+                );
+            }
+            if user_runtime.address_space.is_none() {
+                assert!(
+                    !self.is_user_task_active(task_identifier),
+                    "user task without an address space must not remain in the active set"
+                );
+            }
+        }
     }
 
     pub(in crate::kernel::task) fn record_current_user_execve_reclaim(

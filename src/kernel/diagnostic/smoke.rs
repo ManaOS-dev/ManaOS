@@ -743,6 +743,7 @@ pub fn verify_scheduler_console_command() -> bool {
         &[
             "reclaimed_user_address_spaces=",
             "address_space_reclaim_guard_checks=",
+            "scheduler_transition_invariant_checks=",
             "process_lifecycle:",
             "collected_user_exit_statuses=",
             "zombie_user_tasks=",

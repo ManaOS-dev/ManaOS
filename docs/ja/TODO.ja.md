@@ -30,7 +30,7 @@
 - `waitpid` と exit status の保持、reap、zombie 管理。
 - `spawn + execve` を最初の安定モデルとして進めるための残り実装。
 - 最小 user shell の導入。
-- active、finished、reclaiming transition の impossible state assertion。
+- active、waiting、zombie、reaped lifecycle invariant の文書化。
 
 実装時の注意:
 
@@ -82,8 +82,9 @@ finished child resource reclamation policy は、exit record retention 後に ru
 waitable exit が残ることまで確認します。resumed user process の full runtime trap-frame restore と
 syscall/timer return frame の unified scheduler recording path は scheduler diagnostics と storage smoke
 で確認済みです。さらに address-space/kernel-stack resume handoff 証明も scheduler diagnostics と
-storage smoke で確認済みです。address-space reclaim 中 task の scheduling prevention も
-scheduler diagnostics と storage smoke で確認済みです。残りは impossible transition assertions と
+storage smoke で確認済みです。address-space reclaim 中 task の scheduling prevention と
+active、finished、reclaiming transition の impossible state assertion も scheduler diagnostics と
+storage smoke で確認済みです。残りは active、waiting、zombie、reaped task の invariant documentation と
 preemption/scheduler diagnostics です。
 次も小さい branch に分けて進めます。
 

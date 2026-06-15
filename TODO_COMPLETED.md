@@ -64,6 +64,7 @@ active roadmap can list only unfinished work.
 - [x] Reparent orphaned children to a documented initial process policy.
 - [x] Reclaim finished child address spaces after the exit record is safe.
 - [x] Reclaim finished child kernel stacks after the exit record is safe.
+- [x] Add scheduler assertions for impossible active, finished, and reclaiming transitions.
 
 ### Spawn Model And Fork Decision
 

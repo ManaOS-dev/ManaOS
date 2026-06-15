@@ -172,6 +172,10 @@ The scheduler-backed contract is:
 - While address-space reclaim is in progress, the task is explicitly excluded
   from user scheduling candidates even if a future transition bug leaves it in
   the active set.
+- Assert scheduler transition invariants after active-set, finish, reclaim, and
+  replacement transitions: active user tasks must be retained user tasks, must
+  not be finished or reclaiming, and must own a schedulable address space;
+  finished or reclaiming user tasks must not remain active.
 - Keep wait collection independent from reclaimed runtime resources: `waitpid`
   may consume only scheduler metadata and child exit records.
 
@@ -440,6 +444,9 @@ Current runtime diagnostics cover the first successful replacement path:
   kernel stack have already been reclaimed.
 - Storage smoke asserts one address-space reclaim scheduling guard check for
   every finished user task resource cleanup.
+- Storage smoke verifies the scheduler transition invariant checker once after
+  user lifecycle cleanup and exposes the count as
+  `scheduler_transition_invariant_checks`.
 - Storage smoke asserts the `sys_spawn` descriptor-inheritance snapshot emitted
   before the child image loader opens its temporary executable descriptor. The
   snapshot is emitted from the parent process table and marks the process-table

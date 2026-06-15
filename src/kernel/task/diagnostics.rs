@@ -842,6 +842,7 @@ pub struct SchedulerDiagnostics {
     pub(super) reclaimed_user_kernel_stack_writable_pages: u64,
     pub(super) reclaimed_user_kernel_stack_virtual_pages: u64,
     pub(super) address_space_reclaim_guard_checks: u64,
+    pub(super) scheduler_transition_invariant_checks: u64,
 }
 
 impl SchedulerDiagnostics {
@@ -1038,5 +1039,10 @@ impl SchedulerDiagnostics {
     /// Return the number of reclaim-time scheduling guard checks.
     pub const fn address_space_reclaim_guard_checks(self) -> u64 {
         self.address_space_reclaim_guard_checks
+    }
+
+    /// Return the number of explicit scheduler transition invariant checks.
+    pub const fn scheduler_transition_invariant_checks(self) -> u64 {
+        self.scheduler_transition_invariant_checks
     }
 }

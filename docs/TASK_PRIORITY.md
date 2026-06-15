@@ -72,8 +72,7 @@ smoke, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. add scheduler assertions for impossible active, finished, and reclaiming
-   transitions;
+1. document scheduler invariants for active, waiting, zombie, and reaped tasks;
 2. keep scheduler diagnostics synchronized whenever lifecycle state gains a new
    transition.
 

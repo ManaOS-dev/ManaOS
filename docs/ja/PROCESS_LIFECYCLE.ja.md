@@ -142,6 +142,10 @@ scheduler-backed contract:
   kernel address space へ戻った後に reclaim します。
 - address-space reclaim 中の task は、将来の transition bug で active set に残っていても
   user scheduling candidate から明示的に除外します。
+- active set、finish、reclaim、replacement transition の後に scheduler transition invariant を
+  assert します。active user task は retained user task であり、finished/reclaiming ではなく、
+  schedulable address space を所有している必要があります。finished または reclaiming user task は
+  active set に残ってはいけません。
 - wait collection は reclaimed runtime resource に依存しません。`waitpid` は scheduler metadata と child exit
   record だけを消費します。
 
@@ -362,6 +366,8 @@ inheritance snapshot を記録します。その後 scheduler は、parent snaps
   waitable child exit が `lifecycle=zombie` として観測可能なまま残ることを検証します。
 - storage smoke は、finished user task の resource cleanup ごとに address-space reclaim scheduling guard check
   が1回記録されることを assert します。
+- storage smoke は user lifecycle cleanup 後に scheduler transition invariant checker を1回検証し、
+  `scheduler_transition_invariant_checks` として count を公開します。
 - storage smoke は `sys_spawn` が child image loader の temporary executable descriptor を open する前に出す
   descriptor-inheritance snapshot を assert します。この snapshot は parent process table から出され、
   process-table path であることを明示します。

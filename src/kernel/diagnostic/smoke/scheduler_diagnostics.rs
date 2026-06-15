@@ -9,6 +9,10 @@ use crate::kernel::task::context::UserTrapFrame;
 
 /// Verify scheduler accounting after the userland smoke demo.
 pub fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
+    assert!(
+        crate::kernel::task::verify_scheduler_transition_invariants(),
+        "scheduler transition invariants must be verifiable after user smoke tasks"
+    );
     let diagnostics = crate::kernel::task::get_scheduler_diagnostics()
         .expect("scheduler diagnostics must be available after user smoke tasks");
     let states = diagnostics.states();
@@ -134,6 +138,11 @@ fn verify_scheduler_reclaim_diagnostics(
         diagnostics.address_space_reclaim_guard_checks(),
         expected_user_tasks,
         "finished user address-space reclaim must prove scheduling guard coverage"
+    );
+    assert_eq!(
+        diagnostics.scheduler_transition_invariant_checks(),
+        1,
+        "user smoke must verify scheduler transition invariants once"
     );
 }
 
@@ -377,6 +386,10 @@ fn log_scheduler_reclaim_diagnostics(diagnostics: &crate::kernel::task::Schedule
             LogField::new(
                 "address_space_reclaim_guard_checks",
                 format_args!("{}", diagnostics.address_space_reclaim_guard_checks()),
+            ),
+            LogField::new(
+                "scheduler_transition_invariant_checks",
+                format_args!("{}", diagnostics.scheduler_transition_invariant_checks()),
             ),
         ],
     );
