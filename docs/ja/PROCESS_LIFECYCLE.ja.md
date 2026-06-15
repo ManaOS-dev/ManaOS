@@ -51,9 +51,9 @@ stage し、現在の descriptor inheritance selection を記録してから chi
 blocking `waitpid` は、matching child exit record が retained されるまで parent task を sleep させます。
 descriptor inheritance selection は文書化済みですが、child-private enforcement は descriptor table を
 global filesystem state から process-owned metadata へ移す作業に依存します。
-storage smoke は、parent が exit しても child がまだ alive のまま残る pre-reparenting boundary も
-cover します。現在の runtime は、その child exit を original parent identifier に key 付けたまま
-diagnostics で保持します。まだ initial process への reparent は行いません。
+storage smoke は、parent が exit しても child がまだ alive のまま残る orphan boundary も cover します。
+現在の runtime は、その child relationship を initial process である task `0` へ reparent してから
+child exit を reap します。
 descriptor close-on-exec metadata と successful-`execve` close behavior は、現在の global descriptor
 table 向けに実装済みです。`waitpid` の syscall number、option constant、no-std userland wrapper、
 selector validation、no-child `ECHILD` path、parent task identifier で key 付けされた
@@ -155,19 +155,22 @@ child-exit record には `reaped` を使います。
 
 将来の general process model では、次の invariant を維持します。
 
-- child は、parent exit 後の reparenting policy が文書化されるまでは、記録済み parent に対してのみ
-  waitable です。
+- child は、現在記録されている parent に対してのみ waitable です。
+- user parent が exit したら、scheduler はまだ waitable な child relationship を documented initial
+  process へ reparent します。
 - 成功した `execve` は process identifier、parent identifier、waitability を変えません。
 - child exit status は、成功した parent reap がちょうど一度だけ消費するまで観測可能です。
 - `waitpid(WNOHANG)` が `0` を返してよいのは、caller に matching child が存在し、reap 可能な
   exited matching child がまだない場合だけです。
 - address-space と kernel-stack reclamation は、parent が reap する前に exit status を消してはいけません。
-- orphan handling は明示する必要があります。documented initial process へ reparent するか、orphan を
-  生成しうる process model を拒否します。
+- orphan handling は明示し続けます。ManaOS が dedicated user `init` を起動するまでは、task `0` を
+  reparented child の initial process とします。
 
-現在の smoke coverage は、pre-reparenting behavior を意図的に扱います。user parent が child を spawn し、
-その child が finish する前に parent が exit して、child はそのまま実行を続けます。child exit は recorded
-parent identifier の下に保持され、general orphan lifecycle がまだ完了していないことを見える状態にします。
+現在の initial-process reparenting policy は scheduler-owned です。user task が exit するとき、scheduler は
+recorded parent が exiting task である live user child と uncollected child exit record を task `0` へ移します。
+reparenting は child task identifier、current working directory、address space、blocked/runnable state、
+retained exit status を維持します。parent-exit smoke path は、parent より後に child が finish するケースを作り、
+child が実行を続けることと、その child exit を task `0` 経由で reap できることを確認します。
 
 ## `execve` kernel contract
 

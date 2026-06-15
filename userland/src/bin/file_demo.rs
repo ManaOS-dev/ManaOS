@@ -106,11 +106,12 @@ fn delay_when_user_spawned_child(
     argument_count: usize,
     argument_values: *const *const u8,
 ) {
-    if parent_task_id <= 0 {
+    let is_orphaned_child = orphaned_child_requested(argument_count, argument_values);
+    if !is_orphaned_child && parent_task_id <= 0 {
         return;
     }
 
-    let nanoseconds = if orphaned_child_requested(argument_count, argument_values) {
+    let nanoseconds = if is_orphaned_child {
         ORPHAN_CHILD_DELAY_NANOS
     } else {
         USER_SPAWN_CHILD_DELAY_NANOS
@@ -129,10 +130,10 @@ fn exit_code_for_invocation(
     argument_count: usize,
     argument_values: *const *const u8,
 ) -> usize {
-    if parent_task_id <= 0 {
-        0
-    } else if orphaned_child_requested(argument_count, argument_values) {
+    if orphaned_child_requested(argument_count, argument_values) {
         ORPHAN_CHILD_EXIT_CODE
+    } else if parent_task_id <= 0 {
+        0
     } else {
         USER_SPAWN_CHILD_EXIT_CODE
     }

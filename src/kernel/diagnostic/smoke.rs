@@ -218,28 +218,30 @@ fn verify_parent_exit_child_live_smoke(
     );
     assert!(
         crate::kernel::task::collect_waitable_child_exit(
-            crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64(),
+            orphan_parent_task_id,
             Some(child_exit.task_id()),
         )
         .is_none(),
-        "orphan smoke child must not be reparented before the policy is implemented"
+        "orphan smoke child exit must move away from the exited parent"
     );
+    let initial_process_task_id = crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64();
     let retained_exit = crate::kernel::task::collect_waitable_child_exit(
-        orphan_parent_task_id,
+        initial_process_task_id,
         Some(child_exit.task_id()),
     )
-    .expect("orphan child exit must stay retained for the recorded parent");
+    .expect("orphan child exit must be retained for the initial process");
     assert_eq!(
         retained_exit.exit_code(),
         USER_SMOKE_ORPHAN_CHILD_EXIT_CODE,
-        "orphan child exit code must be retained under the original parent"
+        "orphan child exit code must be retained after reparenting"
     );
     crate::log_info!(
         "task",
-        "Parent-exit child-live smoke passed: parent={} child={} parent_exit_before_child=true retained_parent=true status={} reparented=false",
+        "Parent-exit child-live smoke passed: parent={} child={} parent_exit_before_child=true retained_parent=false status={} reparented=true new_parent={}",
         orphan_parent_task_id,
         retained_exit.task_id(),
-        retained_exit.wait_status()
+        retained_exit.wait_status(),
+        initial_process_task_id
     );
 }
 

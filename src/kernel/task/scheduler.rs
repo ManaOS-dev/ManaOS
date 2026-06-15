@@ -553,6 +553,15 @@ impl ChildExitRecord {
     fn mark_collected(&mut self) {
         self.collected = true;
     }
+
+    fn reparent_to_initial_process(&mut self, old_parent_task_id: u64) -> bool {
+        if self.parent_task_id != old_parent_task_id || self.collected {
+            return false;
+        }
+
+        self.parent_task_id = TaskIdentifier::BOOTSTRAP.as_u64();
+        true
+    }
 }
 
 pub(super) struct Scheduler {

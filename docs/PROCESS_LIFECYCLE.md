@@ -58,10 +58,9 @@ selection, and activates the child immediately. Blocking `waitpid` now sleeps
 the parent task until a matching child exit record is retained. Descriptor
 inheritance selection is documented now, but child-private enforcement still
 depends on moving descriptor tables out of global filesystem state.
-Storage smoke also covers the pre-reparenting boundary where a parent exits
-while its child remains alive. The current runtime keeps that child exit keyed
-to the original parent identifier for diagnostics; it does not yet reparent the
-child to an initial process.
+Storage smoke also covers the orphan boundary where a parent exits while its
+child remains alive. The current runtime reparents that child relationship to
+the initial process, task `0`, before the child exit is reaped.
 Descriptor close-on-exec
 metadata and successful-`execve` close
 behavior exist for the current global descriptor table. The `waitpid` syscall
@@ -181,8 +180,9 @@ The `tasks` console command also prints a per-task `lifecycle` label, using
 
 The future general process model must keep these invariants:
 
-- A child is waitable only to its recorded parent, except for a documented
-  reparenting policy after parent exit.
+- A child is waitable only to its current recorded parent.
+- When a user parent exits, the scheduler reparents any still-waitable child
+  relationship to the documented initial process.
 - A successful `execve` never changes process identifier, parent identifier, or
   waitability.
 - A child exit status remains observable until exactly one successful parent
@@ -191,14 +191,16 @@ The future general process model must keep these invariants:
   but no exited matching child is ready to reap.
 - Address-space and kernel-stack reclamation must not erase the exit status
   before the parent can reap it.
-- Orphan handling must be explicit: either reparent to the documented initial
-  process or reject the process model that can produce orphans.
+- Orphan handling must stay explicit. Until ManaOS starts a dedicated user
+  `init`, task `0` is the initial process for reparented children.
 
-Current smoke coverage intentionally exercises the pre-reparenting behavior: a
-user parent spawns a child and exits before that child finishes, the child
-continues running, and the child exit remains retained under the recorded
-parent identifier. This keeps the missing reparenting policy visible without
-pretending that the general orphan lifecycle is complete.
+The current initial-process reparenting policy is scheduler-owned. When a user
+task exits, the scheduler moves live user children and uncollected child exit
+records whose recorded parent is the exiting task to task `0`. Reparenting
+preserves the child task identifier, current working directory, address space,
+blocked/runnable state, and retained exit status. The parent-exit smoke path
+spawns a child, exits the parent before the child finishes, proves the child
+continues running, and then reaps the child exit through task `0`.
 
 ## `execve` Kernel Contract
 

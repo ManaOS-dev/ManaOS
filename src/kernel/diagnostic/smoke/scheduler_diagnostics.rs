@@ -525,9 +525,9 @@ fn verify_user_task_exit_code(snapshot: &crate::kernel::task::SchedulerTaskSnaps
         .exit_code()
         .expect("finished user task snapshots must retain their exit code");
     if snapshot.parent_task_id() == Some(crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64()) {
-        assert_eq!(
-            exit_code, 0,
-            "bootstrap-spawned smoke parent tasks must retain zero exit status"
+        assert!(
+            exit_code == 0 || exit_code == USER_SMOKE_ORPHAN_CHILD_EXIT_CODE,
+            "bootstrap-owned smoke tasks must retain zero or reparented orphan exit status"
         );
         return;
     }
@@ -560,14 +560,19 @@ fn verify_scheduler_task_snapshot_counts(
     // Two bootstrap children start file_demo directly for spawn/wait and
     // parent-exit marker paths, so they have no execve replacement history.
     const DIRECT_FILE_DEMO_PARENT_TASKS: u64 = 2;
-    let expected_bootstrap_children = u64::try_from(USER_SMOKE_PARENT_TASK_COUNT)
+    let expected_reparented_orphan_children = 1_u64;
+    let expected_bootstrap_parent_tasks = u64::try_from(USER_SMOKE_PARENT_TASK_COUNT)
         .expect("smoke parent task count must fit in u64");
-    let expected_user_spawned_children =
-        u64::try_from(USER_SMOKE_CHILD_TASK_COUNT).expect("smoke child task count must fit in u64");
+    let expected_bootstrap_children =
+        expected_bootstrap_parent_tasks.saturating_add(expected_reparented_orphan_children);
+    let expected_user_spawned_children = u64::try_from(USER_SMOKE_CHILD_TASK_COUNT)
+        .expect("smoke child task count must fit in u64")
+        .saturating_sub(expected_reparented_orphan_children);
     let expected_published_execve_images =
-        expected_bootstrap_children.saturating_sub(DIRECT_FILE_DEMO_PARENT_TASKS);
-    let expected_unreplaced_user_images =
-        expected_user_spawned_children.saturating_add(DIRECT_FILE_DEMO_PARENT_TASKS);
+        expected_bootstrap_parent_tasks.saturating_sub(DIRECT_FILE_DEMO_PARENT_TASKS);
+    let expected_unreplaced_user_images = u64::try_from(USER_SMOKE_CHILD_TASK_COUNT)
+        .expect("smoke child task count must fit in u64")
+        .saturating_add(DIRECT_FILE_DEMO_PARENT_TASKS);
     assert_eq!(
         counters.finished_user_tasks, expected_user_tasks,
         "scheduler snapshots must include every finished user smoke task"
@@ -599,11 +604,11 @@ fn verify_scheduler_task_snapshot_counts(
     );
     assert_eq!(
         counters.bootstrap_child_user_tasks, expected_bootstrap_children,
-        "scheduler snapshots must show every smoke parent as a bootstrap child"
+        "scheduler snapshots must show smoke parents and reparented orphan children as bootstrap children"
     );
     assert_eq!(
         counters.user_spawned_child_user_tasks, expected_user_spawned_children,
-        "scheduler snapshots must show the user-spawned child task"
+        "scheduler snapshots must show unreparented user-spawned child tasks"
     );
     assert_eq!(
         counters.collected_user_exit_snapshots, expected_user_tasks,

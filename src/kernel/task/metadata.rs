@@ -67,6 +67,18 @@ impl TaskMetadata {
         self.parent_identifier
     }
 
+    pub(super) fn reparent_to_initial_process(&mut self) -> bool {
+        let Some(parent_identifier) = self.parent_identifier else {
+            return false;
+        };
+        if parent_identifier == TaskIdentifier::BOOTSTRAP {
+            return false;
+        }
+
+        self.parent_identifier = Some(TaskIdentifier::BOOTSTRAP);
+        true
+    }
+
     pub(super) fn record_exit_status(&mut self, exit_code: u64) -> bool {
         if self.exit_status.is_some() {
             return false;

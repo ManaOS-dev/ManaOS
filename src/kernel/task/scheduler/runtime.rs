@@ -116,6 +116,7 @@ impl Scheduler {
             .get_parent_identifier()
             .map(TaskIdentifier::as_u64)
             .expect("user tasks must have a parent task identifier");
+        self.reparent_orphaned_children_to_initial_process(task_id);
 
         if let Some(bootstrap_task) = self.tasks.first_mut() {
             if !bootstrap_task.state.resume_blocked() {
@@ -149,6 +150,62 @@ impl Scheduler {
         );
         self.wake_waiting_parent_for_child_exit(parent_task_id, task_id);
         Some(exit)
+    }
+
+    fn reparent_orphaned_children_to_initial_process(&mut self, exiting_parent_task_id: u64) {
+        let initial_process_task_id = TaskIdentifier::BOOTSTRAP.as_u64();
+        let mut reparented_child_count = 0_usize;
+        for task in &mut self.tasks {
+            if !matches!(&task.kind, TaskKind::User(_)) {
+                continue;
+            }
+            if task
+                .metadata
+                .get_parent_identifier()
+                .map(TaskIdentifier::as_u64)
+                != Some(exiting_parent_task_id)
+            {
+                continue;
+            }
+            if task.metadata.wait_collected() {
+                continue;
+            }
+            if task.metadata.reparent_to_initial_process() {
+                reparented_child_count = reparented_child_count.saturating_add(1);
+                crate::log_info!(
+                    "task",
+                    "Orphaned child reparented: old_parent={} child={} new_parent={}",
+                    exiting_parent_task_id,
+                    task.get_id(),
+                    initial_process_task_id
+                );
+            }
+        }
+
+        let mut reparented_exit_records = 0_usize;
+        for record in &mut self.child_exit_records {
+            if record.reparent_to_initial_process(exiting_parent_task_id) {
+                reparented_exit_records = reparented_exit_records.saturating_add(1);
+            }
+        }
+        if reparented_exit_records > 0 {
+            crate::log_info!(
+                "task",
+                "Orphaned child exit records reparented: old_parent={} new_parent={} records={}",
+                exiting_parent_task_id,
+                initial_process_task_id,
+                reparented_exit_records
+            );
+        }
+        if reparented_child_count > 0 {
+            crate::log_info!(
+                "task",
+                "Orphaned children reparented: old_parent={} new_parent={} children={}",
+                exiting_parent_task_id,
+                initial_process_task_id,
+                reparented_child_count
+            );
+        }
     }
 
     pub(in crate::kernel::task) fn take_finished_user_exit(&mut self) -> Option<UserTaskExit> {
