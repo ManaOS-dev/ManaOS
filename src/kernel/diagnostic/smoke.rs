@@ -29,6 +29,12 @@ const USER_LIFECYCLE_SMOKE_TASK_COUNT: usize =
 const USER_SHELL_ELF_PATH: &str = "/disk/bin/user_shell";
 const SPAWN_WAIT_PARENT_TASK_INDEX: usize = 3;
 const ORPHAN_PARENT_TASK_INDEX: usize = 4;
+// Storage-smoke user sleeps are single-digit milliseconds; 1000 timer ticks is
+// a failure bound, not normal scheduling latency.
+const ACTIVE_USER_DRAIN_IDLE_TICK_LIMIT: u64 = 1_000;
+// A missing timer tick should fail the smoke quickly instead of spinning
+// forever while interrupts or the Local APIC timer are broken.
+const ACTIVE_USER_DRAIN_SPIN_LIMIT: usize = 10_000_000;
 
 fn spawn_user_smoke_task(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
@@ -415,18 +421,45 @@ fn drain_user_smoke_tasks(
     user_task_ids: [u64; USER_SMOKE_PARENT_TASK_COUNT],
 ) -> alloc::vec::Vec<crate::kernel::task::UserTaskExit> {
     let mut exits = alloc::vec::Vec::new();
-    while let Some(exit) = crate::kernel::task::run_next_user_task_once(frame_allocator) {
-        if exits.is_empty() {
-            verify_preempted_exit_continuation_smoke(exit, user_task_ids);
+    let mut idle_tick_waits = 0_u64;
+    while crate::kernel::task::has_active_user_tasks() {
+        if let Some(exit) = crate::kernel::task::run_next_user_task_once(frame_allocator) {
+            if exits.is_empty() {
+                verify_preempted_exit_continuation_smoke(exit, user_task_ids);
+            }
+            exits.push(exit);
+            idle_tick_waits = 0;
+            continue;
         }
-        exits.push(exit);
+
+        assert!(
+            wait_for_next_drain_tick(),
+            "active user lifecycle drain timed out waiting for timer ticks"
+        );
+        idle_tick_waits = idle_tick_waits.saturating_add(1);
+        assert!(
+            idle_tick_waits <= ACTIVE_USER_DRAIN_IDLE_TICK_LIMIT,
+            "active user lifecycle drain timed out waiting for blocked user tasks"
+        );
     }
     crate::log_info!(
         "task",
-        "Active user lifecycle drained: exits={}",
-        exits.len()
+        "Active user lifecycle drained: exits={} idle_tick_waits={}",
+        exits.len(),
+        idle_tick_waits
     );
     exits
+}
+
+fn wait_for_next_drain_tick() -> bool {
+    let start_tick = crate::kernel::time::get_timer_ticks();
+    for _ in 0..ACTIVE_USER_DRAIN_SPIN_LIMIT {
+        if crate::kernel::time::get_timer_ticks() != start_tick {
+            return true;
+        }
+        core::hint::spin_loop();
+    }
+    false
 }
 
 fn verify_preempted_exit_continuation_smoke(
