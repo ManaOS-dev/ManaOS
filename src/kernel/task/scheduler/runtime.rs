@@ -19,7 +19,7 @@ impl Scheduler {
         let TaskKind::User(user_runtime) = &self.tasks[task_index].kind else {
             return false;
         };
-        if user_runtime.address_space.is_none()
+        if !user_runtime.has_schedulable_address_space()
             || self.tasks[task_index].state == TaskState::Finished
         {
             return false;
@@ -41,7 +41,8 @@ impl Scheduler {
                 let TaskKind::User(user_runtime) = &self.tasks[task_index].kind else {
                     return false;
                 };
-                self.tasks[task_index].state.is_ready() && user_runtime.address_space.is_some()
+                self.tasks[task_index].state.is_ready()
+                    && user_runtime.has_schedulable_address_space()
             })
     }
 
@@ -62,7 +63,12 @@ impl Scheduler {
         let TaskKind::User(user_runtime) = &self.tasks[task_index].kind else {
             return None;
         };
-        let address_space = user_runtime.address_space?;
+        if !user_runtime.has_schedulable_address_space() {
+            return None;
+        }
+        let address_space = user_runtime
+            .address_space
+            .expect("schedulable user tasks must own an address space");
         let trap_frame = user_runtime.saved_frame;
         let kernel_stack_top = self.tasks[task_index]
             .kernel_stack_top()
@@ -622,14 +628,52 @@ impl Scheduler {
         frame_allocator: &mut PhysicalFrameAllocator,
         task_index: usize,
     ) -> Option<UserAddressSpaceReclaim> {
+        self.begin_finished_user_address_space_reclaim(task_index)?;
         let TaskKind::User(user_runtime) = &mut self.tasks[task_index].kind else {
             return None;
         };
-        let address_space = user_runtime.address_space.take()?;
-        Some(address_space::destroy_user_address_space(
-            frame_allocator,
-            address_space,
-        ))
+        let address_space = user_runtime
+            .address_space
+            .take()
+            .expect("reclaiming user tasks must still own an address space");
+        let reclaim = address_space::destroy_user_address_space(frame_allocator, address_space);
+        self.finish_finished_user_address_space_reclaim(task_index);
+        Some(reclaim)
+    }
+
+    fn begin_finished_user_address_space_reclaim(&mut self, task_index: usize) -> Option<()> {
+        if self.tasks[task_index].state != TaskState::Finished {
+            return None;
+        }
+        {
+            let TaskKind::User(user_runtime) = &mut self.tasks[task_index].kind else {
+                return None;
+            };
+            if user_runtime.address_space.is_none() || user_runtime.address_space_reclaiming {
+                return None;
+            }
+            user_runtime.address_space_reclaiming = true;
+        }
+
+        assert!(
+            !self.user_task_has_schedulable_address_space(task_index),
+            "reclaiming user task address space must not be schedulable"
+        );
+        assert!(
+            !self.can_schedule_task(self.current_index, task_index),
+            "reclaiming user task must not be a scheduler candidate"
+        );
+        self.address_space_reclaim_guard_check_count = self
+            .address_space_reclaim_guard_check_count
+            .saturating_add(1);
+        Some(())
+    }
+
+    fn finish_finished_user_address_space_reclaim(&mut self, task_index: usize) {
+        let TaskKind::User(user_runtime) = &mut self.tasks[task_index].kind else {
+            return;
+        };
+        user_runtime.address_space_reclaiming = false;
     }
 
     pub(in crate::kernel::task) fn reclaim_finished_user_kernel_stack_at_index(
@@ -813,6 +857,7 @@ impl Scheduler {
             TaskKind::User(_) => {
                 if !USER_TASK_PREEMPTION_ENABLED
                     || !self.is_user_task_active(self.tasks[candidate_index].get_id())
+                    || !self.user_task_has_schedulable_address_space(candidate_index)
                 {
                     return false;
                 }
@@ -838,7 +883,12 @@ impl Scheduler {
         index: usize,
     ) -> Option<UserAddressSpace> {
         match &self.tasks[index].kind {
-            TaskKind::User(user_runtime) => user_runtime.address_space,
+            TaskKind::User(user_runtime) => {
+                if user_runtime.address_space_reclaiming {
+                    return None;
+                }
+                user_runtime.address_space
+            }
             TaskKind::Kernel => None,
         }
     }
@@ -851,6 +901,14 @@ impl Scheduler {
         matches!(self.tasks[index].kind, TaskKind::User(_))
             && self.tasks[index].context.is_empty()
             && self.is_user_task_active(self.tasks[index].get_id())
+            && self.user_task_has_schedulable_address_space(index)
+    }
+
+    fn user_task_has_schedulable_address_space(&self, index: usize) -> bool {
+        match &self.tasks[index].kind {
+            TaskKind::User(user_runtime) => user_runtime.has_schedulable_address_space(),
+            TaskKind::Kernel => false,
+        }
     }
 
     pub(in crate::kernel::task::scheduler) fn prepare_next_switch(

@@ -260,6 +260,7 @@ $expectedPatterns = @(
     "reclaimed_user_kernel_stacks\s+= 10",
     "reclaimed_kernel_stack_writable_pages\s+= 40",
     "reclaimed_kernel_stack_virtual_pages\s+= 50",
+    "address_space_reclaim_guard_checks\s+= 10",
     "timer_user_entries\s+= [1-9][0-9]*",
     "timer_user_entries_from_preempted_user\s+= [1-9][0-9]*",
     "finished_tasks\s+= 10",

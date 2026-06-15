@@ -130,6 +130,11 @@ fn verify_scheduler_reclaim_diagnostics(
         expected_reclaimed_user_kernel_stack_virtual_pages,
         "finished user tasks must return guard-inclusive kernel stack virtual pages"
     );
+    assert_eq!(
+        diagnostics.address_space_reclaim_guard_checks(),
+        expected_user_tasks,
+        "finished user address-space reclaim must prove scheduling guard coverage"
+    );
 }
 
 fn verify_scheduler_user_return_diagnostics(
@@ -368,6 +373,10 @@ fn log_scheduler_reclaim_diagnostics(diagnostics: &crate::kernel::task::Schedule
                     "{}",
                     diagnostics.reclaimed_user_kernel_stack_virtual_pages()
                 ),
+            ),
+            LogField::new(
+                "address_space_reclaim_guard_checks",
+                format_args!("{}", diagnostics.address_space_reclaim_guard_checks()),
             ),
         ],
     );

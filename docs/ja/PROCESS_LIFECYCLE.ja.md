@@ -140,6 +140,8 @@ scheduler-backed contract:
 - child exit status は、成功した reap がちょうど一度だけ消費するまで保持します。
 - address-space と kernel-stack resource は、scheduler が exit status を保持し、task を active user set から外し、
   kernel address space へ戻った後に reclaim します。
+- address-space reclaim 中の task は、将来の transition bug で active set に残っていても
+  user scheduling candidate から明示的に除外します。
 - wait collection は reclaimed runtime resource に依存しません。`waitpid` は scheduler metadata と child exit
   record だけを消費します。
 
@@ -358,6 +360,8 @@ inheritance snapshot を記録します。その後 scheduler は、parent snaps
   initial process 経由で reap されることを確認します。
 - storage smoke は、finished child の address space と scheduler kernel stack が reclaim 済みでも、
   waitable child exit が `lifecycle=zombie` として観測可能なまま残ることを検証します。
+- storage smoke は、finished user task の resource cleanup ごとに address-space reclaim scheduling guard check
+  が1回記録されることを assert します。
 - storage smoke は `sys_spawn` が child image loader の temporary executable descriptor を open する前に出す
   descriptor-inheritance snapshot を assert します。この snapshot は parent process table から出され、
   process-table path であることを明示します。

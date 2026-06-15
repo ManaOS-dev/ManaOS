@@ -11,7 +11,6 @@ reviewable unit before implementing it.
 
 ### User Process Scheduling
 
-- [ ] Prevent scheduling a task while its address space is being reclaimed.
 - [ ] Add scheduler assertions for impossible active, finished, and reclaiming transitions.
 - [ ] Document scheduler invariants for active, waiting, zombie, and reaped tasks.
 

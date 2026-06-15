@@ -122,6 +122,7 @@ active roadmap can list only unfinished work.
 - [x] Cover syscall return frames and timer interrupt frames with one scheduler path.
 - [x] Verify that each user task resumes with its own address-space root.
 - [x] Verify that each user task resumes with its own kernel stack.
+- [x] Prevent scheduling a task while its address space is being reclaimed.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

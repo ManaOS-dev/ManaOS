@@ -169,6 +169,9 @@ The scheduler-backed contract is:
 - Reclaim address-space and kernel-stack resources only after the scheduler has
   retained the exit status, detached the task from the active user set, and
   returned to the kernel address space.
+- While address-space reclaim is in progress, the task is explicitly excluded
+  from user scheduling candidates even if a future transition bug leaves it in
+  the active set.
 - Keep wait collection independent from reclaimed runtime resources: `waitpid`
   may consume only scheduler metadata and child exit records.
 
@@ -435,6 +438,8 @@ Current runtime diagnostics cover the first successful replacement path:
 - Storage smoke verifies that a waitable child exit stays observable as
   `lifecycle=zombie` after the finished child's address space and scheduler
   kernel stack have already been reclaimed.
+- Storage smoke asserts one address-space reclaim scheduling guard check for
+  every finished user task resource cleanup.
 - Storage smoke asserts the `sys_spawn` descriptor-inheritance snapshot emitted
   before the child image loader opens its temporary executable descriptor. The
   snapshot is emitted from the parent process table and marks the process-table

@@ -38,7 +38,7 @@ impl Scheduler {
                 TaskKind::Kernel => kernel_tasks = kernel_tasks.saturating_add(1),
                 TaskKind::User(user_runtime) => {
                     user_tasks = user_tasks.saturating_add(1);
-                    if user_runtime.address_space.is_some() {
+                    if user_runtime.has_schedulable_address_space() {
                         active_user_address_spaces = active_user_address_spaces.saturating_add(1);
                     }
                     if task.metadata.get_exit_code().is_some() {
@@ -105,6 +105,7 @@ impl Scheduler {
                 .reclaimed_user_kernel_stack_writable_pages,
             reclaimed_user_kernel_stack_virtual_pages: self
                 .reclaimed_user_kernel_stack_virtual_pages,
+            address_space_reclaim_guard_checks: self.address_space_reclaim_guard_check_count,
         }
     }
 

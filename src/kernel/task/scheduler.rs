@@ -223,6 +223,7 @@ struct UserTaskRuntime {
     resume_handoff_count: u64,
     last_resume_address_space_root: u64,
     last_resume_kernel_stack_top: u64,
+    address_space_reclaiming: bool,
 }
 
 impl UserTaskRuntime {
@@ -257,7 +258,12 @@ impl UserTaskRuntime {
             resume_handoff_count: 0,
             last_resume_address_space_root: 0,
             last_resume_kernel_stack_top: 0,
+            address_space_reclaiming: false,
         }
+    }
+
+    fn has_schedulable_address_space(&self) -> bool {
+        self.address_space.is_some() && !self.address_space_reclaiming
     }
 
     fn record_user_trap_frame_restore(&mut self) {
@@ -655,6 +661,7 @@ pub(super) struct Scheduler {
     reclaimed_user_kernel_stack_count: u64,
     reclaimed_user_kernel_stack_writable_pages: u64,
     reclaimed_user_kernel_stack_virtual_pages: u64,
+    address_space_reclaim_guard_check_count: u64,
 }
 
 impl Scheduler {
@@ -690,6 +697,7 @@ impl Scheduler {
             reclaimed_user_kernel_stack_count: 0,
             reclaimed_user_kernel_stack_writable_pages: 0,
             reclaimed_user_kernel_stack_virtual_pages: 0,
+            address_space_reclaim_guard_check_count: 0,
         }
     }
 
