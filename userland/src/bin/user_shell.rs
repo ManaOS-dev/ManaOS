@@ -8,11 +8,14 @@ const STDOUT: usize = 1;
 const COMMAND_BUFFER_BYTES: usize = 128;
 const MAX_COMMAND_TOKENS: usize = 8;
 const MAX_COMMAND_ARGUMENT_POINTERS: usize = MAX_COMMAND_TOKENS + 1;
+const CD_COMMAND: &[u8] = b"cd";
 const HELP_COMMAND: &[u8] = b"help";
 const PWD_COMMAND: &[u8] = b"pwd";
 const READY_MESSAGE: &[u8] = b"user shell ready\n";
 const TOKENIZER_OK_MESSAGE: &[u8] = b"user shell tokenizer ok\n";
-const HELP_OUTPUT: &[u8] = b"builtins: help pwd\n";
+const HELP_OUTPUT: &[u8] = b"builtins: cd help pwd\n";
+const CD_ROOT_OK_MESSAGE: &[u8] = b"user shell cd root ok\n";
+const CD_DISK_OK_MESSAGE: &[u8] = b"user shell cd disk ok\n";
 const HELP_OK_MESSAGE: &[u8] = b"user shell help ok\n";
 const PWD_OK_MESSAGE: &[u8] = b"user shell pwd ok\n";
 const FILE_DEMO_LAUNCH_MESSAGE: &[u8] = b"user shell launching file_demo\n";
@@ -34,6 +37,8 @@ const SPAWN_NOT_FOUND_MESSAGE: &[u8] = b"user shell spawn not found\n";
 const SPAWN_UNSUPPORTED_MESSAGE: &[u8] = b"user shell spawn unsupported\n";
 const WAIT_FAILED_MESSAGE: &[u8] = b"user shell wait failed\n";
 const CHILD_FAILED_MESSAGE: &[u8] = b"user shell child failed\n";
+const INVALID_ARGUMENT_MESSAGE: &[u8] = b"user shell invalid argument\n";
+const CHANGE_DIRECTORY_FAILED_MESSAGE: &[u8] = b"user shell cd failed\n";
 const WORKING_DIRECTORY_FAILED_MESSAGE: &[u8] = b"user shell cwd failed\n";
 
 #[derive(Clone, Copy)]
@@ -108,6 +113,8 @@ enum CommandExecutionError {
     SpawnInvalidArgument,
     SpawnNotFound,
     SpawnUnsupported,
+    InvalidArgument,
+    ChangeDirectoryFailed,
     WorkingDirectoryFailed,
     WaitFailed,
     ChildFailed,
@@ -236,6 +243,7 @@ fn verify_command_execution_smoke() -> Result<(), CommandExecutionError> {
     }
     verify_help_builtin_smoke()?;
     verify_pwd_builtin_smoke()?;
+    verify_cd_builtin_smoke()?;
     let _ = syscall::write(STDOUT, FILE_DEMO_LAUNCH_MESSAGE);
     execute_command(b"/disk/bin/file_demo --shell-command-smoke")?;
     let _ = syscall::write(STDOUT, FILE_DEMO_EXIT_MESSAGE);
@@ -255,6 +263,16 @@ fn verify_help_builtin_smoke() -> Result<(), CommandExecutionError> {
 fn verify_pwd_builtin_smoke() -> Result<(), CommandExecutionError> {
     execute_command(b"pwd")?;
     let _ = syscall::write(STDOUT, PWD_OK_MESSAGE);
+    Ok(())
+}
+
+fn verify_cd_builtin_smoke() -> Result<(), CommandExecutionError> {
+    execute_command(b"cd /")?;
+    execute_command(b"pwd")?;
+    let _ = syscall::write(STDOUT, CD_ROOT_OK_MESSAGE);
+    execute_command(b"cd /disk")?;
+    execute_command(b"pwd")?;
+    let _ = syscall::write(STDOUT, CD_DISK_OK_MESSAGE);
     Ok(())
 }
 
@@ -336,6 +354,16 @@ fn execute_builtin_command(
 ) -> Result<bool, CommandExecutionError> {
     let command_token = tokens.get(0).ok_or(CommandExecutionError::EmptyCommand)?;
     let command_name = command_token.as_bytes(command);
+    if command_name == CD_COMMAND {
+        if tokens.len() != 2 {
+            return Err(CommandExecutionError::InvalidArgument);
+        }
+        let directory_token = tokens
+            .get(1)
+            .ok_or(CommandExecutionError::InvalidArgument)?;
+        change_current_directory(directory_token.as_bytes(command))?;
+        return Ok(true);
+    }
     if command_name == HELP_COMMAND {
         if tokens.len() != 1 {
             return Err(CommandExecutionError::TooManyTokens);
@@ -351,6 +379,24 @@ fn execute_builtin_command(
     }
     write_current_working_directory()?;
     Ok(true)
+}
+
+fn change_current_directory(directory_path: &[u8]) -> Result<(), CommandExecutionError> {
+    let mut directory_buffer = [0_u8; COMMAND_BUFFER_BYTES];
+    let directory_end = directory_path.len();
+    let nul_end = directory_end
+        .checked_add(1)
+        .ok_or(CommandExecutionError::PathTooLong)?;
+    if nul_end > directory_buffer.len() {
+        return Err(CommandExecutionError::PathTooLong);
+    }
+    directory_buffer[..directory_end].copy_from_slice(directory_path);
+    directory_buffer[directory_end] = 0;
+
+    if syscall::chdir(&directory_buffer[..nul_end]) != 0 {
+        return Err(CommandExecutionError::ChangeDirectoryFailed);
+    }
+    Ok(())
 }
 
 fn write_help() {
@@ -402,6 +448,8 @@ fn write_execution_error(error: CommandExecutionError) {
         CommandExecutionError::SpawnInvalidArgument => SPAWN_INVALID_ARGUMENT_MESSAGE,
         CommandExecutionError::SpawnNotFound => SPAWN_NOT_FOUND_MESSAGE,
         CommandExecutionError::SpawnUnsupported => SPAWN_UNSUPPORTED_MESSAGE,
+        CommandExecutionError::InvalidArgument => INVALID_ARGUMENT_MESSAGE,
+        CommandExecutionError::ChangeDirectoryFailed => CHANGE_DIRECTORY_FAILED_MESSAGE,
         CommandExecutionError::WorkingDirectoryFailed => WORKING_DIRECTORY_FAILED_MESSAGE,
         CommandExecutionError::SpawnFailed => EXECUTION_ERROR_MESSAGE,
         CommandExecutionError::WaitFailed => WAIT_FAILED_MESSAGE,
