@@ -210,6 +210,24 @@ The `tasks` console command also prints a per-task `lifecycle` label, using
 `waiting` for blocked tasks, `zombie` for uncollected child-exit records, and
 `reaped` for collected child-exit records.
 
+The scheduler lifecycle invariants are:
+
+- Active: an active user task must reference a retained user task, must not be
+  finished or reclaiming its address space, and must own a schedulable address
+  space. Active blocked tasks may be waiting, but they are not runnable until
+  the wake path returns them to `Ready`.
+- Waiting: a blocked user task has no retained exit status, remains in the
+  active user set, and keeps its user address space so the scheduler can resume
+  the saved syscall or timer state after sleep, `waitpid`, or keyboard-backed
+  `read` completes.
+- Zombie: a finished user task with a waitable exit status must not remain in
+  the active user set. Its address space and scheduler kernel stack may already
+  be reclaimed because parent collection uses retained scheduler metadata and
+  child exit records.
+- Reaped: a finished user task whose exit status has been collected remains as a
+  retained diagnostic row only. It must not be active, and the final smoke path
+  expects the user address space and scheduler kernel stack to be reclaimed.
+
 The future general process model must keep these invariants:
 
 - A child is waitable only to its current recorded parent.
@@ -447,6 +465,9 @@ Current runtime diagnostics cover the first successful replacement path:
 - Storage smoke verifies the scheduler transition invariant checker once after
   user lifecycle cleanup and exposes the count as
   `scheduler_transition_invariant_checks`.
+- Storage smoke logs `Scheduler lifecycle invariants verified` after checking
+  active-set drain, exercised waiting transitions, zero remaining zombies, and
+  the final reaped task count.
 - Storage smoke asserts the `sys_spawn` descriptor-inheritance snapshot emitted
   before the child image loader opens its temporary executable descriptor. The
   snapshot is emitted from the parent process table and marks the process-table

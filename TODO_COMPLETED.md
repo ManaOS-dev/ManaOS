@@ -65,6 +65,7 @@ active roadmap can list only unfinished work.
 - [x] Reclaim finished child address spaces after the exit record is safe.
 - [x] Reclaim finished child kernel stacks after the exit record is safe.
 - [x] Add scheduler assertions for impossible active, finished, and reclaiming transitions.
+- [x] Document scheduler invariants for active, waiting, zombie, and reaped tasks.
 
 ### Spawn Model And Fork Decision
 
@@ -130,6 +131,12 @@ active roadmap can list only unfinished work.
 ### Address Space Lifecycle
 
 - [x] Publish successful `execve` image replacement through one scheduler-owned transition.
+
+## Phase 3: Synchronization, Interrupt Context, And Scheduler Robustness
+
+### Scheduler State Machine
+
+- [x] Add a scheduler invariant check that runs during storage smoke.
 
 ## Immediate Priorities
 

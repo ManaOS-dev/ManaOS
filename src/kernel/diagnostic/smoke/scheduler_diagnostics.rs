@@ -19,6 +19,7 @@ pub fn verify_scheduler_task_diagnostics(expected_user_tasks: u64) {
     verify_scheduler_task_counts(&diagnostics, states, expected_user_tasks);
     verify_scheduler_reclaim_diagnostics(&diagnostics, expected_user_tasks);
     verify_scheduler_user_return_diagnostics(&diagnostics, expected_user_tasks);
+    verify_scheduler_lifecycle_invariants(&diagnostics, expected_user_tasks);
     log_scheduler_task_diagnostics(&diagnostics, states);
 }
 
@@ -239,6 +240,85 @@ fn verify_scheduler_user_return_diagnostics(
         diagnostics.user_return_preemption_window_closes(),
         diagnostics.user_return_stack_sets(),
         "user return window closes must match stored return stacks"
+    );
+}
+
+fn verify_scheduler_lifecycle_invariants(
+    diagnostics: &crate::kernel::task::SchedulerDiagnostics,
+    expected_user_tasks: u64,
+) {
+    let waiting_state_transitions = diagnostics
+        .user_sleep_blocks()
+        .saturating_add(diagnostics.user_waitpid_blocks())
+        .saturating_add(diagnostics.user_read_blocks());
+    assert_eq!(
+        diagnostics.active_user_tasks(),
+        0,
+        "lifecycle cleanup must drain the active user task set"
+    );
+    assert!(
+        diagnostics.user_sleep_blocks() > 0,
+        "lifecycle smoke must exercise sleep waiting state"
+    );
+    assert!(
+        diagnostics.user_waitpid_blocks() > 0,
+        "lifecycle smoke must exercise waitpid waiting state"
+    );
+    assert!(
+        diagnostics.user_read_blocks() > 0,
+        "lifecycle smoke must exercise read waiting state"
+    );
+    assert_eq!(
+        diagnostics.zombie_user_tasks(),
+        0,
+        "lifecycle cleanup must leave no uncollected zombie tasks"
+    );
+    assert_eq!(
+        diagnostics.reaped_user_tasks(),
+        expected_user_tasks,
+        "lifecycle cleanup must reap every retained user task"
+    );
+    log_scheduler_lifecycle_invariants(diagnostics, waiting_state_transitions);
+}
+
+fn log_scheduler_lifecycle_invariants(
+    diagnostics: &crate::kernel::task::SchedulerDiagnostics,
+    waiting_state_transitions: u64,
+) {
+    crate::kernel::diagnostic::log::log_kv(
+        LogLevel::Info,
+        "task",
+        format_args!("Scheduler lifecycle invariants verified"),
+        &[
+            LogField::new(
+                "active_user_tasks",
+                format_args!("{}", diagnostics.active_user_tasks()),
+            ),
+            LogField::new(
+                "waiting_state_transitions",
+                format_args!("{waiting_state_transitions}"),
+            ),
+            LogField::new(
+                "sleep_waiting_transitions",
+                format_args!("{}", diagnostics.user_sleep_blocks()),
+            ),
+            LogField::new(
+                "waitpid_waiting_transitions",
+                format_args!("{}", diagnostics.user_waitpid_blocks()),
+            ),
+            LogField::new(
+                "read_waiting_transitions",
+                format_args!("{}", diagnostics.user_read_blocks()),
+            ),
+            LogField::new(
+                "zombie_user_tasks",
+                format_args!("{}", diagnostics.zombie_user_tasks()),
+            ),
+            LogField::new(
+                "reaped_user_tasks",
+                format_args!("{}", diagnostics.reaped_user_tasks()),
+            ),
+        ],
     );
 }
 

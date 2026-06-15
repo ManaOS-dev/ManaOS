@@ -68,13 +68,15 @@ the userland runtime path API, compiled-in `help` output, configurable `exit`
 status parsing, plus bounded command error smoke for empty input, token
 overflow, argument-buffer exhaustion, and missing commands, shell-loop EOF
 smoke, plus immediate post-shell kernel console availability
-smoke, are documented in
-[`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
-slices:
+smoke, and scheduler invariants for active, waiting, zombie, and reaped tasks
+are documented in [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Phase 1's
+current lifecycle TODO set is complete. Continue with small Phase 2 typed
+address-boundary slices:
 
-1. document scheduler invariants for active, waiting, zombie, and reaped tasks;
-2. keep scheduler diagnostics synchronized whenever lifecycle state gains a new
-   transition.
+1. replace raw physical address parameters with `PhysAddr` in a narrow
+   remaining memory API surface;
+2. replace raw virtual address parameters with `VirtAddr` in a narrow remaining
+   memory API surface.
 
 Manual QEMU validation for observing the current smoke-owned experimental user
 shell entry and exit path is documented in

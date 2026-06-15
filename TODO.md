@@ -7,12 +7,6 @@ Keep each checked-off item backed by a focused branch, a clear commit, and the
 narrowest useful verification command. Split any item that grows beyond one
 reviewable unit before implementing it.
 
-## Phase 1: Process Lifecycle And User Program Execution
-
-### User Process Scheduling
-
-- [ ] Document scheduler invariants for active, waiting, zombie, and reaped tasks.
-
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 
 ### Typed Address Boundaries
@@ -131,7 +125,6 @@ reviewable unit before implementing it.
 - [ ] Add transition helper functions with documented preconditions.
 - [ ] Add transition diagnostics for invalid state changes.
 - [ ] Add per-state task counters to scheduler snapshots.
-- [ ] Add a scheduler invariant check that runs during storage smoke.
 - [ ] Add a scheduler invariant check that can be triggered from the `tasks` command.
 - [ ] Add timeout-aware waiting state for sleep and waitpid.
 - [ ] Add wake reason diagnostics for sleeping tasks.

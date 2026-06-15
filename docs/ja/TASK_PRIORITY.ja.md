@@ -60,10 +60,12 @@ absolute and relative path execution smoke、userland runtime path API 経由の
 compiled-in `help` output、configurable `exit` status parsing、empty input、token overflow、argument-buffer exhaustion、
 missing command の bounded command error smoke、shell-loop EOF smoke、直後の
 post-shell kernel console availability smoke は
-[`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。ここからは小さい runtime slice で進めます。
+[`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。active、waiting、zombie、reaped task の
+scheduler invariant も同じ文書に整理済みです。Phase 1 の current lifecycle TODO set は完了したため、
+ここからは Phase 2 の typed address boundary を小さい slice で進めます。
 
-1. active、waiting、zombie、reaped task の scheduler invariant を文書化する。
-2. lifecycle state に新しい transition が増えたら scheduler diagnostics も同期する。
+1. 残っている memory API の狭い範囲で raw physical address parameter を `PhysAddr` に置き換える。
+2. 残っている memory API の狭い範囲で raw virtual address parameter を `VirtAddr` に置き換える。
 
 現在の smoke-owned experimental user shell の entry / exit path を QEMU で観察する手順は
 [`MANUAL_QEMU_VALIDATION.ja.md`](MANUAL_QEMU_VALIDATION.ja.md) に整理済みです。

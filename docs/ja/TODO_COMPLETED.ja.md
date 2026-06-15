@@ -54,7 +54,9 @@ complete saved trap frame snapshot coverage、resumed user process の full runt
 diagnostics と smoke assertion、syscall/timer trap frame の unified scheduler recording path、
 resumed user task ごとの address-space root / kernel stack handoff diagnostics と storage smoke assertion、
 address-space reclaim 中 task の scheduling guard と storage smoke assertion、active、finished、reclaiming
-transition の impossible state assertion と storage smoke verification も完了済みです。
+transition の impossible state assertion と storage smoke verification、active、waiting、zombie、reaped task の
+scheduler invariant documentation も完了済みです。Phase 3 の scheduler state machine では、
+storage smoke で走る scheduler invariant check が完了済みです。
 正本は英語版の
 `TODO_COMPLETED.md` と [`PROCESS_LIFECYCLE.md`](../PROCESS_LIFECYCLE.md) です。
 
