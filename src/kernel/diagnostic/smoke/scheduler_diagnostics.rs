@@ -1,6 +1,8 @@
 //! Scheduler and frame allocator smoke diagnostics.
 
-use super::{USER_SMOKE_CHILD_TASK_COUNT, USER_SMOKE_PARENT_TASK_COUNT};
+use super::{
+    USER_SMOKE_CHILD_EXIT_CODE, USER_SMOKE_CHILD_TASK_COUNT, USER_SMOKE_PARENT_TASK_COUNT,
+};
 use crate::kernel::diagnostic::log::{LogField, LogLevel};
 
 /// Verify scheduler accounting after the userland smoke demo.
@@ -445,8 +447,8 @@ fn record_scheduler_user_task_snapshot(
     record_parentage_snapshot(snapshot, counters);
     assert_eq!(
         snapshot.exit_code(),
-        Some(0),
-        "finished user task snapshots must retain exit code zero"
+        Some(expected_user_task_exit_code(snapshot)),
+        "finished user task snapshots must retain their exit code"
     );
     assert!(
         snapshot.wait_collected(),
@@ -484,6 +486,14 @@ fn record_scheduler_user_task_snapshot(
     }
     if verification.fully_reclaimed {
         counters.fully_reclaimed_user_tasks = counters.fully_reclaimed_user_tasks.saturating_add(1);
+    }
+}
+
+fn expected_user_task_exit_code(snapshot: &crate::kernel::task::SchedulerTaskSnapshot) -> u64 {
+    if snapshot.parent_task_id() == Some(crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64()) {
+        0
+    } else {
+        USER_SMOKE_CHILD_EXIT_CODE
     }
 }
 

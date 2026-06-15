@@ -52,7 +52,7 @@ scheduler tick、spurious/unexpected external vector diagnostics は storage smo
 そのため次の大きな流れは、PIT route に依存しなくなった timer preemption の上で、
 full user process lifecycle を進めることです。`execve` の kernel-side contract、cleanup invariant、
 successful self-replacement path、current directory preservation、path-only `spawn`、nonblocking
-`waitpid(WNOHANG)` child collection smoke は
+`waitpid(WNOHANG)` child collection smoke と nonzero child status encoding は
 [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。ここからは小さい runtime slice で進めます。
 
 1. `execve` の replacement-state diagnostics の残り gap を閉じる。

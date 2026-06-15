@@ -101,7 +101,7 @@ exit がまだない場合に `0` を返します。blocking wait は、waiting 
 できるようになるまで `-ENOSYS` のままです。ManaOS にはまだ user interrupt policy がないため、この
 syscall は `-EINTR` を返しません。storage smoke は no-std userland wrapper 経由で no-child と明示的な
 non-child selector path、path-only `spawn` child に対する pending `waitpid(WNOHANG) == 0`、その後の
-one-shot child reap と zero status を検証します。
+one-shot child reap と nonzero status encoding を検証します。
 
 残りの scheduler-backed contract:
 
@@ -296,7 +296,7 @@ unmarked descriptor は default で descriptor number と offset を保持し、
   parent 1つを spawn し、すべてをまとめて active set に入れる前提を assert します。
 - storage smoke は user-visible path-only `spawn` wrapper を使い、no-std userland から child を
   spawn して、その child が実行中の間は `waitpid(WNOHANG) == 0` になり、後で child exit status を
-  ちょうど一度だけ collect できることを検証します。
+  nonzero status としてちょうど一度だけ collect できることを検証します。
 - storage smoke は、同じ task が `execve` で current image を置き換えた後も、`tasks` output が
   original spawn path を `origin=` として保持することを assert します。
 - storage smoke は successful self-`execve` で継承された unmarked descriptor が new image でも使えることを
@@ -315,8 +315,9 @@ unmarked descriptor は default で descriptor number と offset を保持し、
   `waitpid` が `-ECHILD` を返すことを検証します。
 - storage smoke は、parent-keyed child exit record を保持する scheduler log line と、その record を一度だけ
   collect する log line を assert します。
-- storage smoke は、selected-child wait collection と zero-exit wait status encoding を
-  scheduler-owned child exit record 経由で assert します。
+- storage smoke は、selected-child wait collection、bootstrap child の zero-exit wait status encoding、
+  userland-spawned child の nonzero wait status encoding を scheduler-owned child exit record 経由で
+  assert します。
 - storage smoke は retained child count、collected child count、double-reap prevention を示す stable な
   wait lifecycle summary も assert します。
 - `tasks` console command は、user task ごとの spawned origin path、current image generation、

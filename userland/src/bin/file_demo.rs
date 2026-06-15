@@ -6,11 +6,15 @@ use mana_userland::syscall;
 const STDOUT: usize = 1;
 const BUFFER_LENGTH: usize = 64;
 const USER_SPAWN_CHILD_DELAY_NANOS: u64 = 5_000_000;
+// Nonzero by design so waitpid status encoding cannot pass by treating all
+// child exits as success.
+const USER_SPAWN_CHILD_EXIT_CODE: usize = 7;
+const USER_SPAWN_CHILD_WAIT_STATUS: i32 = (USER_SPAWN_CHILD_EXIT_CODE as i32) << 8;
 const SPAWN_WAIT_SLEEP_NANOS: u64 = 50_000_000;
 const SPAWN_WAIT_RETRY_COUNT: usize = 16;
 const NON_CHILD_PROCESS_IDENTIFIER: isize = 9999;
 const WAITPID_MESSAGE: &[u8] = b"user waitpid no child ok\n";
-const SPAWN_WAIT_MESSAGE: &[u8] = b"user spawn waitpid ok\n";
+const SPAWN_WAIT_MESSAGE: &[u8] = b"user spawn waitpid nonzero ok\n";
 const SPAWN_WAIT_ARGUMENT: &[u8] = b"--spawn-wait-smoke";
 
 #[no_mangle]
@@ -67,7 +71,7 @@ extern "C" fn _start(argument_count: usize, argument_values: *const *const u8) -
         buffer.as_ptr() as usize,
         bytes_read,
     );
-    syscall::exit(0);
+    syscall::exit(exit_code_for_parent(parent_task_id));
 }
 
 fn change_to_disk_directory() {
@@ -87,6 +91,14 @@ fn delay_when_user_spawned_child(parent_task_id: isize) {
     };
     if syscall::nanosleep(&duration) != 0 {
         syscall::exit(14);
+    }
+}
+
+fn exit_code_for_parent(parent_task_id: isize) -> usize {
+    if parent_task_id > 0 {
+        USER_SPAWN_CHILD_EXIT_CODE
+    } else {
+        0
     }
 }
 
@@ -124,7 +136,7 @@ fn verify_spawn_child_waitpid() {
             syscall::WNOHANG,
         );
         if wait_result == child_task_id {
-            if wait_status != 0 {
+            if wait_status != USER_SPAWN_CHILD_WAIT_STATUS {
                 syscall::exit(18);
             }
             let _ = syscall::write(STDOUT, SPAWN_WAIT_MESSAGE);

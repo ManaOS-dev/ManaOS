@@ -55,7 +55,7 @@ scheduler-backed `waitpid` reap、nonblocking `WNOHANG` smoke、filesystem path 
 作る kernel-internal spawn helper と spawned process origin diagnostics、2つの concurrently spawned
 user program smoke、spawn 前の argv/envp entry vector 表現、spawn path lookup failure と memory
 allocation failure の errno mapping、path-only user-visible spawn wrapper と userland child wait
-smoke まで完了済みです。
+smoke、nonzero child exit status smoke まで完了済みです。
 spawned process の current working directory inheritance も完了済みです。
 最初の stable process model は `spawn + execve` として決定済みで、minimal `fork` は Phase 2 の
 address-space copy plan ができるまで defer します。

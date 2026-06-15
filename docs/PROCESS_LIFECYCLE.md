@@ -118,7 +118,7 @@ through the scheduler. The syscall does not return `-EINTR` because ManaOS has
 no documented user interrupt policy yet. Storage smoke covers the no-child and
 explicit non-child selector paths through the no-std userland wrapper, a
 path-only `spawn` child whose pending `waitpid(WNOHANG)` returns `0`, and the
-later one-shot child reap with zero status.
+later one-shot child reap with nonzero status encoding.
 
 The remaining scheduler-backed contract is:
 
@@ -348,8 +348,8 @@ Current runtime diagnostics cover the first successful replacement path:
   marker-driven `file_demo` spawn/wait parent before all are activated together.
 - Storage smoke verifies the user-visible path-only `spawn` wrapper by spawning
   a child from no-std userland, observing `waitpid(WNOHANG) == 0` while that
-  child is still running, and later collecting the child exit status exactly
-  once.
+  child is still running, and later collecting the nonzero child exit status
+  exactly once.
 - Storage smoke asserts that `tasks` output retains the original spawn path as
   `origin=` after the same task successfully replaces its current image through
   `execve`.
@@ -369,8 +369,9 @@ Current runtime diagnostics cover the first successful replacement path:
   task has no child and when a positive process identifier is not its child.
 - Storage smoke asserts the scheduler log line that retains a parent-keyed
   child exit record and the later line that collects that record once.
-- Storage smoke asserts selected-child wait collection and zero-exit wait
-  status encoding through the scheduler-owned child exit records.
+- Storage smoke asserts selected-child wait collection, bootstrap zero-exit
+  wait status encoding, and userland-spawned nonzero wait status encoding
+  through the scheduler-owned child exit records.
 - Storage smoke asserts a stable wait lifecycle summary showing retained child
   count, collected child count, and double-reap prevention.
 - The `tasks` console command shows each user task's spawned origin path,

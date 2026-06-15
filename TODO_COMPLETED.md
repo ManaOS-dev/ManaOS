@@ -58,6 +58,7 @@ active roadmap can list only unfinished work.
 - [x] Reap an already-exited child through scheduler-backed `waitpid`.
 - [x] Support nonblocking wait with a minimal `WNOHANG` equivalent.
 - [x] Add a userland smoke program that spawns a child and waits for exit.
+- [x] Add a userland smoke program that verifies a nonzero child exit status.
 
 ### Spawn Model And Fork Decision
 

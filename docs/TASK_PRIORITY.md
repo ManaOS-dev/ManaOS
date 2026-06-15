@@ -57,7 +57,8 @@ external vector diagnostics are proven by storage smoke.
 The active selection is now full user process lifecycle work. The kernel-side
 `execve` contract, cleanup invariants, successful self-replacement path,
 current-directory preservation, path-only `spawn`, and nonblocking
-`waitpid(WNOHANG)` child collection smoke are documented in
+`waitpid(WNOHANG)` child collection smoke, including nonzero child status
+encoding, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 

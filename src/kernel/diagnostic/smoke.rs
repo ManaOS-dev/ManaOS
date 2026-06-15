@@ -11,6 +11,8 @@ pub use scheduler_diagnostics::{
 pub const USER_SMOKE_PARENT_TASK_COUNT: usize = 4;
 /// Number of user-spawned child processes created by one marked smoke parent.
 pub const USER_SMOKE_CHILD_TASK_COUNT: usize = 1;
+/// Exit code used by the user-spawned child status smoke.
+pub const USER_SMOKE_CHILD_EXIT_CODE: u64 = 7;
 /// Number of user tasks expected after the full storage smoke lifecycle.
 pub const USER_SMOKE_TASK_COUNT: usize = USER_SMOKE_PARENT_TASK_COUNT + USER_SMOKE_CHILD_TASK_COUNT;
 
@@ -128,8 +130,8 @@ pub fn run_user_smoke_demo(
         } else {
             assert_eq!(
                 exit.exit_code(),
-                0,
-                "user-spawned child task must exit successfully"
+                USER_SMOKE_CHILD_EXIT_CODE,
+                "user-spawned child task must retain the nonzero wait status smoke code"
             );
             finished_child_tasks = finished_child_tasks.saturating_add(1);
         }
