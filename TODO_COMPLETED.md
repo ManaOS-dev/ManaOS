@@ -118,6 +118,7 @@ active roadmap can list only unfinished work.
 - [x] Add a storage smoke case where one preempted process exits while another continues.
 - [x] Extend timer preemption across general spawned user process lifecycles.
 - [x] Save the full runtime user trap frame for every preempted user process.
+- [x] Restore the full runtime user trap frame for resumed user processes.
 
 ## Phase 2: Memory Safety, Address Spaces, And Stack Hardening
 

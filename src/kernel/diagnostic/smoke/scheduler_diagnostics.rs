@@ -436,6 +436,8 @@ struct SchedulerTaskSnapshotCounters {
     reaped_user_task_snapshots: u64,
     preempted_user_task_snapshots: u64,
     full_timer_trap_frame_snapshots: u64,
+    full_restored_trap_frame_snapshots: u64,
+    runtime_trap_frame_restore_snapshots: u64,
     resumed_user_task_snapshots: u64,
 }
 
@@ -455,6 +457,8 @@ impl SchedulerTaskSnapshotCounters {
             reaped_user_task_snapshots: 0,
             preempted_user_task_snapshots: 0,
             full_timer_trap_frame_snapshots: 0,
+            full_restored_trap_frame_snapshots: 0,
+            runtime_trap_frame_restore_snapshots: 0,
             resumed_user_task_snapshots: 0,
         }
     }
@@ -536,12 +540,29 @@ fn record_scheduler_user_task_snapshot(
             counters.preempted_user_task_snapshots.saturating_add(1);
         counters.full_timer_trap_frame_snapshots =
             counters.full_timer_trap_frame_snapshots.saturating_add(1);
+        assert!(
+            snapshot.runtime_trap_frame_restore_count() > 0,
+            "timer-preempted user task snapshots must show a runtime trap frame restore"
+        );
     }
     assert_ne!(
         snapshot.last_resume_path(),
         crate::kernel::task::UserResumePathDiagnostics::None,
         "finished user task snapshots must retain their last user resume path"
     );
+    assert_eq!(
+        snapshot.restored_user_trap_frame_bytes(),
+        core::mem::size_of::<UserTrapFrame>(),
+        "finished user task snapshots must retain a complete restored user trap frame"
+    );
+    counters.full_restored_trap_frame_snapshots = counters
+        .full_restored_trap_frame_snapshots
+        .saturating_add(1);
+    if snapshot.runtime_trap_frame_restore_count() > 0 {
+        counters.runtime_trap_frame_restore_snapshots = counters
+            .runtime_trap_frame_restore_snapshots
+            .saturating_add(1);
+    }
     counters.resumed_user_task_snapshots = counters.resumed_user_task_snapshots.saturating_add(1);
     match verify_user_task_image_snapshot(snapshot) {
         crate::kernel::task::UserExecveReplacementStateDiagnostics::Published => {
@@ -686,6 +707,14 @@ fn verify_scheduler_task_snapshot_counts(
         "every timer-preempted user task snapshot must retain a complete interrupt trap frame"
     );
     assert_eq!(
+        counters.full_restored_trap_frame_snapshots, expected_user_tasks,
+        "scheduler snapshots must show every finished user task restored a complete user trap frame"
+    );
+    assert!(
+        counters.runtime_trap_frame_restore_snapshots >= counters.preempted_user_task_snapshots,
+        "every timer-preempted user task snapshot must show a runtime trap frame restore"
+    );
+    assert_eq!(
         counters.resumed_user_task_snapshots, expected_user_tasks,
         "scheduler snapshots must show every user task was entered or resumed"
     );
@@ -728,6 +757,14 @@ fn log_scheduler_task_snapshot_counters(
             LogField::new(
                 "full_timer_trap_frame_snapshots",
                 format_args!("{}", counters.full_timer_trap_frame_snapshots),
+            ),
+            LogField::new(
+                "full_restored_trap_frame_snapshots",
+                format_args!("{}", counters.full_restored_trap_frame_snapshots),
+            ),
+            LogField::new(
+                "runtime_trap_frame_restore_snapshots",
+                format_args!("{}", counters.runtime_trap_frame_restore_snapshots),
             ),
             LogField::new(
                 "resumed_user_task_snapshots",

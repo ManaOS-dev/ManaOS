@@ -215,6 +215,8 @@ struct UserTaskRuntime {
     read_request: Option<UserReadRequest>,
     syscall_frame_recorded: bool,
     interrupt_frame_recorded: bool,
+    restored_user_trap_frame_bytes: usize,
+    runtime_trap_frame_restore_count: u64,
     last_preemption_reason: UserPreemptionReasonDiagnostics,
     last_resume_path: UserResumePathDiagnostics,
 }
@@ -243,9 +245,23 @@ impl UserTaskRuntime {
             read_request: None,
             syscall_frame_recorded: false,
             interrupt_frame_recorded: false,
+            restored_user_trap_frame_bytes: 0,
+            runtime_trap_frame_restore_count: 0,
             last_preemption_reason: UserPreemptionReasonDiagnostics::None,
             last_resume_path: UserResumePathDiagnostics::None,
         }
+    }
+
+    fn record_user_trap_frame_restore(&mut self) {
+        self.restored_user_trap_frame_bytes = core::mem::size_of::<UserTrapFrame>();
+        if self.has_recorded_runtime_trap_frame() {
+            self.runtime_trap_frame_restore_count =
+                self.runtime_trap_frame_restore_count.saturating_add(1);
+        }
+    }
+
+    fn has_recorded_runtime_trap_frame(&self) -> bool {
+        self.syscall_frame_recorded || self.interrupt_frame_recorded
     }
 }
 

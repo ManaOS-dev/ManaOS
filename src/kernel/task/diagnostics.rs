@@ -509,19 +509,25 @@ pub(super) struct UserTrapFrameDiagnosticsSnapshot {
     saved_user_trap_frame_bytes: usize,
     syscall_frame_recorded: bool,
     interrupt_frame_recorded: bool,
+    restored_user_trap_frame_bytes: usize,
+    runtime_trap_frame_restore_count: u64,
 }
 
 impl UserTrapFrameDiagnosticsSnapshot {
-    /// Create a saved user trap frame diagnostics snapshot.
+    /// Create a user trap frame diagnostics snapshot.
     pub(super) const fn new(
         saved_user_trap_frame_bytes: usize,
         syscall_frame_recorded: bool,
         interrupt_frame_recorded: bool,
+        restored_user_trap_frame_bytes: usize,
+        runtime_trap_frame_restore_count: u64,
     ) -> Self {
         Self {
             saved_user_trap_frame_bytes,
             syscall_frame_recorded,
             interrupt_frame_recorded,
+            restored_user_trap_frame_bytes,
+            runtime_trap_frame_restore_count,
         }
     }
 }
@@ -711,6 +717,22 @@ impl SchedulerTaskSnapshot {
     /// Return whether a timer interrupt frame has been recorded for this task.
     pub const fn interrupt_frame_recorded(&self) -> bool {
         self.status.runtime.trap_frame.interrupt_frame_recorded
+    }
+
+    /// Return the byte size of the last restored user trap frame, or zero before entry.
+    pub const fn restored_user_trap_frame_bytes(&self) -> usize {
+        self.status
+            .runtime
+            .trap_frame
+            .restored_user_trap_frame_bytes
+    }
+
+    /// Return the number of restores from a saved runtime user trap frame.
+    pub const fn runtime_trap_frame_restore_count(&self) -> u64 {
+        self.status
+            .runtime
+            .trap_frame
+            .runtime_trap_frame_restore_count
     }
 
     /// Return the retained exit code for finished task records.

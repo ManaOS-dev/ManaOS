@@ -72,8 +72,9 @@ smoke, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. restore the full runtime user trap frame for resumed user processes;
-2. cover syscall return frames and timer interrupt frames with one scheduler path;
+1. cover syscall return frames and timer interrupt frames with one scheduler path;
+2. verify that each resumed user task uses its own address-space root and kernel
+   stack;
 3. keep scheduler diagnostics synchronized whenever lifecycle state gains a new
    transition.
 

@@ -18,9 +18,11 @@ captures a runtime `UserTrapFrame`, and stores returning syscall frames on the
 current user task. The x86_64 timer interrupt entry also captures a complete
 general-purpose register snapshot for Ring 3 timer frames and records it on the
 current user task. Scheduler task snapshots and the `tasks` command expose
-whether syscall and timer interrupt frames have been recorded, plus the saved
-`UserTrapFrame` byte size. Storage smoke asserts that every timer-preempted
-user task snapshot has a recorded interrupt frame with the full frame size.
+whether syscall and timer interrupt frames have been recorded, the saved
+`UserTrapFrame` byte size, the last restored frame byte size, and the number of
+restores from a saved runtime frame. Storage smoke asserts that every
+timer-preempted user task snapshot has a recorded interrupt frame with the full
+frame size and a runtime-frame restore.
 The scheduler can now preempt a Ring 3 task from the timer
 path, run another schedulable task, and resume the preempted user task through
 the saved timer interrupt context. User tasks also carry a `UserAddressSpace`
@@ -111,7 +113,8 @@ User task preemption stays disabled until all of the following are true:
 - User task metadata owns the saved trap frame and exposes it only through task
   lifecycle helpers. This is complete for returning syscalls and the current
   Local APIC timer interrupt path, and scheduler snapshots now expose recorded
-  frame flags and the full saved frame byte size for smoke assertions.
+  frame flags, the full saved frame byte size, the full restored frame byte
+  size, and runtime-frame restore counts for smoke assertions.
 - Per-task kernel stacks exist and are installed before entering or resuming a
   user task. This is complete for first entry, syscall entry, and timer-context
   resume on the current scheduler path.
@@ -136,7 +139,9 @@ User task preemption stays disabled until all of the following are true:
   periodic Local APIC timer interrupts can enter another active user task,
   preempt and resume user code across two user task records, and finish tasks
   that own separate stack slots, separate address spaces, and lifecycle
-  diagnostics. Finished user exits are now reported through a scheduler-owned
+  diagnostics. It also asserts that finished user task snapshots retain a full
+  restored trap-frame size and that timer-preempted snapshots record a runtime
+  trap-frame restore. Finished user exits are now reported through a scheduler-owned
   exit queue instead of a
   global single-result latch, so lifecycle cleanup can drain task-specific exit
   records before asking the scheduler for one aggregate resource-reclaim pass

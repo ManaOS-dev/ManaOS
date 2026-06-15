@@ -86,6 +86,7 @@ impl Scheduler {
         self.one_shot_user_entry_count = self.one_shot_user_entry_count.saturating_add(1);
         if let TaskKind::User(user_runtime) = &mut self.tasks[task_index].kind {
             user_runtime.last_resume_path = UserResumePathDiagnostics::LifecycleEntry;
+            user_runtime.record_user_trap_frame_restore();
         }
         Some(OneShotUserTask {
             trap_frame,
@@ -749,6 +750,8 @@ impl Scheduler {
         user_runtime.read_request = None;
         user_runtime.syscall_frame_recorded = false;
         user_runtime.interrupt_frame_recorded = false;
+        user_runtime.restored_user_trap_frame_bytes = 0;
+        user_runtime.runtime_trap_frame_restore_count = 0;
         current_task.context.clear();
 
         crate::log_info!(
@@ -907,6 +910,7 @@ impl Scheduler {
                     unreachable!("user task kind checked before timer entry");
                 };
                 user_runtime.last_resume_path = UserResumePathDiagnostics::TimerEntry;
+                user_runtime.record_user_trap_frame_restore();
                 return Some(SwitchAction::EnterUser {
                     current_context,
                     task_id: next_task_id,
@@ -921,6 +925,7 @@ impl Scheduler {
                 unreachable!("user task kind checked before timer resume");
             };
             user_runtime.last_resume_path = UserResumePathDiagnostics::TimerResume;
+            user_runtime.record_user_trap_frame_restore();
             if !self.user_resume_logged {
                 crate::log_info!(
                     "task",
