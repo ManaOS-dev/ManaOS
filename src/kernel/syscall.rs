@@ -1155,30 +1155,23 @@ fn copy_user_entry_string_value(
             .expect("max user entry string bytes must fit in u64"),
     )
     .ok_or(ERROR_BAD_ADDRESS)?;
-    let Some(bytes) = user_pointer::copy_from_user(UserReadableRange::new(range)) else {
+    let Some(value) =
+        user_pointer::copy_cstr_bytes_from_user(UserCString::new(UserReadableRange::new(range)))
+    else {
         return Err(ERROR_BAD_ADDRESS);
     };
 
-    let mut value = Vec::new();
-    for byte in bytes {
-        if *byte == 0 {
-            let next_string_bytes = value
-                .len()
-                .checked_add(1)
-                .and_then(|length| copied_string_bytes.checked_add(length))
-                .ok_or(ERROR_ARGUMENT_LIST_TOO_LONG)?;
-            if next_string_bytes > MAX_USER_ENTRY_COPIED_STRING_BYTES {
-                return Err(ERROR_ARGUMENT_LIST_TOO_LONG);
-            }
-
-            *copied_string_bytes = next_string_bytes;
-            return Ok(value);
-        }
-
-        value.push(*byte);
+    let next_string_bytes = value
+        .len()
+        .checked_add(1)
+        .and_then(|length| copied_string_bytes.checked_add(length))
+        .ok_or(ERROR_ARGUMENT_LIST_TOO_LONG)?;
+    if next_string_bytes > MAX_USER_ENTRY_COPIED_STRING_BYTES {
+        return Err(ERROR_ARGUMENT_LIST_TOO_LONG);
     }
 
-    Err(ERROR_BAD_ADDRESS)
+    *copied_string_bytes = next_string_bytes;
+    Ok(value)
 }
 
 fn copy_input_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static [u8]> {

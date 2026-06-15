@@ -2,7 +2,7 @@
 
 use super::{
     USER_SMOKE_CHILD_EXIT_CODE, USER_SMOKE_CHILD_TASK_COUNT, USER_SMOKE_ORPHAN_CHILD_EXIT_CODE,
-    USER_SMOKE_PARENT_TASK_COUNT, USER_SMOKE_SHELL_TASK_COUNT,
+    USER_SMOKE_PARENT_TASK_COUNT, USER_SMOKE_SHELL_CHILD_TASK_COUNT, USER_SMOKE_SHELL_TASK_COUNT,
 };
 use crate::kernel::diagnostic::log::{LogField, LogLevel};
 
@@ -77,9 +77,9 @@ fn verify_scheduler_reclaim_diagnostics(
     // pages. The old heap and private mappings are reclaimed during execve
     // publication, before the task exits.
     const SMOKE_RECLAIMED_USER_PAGES_PER_TASK: u64 = 8;
-    // The tokenizer shell image touches its text, rodata, data, and stack
-    // windows, matching the current post-exec smoke image reclaim total.
-    const SHELL_RECLAIMED_USER_PAGES_PER_TASK: u64 = 8;
+    // The shell image now includes command execution paths, so it touches one
+    // more program page than the smaller file_demo smoke image before exit.
+    const SHELL_RECLAIMED_USER_PAGES_PER_TASK: u64 = 9;
     // The post-exec image touches only the program and stack windows, leaving
     // seven page-table frames to reclaim with the PML4.
     const SMOKE_RECLAIMED_PAGE_TABLE_PAGES_PER_TASK: u64 = 7;
@@ -186,10 +186,12 @@ fn verify_scheduler_user_return_diagnostics(
         diagnostics.user_sleep_blocks(),
         "every sleeping user smoke task must wake once"
     );
+    let expected_waitpid_blocks = 1 + u64::try_from(USER_SMOKE_SHELL_CHILD_TASK_COUNT)
+        .expect("shell child smoke task count must fit in u64");
     assert_eq!(
         diagnostics.user_waitpid_blocks(),
-        1,
-        "userland spawn parent must block once in waitpid"
+        expected_waitpid_blocks,
+        "userland spawn parents must block for waitpid"
     );
     assert_eq!(
         diagnostics.user_waitpid_wakes(),
@@ -540,8 +542,10 @@ fn verify_user_task_exit_code(snapshot: &crate::kernel::task::SchedulerTaskSnaps
         return;
     }
     assert!(
-        exit_code == USER_SMOKE_CHILD_EXIT_CODE || exit_code == USER_SMOKE_ORPHAN_CHILD_EXIT_CODE,
-        "user-spawned child tasks must retain known nonzero smoke exit status"
+        exit_code == 0
+            || exit_code == USER_SMOKE_CHILD_EXIT_CODE
+            || exit_code == USER_SMOKE_ORPHAN_CHILD_EXIT_CODE,
+        "user-spawned child tasks must retain known smoke exit status"
     );
 }
 
@@ -571,6 +575,8 @@ fn verify_scheduler_task_snapshot_counts(
     let expected_reparented_orphan_children = 1_u64;
     let expected_shell_tasks =
         u64::try_from(USER_SMOKE_SHELL_TASK_COUNT).expect("shell smoke task count must fit in u64");
+    let expected_shell_child_tasks = u64::try_from(USER_SMOKE_SHELL_CHILD_TASK_COUNT)
+        .expect("shell child smoke task count must fit in u64");
     let expected_bootstrap_parent_tasks = u64::try_from(USER_SMOKE_PARENT_TASK_COUNT)
         .expect("smoke parent task count must fit in u64");
     let expected_bootstrap_children = expected_bootstrap_parent_tasks
@@ -578,13 +584,15 @@ fn verify_scheduler_task_snapshot_counts(
         .saturating_add(expected_shell_tasks);
     let expected_user_spawned_children = u64::try_from(USER_SMOKE_CHILD_TASK_COUNT)
         .expect("smoke child task count must fit in u64")
-        .saturating_sub(expected_reparented_orphan_children);
+        .saturating_sub(expected_reparented_orphan_children)
+        .saturating_add(expected_shell_child_tasks);
     let expected_published_execve_images =
         expected_bootstrap_parent_tasks.saturating_sub(DIRECT_FILE_DEMO_PARENT_TASKS);
     let expected_unreplaced_user_images = u64::try_from(USER_SMOKE_CHILD_TASK_COUNT)
         .expect("smoke child task count must fit in u64")
         .saturating_add(DIRECT_FILE_DEMO_PARENT_TASKS)
-        .saturating_add(expected_shell_tasks);
+        .saturating_add(expected_shell_tasks)
+        .saturating_add(expected_shell_child_tasks);
     assert_eq!(
         counters.finished_user_tasks, expected_user_tasks,
         "scheduler snapshots must include every finished user smoke task"

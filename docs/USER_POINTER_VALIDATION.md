@@ -14,14 +14,16 @@ The implementation entry point is `kernel::memory::user_pointer`.
 - Output buffers must use `copy_to_user`, which requires a present writable
   user-accessible, non-executable mapping.
 - NUL-terminated path strings must use `copy_cstr_from_user` with a syscall
-  specific maximum length.
+  specific maximum length. The helper validates each byte up to the first NUL
+  terminator, so a short string near the end of a mapped user page is accepted
+  as long as the terminator itself is readable.
 - NUL-terminated pointer arrays must copy each pointer slot with
   `copy_from_user` before scanning the pointed-to strings.
 - Non-zero syscall pointer arguments are converted from raw `u64` ABI values to
   `UserVirtualRange`, then wrapped as `UserReadableRange` or
   `UserWritableRange` before the copy helpers run.
 - NUL-terminated path arguments are additionally wrapped as `UserCString`
-  before `copy_cstr_from_user` scans for the terminator.
+  before `copy_cstr_from_user` scans readable bytes for the terminator.
 - Syscalls return Linux-like `-EFAULT` (`ERROR_BAD_ADDRESS`) when pointer
   validation fails.
 

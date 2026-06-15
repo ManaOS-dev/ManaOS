@@ -20,6 +20,7 @@ const ORPHAN_PARENT_MESSAGE: &[u8] = b"user parent exit child alive ok\n";
 const ORPHAN_CHILD_VECTORS_MESSAGE: &[u8] = b"user orphaned child vectors ok\n";
 const SPAWN_WAIT_ARGUMENT: &[u8] = b"--spawn-wait-smoke";
 const ORPHAN_PARENT_ARGUMENT: &[u8] = b"--orphan-parent-smoke";
+const SHELL_COMMAND_ARGUMENT: &[u8] = b"--shell-command-smoke";
 const SPAWNED_CHILD_ARGUMENT: &[u8] = b"--spawned-child";
 const ORPHANED_CHILD_ARGUMENT: &[u8] = b"--orphaned-child";
 const SPAWNED_CHILD_ENVIRONMENT: &[u8] = b"MANAOS_CHILD=spawn";
@@ -130,7 +131,9 @@ fn exit_code_for_invocation(
     argument_count: usize,
     argument_values: *const *const u8,
 ) -> usize {
-    if orphaned_child_requested(argument_count, argument_values) {
+    if shell_command_requested(argument_count, argument_values) {
+        0
+    } else if orphaned_child_requested(argument_count, argument_values) {
         ORPHAN_CHILD_EXIT_CODE
     } else if parent_task_id <= 0 {
         0
@@ -149,6 +152,10 @@ fn orphan_parent_requested(argument_count: usize, argument_values: *const *const
     argument_count == 2
         && !argument_values.is_null()
         && argument_equals(argument_values, 1, ORPHAN_PARENT_ARGUMENT)
+}
+
+fn shell_command_requested(argument_count: usize, argument_values: *const *const u8) -> bool {
+    child_argument_requested(argument_count, argument_values, SHELL_COMMAND_ARGUMENT)
 }
 
 fn verify_spawn_child_waitpid() {

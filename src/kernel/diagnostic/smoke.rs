@@ -13,13 +13,16 @@ pub const USER_SMOKE_PARENT_TASK_COUNT: usize = 5;
 pub const USER_SMOKE_CHILD_TASK_COUNT: usize = 2;
 /// Number of post-gate user shell processes spawned by storage smoke.
 pub const USER_SMOKE_SHELL_TASK_COUNT: usize = 1;
+/// Number of child processes launched by the post-gate user shell smoke.
+pub const USER_SMOKE_SHELL_CHILD_TASK_COUNT: usize = 1;
 /// Exit code used by the blocking user-spawned child status smoke.
 pub const USER_SMOKE_CHILD_EXIT_CODE: u64 = 7;
 /// Exit code used by the child whose parent exits before it does.
 pub const USER_SMOKE_ORPHAN_CHILD_EXIT_CODE: u64 = 43;
 /// Number of user tasks expected after the full storage smoke lifecycle.
-pub const USER_SMOKE_TASK_COUNT: usize =
-    USER_LIFECYCLE_SMOKE_TASK_COUNT + USER_SMOKE_SHELL_TASK_COUNT;
+pub const USER_SMOKE_TASK_COUNT: usize = USER_LIFECYCLE_SMOKE_TASK_COUNT
+    + USER_SMOKE_SHELL_TASK_COUNT
+    + USER_SMOKE_SHELL_CHILD_TASK_COUNT;
 
 const USER_LIFECYCLE_SMOKE_TASK_COUNT: usize =
     USER_SMOKE_PARENT_TASK_COUNT + USER_SMOKE_CHILD_TASK_COUNT;
@@ -182,13 +185,7 @@ fn run_initial_user_shell_smoke(
         user_task_id,
         USER_SHELL_ELF_PATH
     );
-    let exit = crate::kernel::task::run_user_task_once(frame_allocator, user_task_id)
-        .expect("initial user shell smoke task must exit after stdin EOF");
-    assert_eq!(
-        exit.task_id(),
-        user_task_id,
-        "initial user shell smoke must return the shell task exit"
-    );
+    let exit = run_initial_user_shell_until_exit(frame_allocator, user_task_id);
     assert_eq!(
         exit.exit_code(),
         0,
@@ -200,6 +197,26 @@ fn run_initial_user_shell_smoke(
         "Initial user shell smoke passed: task={} exit_code=0 stdin=eof",
         user_task_id
     );
+}
+
+fn run_initial_user_shell_until_exit(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    user_task_id: u64,
+) -> crate::kernel::task::UserTaskExit {
+    loop {
+        let exit = crate::kernel::task::run_user_task_once(frame_allocator, user_task_id)
+            .expect("initial user shell smoke task must exit after stdin EOF");
+        if exit.task_id() == user_task_id {
+            return exit;
+        }
+        crate::log_info!(
+            "task",
+            "Initial user shell child exit observed: parent={} child={} code={}",
+            user_task_id,
+            exit.task_id(),
+            exit.exit_code()
+        );
+    }
 }
 
 fn verify_initial_user_shell_exit_collection(exit: crate::kernel::task::UserTaskExit) {

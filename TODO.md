@@ -12,16 +12,12 @@ reviewable unit before implementing it.
 ### Minimal User Shell
 
 - [ ] Keep the smoke-started userland shell alive once stdin is keyboard-backed.
-- [ ] Implement absolute path execution for user programs.
 - [ ] Implement relative path execution using the current working directory.
 - [ ] Implement `cd` through a user-visible syscall or runtime helper.
 - [ ] Implement `pwd` using the userland runtime path API.
 - [ ] Implement `exit` with a configurable status code.
 - [ ] Implement `help` with commands compiled into the shell.
-- [ ] Implement single-command execution without pipelines first.
-- [ ] Add fixed-buffer argv construction for command execution.
 - [ ] Add bounded error messages for command failures.
-- [ ] Add shell smoke logs for launching `file_demo`.
 - [ ] Add shell smoke logs for a missing command.
 - [ ] Keep the kernel console available while the user shell is experimental.
 - [ ] Document how to enter and leave the user shell in QEMU.
