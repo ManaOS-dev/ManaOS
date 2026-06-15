@@ -177,6 +177,16 @@ fn verify_scheduler_user_return_diagnostics(
         diagnostics.user_sleep_blocks(),
         "every sleeping user smoke task must wake once"
     );
+    assert_eq!(
+        diagnostics.user_waitpid_blocks(),
+        1,
+        "userland spawn parent must block once in waitpid"
+    );
+    assert_eq!(
+        diagnostics.user_waitpid_wakes(),
+        diagnostics.user_waitpid_blocks(),
+        "every waitpid-blocked user task must wake once"
+    );
     assert!(
         diagnostics.user_return_preemption_window_closes() >= expected_user_tasks,
         "every user task exit and blocking wait must close the preemption return window"
@@ -259,6 +269,14 @@ fn log_scheduler_task_diagnostics(
             LogField::new(
                 "user_sleep_wakes",
                 format_args!("{}", diagnostics.user_sleep_wakes()),
+            ),
+            LogField::new(
+                "user_waitpid_blocks",
+                format_args!("{}", diagnostics.user_waitpid_blocks()),
+            ),
+            LogField::new(
+                "user_waitpid_wakes",
+                format_args!("{}", diagnostics.user_waitpid_wakes()),
             ),
             LogField::new(
                 "user_return_preemption_window_closes",

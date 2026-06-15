@@ -77,6 +77,8 @@ impl Scheduler {
             user_resumes: self.user_resume_count,
             user_sleep_blocks: self.user_sleep_block_count,
             user_sleep_wakes: self.user_sleep_wake_count,
+            user_waitpid_blocks: self.user_waitpid_block_count,
+            user_waitpid_wakes: self.user_waitpid_wake_count,
             finished_tasks: self.finished_task_count,
             pending_user_exits: u64::try_from(self.finished_user_exits.len())
                 .expect("pending user exit count must fit in u64"),

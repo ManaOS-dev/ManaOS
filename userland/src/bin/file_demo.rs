@@ -10,11 +10,9 @@ const USER_SPAWN_CHILD_DELAY_NANOS: u64 = 5_000_000;
 // child exits as success.
 const USER_SPAWN_CHILD_EXIT_CODE: usize = 7;
 const USER_SPAWN_CHILD_WAIT_STATUS: i32 = (USER_SPAWN_CHILD_EXIT_CODE as i32) << 8;
-const SPAWN_WAIT_SLEEP_NANOS: u64 = 50_000_000;
-const SPAWN_WAIT_RETRY_COUNT: usize = 16;
 const NON_CHILD_PROCESS_IDENTIFIER: isize = 9999;
 const WAITPID_MESSAGE: &[u8] = b"user waitpid no child ok\n";
-const SPAWN_WAIT_MESSAGE: &[u8] = b"user spawn waitpid nonzero ok\n";
+const SPAWN_WAIT_MESSAGE: &[u8] = b"user waitpid blocking nonzero ok\n";
 const SPAWN_VECTORS_MESSAGE: &[u8] = b"user spawn vectors ok\n";
 const SPAWN_WAIT_ARGUMENT: &[u8] = b"--spawn-wait-smoke";
 const SPAWNED_CHILD_ARGUMENT: &[u8] = b"--spawned-child";
@@ -149,36 +147,14 @@ fn verify_spawn_child_waitpid() {
         syscall::exit(17);
     }
 
-    for _ in 0..SPAWN_WAIT_RETRY_COUNT {
-        sleep_for_child_wait();
-        let wait_result = syscall::waitpid(
-            child_task_id,
-            &mut wait_status as *mut i32,
-            syscall::WNOHANG,
-        );
-        if wait_result == child_task_id {
-            if wait_status != USER_SPAWN_CHILD_WAIT_STATUS {
-                syscall::exit(18);
-            }
-            let _ = syscall::write(STDOUT, SPAWN_WAIT_MESSAGE);
-            return;
-        }
-        if wait_result != 0 {
-            syscall::exit(19);
-        }
+    let wait_result = syscall::waitpid(syscall::WAIT_ANY, &mut wait_status as *mut i32, 0);
+    if wait_result != child_task_id {
+        syscall::exit(18);
     }
-
-    syscall::exit(20);
-}
-
-fn sleep_for_child_wait() {
-    let duration = syscall::Timespec {
-        seconds: 0,
-        nanoseconds: SPAWN_WAIT_SLEEP_NANOS,
-    };
-    if syscall::nanosleep(&duration) != 0 {
-        syscall::exit(21);
+    if wait_status != USER_SPAWN_CHILD_WAIT_STATUS {
+        syscall::exit(19);
     }
+    let _ = syscall::write(STDOUT, SPAWN_WAIT_MESSAGE);
 }
 
 fn verify_waitpid_no_child() {

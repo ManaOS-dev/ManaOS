@@ -16,6 +16,7 @@ use super::reclaim::FinishedUserTaskReclaim;
 use super::stack::{KernelStack, KernelStackFaultOwner, KernelStackGuardFault, KernelStackReclaim};
 use super::state::TaskState;
 use crate::kernel::memory::address::UserVirtualAddress;
+use crate::kernel::memory::address::{UserVirtualRange, UserWritableRange};
 use crate::kernel::memory::address_space::{self, UserAddressSpace, UserAddressSpaceReclaim};
 use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
 use crate::kernel::memory::user_heap::UserHeap;
@@ -172,6 +173,8 @@ struct UserTaskRuntime {
     mapping_peak_active_records: u64,
     mapping_file_private_map_count: u64,
     sleep_wake_tick: Option<u64>,
+    waitpid_request: Option<UserWaitpidRequest>,
+    waitpid_completion: Option<UserWaitpidCompletion>,
     syscall_frame_recorded: bool,
     interrupt_frame_recorded: bool,
     last_preemption_reason: UserPreemptionReasonDiagnostics,
@@ -197,10 +200,51 @@ impl UserTaskRuntime {
             mapping_peak_active_records: 0,
             mapping_file_private_map_count: 0,
             sleep_wake_tick: None,
+            waitpid_request: None,
+            waitpid_completion: None,
             syscall_frame_recorded: false,
             interrupt_frame_recorded: false,
             last_preemption_reason: UserPreemptionReasonDiagnostics::None,
             last_resume_path: UserResumePathDiagnostics::None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct UserWaitpidRequest {
+    child_task_id: Option<u64>,
+    status_pointer: Option<u64>,
+}
+
+impl UserWaitpidRequest {
+    const fn new(child_task_id: Option<u64>, status_pointer: Option<u64>) -> Self {
+        Self {
+            child_task_id,
+            status_pointer,
+        }
+    }
+
+    const fn matches_child(self, child_task_id: u64) -> bool {
+        match self.child_task_id {
+            Some(requested_child_task_id) => requested_child_task_id == child_task_id,
+            None => true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct UserWaitpidCompletion {
+    child_task_id: u64,
+    status_pointer: Option<u64>,
+    wait_status: u32,
+}
+
+impl UserWaitpidCompletion {
+    const fn new(child_task_id: u64, status_pointer: Option<u64>, wait_status: u32) -> Self {
+        Self {
+            child_task_id,
+            status_pointer,
+            wait_status,
         }
     }
 }
@@ -518,6 +562,8 @@ pub(super) struct Scheduler {
     user_resume_count: u64,
     user_sleep_block_count: u64,
     user_sleep_wake_count: u64,
+    user_waitpid_block_count: u64,
+    user_waitpid_wake_count: u64,
     finished_task_count: u64,
     reclaimed_user_resource_record_count: u64,
     reclaimed_user_address_space_count: u64,
@@ -548,6 +594,8 @@ impl Scheduler {
             user_resume_count: 0,
             user_sleep_block_count: 0,
             user_sleep_wake_count: 0,
+            user_waitpid_block_count: 0,
+            user_waitpid_wake_count: 0,
             finished_task_count: 0,
             reclaimed_user_resource_record_count: 0,
             reclaimed_user_address_space_count: 0,
@@ -728,6 +776,7 @@ mod facade;
 mod runtime;
 mod user_memory;
 
+pub(in crate::kernel::task) use facade::complete_pending_user_waitpid_status;
 pub(super) use facade::install_user_task_kernel_stack;
 pub use facade::{
     activate_user_task, block_current_user_after_syscall, close_user_return_preemption_window,
@@ -736,8 +785,8 @@ pub use facade::{
     get_current_working_directory, get_kernel_stack_guard_fault,
     get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
     get_scheduler_task_snapshots, has_active_user_tasks, initialize, prepare_current_user_sleep,
-    process_current_user_break, process_current_user_mapping, process_current_user_unmapping,
-    process_timer_tick, record_current_user_execve_reclaim,
+    prepare_current_user_waitpid, process_current_user_break, process_current_user_mapping,
+    process_current_user_unmapping, process_timer_tick, record_current_user_execve_reclaim,
     record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
     replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
     run_user_task_once, set_current_working_directory, set_preemption_enabled, spawn,

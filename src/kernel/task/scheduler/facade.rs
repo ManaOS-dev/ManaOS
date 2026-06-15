@@ -163,6 +163,17 @@ pub fn collect_waitable_child_exit(
         .and_then(|scheduler| scheduler.collect_waitable_child_exit(parent_task_id, child_task_id))
 }
 
+/// Prepare the current user task to block in `waitpid`.
+pub fn prepare_current_user_waitpid(
+    child_task_id: Option<u64>,
+    status_pointer: Option<u64>,
+) -> Option<u64> {
+    let mut scheduler = SCHEDULER.lock();
+    scheduler
+        .as_mut()
+        .and_then(|scheduler| scheduler.prepare_current_user_waitpid(child_task_id, status_pointer))
+}
+
 /// Return whether the current user task owns a matching child task.
 pub fn current_user_task_has_child(child_task_id: Option<u64>) -> Option<bool> {
     let scheduler = SCHEDULER.lock();
@@ -220,6 +231,14 @@ pub fn block_current_user_after_syscall() -> Option<u64> {
     scheduler
         .as_mut()
         .and_then(Scheduler::block_current_user_after_syscall)
+}
+
+/// Complete pending `waitpid` user status writes after switching address space.
+pub(in crate::kernel::task) fn complete_pending_user_waitpid_status(task_id: u64) {
+    let mut scheduler = SCHEDULER.lock();
+    if let Some(scheduler) = scheduler.as_mut() {
+        let _ = scheduler.complete_pending_user_waitpid_status(task_id);
+    }
 }
 
 /// Save a captured user trap frame for the currently running user task.
@@ -326,6 +345,7 @@ pub fn process_timer_tick(interrupted_user_mode: bool) {
             address_space,
         } => {
             address_space::switch_to_user_address_space(address_space);
+            complete_pending_user_waitpid_status(task_id);
             install_user_task_kernel_stack(kernel_stack_top);
             crate::log_info!(
                 "task",

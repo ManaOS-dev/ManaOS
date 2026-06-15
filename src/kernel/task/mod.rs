@@ -23,6 +23,7 @@
 //! - [`process_current_user_mapping`] - Process a private user mapping request
 //! - [`process_current_user_unmapping`] - Process a private user unmapping request
 //! - [`prepare_current_user_sleep`] - Prepare the current user task to sleep
+//! - [`prepare_current_user_waitpid`] - Prepare the current user task to wait for a child
 //! - [`block_current_user_after_syscall`] - Block the current user task after saving its syscall frame
 //! - [`process_timer_tick`] - Run one preemptive scheduling step
 //! - [`get_current_task_id`] - Read the current task identifier
@@ -74,8 +75,8 @@ pub use scheduler::{
     get_current_working_directory, get_kernel_stack_guard_fault,
     get_kernel_stack_guard_fault_diagnostic_sample, get_scheduler_diagnostics,
     get_scheduler_task_snapshots, has_active_user_tasks, initialize, prepare_current_user_sleep,
-    process_current_user_break, process_current_user_mapping, process_current_user_unmapping,
-    process_timer_tick, record_current_user_execve_reclaim,
+    prepare_current_user_waitpid, process_current_user_break, process_current_user_mapping,
+    process_current_user_unmapping, process_timer_tick, record_current_user_execve_reclaim,
     record_current_user_interrupt_trap_frame, record_current_user_trap_frame,
     replace_current_user_image, run_active_user_tasks_until_empty, run_next_user_task_once,
     run_user_task_once, set_current_working_directory, set_preemption_enabled, spawn,

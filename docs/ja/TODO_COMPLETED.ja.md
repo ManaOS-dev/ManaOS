@@ -31,7 +31,7 @@ spawn 前の argv/envp entry vector 表現、spawn path lookup failure と memor
 errno mapping、
 spawned process の current working directory inheritance、task-owned current directory を読む
 no-std `getcwd` wrapper、argv/envp-capable user-visible spawn wrapper、
-userland child wait smoke、nonzero child exit status smoke、
+userland child wait smoke、nonzero child exit status smoke、blocking `waitpid(WAIT_ANY)` smoke、
 最小 no-std `user_shell` binary の build と storage smoke disk image 登録が
 完了済みです。user process scheduling は、4つの active parent user process と user-spawned child を
 扱う storage smoke まで完了済みです。さらに、per-task の last preemption / last resume diagnostics と、preempted

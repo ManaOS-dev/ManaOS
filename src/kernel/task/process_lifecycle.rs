@@ -72,6 +72,7 @@ fn run_user_task_until_kernel_return(
             .prepare_one_shot_user_task(task_id)?
     };
     crate::kernel::memory::address_space::switch_to_user_address_space(user_task.address_space);
+    super::scheduler::complete_pending_user_waitpid_status(task_id);
     super::scheduler::install_user_task_kernel_stack(user_task.kernel_stack_top);
     crate::log_info!(
         "task",

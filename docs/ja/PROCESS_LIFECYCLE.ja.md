@@ -44,8 +44,9 @@ task metadata の所有になり、relative path は current task の directory 
 wrapper は、この task-owned directory を no-std userland code に公開します。scheduler-spawned child task は、
 task creation 時点の parent current working directory をコピーします。現在の user-visible `spawn`
 surface は、その directory で executable path を1つ解決し、bounded `argv` / `envp` vectors を
-stage してから child を即座に active set へ入れます。blocking `waitpid` と完全な descriptor
-inheritance policy は今後の作業です。
+stage してから child を即座に active set へ入れます。blocking `waitpid` は、matching child exit
+record が retained されるまで parent task を sleep させます。完全な descriptor inheritance policy は
+今後の作業です。
 descriptor close-on-exec metadata と successful-`execve` close behavior は、現在の global descriptor
 table 向けに実装済みです。`waitpid` の syscall number、option constant、no-std userland wrapper、
 selector validation、no-child `ECHILD` path、parent task identifier で key 付けされた
@@ -99,18 +100,22 @@ option bit と process-group selector は `-EINVAL` で拒否し、current user 
 存在しない場合は `-ECHILD` を返します。matching child に waitable exit record が既にある場合は、
 その record を collect し、child process identifier を返し、status pointer が non-null なら normal
 wait status word を格納します。`WNOHANG` は matching child が存在しても waitable な matching child
-exit がまだない場合に `0` を返します。blocking wait は、waiting parent を scheduler で sleep/wake
-できるようになるまで `-ENOSYS` のままです。ManaOS にはまだ user interrupt policy がないため、この
-syscall は `-EINTR` を返しません。storage smoke は no-std userland wrapper 経由で no-child と明示的な
-non-child selector path、argv/envp-bearing `spawn` child に対する pending `waitpid(WNOHANG) == 0`、
-その後の one-shot child reap と nonzero status encoding を検証します。
+exit がまだない場合に `0` を返します。blocking wait は scheduler-owned wait request を parent task に
+保存し、syscall frame 保存後にその task を block し、matching child exit record が retained されたら
+parent を wake して saved syscall frame の `rax` に child process identifier を入れて resume します。
+non-null status pointer は block 前に validate し、waiting parent の address space へ戻った後に書き込みます。
+ManaOS にはまだ user interrupt policy がないため、この syscall は `-EINTR` を返しません。storage smoke は
+no-std userland wrapper 経由で no-child と明示的な non-child selector path、explicit `argv` / `envp`
+付き spawned child に対する pending `waitpid(WNOHANG) == 0`、その後の blocking `waitpid(WAIT_ANY)` reap と
+nonzero status encoding を検証します。
 
-残りの scheduler-backed contract:
+scheduler-backed contract:
 
 - 成功時は reaped child process identifier を返します。
 - status pointer が non-null の場合、normal process exit status は `(exit_code & 0xff) << 8`
   として格納します。
 - `WNOHANG` で matching child は存在するが reap 可能な exited child がない場合は `0` を返します。
+- option `0` で matching child は存在するが reap 可能な exited child がない場合は parent を block します。
 - child exit status は、成功した reap がちょうど一度だけ消費するまで保持します。
 - address-space と kernel-stack resource は、scheduler-owned lifecycle policy 上で exit record が
   安全になってから reclaim します。
@@ -321,6 +326,9 @@ unmarked descriptor は default で descriptor number と offset を保持し、
 - storage smoke は、selected-child wait collection、bootstrap child の zero-exit wait status encoding、
   userland-spawned child の nonzero wait status encoding を scheduler-owned child exit record 経由で
   assert します。
+- storage smoke は、userland parent が `waitpid(WAIT_ANY)` で block し、spawned child の exit で wake し、
+  parent address space に戻った後で nonzero wait status を書き、child task identifier を返して resume
+  することを assert します。
 - storage smoke は retained child count、collected child count、double-reap prevention を示す stable な
   wait lifecycle summary も assert します。
 - `tasks` console command は、user task ごとの spawned origin path、current image generation、

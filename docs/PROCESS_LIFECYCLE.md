@@ -50,7 +50,8 @@ directory to no-std userland code. Scheduler-spawned child tasks copy the
 parent's current working directory at task creation. The current user-visible
 `spawn` surface resolves one executable path using that directory, stages
 bounded `argv` / `envp` vectors, and activates the child immediately. Blocking
-`waitpid` and full descriptor inheritance policy are still future work.
+`waitpid` now sleeps the parent task until a matching child exit record is
+retained. Full descriptor inheritance policy is still future work.
 Descriptor close-on-exec
 metadata and successful-`execve` close
 behavior exist for the current global descriptor table. The `waitpid` syscall
@@ -115,19 +116,25 @@ child. If a matching child already has a waitable exit record, the syscall
 collects that record, returns the child process identifier, and stores the
 normal wait status word when the status pointer is non-null. `WNOHANG` returns
 `0` when a matching child exists but no matching child exit is waitable yet.
-Blocking wait still returns `-ENOSYS` until waiting parents can sleep and wake
-through the scheduler. The syscall does not return `-EINTR` because ManaOS has
-no documented user interrupt policy yet. Storage smoke covers the no-child and
-explicit non-child selector paths through the no-std userland wrapper, an
-argv/envp-bearing `spawn` child whose pending `waitpid(WNOHANG)` returns `0`,
-and the later one-shot child reap with nonzero status encoding.
+Blocking wait stores a scheduler-owned wait request on the parent task, blocks
+that task after its syscall frame is saved, wakes it when a matching child exit
+record is retained, and resumes the saved syscall frame with the child process
+identifier in `rax`. Non-null status pointers are validated before blocking and
+written after the scheduler has switched back to the waiting parent's address
+space. The syscall does not return `-EINTR` because ManaOS has no documented
+user interrupt policy yet. Storage smoke covers the no-child and explicit
+non-child selector paths through the no-std userland wrapper, a spawned child
+with explicit `argv` / `envp` whose pending `waitpid(WNOHANG)` returns `0`, and
+the later blocking `waitpid(WAIT_ANY)` reap with nonzero status encoding.
 
-The remaining scheduler-backed contract is:
+The scheduler-backed contract is:
 
 - Return the reaped child process identifier on success.
 - Store normal process exit status as `(exit_code & 0xff) << 8` when the status
   pointer is non-null.
 - Return `0` for `WNOHANG` when the caller has a matching child but no matching
+  exited child is ready to reap.
+- Block the parent for option `0` when a matching child exists but no matching
   exited child is ready to reap.
 - Preserve each child exit status until exactly one successful reap consumes it.
 - Reclaim address-space and kernel-stack resources only after the exit record is
@@ -375,6 +382,10 @@ Current runtime diagnostics cover the first successful replacement path:
 - Storage smoke asserts selected-child wait collection, bootstrap zero-exit
   wait status encoding, and userland-spawned nonzero wait status encoding
   through the scheduler-owned child exit records.
+- Storage smoke asserts that a userland parent blocks in `waitpid(WAIT_ANY)`,
+  wakes when the spawned child exits, writes the nonzero wait status after
+  returning to the parent's address space, and resumes with the child task
+  identifier.
 - Storage smoke asserts a stable wait lifecycle summary showing retained child
   count, collected child count, and double-reap prevention.
 - The `tasks` console command shows each user task's spawned origin path,

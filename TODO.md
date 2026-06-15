@@ -15,7 +15,6 @@ reviewable unit before implementing it.
 
 ### `waitpid`, Exit Status, And Reaping
 
-- [ ] Support blocking wait for any child.
 - [ ] Reparent orphaned children to a documented initial process policy.
 - [ ] Reclaim finished child address spaces after the exit record is safe.
 - [ ] Reclaim finished child kernel stacks after the exit record is safe.

@@ -281,19 +281,21 @@ fn sys_waitpid(process_identifier: u64, status_pointer: u64, options: u64) -> u6
         return ERROR_NO_CHILD;
     }
 
-    let status_buffer = if status_pointer == 0 {
+    let wait_status_pointer = if status_pointer == 0 {
         None
     } else {
-        let Some(buffer) = copy_output_buffer(status_pointer, USER_WAIT_STATUS_BYTES) else {
+        if !validate_output_buffer(status_pointer, USER_WAIT_STATUS_BYTES) {
             return ERROR_BAD_ADDRESS;
-        };
-        Some(buffer)
+        }
+        Some(status_pointer)
     };
 
     if let Some(exit) =
         crate::kernel::task::collect_waitable_child_exit(parent_task_id, selector.child_task_id())
     {
-        if let Some(buffer) = status_buffer {
+        if let Some(status_pointer) = wait_status_pointer {
+            let buffer = copy_output_buffer(status_pointer, USER_WAIT_STATUS_BYTES)
+                .expect("validated waitpid status pointer must remain writable");
             write_user_u32(buffer, 0, exit.wait_status());
         }
         return exit.task_id();
@@ -303,7 +305,16 @@ fn sys_waitpid(process_identifier: u64, status_pointer: u64, options: u64) -> u6
         return 0;
     }
 
-    ERROR_NOT_IMPLEMENTED
+    if crate::kernel::task::prepare_current_user_waitpid(
+        selector.child_task_id(),
+        wait_status_pointer,
+    )
+    .is_none()
+    {
+        return ERROR_NOT_IMPLEMENTED;
+    }
+
+    USER_BLOCK_SENTINEL
 }
 
 /// Enable or disable syscall trace logging.
@@ -427,7 +438,7 @@ pub unsafe extern "C" fn syscall_dispatch_from_trap_frame(trap_frame: *mut UserT
             trap_frame_storage_address,
         );
         let task_id = crate::kernel::task::block_current_user_after_syscall()
-            .expect("prepared user sleep must block after saving the syscall frame");
+            .expect("prepared blocking syscall must block after saving the syscall frame");
         crate::kernel::task::close_user_return_preemption_window(task_id);
         return USER_BLOCK_SENTINEL;
     }
@@ -1143,6 +1154,10 @@ fn copy_output_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static mut [
 
     let range = UserVirtualRange::from_syscall_arguments(user_pointer, byte_len)?;
     user_pointer::copy_to_user(UserWritableRange::new(range))
+}
+
+fn validate_output_buffer(user_pointer: u64, byte_len: u64) -> bool {
+    copy_output_buffer(user_pointer, byte_len).is_some()
 }
 
 fn copy_path_argument(user_pointer: u64) -> Option<alloc::string::String> {

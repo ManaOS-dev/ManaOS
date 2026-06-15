@@ -5,8 +5,12 @@ use super::{
     PhysicalFrameAllocator, Scheduler, SwitchAction, TaskIdentifier, TaskKind, TaskState,
     UserAddressSpace, UserAddressSpaceReclaim, UserHeap, UserMappings,
     UserPreemptionReasonDiagnostics, UserResumePathDiagnostics, UserTaskExit, UserTrapFrame,
-    UserTrapFrameSource, UserVirtualAddress, USER_TASK_PREEMPTION_ENABLED,
+    UserTrapFrameSource, UserVirtualAddress, UserVirtualRange, UserWaitpidCompletion,
+    UserWaitpidRequest, UserWritableRange, USER_TASK_PREEMPTION_ENABLED,
 };
+use crate::kernel::memory::user_pointer;
+
+const USER_WAIT_STATUS_BYTES: u64 = core::mem::size_of::<i32>() as u64;
 impl Scheduler {
     pub(in crate::kernel::task) fn activate_user_task(&mut self, task_id: u64) -> bool {
         let Some(task_index) = self.get_task_index(task_id) else {
@@ -143,6 +147,7 @@ impl Scheduler {
             task_id,
             exit_code
         );
+        self.wake_waiting_parent_for_child_exit(parent_task_id, task_id);
         Some(exit)
     }
 
@@ -213,6 +218,42 @@ impl Scheduler {
         }))
     }
 
+    pub(in crate::kernel::task) fn prepare_current_user_waitpid(
+        &mut self,
+        child_task_id: Option<u64>,
+        status_pointer: Option<u64>,
+    ) -> Option<u64> {
+        let current_task = &mut self.tasks[self.current_index];
+        let task_id = current_task.get_id();
+        let TaskKind::User(user_runtime) = &mut current_task.kind else {
+            return None;
+        };
+        if user_runtime.address_space.is_none()
+            || current_task.state != TaskState::Running
+            || user_runtime.sleep_wake_tick.is_some()
+            || user_runtime.waitpid_request.is_some()
+            || user_runtime.waitpid_completion.is_some()
+        {
+            return None;
+        }
+
+        user_runtime.waitpid_request = Some(UserWaitpidRequest::new(child_task_id, status_pointer));
+        match child_task_id {
+            Some(child_task_id) => crate::log_info!(
+                "task",
+                "User task waitpid requested: task={} child={}",
+                task_id,
+                child_task_id
+            ),
+            None => crate::log_info!(
+                "task",
+                "User task waitpid requested: task={} child=any",
+                task_id
+            ),
+        }
+        Some(task_id)
+    }
+
     pub(in crate::kernel::task) fn prepare_current_user_sleep(
         &mut self,
         wake_tick: u64,
@@ -241,7 +282,11 @@ impl Scheduler {
         let TaskKind::User(user_runtime) = &self.tasks[self.current_index].kind else {
             return None;
         };
-        let wake_tick = user_runtime.sleep_wake_tick?;
+        let wake_tick = user_runtime.sleep_wake_tick;
+        let waitpid_request = user_runtime.waitpid_request;
+        if wake_tick.is_none() && waitpid_request.is_none() {
+            return None;
+        }
         if !self.tasks[self.current_index].state.prepare_to_block() {
             return None;
         }
@@ -252,14 +297,94 @@ impl Scheduler {
             }
             self.current_index = 0;
         }
-        self.user_sleep_block_count = self.user_sleep_block_count.saturating_add(1);
+        if let Some(wake_tick) = wake_tick {
+            self.user_sleep_block_count = self.user_sleep_block_count.saturating_add(1);
+            crate::log_info!(
+                "task",
+                "User task blocked for sleep: task={} wake_tick={}",
+                task_id,
+                wake_tick
+            );
+        } else if let Some(request) = waitpid_request {
+            self.user_waitpid_block_count = self.user_waitpid_block_count.saturating_add(1);
+            match request.child_task_id {
+                Some(child_task_id) => crate::log_info!(
+                    "task",
+                    "User task blocked for waitpid: task={} child={}",
+                    task_id,
+                    child_task_id
+                ),
+                None => crate::log_info!(
+                    "task",
+                    "User task blocked for waitpid: task={} child=any",
+                    task_id
+                ),
+            }
+        }
+        Some(task_id)
+    }
+
+    fn wake_waiting_parent_for_child_exit(&mut self, parent_task_id: u64, child_task_id: u64) {
+        let Some(parent_index) = self.get_task_index(parent_task_id) else {
+            return;
+        };
+        let TaskKind::User(parent_runtime) = &self.tasks[parent_index].kind else {
+            return;
+        };
+        let Some(request) = parent_runtime.waitpid_request else {
+            return;
+        };
+        if !request.matches_child(child_task_id) {
+            return;
+        }
+
+        let exit = self
+            .collect_waitable_child_exit(parent_task_id, request.child_task_id)
+            .expect("waitpid wake must collect the matching child exit record");
+        let TaskKind::User(parent_runtime) = &mut self.tasks[parent_index].kind else {
+            return;
+        };
+        parent_runtime.waitpid_request = None;
+        parent_runtime.waitpid_completion = Some(UserWaitpidCompletion::new(
+            exit.task_id(),
+            request.status_pointer,
+            exit.wait_status(),
+        ));
+        parent_runtime.saved_frame.rax = exit.task_id();
+        assert!(
+            self.tasks[parent_index].state.wake_blocked(),
+            "waitpid parent must be blocked before child exit wake"
+        );
+        self.user_waitpid_wake_count = self.user_waitpid_wake_count.saturating_add(1);
         crate::log_info!(
             "task",
-            "User task blocked for sleep: task={} wake_tick={}",
-            task_id,
-            wake_tick
+            "User task waitpid woke: parent={} child={} status={}",
+            parent_task_id,
+            exit.task_id(),
+            exit.wait_status()
         );
-        Some(task_id)
+    }
+
+    pub(in crate::kernel::task) fn complete_pending_user_waitpid_status(
+        &mut self,
+        task_id: u64,
+    ) -> Option<()> {
+        let task_index = self.get_task_index(task_id)?;
+        let TaskKind::User(user_runtime) = &mut self.tasks[task_index].kind else {
+            return None;
+        };
+        let completion = user_runtime.waitpid_completion.take()?;
+        if let Some(status_pointer) = completion.status_pointer {
+            write_user_wait_status(status_pointer, completion.wait_status);
+        }
+        crate::log_info!(
+            "task",
+            "User task waitpid completed: task={} child={} status_stored={}",
+            task_id,
+            completion.child_task_id,
+            completion.status_pointer.is_some()
+        );
+        Some(())
     }
 
     pub(in crate::kernel::task) fn wake_sleeping_user_tasks(&mut self, current_tick: u64) {
@@ -452,6 +577,8 @@ impl Scheduler {
         user_runtime.mapping_peak_active_records = 0;
         user_runtime.mapping_file_private_map_count = 0;
         user_runtime.sleep_wake_tick = None;
+        user_runtime.waitpid_request = None;
+        user_runtime.waitpid_completion = None;
         user_runtime.syscall_frame_recorded = false;
         user_runtime.interrupt_frame_recorded = false;
         current_task.context.clear();
@@ -658,4 +785,12 @@ impl Scheduler {
 
         None
     }
+}
+
+fn write_user_wait_status(status_pointer: u64, wait_status: u32) {
+    let range = UserVirtualRange::from_syscall_arguments(status_pointer, USER_WAIT_STATUS_BYTES)
+        .expect("validated waitpid status pointer must remain in user range");
+    let buffer = user_pointer::copy_to_user(UserWritableRange::new(range))
+        .expect("validated blocked waitpid status pointer must remain writable");
+    buffer[..core::mem::size_of::<u32>()].copy_from_slice(&wait_status.to_ne_bytes());
 }
