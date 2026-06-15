@@ -103,6 +103,7 @@ active roadmap can list only unfinished work.
 - [x] Add shell smoke logs for launching `file_demo`.
 - [x] Add bounded error messages for command failures.
 - [x] Add shell smoke logs for a missing command.
+- [x] Keep the kernel console available while the user shell is experimental.
 
 ### User Process Scheduling
 

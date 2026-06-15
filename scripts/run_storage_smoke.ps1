@@ -226,6 +226,7 @@ $expectedPatterns = @(
     "user shell bounded errors ok",
     "user shell stdin eof",
     "Initial user shell exit collected: parent=0 child=.* status=0",
+    "Kernel console available after initial user shell: command=`"pwd`" output_lines=1",
     "Initial user shell smoke passed: task=.* exit_code=0 stdin=eof",
     "Scheduler diagnostics verified",
     "user_tasks\s+= 10",

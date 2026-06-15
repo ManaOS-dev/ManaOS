@@ -57,11 +57,12 @@ reclamation、process-owned descriptor table inheritance、close-on-exec child f
 launch、fixed-buffer stdin EOF handling、heap-free whitespace tokenization、fixed-buffer argv construction、
 absolute and relative path execution smoke、userland runtime path API 経由の `cd` / `pwd` execution、
 compiled-in `help` output、configurable `exit` status parsing、empty input、token overflow、argument-buffer exhaustion、
-missing command の bounded command error smoke は
+missing command の bounded command error smoke、直後の post-shell kernel console availability smoke は
 [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。ここからは小さい runtime slice で進めます。
 
 1. smoke-started userland shell を stdin が keyboard-backed になった後も動かし続ける。
-2. general spawned user process lifecycle へ timer preemption を拡張する。
-3. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
+2. experimental user shell に QEMU で入る方法と抜ける方法を document する。
+3. general spawned user process lifecycle へ timer preemption を拡張する。
+4. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
 
 広い syscall surface を一気に増やす前に、docs、diagnostics、narrow smoke assertion を優先します。

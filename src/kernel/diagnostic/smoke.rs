@@ -198,6 +198,7 @@ fn run_initial_user_shell_smoke(
         "initial user shell smoke must exit cleanly after stdin EOF"
     );
     verify_initial_user_shell_exit_collection(exit);
+    verify_kernel_console_after_initial_user_shell();
     crate::log_info!(
         "task",
         "Initial user shell smoke passed: task={} exit_code=0 stdin=eof",
@@ -251,6 +252,20 @@ fn verify_initial_user_shell_exit_collection(exit: crate::kernel::task::UserTask
         initial_process_task_id,
         retained_exit.task_id(),
         retained_exit.wait_status()
+    );
+}
+
+fn verify_kernel_console_after_initial_user_shell() {
+    let output_lines = crate::kernel::console::verify_command_smoke_contains("pwd", &["/"])
+        .expect("kernel console pwd smoke must run after initial user shell exit");
+    assert_eq!(
+        output_lines, 1,
+        "kernel console pwd smoke must produce one output line"
+    );
+    crate::log_info!(
+        "console",
+        "Kernel console available after initial user shell: command=\"pwd\" output_lines={}",
+        output_lines
     );
 }
 

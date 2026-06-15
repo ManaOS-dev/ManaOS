@@ -451,7 +451,10 @@ Current runtime diagnostics cover the first successful replacement path:
   and nonzero codes, verifies bounded error messages for an empty command,
   token-limit overflow, argument-buffer exhaustion, and
   `bin/missing_shell_command`, and is collected through the initial process
-  after stdin EOF.
+  after stdin EOF. Immediately after that collection, storage smoke runs the
+  kernel console `pwd` command through the non-interactive console smoke path
+  to prove the experimental shell did not take over kernel console command
+  availability.
 - Serial logs record `User image replaced by execve` and
   `execve image published` with old-image reclaim counts.
 - Scheduler smoke verifies that `execve` resets heap and private mapping

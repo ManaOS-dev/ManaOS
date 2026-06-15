@@ -370,7 +370,9 @@ inheritance snapshot を記録します。その後 scheduler は、parent snaps
   userland `getcwd` wrapper 経由の `pwd`、default / nonzero code の `exit` status parsing を実行し、
   empty command、token-limit overflow、argument-buffer exhaustion、
   `bin/missing_shell_command` の bounded error message を検証し、stdin EOF 後に initial process 経由で
-  collect されることを検証します。
+  collect されることを検証します。その直後に storage smoke は non-interactive console smoke path で
+  kernel console の `pwd` command を実行し、experimental shell が kernel console command availability を
+  奪っていないことも証明します。
 - serial log は `User image replaced by execve` と `execve image published` を old-image reclaim count 付きで
   記録します。
 - scheduler smoke は、post-exec image が exit する前に `execve` が heap と private mapping bookkeeping を

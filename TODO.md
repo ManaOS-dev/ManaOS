@@ -12,7 +12,6 @@ reviewable unit before implementing it.
 ### Minimal User Shell
 
 - [ ] Keep the smoke-started userland shell alive once stdin is keyboard-backed.
-- [ ] Keep the kernel console available while the user shell is experimental.
 - [ ] Document how to enter and leave the user shell in QEMU.
 
 ### User Process Scheduling

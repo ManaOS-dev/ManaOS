@@ -65,13 +65,15 @@ and heap-free whitespace tokenization, fixed-buffer argv construction, and
 absolute and relative path execution smoke, `cd` and `pwd` execution through
 the userland runtime path API, compiled-in `help` output, configurable `exit`
 status parsing, plus bounded command error smoke for empty input, token
-overflow, argument-buffer exhaustion, and missing commands, are documented in
+overflow, argument-buffer exhaustion, and missing commands, plus immediate
+post-shell kernel console availability smoke, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
 1. keep the smoke-started userland shell alive once stdin is keyboard-backed;
-2. extend timer preemption across general spawned user process lifecycles;
-3. update scheduler diagnostics whenever lifecycle state gains a new transition.
+2. document how to enter and leave the experimental user shell in QEMU;
+3. extend timer preemption across general spawned user process lifecycles;
+4. update scheduler diagnostics whenever lifecycle state gains a new transition.
 
 Prefer docs, diagnostics, and narrow smoke assertions before broad syscall
 surface expansion.
