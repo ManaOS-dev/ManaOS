@@ -79,6 +79,7 @@ active roadmap can list only unfinished work.
 - [x] Add a userland runtime helper for launching a child program.
 - [x] Extend user-visible spawn beyond path-only launch with argv/envp vectors.
 - [x] Define how inherited file descriptors are selected for spawned processes.
+- [x] Add a smoke case for parent exit while child remains alive.
 
 ### Minimal User Shell
 

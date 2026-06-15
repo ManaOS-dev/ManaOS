@@ -8,13 +8,18 @@ pub use scheduler_diagnostics::{
 };
 
 /// Number of active user processes spawned by the storage smoke lifecycle.
-pub const USER_SMOKE_PARENT_TASK_COUNT: usize = 4;
-/// Number of user-spawned child processes created by one marked smoke parent.
-pub const USER_SMOKE_CHILD_TASK_COUNT: usize = 1;
-/// Exit code used by the user-spawned child status smoke.
+pub const USER_SMOKE_PARENT_TASK_COUNT: usize = 5;
+/// Number of user-spawned child processes created by marked smoke parents.
+pub const USER_SMOKE_CHILD_TASK_COUNT: usize = 2;
+/// Exit code used by the blocking user-spawned child status smoke.
 pub const USER_SMOKE_CHILD_EXIT_CODE: u64 = 7;
+/// Exit code used by the child whose parent exits before it does.
+pub const USER_SMOKE_ORPHAN_CHILD_EXIT_CODE: u64 = 43;
 /// Number of user tasks expected after the full storage smoke lifecycle.
 pub const USER_SMOKE_TASK_COUNT: usize = USER_SMOKE_PARENT_TASK_COUNT + USER_SMOKE_CHILD_TASK_COUNT;
+
+const SPAWN_WAIT_PARENT_TASK_INDEX: usize = 3;
+const ORPHAN_PARENT_TASK_INDEX: usize = 4;
 
 fn spawn_user_smoke_task(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
@@ -41,8 +46,23 @@ fn spawn_wait_user_smoke_task(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
     user_stack_pages: u64,
 ) -> u64 {
+    spawn_file_demo_marker_task(frame_allocator, user_stack_pages, b"--spawn-wait-smoke")
+}
+
+fn spawn_orphan_parent_user_smoke_task(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    user_stack_pages: u64,
+) -> u64 {
+    spawn_file_demo_marker_task(frame_allocator, user_stack_pages, b"--orphan-parent-smoke")
+}
+
+fn spawn_file_demo_marker_task(
+    frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
+    user_stack_pages: u64,
+    marker_argument: &[u8],
+) -> u64 {
     let user_elf_path = "/disk/bin/file_demo";
-    let user_entry_arguments: [&[u8]; 2] = [user_elf_path.as_bytes(), b"--spawn-wait-smoke"];
+    let user_entry_arguments: [&[u8]; 2] = [user_elf_path.as_bytes(), marker_argument];
     let user_entry_environment: [&[u8]; 1] = [b"MANAOS_BOOT=storage-smoke"];
     let user_entry_vectors = crate::kernel::process::UserProgramEntryVectors::new(
         &user_entry_arguments,
@@ -54,7 +74,7 @@ fn spawn_wait_user_smoke_task(
         user_stack_pages,
     );
     crate::kernel::process::spawn_user_program(frame_allocator, request)
-        .expect("user spawn wait smoke program must spawn from /disk/bin")
+        .expect("user file demo marker smoke program must spawn from /disk/bin")
 }
 
 /// Run the boot-time userland scheduler and syscall smoke demo.
@@ -71,24 +91,27 @@ pub fn run_user_smoke_demo(
         spawn_user_smoke_task(frame_allocator, user_elf_path, user_stack_pages),
         spawn_user_smoke_task(frame_allocator, user_elf_path, user_stack_pages),
         spawn_wait_user_smoke_task(frame_allocator, user_stack_pages),
+        spawn_orphan_parent_user_smoke_task(frame_allocator, user_stack_pages),
     ];
     crate::log_info!(
         "task",
-        "Multi-user smoke tasks spawned: first={} second={} third={} spawn_wait={}",
+        "Multi-user smoke tasks spawned: first={} second={} third={} spawn_wait={} orphan_parent={}",
         user_task_ids[0],
         user_task_ids[1],
         user_task_ids[2],
-        user_task_ids[3]
+        user_task_ids[SPAWN_WAIT_PARENT_TASK_INDEX],
+        user_task_ids[ORPHAN_PARENT_TASK_INDEX]
     );
     assert_distinct_user_task_ids(user_task_ids);
     crate::log_info!(
         "task",
-        "Concurrent user program spawn smoke passed: tasks={} first={} second={} third={} spawn_wait={}",
+        "Concurrent user program spawn smoke passed: tasks={} first={} second={} third={} spawn_wait={} orphan_parent={}",
         user_task_ids.len(),
         user_task_ids[0],
         user_task_ids[1],
         user_task_ids[2],
-        user_task_ids[3]
+        user_task_ids[SPAWN_WAIT_PARENT_TASK_INDEX],
+        user_task_ids[ORPHAN_PARENT_TASK_INDEX]
     );
     for user_task_id in &user_task_ids {
         assert!(
@@ -109,8 +132,22 @@ pub fn run_user_smoke_demo(
         "active user lifecycle drain must return every smoke task exit"
     );
 
+    verify_user_smoke_exits(user_task_ids, &exits);
+    crate::log_info!(
+        "task",
+        "Multi-user preemption smoke passed: tasks={}",
+        user_task_ids.len()
+    );
+    crate::kernel::task::set_preemption_enabled(true);
+}
+
+fn verify_user_smoke_exits(
+    user_task_ids: [u64; USER_SMOKE_PARENT_TASK_COUNT],
+    exits: &[crate::kernel::task::UserTaskExit],
+) {
     let mut finished_parent_tasks = [false; USER_SMOKE_PARENT_TASK_COUNT];
-    let mut finished_child_tasks = 0_usize;
+    let mut finished_wait_child_tasks = 0_usize;
+    let mut finished_orphan_child_tasks = 0_usize;
     for exit in exits {
         crate::log_info!(
             "task",
@@ -128,12 +165,15 @@ pub fn run_user_smoke_demo(
             );
             finished_parent_tasks[finished_index] = true;
         } else {
-            assert_eq!(
-                exit.exit_code(),
-                USER_SMOKE_CHILD_EXIT_CODE,
-                "user-spawned child task must retain the nonzero wait status smoke code"
-            );
-            finished_child_tasks = finished_child_tasks.saturating_add(1);
+            match exit.exit_code() {
+                USER_SMOKE_CHILD_EXIT_CODE => {
+                    finished_wait_child_tasks = finished_wait_child_tasks.saturating_add(1);
+                }
+                USER_SMOKE_ORPHAN_CHILD_EXIT_CODE => {
+                    finished_orphan_child_tasks = finished_orphan_child_tasks.saturating_add(1);
+                }
+                _ => panic!("user-spawned child task must retain a known nonzero smoke exit code"),
+            }
         }
     }
 
@@ -142,16 +182,65 @@ pub fn run_user_smoke_demo(
         "all user smoke parent tasks must exit"
     );
     assert_eq!(
-        finished_child_tasks, USER_SMOKE_CHILD_TASK_COUNT,
+        finished_wait_child_tasks, 1,
+        "blocking wait smoke must finish one user-spawned child task"
+    );
+    assert_eq!(
+        finished_orphan_child_tasks, 1,
+        "parent-exit smoke must finish one user-spawned orphan child task"
+    );
+    assert_eq!(
+        finished_wait_child_tasks + finished_orphan_child_tasks,
+        USER_SMOKE_CHILD_TASK_COUNT,
         "all user-spawned child tasks must exit"
     );
+    verify_parent_exit_child_live_smoke(user_task_ids, exits);
     verify_bootstrap_child_exit_collection(user_task_ids);
+}
+
+fn verify_parent_exit_child_live_smoke(
+    user_task_ids: [u64; USER_SMOKE_PARENT_TASK_COUNT],
+    exits: &[crate::kernel::task::UserTaskExit],
+) {
+    let orphan_parent_task_id = user_task_ids[ORPHAN_PARENT_TASK_INDEX];
+    let parent_exit_index = exits
+        .iter()
+        .position(|exit| exit.task_id() == orphan_parent_task_id)
+        .expect("orphan smoke parent must exit");
+    let (child_exit_index, child_exit) = exits
+        .iter()
+        .enumerate()
+        .find(|(_, exit)| exit.exit_code() == USER_SMOKE_ORPHAN_CHILD_EXIT_CODE)
+        .expect("orphan smoke child must exit after parent");
+    assert!(
+        parent_exit_index < child_exit_index,
+        "orphan smoke parent must exit before the child finishes"
+    );
+    assert!(
+        crate::kernel::task::collect_waitable_child_exit(
+            crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64(),
+            Some(child_exit.task_id()),
+        )
+        .is_none(),
+        "orphan smoke child must not be reparented before the policy is implemented"
+    );
+    let retained_exit = crate::kernel::task::collect_waitable_child_exit(
+        orphan_parent_task_id,
+        Some(child_exit.task_id()),
+    )
+    .expect("orphan child exit must stay retained for the recorded parent");
+    assert_eq!(
+        retained_exit.exit_code(),
+        USER_SMOKE_ORPHAN_CHILD_EXIT_CODE,
+        "orphan child exit code must be retained under the original parent"
+    );
     crate::log_info!(
         "task",
-        "Multi-user preemption smoke passed: tasks={}",
-        user_task_ids.len()
+        "Parent-exit child-live smoke passed: parent={} child={} parent_exit_before_child=true retained_parent=true status={} reparented=false",
+        orphan_parent_task_id,
+        retained_exit.task_id(),
+        retained_exit.wait_status()
     );
-    crate::kernel::task::set_preemption_enabled(true);
 }
 
 fn drain_user_smoke_tasks(

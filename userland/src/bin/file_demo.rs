@@ -6,17 +6,24 @@ use mana_userland::syscall;
 const STDOUT: usize = 1;
 const BUFFER_LENGTH: usize = 64;
 const USER_SPAWN_CHILD_DELAY_NANOS: u64 = 5_000_000;
+const ORPHAN_CHILD_DELAY_NANOS: u64 = 8_000_000;
 // Nonzero by design so waitpid status encoding cannot pass by treating all
 // child exits as success.
 const USER_SPAWN_CHILD_EXIT_CODE: usize = 7;
+const ORPHAN_CHILD_EXIT_CODE: usize = 43;
 const USER_SPAWN_CHILD_WAIT_STATUS: i32 = (USER_SPAWN_CHILD_EXIT_CODE as i32) << 8;
 const NON_CHILD_PROCESS_IDENTIFIER: isize = 9999;
 const WAITPID_MESSAGE: &[u8] = b"user waitpid no child ok\n";
 const SPAWN_WAIT_MESSAGE: &[u8] = b"user waitpid blocking nonzero ok\n";
 const SPAWN_VECTORS_MESSAGE: &[u8] = b"user spawn vectors ok\n";
+const ORPHAN_PARENT_MESSAGE: &[u8] = b"user parent exit child alive ok\n";
+const ORPHAN_CHILD_VECTORS_MESSAGE: &[u8] = b"user orphaned child vectors ok\n";
 const SPAWN_WAIT_ARGUMENT: &[u8] = b"--spawn-wait-smoke";
+const ORPHAN_PARENT_ARGUMENT: &[u8] = b"--orphan-parent-smoke";
 const SPAWNED_CHILD_ARGUMENT: &[u8] = b"--spawned-child";
+const ORPHANED_CHILD_ARGUMENT: &[u8] = b"--orphaned-child";
 const SPAWNED_CHILD_ENVIRONMENT: &[u8] = b"MANAOS_CHILD=spawn";
+const ORPHANED_CHILD_ENVIRONMENT: &[u8] = b"MANAOS_CHILD=orphan";
 
 #[no_mangle]
 extern "C" fn _start(
@@ -28,8 +35,12 @@ extern "C" fn _start(
         syscall::exit(4);
     }
     let parent_task_id = syscall::getppid();
-    delay_when_user_spawned_child(parent_task_id);
+    delay_when_user_spawned_child(parent_task_id, argument_count, argument_values);
     verify_spawned_child_vectors(argument_count, argument_values, environment_values);
+    if orphan_parent_requested(argument_count, argument_values) {
+        change_to_disk_directory();
+        exit_after_spawning_orphan_child();
+    }
     let run_spawn_wait = spawn_wait_requested(argument_count, argument_values);
     if run_spawn_wait {
         change_to_disk_directory();
@@ -77,7 +88,11 @@ extern "C" fn _start(
         buffer.as_ptr() as usize,
         bytes_read,
     );
-    syscall::exit(exit_code_for_parent(parent_task_id));
+    syscall::exit(exit_code_for_invocation(
+        parent_task_id,
+        argument_count,
+        argument_values,
+    ));
 }
 
 fn change_to_disk_directory() {
@@ -86,25 +101,40 @@ fn change_to_disk_directory() {
     }
 }
 
-fn delay_when_user_spawned_child(parent_task_id: isize) {
+fn delay_when_user_spawned_child(
+    parent_task_id: isize,
+    argument_count: usize,
+    argument_values: *const *const u8,
+) {
     if parent_task_id <= 0 {
         return;
     }
 
+    let nanoseconds = if orphaned_child_requested(argument_count, argument_values) {
+        ORPHAN_CHILD_DELAY_NANOS
+    } else {
+        USER_SPAWN_CHILD_DELAY_NANOS
+    };
     let duration = syscall::Timespec {
         seconds: 0,
-        nanoseconds: USER_SPAWN_CHILD_DELAY_NANOS,
+        nanoseconds,
     };
     if syscall::nanosleep(&duration) != 0 {
         syscall::exit(14);
     }
 }
 
-fn exit_code_for_parent(parent_task_id: isize) -> usize {
-    if parent_task_id > 0 {
-        USER_SPAWN_CHILD_EXIT_CODE
-    } else {
+fn exit_code_for_invocation(
+    parent_task_id: isize,
+    argument_count: usize,
+    argument_values: *const *const u8,
+) -> usize {
+    if parent_task_id <= 0 {
         0
+    } else if orphaned_child_requested(argument_count, argument_values) {
+        ORPHAN_CHILD_EXIT_CODE
+    } else {
+        USER_SPAWN_CHILD_EXIT_CODE
     }
 }
 
@@ -112,6 +142,12 @@ fn spawn_wait_requested(argument_count: usize, argument_values: *const *const u8
     argument_count == 2
         && !argument_values.is_null()
         && argument_equals(argument_values, 1, SPAWN_WAIT_ARGUMENT)
+}
+
+fn orphan_parent_requested(argument_count: usize, argument_values: *const *const u8) -> bool {
+    argument_count == 2
+        && !argument_values.is_null()
+        && argument_equals(argument_values, 1, ORPHAN_PARENT_ARGUMENT)
 }
 
 fn verify_spawn_child_waitpid() {
@@ -157,6 +193,30 @@ fn verify_spawn_child_waitpid() {
     let _ = syscall::write(STDOUT, SPAWN_WAIT_MESSAGE);
 }
 
+fn exit_after_spawning_orphan_child() -> ! {
+    let child_path = b"bin/file_demo\0";
+    let child_argument0 = b"bin/file_demo\0";
+    let child_argument1 = b"--orphaned-child\0";
+    let child_arguments: [*const u8; 3] = [
+        child_argument0.as_ptr(),
+        child_argument1.as_ptr(),
+        core::ptr::null(),
+    ];
+    let child_environment0 = b"MANAOS_CHILD=orphan\0";
+    let child_environment: [*const u8; 2] = [child_environment0.as_ptr(), core::ptr::null()];
+    let child_task_id = syscall::spawn_with_vectors(
+        child_path,
+        child_arguments.as_ptr(),
+        child_environment.as_ptr(),
+    );
+    if child_task_id <= 0 || child_task_id == syscall::getpid() {
+        syscall::exit(29);
+    }
+
+    let _ = syscall::write(STDOUT, ORPHAN_PARENT_MESSAGE);
+    syscall::exit(0);
+}
+
 fn verify_waitpid_no_child() {
     if syscall::waitpid(syscall::WAIT_ANY, core::ptr::null_mut(), 0) != syscall::ERROR_NO_CHILD {
         syscall::exit(8);
@@ -180,35 +240,74 @@ fn verify_spawned_child_vectors(
     argument_values: *const *const u8,
     environment_values: *const *const u8,
 ) {
-    if !spawned_child_requested(argument_count, argument_values) {
+    let Some(expected) = expected_child_vectors(argument_count, argument_values) else {
         return;
-    }
+    };
     if argument_count != 2 || argument_values.is_null() || environment_values.is_null() {
         syscall::exit(23);
     }
     if !argument_equals(argument_values, 0, b"bin/file_demo") {
         syscall::exit(24);
     }
-    if !argument_equals(argument_values, 1, SPAWNED_CHILD_ARGUMENT) {
+    if !argument_equals(argument_values, 1, expected.argument) {
         syscall::exit(25);
     }
     if read_argument_pointer(argument_values, 2).is_some() {
         syscall::exit(26);
     }
-    if !argument_equals(environment_values, 0, SPAWNED_CHILD_ENVIRONMENT) {
+    if !argument_equals(environment_values, 0, expected.environment) {
         syscall::exit(27);
     }
     if read_argument_pointer(environment_values, 1).is_some() {
         syscall::exit(28);
     }
 
-    let _ = syscall::write(STDOUT, SPAWN_VECTORS_MESSAGE);
+    let _ = syscall::write(STDOUT, expected.message);
+}
+
+struct ExpectedChildVectors {
+    argument: &'static [u8],
+    environment: &'static [u8],
+    message: &'static [u8],
+}
+
+fn expected_child_vectors(
+    argument_count: usize,
+    argument_values: *const *const u8,
+) -> Option<ExpectedChildVectors> {
+    if spawned_child_requested(argument_count, argument_values) {
+        Some(ExpectedChildVectors {
+            argument: SPAWNED_CHILD_ARGUMENT,
+            environment: SPAWNED_CHILD_ENVIRONMENT,
+            message: SPAWN_VECTORS_MESSAGE,
+        })
+    } else if orphaned_child_requested(argument_count, argument_values) {
+        Some(ExpectedChildVectors {
+            argument: ORPHANED_CHILD_ARGUMENT,
+            environment: ORPHANED_CHILD_ENVIRONMENT,
+            message: ORPHAN_CHILD_VECTORS_MESSAGE,
+        })
+    } else {
+        None
+    }
 }
 
 fn spawned_child_requested(argument_count: usize, argument_values: *const *const u8) -> bool {
+    child_argument_requested(argument_count, argument_values, SPAWNED_CHILD_ARGUMENT)
+}
+
+fn orphaned_child_requested(argument_count: usize, argument_values: *const *const u8) -> bool {
+    child_argument_requested(argument_count, argument_values, ORPHANED_CHILD_ARGUMENT)
+}
+
+fn child_argument_requested(
+    argument_count: usize,
+    argument_values: *const *const u8,
+    expected: &[u8],
+) -> bool {
     argument_count == 2
         && !argument_values.is_null()
-        && argument_equals(argument_values, 1, SPAWNED_CHILD_ARGUMENT)
+        && argument_equals(argument_values, 1, expected)
 }
 
 fn argument_equals(arguments: *const *const u8, index: usize, expected: &[u8]) -> bool {

@@ -58,6 +58,10 @@ selection, and activates the child immediately. Blocking `waitpid` now sleeps
 the parent task until a matching child exit record is retained. Descriptor
 inheritance selection is documented now, but child-private enforcement still
 depends on moving descriptor tables out of global filesystem state.
+Storage smoke also covers the pre-reparenting boundary where a parent exits
+while its child remains alive. The current runtime keeps that child exit keyed
+to the original parent identifier for diagnostics; it does not yet reparent the
+child to an initial process.
 Descriptor close-on-exec
 metadata and successful-`execve` close
 behavior exist for the current global descriptor table. The `waitpid` syscall
@@ -189,6 +193,12 @@ The future general process model must keep these invariants:
   before the parent can reap it.
 - Orphan handling must be explicit: either reparent to the documented initial
   process or reject the process model that can produce orphans.
+
+Current smoke coverage intentionally exercises the pre-reparenting behavior: a
+user parent spawns a child and exits before that child finishes, the child
+continues running, and the child exit remains retained under the recorded
+parent identifier. This keeps the missing reparenting policy visible without
+pretending that the general orphan lifecycle is complete.
 
 ## `execve` Kernel Contract
 
@@ -384,13 +394,18 @@ Current runtime diagnostics cover the first successful replacement path:
 - Storage smoke asserts stable spawn errno mappings for missing, relative,
   directory, device, non-ELF, and image-buffer allocation failures before
   successful spawn task creation.
-- Storage smoke asserts three distinct `smoke_demo` parent tasks plus one
-  marker-driven `file_demo` spawn/wait parent before all are activated together.
+- Storage smoke asserts three distinct `smoke_demo` parent tasks plus two
+  marker-driven `file_demo` parents for spawn/wait and parent-exit coverage
+  before all are activated together.
 - Storage smoke verifies the user-visible `spawn_with_vectors` wrapper by
   spawning a child from no-std userland, validating the child's `argv` / `envp`
   in the child image, observing `waitpid(WNOHANG) == 0` while that child is
   still running, and later collecting the nonzero child exit status exactly
   once.
+- Storage smoke starts a second userland parent that spawns a child and exits
+  before the child finishes. The child continues to exit through the normal
+  user lifecycle, and the diagnostic collector proves the exit record is still
+  retained for the original parent rather than silently reparented.
 - Storage smoke asserts the `sys_spawn` descriptor-inheritance snapshot emitted
   before the child image loader opens its temporary executable descriptor. The
   snapshot keeps the current global-table limitation visible until per-process

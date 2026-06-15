@@ -8,7 +8,7 @@ not on product value.
 
 1. Full user process lifecycle
    - Add a minimal user shell process.
-   - Add parent-exit-while-child-lives coverage before broader reparenting.
+   - Define the initial-process reparenting policy for orphaned children.
    - Extend preemptive scheduling across general process lifecycle paths.
    - Reason: this crosses ELF loading, syscall ABI, address-space ownership,
      file descriptors, parent-child metadata, and scheduler cleanup.
@@ -62,7 +62,7 @@ diagnostics in `tasks` output are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 
-1. add a parent-exit-while-child-lives smoke before broader reparenting;
+1. define and implement the initial-process reparenting policy for orphaned children;
 2. update scheduler diagnostics whenever lifecycle state gains a new transition.
 
 Prefer docs, diagnostics, and narrow smoke assertions before broad syscall

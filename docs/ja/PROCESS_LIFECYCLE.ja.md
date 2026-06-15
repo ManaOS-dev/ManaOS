@@ -51,6 +51,9 @@ stage し、現在の descriptor inheritance selection を記録してから chi
 blocking `waitpid` は、matching child exit record が retained されるまで parent task を sleep させます。
 descriptor inheritance selection は文書化済みですが、child-private enforcement は descriptor table を
 global filesystem state から process-owned metadata へ移す作業に依存します。
+storage smoke は、parent が exit しても child がまだ alive のまま残る pre-reparenting boundary も
+cover します。現在の runtime は、その child exit を original parent identifier に key 付けたまま
+diagnostics で保持します。まだ initial process への reparent は行いません。
 descriptor close-on-exec metadata と successful-`execve` close behavior は、現在の global descriptor
 table 向けに実装済みです。`waitpid` の syscall number、option constant、no-std userland wrapper、
 selector validation、no-child `ECHILD` path、parent task identifier で key 付けされた
@@ -161,6 +164,10 @@ child-exit record には `reaped` を使います。
 - address-space と kernel-stack reclamation は、parent が reap する前に exit status を消してはいけません。
 - orphan handling は明示する必要があります。documented initial process へ reparent するか、orphan を
   生成しうる process model を拒否します。
+
+現在の smoke coverage は、pre-reparenting behavior を意図的に扱います。user parent が child を spawn し、
+その child が finish する前に parent が exit して、child はそのまま実行を続けます。child exit は recorded
+parent identifier の下に保持され、general orphan lifecycle がまだ完了していないことを見える状態にします。
 
 ## `execve` kernel contract
 
@@ -320,12 +327,16 @@ smoke coverage 用に記録し、general spawn で target policy を enforce す
 - storage smoke は、helper が initial user stack を構築する前に staged entry vector count を assert します。
 - storage smoke は successful spawn task creation の前に、missing、relative、directory、device、
   non-ELF target、image-buffer allocation failure の stable な spawn errno mapping を assert します。
-- storage smoke は、distinct な `smoke_demo` parent task 3つと marker 付き `file_demo` spawn/wait
-  parent 1つを spawn し、すべてをまとめて active set に入れる前提を assert します。
+- storage smoke は、distinct な `smoke_demo` parent task 3つと、spawn/wait coverage と
+  parent-exit coverage 用の marker 付き `file_demo` parent 2つを spawn し、すべてをまとめて
+  active set に入れる前提を assert します。
 - storage smoke は user-visible `spawn_with_vectors` wrapper を使い、no-std userland から child を
   spawn し、child image 内で `argv` / `envp` を検証して、その child が実行中の間は
   `waitpid(WNOHANG) == 0` になり、後で child exit status を nonzero status としてちょうど一度だけ
   collect できることを検証します。
+- storage smoke は、もう1つの userland parent が child を spawn して、その child が finish する前に
+  parent が exit する case も実行します。child は通常の user lifecycle で exit し、diagnostic collector が
+  exit record が silent reparent ではなく original parent に retained されていることを確認します。
 - storage smoke は `sys_spawn` が child image loader の temporary executable descriptor を open する前に出す
   descriptor-inheritance snapshot を assert します。この snapshot により、per-process descriptor table が
   child-private selection を enforce するまでの global-table limitation を見える状態にします。

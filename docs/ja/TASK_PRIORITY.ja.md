@@ -8,7 +8,7 @@ kernel engineering 上の順序を示す文書です。
 
 1. Full user process lifecycle
    - minimal user shell process を追加する。
-   - broader reparenting の前に parent-exit-while-child-lives smoke を追加する。
+   - orphaned child 向けの initial-process reparenting policy を定義する。
    - general process lifecycle path へ preemptive scheduling を拡張する。
    - 理由: ELF loading、syscall ABI、address-space ownership、file descriptor、
      parent-child metadata、scheduler cleanup をまたぐため。
@@ -55,7 +55,7 @@ successful self-replacement path、current directory preservation、argv/envp-ca
 `tasks` output の `execve` replacement-state diagnostics は
 [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。ここからは小さい runtime slice で進めます。
 
-1. broader reparenting の前に parent-exit-while-child-lives smoke を追加する。
+1. orphaned child 向けの initial-process reparenting policy を定義して実装する。
 2. lifecycle state に新しい transition が増えたら scheduler diagnostics も更新する。
 
 広い syscall surface を一気に増やす前に、docs、diagnostics、narrow smoke assertion を優先します。

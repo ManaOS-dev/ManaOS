@@ -1,7 +1,8 @@
 //! Scheduler and frame allocator smoke diagnostics.
 
 use super::{
-    USER_SMOKE_CHILD_EXIT_CODE, USER_SMOKE_CHILD_TASK_COUNT, USER_SMOKE_PARENT_TASK_COUNT,
+    USER_SMOKE_CHILD_EXIT_CODE, USER_SMOKE_CHILD_TASK_COUNT, USER_SMOKE_ORPHAN_CHILD_EXIT_CODE,
+    USER_SMOKE_PARENT_TASK_COUNT,
 };
 use crate::kernel::diagnostic::log::{LogField, LogLevel};
 
@@ -467,11 +468,7 @@ fn record_scheduler_user_task_snapshot(
         "user smoke task snapshots must be finished"
     );
     record_parentage_snapshot(snapshot, counters);
-    assert_eq!(
-        snapshot.exit_code(),
-        Some(expected_user_task_exit_code(snapshot)),
-        "finished user task snapshots must retain their exit code"
-    );
+    verify_user_task_exit_code(snapshot);
     assert!(
         snapshot.wait_collected(),
         "finished user task snapshots must show collected wait status"
@@ -523,12 +520,21 @@ fn record_scheduler_user_task_snapshot(
     }
 }
 
-fn expected_user_task_exit_code(snapshot: &crate::kernel::task::SchedulerTaskSnapshot) -> u64 {
+fn verify_user_task_exit_code(snapshot: &crate::kernel::task::SchedulerTaskSnapshot) {
+    let exit_code = snapshot
+        .exit_code()
+        .expect("finished user task snapshots must retain their exit code");
     if snapshot.parent_task_id() == Some(crate::kernel::task::TaskIdentifier::BOOTSTRAP.as_u64()) {
-        0
-    } else {
-        USER_SMOKE_CHILD_EXIT_CODE
+        assert_eq!(
+            exit_code, 0,
+            "bootstrap-spawned smoke parent tasks must retain zero exit status"
+        );
+        return;
     }
+    assert!(
+        exit_code == USER_SMOKE_CHILD_EXIT_CODE || exit_code == USER_SMOKE_ORPHAN_CHILD_EXIT_CODE,
+        "user-spawned child tasks must retain known nonzero smoke exit status"
+    );
 }
 
 fn record_parentage_snapshot(
@@ -551,9 +557,9 @@ fn verify_scheduler_task_snapshot_counts(
     counters: SchedulerTaskSnapshotCounters,
     expected_user_tasks: u64,
 ) {
-    // One bootstrap child starts file_demo directly for the spawn/wait marker
-    // path, so it has no execve replacement history.
-    const DIRECT_FILE_DEMO_PARENT_TASKS: u64 = 1;
+    // Two bootstrap children start file_demo directly for spawn/wait and
+    // parent-exit marker paths, so they have no execve replacement history.
+    const DIRECT_FILE_DEMO_PARENT_TASKS: u64 = 2;
     let expected_bootstrap_children = u64::try_from(USER_SMOKE_PARENT_TASK_COUNT)
         .expect("smoke parent task count must fit in u64");
     let expected_user_spawned_children =

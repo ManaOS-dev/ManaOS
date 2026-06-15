@@ -19,7 +19,6 @@ reviewable unit before implementing it.
 
 - [ ] Move user file descriptor tables from global filesystem state to process-owned metadata before general spawn.
 - [ ] Enforce spawn descriptor inheritance selection after process-owned descriptor tables replace the global table.
-- [ ] Add a smoke case for parent exit while child remains alive.
 
 ### Minimal User Shell
 

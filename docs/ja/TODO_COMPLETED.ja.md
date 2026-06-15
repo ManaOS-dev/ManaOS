@@ -33,8 +33,9 @@ spawned process の current working directory inheritance、task-owned current d
 no-std `getcwd` wrapper、argv/envp-capable user-visible spawn wrapper、
 userland child wait smoke、nonzero child exit status smoke、blocking `waitpid(WAIT_ANY)` smoke、
 spawn descriptor inheritance selection policy と snapshot diagnostic、
+parent-exit-while-child-lives smoke、
 最小 no-std `user_shell` binary の build と storage smoke disk image 登録が
-完了済みです。user process scheduling は、4つの active parent user process と user-spawned child を
+完了済みです。user process scheduling は、5つの active parent user process と2つの user-spawned child を
 扱う storage smoke まで完了済みです。さらに、per-task の last preemption / last resume diagnostics と、preempted
 process の exit 後も別の active process が継続する storage smoke も完了済みです。正本は英語版の
 `TODO_COMPLETED.md` と [`PROCESS_LIFECYCLE.md`](../PROCESS_LIFECYCLE.md) です。
