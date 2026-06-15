@@ -13,7 +13,6 @@ reviewable unit before implementing it.
 
 - [ ] Keep the smoke-started userland shell alive once stdin is keyboard-backed.
 - [ ] Implement `cd` through a user-visible syscall or runtime helper.
-- [ ] Implement `pwd` using the userland runtime path API.
 - [ ] Implement `exit` with a configurable status code.
 - [ ] Implement `help` with commands compiled into the shell.
 - [ ] Keep the kernel console available while the user shell is experimental.

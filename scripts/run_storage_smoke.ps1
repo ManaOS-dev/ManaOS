@@ -206,6 +206,8 @@ $expectedPatterns = @(
     "Initial user shell smoke started: task=.* path=/disk/bin/user_shell",
     "user shell ready",
     "user shell tokenizer ok",
+    "^/disk$",
+    "user shell pwd ok",
     "user shell launching file_demo",
     "user shell file_demo exit ok",
     "user shell launching relative file_demo",

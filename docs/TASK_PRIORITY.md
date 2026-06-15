@@ -62,9 +62,9 @@ retention, process-owned descriptor table inheritance, close-on-exec child
 filtering, `execve` replacement-state diagnostics in `tasks` output, and the
 post-smoke experimental `user_shell` launch with fixed-buffer stdin EOF handling
 and heap-free whitespace tokenization, fixed-buffer argv construction, and
-absolute and relative path execution smoke, plus bounded command error smoke
-for empty input, token overflow, argument-buffer exhaustion, and missing
-commands, are documented in
+absolute and relative path execution smoke, `pwd` execution through the
+userland runtime path API, plus bounded command error smoke for empty input,
+token overflow, argument-buffer exhaustion, and missing commands, are documented in
 [`PROCESS_LIFECYCLE.md`](PROCESS_LIFECYCLE.md). Continue with small runtime
 slices:
 

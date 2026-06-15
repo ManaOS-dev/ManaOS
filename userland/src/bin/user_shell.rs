@@ -8,8 +8,10 @@ const STDOUT: usize = 1;
 const COMMAND_BUFFER_BYTES: usize = 128;
 const MAX_COMMAND_TOKENS: usize = 8;
 const MAX_COMMAND_ARGUMENT_POINTERS: usize = MAX_COMMAND_TOKENS + 1;
+const PWD_COMMAND: &[u8] = b"pwd";
 const READY_MESSAGE: &[u8] = b"user shell ready\n";
 const TOKENIZER_OK_MESSAGE: &[u8] = b"user shell tokenizer ok\n";
+const PWD_OK_MESSAGE: &[u8] = b"user shell pwd ok\n";
 const FILE_DEMO_LAUNCH_MESSAGE: &[u8] = b"user shell launching file_demo\n";
 const FILE_DEMO_EXIT_MESSAGE: &[u8] = b"user shell file_demo exit ok\n";
 const RELATIVE_FILE_DEMO_LAUNCH_MESSAGE: &[u8] = b"user shell launching relative file_demo\n";
@@ -229,6 +231,7 @@ fn verify_command_execution_smoke() -> Result<(), CommandExecutionError> {
     if syscall::chdir(b"/disk\0") != 0 {
         return Err(CommandExecutionError::WorkingDirectoryFailed);
     }
+    verify_pwd_builtin_smoke()?;
     let _ = syscall::write(STDOUT, FILE_DEMO_LAUNCH_MESSAGE);
     execute_command(b"/disk/bin/file_demo --shell-command-smoke")?;
     let _ = syscall::write(STDOUT, FILE_DEMO_EXIT_MESSAGE);
@@ -236,6 +239,12 @@ fn verify_command_execution_smoke() -> Result<(), CommandExecutionError> {
     execute_command(b"bin/file_demo --shell-command-smoke")?;
     let _ = syscall::write(STDOUT, RELATIVE_FILE_DEMO_EXIT_MESSAGE);
     verify_bounded_error_message_smoke()?;
+    Ok(())
+}
+
+fn verify_pwd_builtin_smoke() -> Result<(), CommandExecutionError> {
+    execute_command(b"pwd")?;
+    let _ = syscall::write(STDOUT, PWD_OK_MESSAGE);
     Ok(())
 }
 
@@ -277,6 +286,9 @@ fn execute_command(command: &[u8]) -> Result<(), CommandExecutionError> {
     if tokens.len() == 0 {
         return Err(CommandExecutionError::EmptyCommand);
     }
+    if execute_builtin_command(&tokens, command)? {
+        return Ok(());
+    }
     let mut argument_storage = [0_u8; COMMAND_BUFFER_BYTES];
     let mut argument_pointers = [core::ptr::null(); MAX_COMMAND_ARGUMENT_POINTERS];
     let command_path = build_argument_vector(
@@ -305,6 +317,47 @@ fn execute_command(command: &[u8]) -> Result<(), CommandExecutionError> {
     if wait_status != 0 {
         return Err(CommandExecutionError::ChildFailed);
     }
+    Ok(())
+}
+
+fn execute_builtin_command(
+    tokens: &CommandTokens,
+    command: &[u8],
+) -> Result<bool, CommandExecutionError> {
+    let command_token = tokens.get(0).ok_or(CommandExecutionError::EmptyCommand)?;
+    if command_token.as_bytes(command) != PWD_COMMAND {
+        return Ok(false);
+    }
+    if tokens.len() != 1 {
+        return Err(CommandExecutionError::TooManyTokens);
+    }
+    write_current_working_directory()?;
+    Ok(true)
+}
+
+fn write_current_working_directory() -> Result<(), CommandExecutionError> {
+    let mut directory_buffer = [0_u8; COMMAND_BUFFER_BYTES];
+    let byte_count = syscall::getcwd(&mut directory_buffer);
+    if byte_count <= 0 {
+        return Err(CommandExecutionError::WorkingDirectoryFailed);
+    }
+    let byte_count = byte_count as usize;
+    if byte_count > directory_buffer.len() {
+        return Err(CommandExecutionError::WorkingDirectoryFailed);
+    }
+
+    let mut printable_bytes = byte_count;
+    if directory_buffer
+        .get(byte_count - 1)
+        .is_some_and(|byte| *byte == 0)
+    {
+        printable_bytes -= 1;
+    }
+    let directory_path = directory_buffer
+        .get(..printable_bytes)
+        .ok_or(CommandExecutionError::WorkingDirectoryFailed)?;
+    let _ = syscall::write(STDOUT, directory_path);
+    let _ = syscall::write(STDOUT, b"\n");
     Ok(())
 }
 

@@ -55,8 +55,8 @@ orphaned child の initial-process reparenting、exit record retention 後の sa
 reclamation、process-owned descriptor table inheritance、close-on-exec child filtering、
 `tasks` output の `execve` replacement-state diagnostics、post-smoke experimental `user_shell`
 launch、fixed-buffer stdin EOF handling、heap-free whitespace tokenization、fixed-buffer argv construction、
-absolute and relative path execution smoke、empty input、token overflow、argument-buffer exhaustion、
-missing command の bounded command error smoke は
+absolute and relative path execution smoke、userland runtime path API 経由の `pwd` execution、
+empty input、token overflow、argument-buffer exhaustion、missing command の bounded command error smoke は
 [`PROCESS_LIFECYCLE.ja.md`](PROCESS_LIFECYCLE.ja.md) に整理済みです。ここからは小さい runtime slice で進めます。
 
 1. smoke-started userland shell を stdin が keyboard-backed になった後も動かし続ける。
