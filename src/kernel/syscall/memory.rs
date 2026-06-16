@@ -7,8 +7,9 @@ use super::{
     NANOSECONDS_PER_SECOND, NANOSECONDS_PER_TIMER_TICK, PAGE_SIZE, USER_BLOCK_SENTINEL,
     USER_TIMESPEC_BYTES,
 };
-use crate::kernel::memory::user_mapping::{
-    UserMappingError, UserMappingPlacement, UserMappingSource,
+use crate::kernel::memory::{
+    address::{UserVirtualAddress, VirtAddr},
+    user_mapping::{UserMappingError, UserMappingPlacement, UserMappingSource},
 };
 /// Handle a user heap break syscall.
 pub(super) fn sys_brk(requested_break: u64) -> u64 {
@@ -221,13 +222,13 @@ fn mapping_placement(requested_address: u64, flags: u64) -> Option<UserMappingPl
         if requested_address == 0 || !requested_address.is_multiple_of(PAGE_SIZE) {
             return None;
         }
-        let address = crate::kernel::memory::address::UserVirtualAddress::new(requested_address)?;
+        let address = UserVirtualAddress::new(VirtAddr::new(requested_address))?;
         Some(UserMappingPlacement::FixedNoReplace(address))
     } else if fixed_replace {
         if requested_address == 0 || !requested_address.is_multiple_of(PAGE_SIZE) {
             return None;
         }
-        let address = crate::kernel::memory::address::UserVirtualAddress::new(requested_address)?;
+        let address = UserVirtualAddress::new(VirtAddr::new(requested_address))?;
         Some(UserMappingPlacement::FixedReplace(address))
     } else if requested_address == 0 {
         Some(UserMappingPlacement::Any)

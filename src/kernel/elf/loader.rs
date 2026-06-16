@@ -1,6 +1,6 @@
 use crate::kernel::elf::parser::{ElfError, ElfFile, ProgramHeader};
 use crate::kernel::memory::{
-    address::{PhysicalFrameStart, UserVirtualAddress, UserVirtualRange},
+    address::{PhysicalFrameStart, UserVirtualAddress, UserVirtualRange, VirtAddr},
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     user_layout, user_stack,
@@ -161,8 +161,9 @@ impl LoadSegmentRange {
             return Err(LoadError::SegmentAddressOutOfRange);
         }
 
-        let segment_start = UserVirtualAddress::new(program_header.virtual_address())
-            .ok_or(LoadError::SegmentAddressOutOfRange)?;
+        let segment_start =
+            UserVirtualAddress::new(VirtAddr::new(program_header.virtual_address()))
+                .ok_or(LoadError::SegmentAddressOutOfRange)?;
         let memory_size = usize::try_from(program_header.memory_size())
             .map_err(|_| LoadError::SegmentAddressOverflow)?;
         let memory_range = UserVirtualRange::new(segment_start, memory_size)
@@ -171,7 +172,7 @@ impl LoadSegmentRange {
             .end_exclusive()
             .checked_sub(1)
             .ok_or(LoadError::SegmentAddressOverflow)?;
-        let last_byte_address = UserVirtualAddress::new(last_byte_address)
+        let last_byte_address = UserVirtualAddress::new(VirtAddr::new(last_byte_address))
             .ok_or(LoadError::SegmentAddressOutOfRange)?;
         let first_page = segment_start.align_down_to_page();
         let last_page = last_byte_address.align_down_to_page();
@@ -262,9 +263,9 @@ fn load_user_elf(
     }
 
     Ok(LoadedElf {
-        entry_point: UserVirtualAddress::new(elf.entry())
+        entry_point: UserVirtualAddress::new(VirtAddr::new(elf.entry()))
             .expect("validated ELF entry point must be a valid user address"),
-        heap_start: UserVirtualAddress::new(heap_start)
+        heap_start: UserVirtualAddress::new(VirtAddr::new(heap_start))
             .ok_or(LoadError::SegmentAddressOutOfRange)?,
     })
 }
@@ -277,7 +278,7 @@ fn align_up_to_page(address: u64) -> Result<u64, LoadError> {
 }
 
 fn validate_entry_point(entry_point: u64) -> Result<(), LoadError> {
-    if UserVirtualAddress::new(entry_point).is_none() {
+    if UserVirtualAddress::new(VirtAddr::new(entry_point)).is_none() {
         return Err(LoadError::EntryOutOfRange);
     }
     Ok(())
@@ -491,9 +492,9 @@ fn load_user_elf_metadata(image: &[u8]) -> Result<LoadedElf, LoadError> {
         return Err(LoadError::EntryOutOfRange);
     }
     Ok(LoadedElf {
-        entry_point: UserVirtualAddress::new(elf.entry())
+        entry_point: UserVirtualAddress::new(VirtAddr::new(elf.entry()))
             .expect("validated ELF entry point must be a valid user address"),
-        heap_start: UserVirtualAddress::new(heap_start)
+        heap_start: UserVirtualAddress::new(VirtAddr::new(heap_start))
             .ok_or(LoadError::SegmentAddressOutOfRange)?,
     })
 }

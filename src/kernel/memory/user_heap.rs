@@ -1,8 +1,10 @@
 //! User heap break tracking and page mapping.
 
 use super::{
-    address::UserVirtualAddress, address_space::UserAddressSpace,
-    frame_allocator::PhysicalFrameAllocator, user_layout::USER_HEAP_END,
+    address::{UserVirtualAddress, VirtAddr},
+    address_space::UserAddressSpace,
+    frame_allocator::PhysicalFrameAllocator,
+    user_layout::USER_HEAP_END,
 };
 use crate::kernel::memory::frame_allocator::FrameRangeOwner;
 use x86_64::structures::paging::PageTableFlags;
@@ -80,7 +82,7 @@ impl UserHeap {
             return self.current_break;
         }
 
-        let Some(requested_break) = UserVirtualAddress::new(requested_break) else {
+        let Some(requested_break) = UserVirtualAddress::new(VirtAddr::new(requested_break)) else {
             return self.current_break;
         };
         let mapped_end = align_up_to_page(requested_break.as_u64());

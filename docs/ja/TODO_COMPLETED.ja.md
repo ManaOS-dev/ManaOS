@@ -95,7 +95,8 @@ module、multi-binary build、smoke runner が完了済みです。
 ### Kernel Hardening
 
 physical frame allocator、owner diagnostics、dynamic kernel virtual mapping、
-`PhysicalFrameStart` construction の `PhysAddr` 化、per-process page table、user address-space reclaim、kernel stack reclaim、
+`PhysicalFrameStart` construction の `PhysAddr` 化、`UserVirtualAddress` construction の `VirtAddr` 化、
+per-process page table、user address-space reclaim、kernel stack reclaim、
 user pointer validation、mapping permission checks、identity mapping audit、
 page fault diagnostics が大きく進んでいます。
 

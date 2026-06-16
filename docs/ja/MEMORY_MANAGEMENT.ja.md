@@ -34,6 +34,8 @@ physical frame allocator は、以下の前提に依存します。
   に渡せないようにします。
 - `PhysicalFrameStart` construction は `PhysAddr` だけを受け取るため、hardware register や
   page table から読んだ raw address は境界で physical address として分類してから渡します。
+- `UserVirtualAddress` construction は `VirtAddr` だけを受け取るため、syscall や ELF loader の
+  raw address field は user address wrapper に入る前に分類してから渡します。
 - registered range は 4 KiB page に正規化し、physical address zero を避けます。
 - registered range は sort し、隣接 range は merge します。
 - allocation は tracked free range を scan し、owner が release するまで同じ physical frame を

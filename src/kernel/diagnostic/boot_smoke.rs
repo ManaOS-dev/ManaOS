@@ -115,6 +115,24 @@ pub fn verify_frame_allocator_rules() -> bool {
     passed
 }
 
+/// Verify typed memory address wrapper self-check rules.
+pub fn verify_memory_address_wrapper_rules() -> bool {
+    let user_virtual_address_ok = kernel::memory::address::verify_typed_user_virtual_address();
+    if user_virtual_address_ok {
+        crate::log_info!(
+            "memory",
+            "Memory address wrapper self-checks passed: user_virtual_address=true"
+        );
+    } else {
+        crate::log_error!(
+            "memory",
+            "Memory address wrapper self-checks failed: user_virtual_address={}",
+            user_virtual_address_ok
+        );
+    }
+    user_virtual_address_ok
+}
+
 /// Verify the kernel virtual range allocator self-check rules.
 pub fn verify_kernel_virtual_range_allocator_rules() {
     let non_overlapping_reuse_ok =

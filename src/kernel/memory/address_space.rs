@@ -365,7 +365,7 @@ pub fn verify_user_address_space_reclaim(
 ) -> Option<UserAddressSpaceReclaim> {
     let address_space = create_user_address_space(frame_allocator);
     let physical_start = frame_allocator.allocate_frame_for(FrameRangeOwner::UserElf)?;
-    let virtual_address = UserVirtualAddress::new(USER_ADDRESS_SPACE_RECLAIM_PROBE)
+    let virtual_address = UserVirtualAddress::new(VirtAddr::new(USER_ADDRESS_SPACE_RECLAIM_PROBE))
         .expect("user address-space reclaim probe must be a valid user address");
     address_space.map_user_page(
         frame_allocator,

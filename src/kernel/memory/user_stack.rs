@@ -1,7 +1,7 @@
 //! User-space bootstrap stack and page mapping.
 
 use crate::kernel::memory::{
-    address::{PhysicalFrameRange, PhysicalFrameStart, UserVirtualAddress},
+    address::{PhysicalFrameRange, PhysicalFrameStart, UserVirtualAddress, VirtAddr},
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     user_layout::{USER_STACK_REGION_BASE, USER_STACK_SLOT_BYTES},
@@ -115,8 +115,8 @@ pub fn allocate_user_stack(
     let stack_base = USER_STACK_REGION_BASE
         .checked_add(stack_slot_offset)
         .expect("user stack base address overflowed");
-    let stack_base =
-        UserVirtualAddress::new(stack_base).expect("user stack base must be a valid user address");
+    let stack_base = UserVirtualAddress::new(VirtAddr::new(stack_base))
+        .expect("user stack base must be a valid user address");
     let stack_top = stack_base
         .checked_add(stack_size)
         .expect("user stack top address overflowed");
@@ -264,7 +264,7 @@ pub fn allocate_and_map_user_page(
         core::ptr::write_bytes(page_pointer, 0, PAGE_SIZE_USIZE);
         address_space.map_user_page(
             frame_allocator,
-            UserVirtualAddress::new(virtual_address)
+            UserVirtualAddress::new(VirtAddr::new(virtual_address))
                 .expect("validated user page address must remain valid"),
             physical_address,
             flags,
@@ -332,7 +332,7 @@ impl UserStackCursor {
     fn align_down(&mut self, alignment: u64) {
         debug_assert!(alignment.is_power_of_two());
         let aligned_pointer = self.pointer.as_u64() & !(alignment - 1);
-        let aligned_pointer = UserVirtualAddress::new(aligned_pointer)
+        let aligned_pointer = UserVirtualAddress::new(VirtAddr::new(aligned_pointer))
             .expect("aligned user stack pointer must remain valid");
         assert!(
             aligned_pointer.as_u64() >= self.stack.base().as_u64(),

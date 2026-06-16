@@ -36,6 +36,9 @@ The current physical frame allocator relies on these properties:
 - `PhysicalFrameStart` construction accepts only `PhysAddr`, so callers must
   classify raw hardware or page-table addresses at the boundary where they are
   read.
+- `UserVirtualAddress` construction accepts only `VirtAddr`, so syscall and
+  ELF loader raw address fields are classified before they enter user address
+  wrappers.
 - Registered ranges are normalized to 4 KiB pages and skip physical address
   zero.
 - Registered ranges are sorted and adjacent ranges are merged before

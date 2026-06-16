@@ -1,6 +1,6 @@
 //! Static user virtual address layout.
 
-use super::address::UserVirtualAddress;
+use super::address::{UserVirtualAddress, VirtAddr};
 
 const PAGE_SIZE: u64 = 4096;
 
@@ -21,7 +21,8 @@ const _: () = assert!(USER_HEAP_END == USER_MAPPING_BASE);
 const _: () = assert!(USER_PROGRAM_BASE < USER_HEAP_END);
 const _: () = assert!(USER_MAPPING_BASE < USER_MAPPING_END);
 const _: () = assert!(USER_MAPPING_END < USER_STACK_REGION_BASE);
-const _: () = assert!(UserVirtualAddress::new(USER_PROGRAM_BASE).is_some());
-const _: () = assert!(UserVirtualAddress::new(USER_MAPPING_BASE).is_some());
-const _: () = assert!(UserVirtualAddress::new(USER_MAPPING_END - PAGE_SIZE).is_some());
-const _: () = assert!(UserVirtualAddress::new(USER_STACK_REGION_BASE).is_some());
+const _: () = assert!(UserVirtualAddress::new(VirtAddr::new(USER_PROGRAM_BASE)).is_some());
+const _: () = assert!(UserVirtualAddress::new(VirtAddr::new(USER_MAPPING_BASE)).is_some());
+const _: () =
+    assert!(UserVirtualAddress::new(VirtAddr::new(USER_MAPPING_END - PAGE_SIZE)).is_some());
+const _: () = assert!(UserVirtualAddress::new(VirtAddr::new(USER_STACK_REGION_BASE)).is_some());

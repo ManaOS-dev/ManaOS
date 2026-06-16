@@ -176,6 +176,7 @@ fn main() -> Status {
     import_boot_memory_map(&mut frame_allocator, mmap.entries());
     boot_summary.frame_allocator =
         CheckStatus::from_bool(kernel::diagnostic::boot_smoke::verify_frame_allocator_rules());
+    kernel::diagnostic::boot_smoke::verify_memory_address_wrapper_rules();
     kernel::diagnostic::boot_smoke::verify_kernel_virtual_range_allocator_rules();
     kernel::diagnostic::boot_smoke::verify_elf_loader_rules();
 

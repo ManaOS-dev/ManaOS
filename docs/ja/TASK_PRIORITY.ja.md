@@ -65,7 +65,7 @@ scheduler invariant も同じ文書に整理済みです。Phase 1 の current l
 ここからは Phase 2 の typed address boundary を小さい slice で進めます。
 
 1. `PhysicalFrameStart` construction 以外に残る memory API の狭い範囲で raw physical address parameter を `PhysAddr` に置き換える。
-2. 残っている memory API の狭い範囲で raw virtual address parameter を `VirtAddr` に置き換える。
+2. `UserVirtualAddress` construction 以外に残る memory API の狭い範囲で raw virtual address parameter を `VirtAddr` に置き換える。
 
 現在の smoke-owned experimental user shell の entry / exit path を QEMU で観察する手順は
 [`MANUAL_QEMU_VALIDATION.ja.md`](MANUAL_QEMU_VALIDATION.ja.md) に整理済みです。

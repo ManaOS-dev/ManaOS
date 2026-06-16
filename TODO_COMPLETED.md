@@ -131,6 +131,7 @@ active roadmap can list only unfinished work.
 ### Typed Address Boundaries
 
 - [x] Make `PhysicalFrameStart` construction require `PhysAddr`.
+- [x] Make `UserVirtualAddress` construction require `VirtAddr`.
 
 ### Address Space Lifecycle
 
