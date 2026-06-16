@@ -40,6 +40,9 @@ untyped cross-domain `u64` values:
 - `UserReadableRange`, `UserWritableRange`, and `UserCString` represent syscall
   copy direction and string policy before `copy_from_user`, `copy_to_user`, and
   `copy_cstr_from_user`.
+- `UserHeapBreakRequest` represents `brk` requests after syscall ABI address
+  classification, so scheduler and heap code do not receive raw break
+  addresses.
 - `user_stack::allocate_and_map_user_page(...) -> PhysicalFrameStart` now
   returns a typed physical frame start instead of a raw physical `u64`.
 - `user_stack::map_user_range(...)` now accepts `UserVirtualAddress` and
@@ -132,6 +135,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - `kernel::memory::user_mapping::UserMappings` converts syscall byte lengths
   into `PageCount` after ABI validation, then uses typed page counts for mapping
   records, successful allocations, and unmap results.
+- `kernel::memory::user_heap::UserHeap` accepts `UserHeapBreakRequest` after
+  `sys_brk` classifies the raw ABI value as either a current-break query or a
+  validated user virtual address.
 - `PreparedUserStack` exposes typed user virtual `stack_pointer`,
   `argument_values_pointer`, and `environment_values_pointer`.
 - Initial user stack argument layout uses a local `UserVirtualAddress` cursor;

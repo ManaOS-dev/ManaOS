@@ -138,6 +138,7 @@ active roadmap can list only unfinished work.
 - [x] Add `PageCount` for user stack APIs.
 - [x] Add `PageCount` for user mapping APIs.
 - [x] Add `PageCount` for paging helper APIs.
+- [x] Add a typed `brk` user heap request boundary and invalid ABI smoke coverage.
 
 ### Address Space Lifecycle
 

@@ -98,6 +98,7 @@ physical frame allocator、owner diagnostics、dynamic kernel virtual mapping、
 `PhysicalFrameStart` construction の `PhysAddr` 化、`UserVirtualAddress` construction の `VirtAddr` 化、
 user page mapping/unmapping API の `UserPageStart` 化、frame allocator API の `FrameCount` 化、
 kernel virtual range allocator API、user stack API、user mapping API、paging helper API の `PageCount` 化、
+`brk` user heap request の typed boundary 化と invalid ABI smoke coverage、
 per-process page table、
 user address-space reclaim、kernel stack reclaim、
 user pointer validation、mapping permission checks、identity mapping audit、

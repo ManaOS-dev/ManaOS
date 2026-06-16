@@ -112,6 +112,9 @@ fn verify_syscall_error_paths() {
     if syscall::munmap(1, 4096) != syscall::ERROR_INVALID_ARGUMENT {
         syscall::exit(65);
     }
+    if syscall::brk(usize::MAX) != syscall::ERROR_INVALID_ARGUMENT {
+        syscall::exit(71);
+    }
 
     let invalid_duration = syscall::Timespec {
         seconds: 0,

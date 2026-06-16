@@ -9,12 +9,17 @@ use super::{
 };
 use crate::kernel::memory::{
     address::{UserPageStart, UserVirtualAddress, VirtAddr},
+    user_heap::UserHeapBreakRequest,
     user_mapping::{UserMappingError, UserMappingPlacement, UserMappingSource},
 };
 /// Handle a user heap break syscall.
 pub(super) fn sys_brk(requested_break: u64) -> u64 {
+    let Some(request) = UserHeapBreakRequest::from_syscall_argument(requested_break) else {
+        return ERROR_INVALID_ARGUMENT;
+    };
+
     crate::kernel::memory::runtime_allocator::with_user_runtime_frame_allocator(|frame_allocator| {
-        crate::kernel::task::process_current_user_break(frame_allocator, requested_break)
+        crate::kernel::task::process_current_user_break(frame_allocator, request)
     })
     .flatten()
     .unwrap_or(ERROR_NOT_IMPLEMENTED)

@@ -1062,6 +1062,9 @@ fn verify_user_task_image_snapshot(
 fn verify_smoke_parent_image_snapshot(
     user_image: &crate::kernel::task::UserImageDiagnosticsSnapshot,
 ) {
+    // The second smoke execve replaces the current smoke_demo image. Its
+    // reclaimed page count tracks the checked-in userland smoke binary layout.
+    const SMOKE_DEMO_LAST_EXECVE_OLD_USER_PAGES: u64 = 10;
     assert_eq!(
         user_image.last_execve_state(),
         crate::kernel::task::UserExecveReplacementStateDiagnostics::Published,
@@ -1079,7 +1082,7 @@ fn verify_smoke_parent_image_snapshot(
     );
     assert_eq!(
         user_image.last_execve_old_user_pages(),
-        9,
+        SMOKE_DEMO_LAST_EXECVE_OLD_USER_PAGES,
         "execve diagnostics must record old user page reclaim count"
     );
     assert_eq!(

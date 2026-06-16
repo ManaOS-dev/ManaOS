@@ -9,6 +9,7 @@ use super::{
     UserVirtualAddress, PREEMPTION_STATE, SCHEDULER, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
 use crate::kernel::filesystem::{FileDescriptorTable, SpawnDescriptorInheritanceSnapshot};
+use crate::kernel::memory::user_heap::UserHeapBreakRequest;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::sync::atomic::Ordering;
@@ -206,12 +207,12 @@ pub fn current_user_task_has_child(child_task_id: Option<u64>) -> Option<bool> {
 /// Process a `brk` request for the currently running user task.
 pub fn process_current_user_break(
     frame_allocator: &mut PhysicalFrameAllocator,
-    requested_break: u64,
+    request: UserHeapBreakRequest,
 ) -> Option<u64> {
     let mut scheduler = SCHEDULER.lock();
-    scheduler.as_mut().and_then(|scheduler| {
-        scheduler.process_current_user_break(frame_allocator, requested_break)
-    })
+    scheduler
+        .as_mut()
+        .and_then(|scheduler| scheduler.process_current_user_break(frame_allocator, request))
 }
 
 /// Process a private `mmap` request for the currently running user task.

@@ -4,11 +4,13 @@ use super::{
     PhysicalFrameAllocator, Scheduler, TaskKind, UserMappingError, UserMappingPlan,
     UserMappingRequest, UserMappingSource,
 };
+use crate::kernel::memory::user_heap::UserHeapBreakRequest;
+
 impl Scheduler {
     pub(in crate::kernel::task::scheduler) fn process_current_user_break(
         &mut self,
         frame_allocator: &mut PhysicalFrameAllocator,
-        requested_break: u64,
+        request: UserHeapBreakRequest,
     ) -> Option<u64> {
         let current_task = &mut self.tasks[self.current_index];
         let task_id = current_task.get_id();
@@ -17,15 +19,14 @@ impl Scheduler {
         };
         let address_space = user_runtime.address_space?;
         let previous_break = user_runtime.heap.current_break();
-        let next_break =
-            user_runtime
-                .heap
-                .process_break(address_space, frame_allocator, requested_break);
+        let next_break = user_runtime
+            .heap
+            .process_break(address_space, frame_allocator, request);
         crate::log_info!(
             "syscall",
-            "brk -> task={} requested={:#x} heap_base={:#x} previous={:#x} next={:#x} mapped_end={:#x} mapped_pages={}",
+            "brk -> task={} requested={:#x} heap_base={:#x} previous={:#x} next={:#x} mapped_end={:#x} mapped_pages={} brk_request_typed=true",
             task_id,
-            requested_break,
+            request.as_u64(),
             user_runtime.heap.base().as_u64(),
             previous_break.as_u64(),
             next_break.as_u64(),

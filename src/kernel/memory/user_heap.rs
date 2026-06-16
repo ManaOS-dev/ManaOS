@@ -20,6 +20,34 @@ pub struct UserHeap {
     mapped_end: UserVirtualAddress,
 }
 
+/// A user heap break request after syscall ABI address classification.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum UserHeapBreakRequest {
+    /// Return the current break without changing heap mappings.
+    Current,
+    /// Move the break to a validated user virtual address.
+    Set(UserVirtualAddress),
+}
+
+impl UserHeapBreakRequest {
+    /// Convert a raw syscall `brk` argument into a heap break request.
+    pub fn from_syscall_argument(requested_break: u64) -> Option<Self> {
+        if requested_break == 0 {
+            return Some(Self::Current);
+        }
+
+        UserVirtualAddress::new(VirtAddr::new(requested_break)).map(Self::Set)
+    }
+
+    /// Return the raw request value for diagnostics.
+    pub const fn as_u64(self) -> u64 {
+        match self {
+            Self::Current => 0,
+            Self::Set(address) => address.as_u64(),
+        }
+    }
+}
+
 impl UserHeap {
     /// Create a heap whose initial break starts after loaded user segments.
     ///
@@ -73,18 +101,17 @@ impl UserHeap {
         &mut self,
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
-        requested_break: u64,
+        request: UserHeapBreakRequest,
     ) -> UserVirtualAddress {
-        if requested_break == 0 {
+        let UserHeapBreakRequest::Set(requested_break) = request else {
             return self.current_break;
-        }
-        if requested_break < self.base.as_u64() || requested_break >= USER_HEAP_END {
+        };
+        if requested_break.as_u64() < self.base.as_u64()
+            || requested_break.as_u64() >= USER_HEAP_END
+        {
             return self.current_break;
         }
 
-        let Some(requested_break) = UserVirtualAddress::new(VirtAddr::new(requested_break)) else {
-            return self.current_break;
-        };
         let mapped_end = align_up_to_page(requested_break.as_u64());
         if mapped_end > self.mapped_end.as_u64()
             && !self.map_new_pages(address_space, frame_allocator, mapped_end)

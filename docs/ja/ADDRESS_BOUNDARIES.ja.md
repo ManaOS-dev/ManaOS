@@ -31,6 +31,7 @@ kernel ownership boundary では型付き address に変換することです。
 - `DmaPhysicalAddress`: AHCI descriptor、FIS buffer、command table、PRDT へ program できる physical address。
 - `UserVirtualAddress` / `UserVirtualRange`: syscall copy validation 前の non-null user virtual address と byte range。
 - `UserReadableRange` / `UserWritableRange` / `UserCString`: copy direction と string policy。
+- `UserHeapBreakRequest`: syscall ABI address classification 後の `brk` request。scheduler と heap code は raw break address を受け取りません。
 - `user_stack::allocate_and_map_user_page(...) -> PhysicalFrameStart`。
 - `user_stack::map_user_range(...)` の internal user virtual / physical frame boundary。
 - `paging::map_kernel_mmio_range(...)` の MMIO physical base `PhysAddr` と mapped page coverage の `PageCount`。
@@ -78,6 +79,7 @@ arithmetic を行い、mapper boundary で `x86_64` address type へ変換しま
 
 user stack allocation、prepared stack pointer、ELF entry point、syscall copy helper は、
 raw ABI argument から typed user pointer へ変換してから validation へ進みます。
+`brk` request は `sys_brk` で raw ABI value を current-break query または validated user virtual address に分類してから `UserHeap` へ渡します。
 user stack allocation の page count は `PageCount` で分類してから frame allocation と stack slot mapping に進みます。
 private user mapping は syscall byte length を ABI validation 後に `PageCount` へ変換し、mapping record、successful allocation、unmap result で typed page count を使います。
 `UserTaskContext` の raw register layout は architecture entry ABI のために private に保ちます。

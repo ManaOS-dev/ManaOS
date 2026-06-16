@@ -218,13 +218,15 @@ without keeping page tables alive. Each retained user task also reports a
 `task_mmap_lifecycle` row with total mapped pages, total released pages, active
 page and record high-water marks, and file-private mapping calls.
 
-`brk` is the first syscall-time user heap growth path. The ELF loader reports a
-page-aligned heap start after the highest `PT_LOAD` segment, the scheduler stores
-the current heap break in each user task runtime, and `kernel::memory::user_heap`
-maps writable non-executable user heap pages as the break grows. Shrinking the
-break unmaps no-longer-covered heap pages and returns their physical frames to
-the `UserHeap` owner pool, while page-table frames remain owned by the address
-space until process cleanup.
+`brk` is the first syscall-time user heap growth path. The syscall boundary
+classifies the raw ABI argument into `UserHeapBreakRequest` before scheduler and
+heap code can process it. The ELF loader reports a page-aligned heap start after
+the highest `PT_LOAD` segment, the scheduler stores the current heap break in
+each user task runtime, and `kernel::memory::user_heap` maps writable
+non-executable user heap pages as the break grows. Shrinking the break unmaps
+no-longer-covered heap pages and returns their physical frames to the `UserHeap`
+owner pool, while page-table frames remain owned by the address space until
+process cleanup.
 
 Private `mmap` is the second syscall-time user memory path. The current ABI
 supports automatic anonymous mappings with `addr = 0`, non-overlapping fixed
