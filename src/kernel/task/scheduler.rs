@@ -61,17 +61,15 @@ pub struct UserMappingRequest {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserReadRequest {
     file_descriptor: usize,
-    user_pointer: u64,
-    byte_len: u64,
+    user_buffer: UserWritableRange,
 }
 
 impl UserReadRequest {
     /// Create a pending user read request.
-    pub const fn new(file_descriptor: usize, user_pointer: u64, byte_len: u64) -> Self {
+    pub const fn new(file_descriptor: usize, user_buffer: UserWritableRange) -> Self {
         Self {
             file_descriptor,
-            user_pointer,
-            byte_len,
+            user_buffer,
         }
     }
 
@@ -80,14 +78,14 @@ impl UserReadRequest {
         self.file_descriptor
     }
 
-    /// Return the destination user pointer.
-    pub const fn user_pointer(self) -> u64 {
-        self.user_pointer
+    /// Return the destination user buffer.
+    pub const fn user_buffer(self) -> UserWritableRange {
+        self.user_buffer
     }
 
     /// Return the requested byte length.
-    pub const fn byte_len(self) -> u64 {
-        self.byte_len
+    pub const fn byte_len(self) -> usize {
+        self.user_buffer.as_range().byte_len()
     }
 }
 

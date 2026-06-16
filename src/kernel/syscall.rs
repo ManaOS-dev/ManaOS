@@ -723,8 +723,11 @@ fn sys_read(file_descriptor: u64, user_pointer: u64, length: u64) -> u64 {
     }) {
         Ok(bytes_read) => u64::try_from(bytes_read).unwrap_or(u64::MAX),
         Err(ERROR_TRY_AGAIN) => {
+            let Some(user_buffer) = output_buffer_range(user_pointer, length) else {
+                return 0;
+            };
             if crate::kernel::task::prepare_current_user_read(
-                crate::kernel::task::UserReadRequest::new(file_descriptor, user_pointer, length),
+                crate::kernel::task::UserReadRequest::new(file_descriptor, user_buffer),
             )
             .is_none()
             {
@@ -745,7 +748,7 @@ pub fn complete_pending_user_read(task_id: u64) -> Option<u64> {
 }
 
 fn complete_user_read_request(request: crate::kernel::task::UserReadRequest) -> u64 {
-    let Some(buffer) = copy_output_buffer(request.user_pointer(), request.byte_len()) else {
+    let Some(buffer) = user_pointer::copy_to_user(request.user_buffer()) else {
         return ERROR_BAD_ADDRESS;
     };
 
@@ -1222,8 +1225,12 @@ fn copy_output_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static mut [
         return Some(&mut []);
     }
 
+    user_pointer::copy_to_user(output_buffer_range(user_pointer, byte_len)?)
+}
+
+fn output_buffer_range(user_pointer: u64, byte_len: u64) -> Option<UserWritableRange> {
     let range = UserVirtualRange::from_syscall_arguments(user_pointer, byte_len)?;
-    user_pointer::copy_to_user(UserWritableRange::new(range))
+    Some(UserWritableRange::new(range))
 }
 
 fn validate_output_buffer(user_pointer: u64, byte_len: u64) -> bool {

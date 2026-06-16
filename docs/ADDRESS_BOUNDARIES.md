@@ -40,6 +40,9 @@ untyped cross-domain `u64` values:
 - `UserReadableRange`, `UserWritableRange`, and `UserCString` represent syscall
   copy direction and string policy before `copy_from_user`, `copy_to_user`, and
   `copy_cstr_from_user`.
+- `UserReadRequest` stores pending `read` destinations as `UserWritableRange`
+  after syscall ABI pointer classification, so scheduler wait state does not
+  retain a raw user pointer.
 - `UserHeapBreakRequest` represents `brk` requests after syscall ABI address
   classification, so scheduler and heap code do not receive raw break
   addresses.
@@ -180,6 +183,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - `kernel::memory::user_pointer::copy_from_user` accepts
   `UserReadableRange`, and `copy_to_user` accepts `UserWritableRange`; syscall
   helpers convert raw ABI arguments first.
+- Pending keyboard-backed `read` waits retain the validated destination as
+  `UserWritableRange` until the task address space is active again, then
+  revalidate page-table permissions before copying bytes.
 - `kernel::memory::user_pointer::copy_cstr_from_user` accepts `UserCString`,
   which wraps a readable range capped by the syscall path-length policy.
 
@@ -230,6 +236,8 @@ Continue introducing wrappers in small steps:
 - `UserVirtualRange` for non-empty validated user pointer ranges.
 - `UserReadableRange` and `UserWritableRange` for syscall copy direction before
   page-table permission checks.
+- `UserReadRequest` for scheduler-retained pending `read` destinations after
+  raw syscall pointer classification.
 - `UserCString` for readable syscall string candidates before NUL validation.
 - `UserMappingUnmapRequest` for private `munmap` requests after syscall ABI
   classification.
