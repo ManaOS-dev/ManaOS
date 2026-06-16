@@ -76,7 +76,8 @@ address-boundary slices:
 1. replace raw physical address parameters with `PhysAddr` in a narrow
    remaining memory API surface beyond `PhysicalFrameStart` construction;
 2. replace raw virtual address parameters with `VirtAddr` in a narrow remaining
-   memory API surface beyond `UserVirtualAddress` construction.
+   memory API surface beyond `UserVirtualAddress` construction;
+3. continue typed page-aligned wrappers beyond the user page mapping APIs.
 
 Manual QEMU validation for observing the current smoke-owned experimental user
 shell entry and exit path is documented in

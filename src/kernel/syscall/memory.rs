@@ -8,7 +8,7 @@ use super::{
     USER_TIMESPEC_BYTES,
 };
 use crate::kernel::memory::{
-    address::{UserVirtualAddress, VirtAddr},
+    address::{UserPageStart, UserVirtualAddress, VirtAddr},
     user_mapping::{UserMappingError, UserMappingPlacement, UserMappingSource},
 };
 /// Handle a user heap break syscall.
@@ -222,19 +222,24 @@ fn mapping_placement(requested_address: u64, flags: u64) -> Option<UserMappingPl
         if requested_address == 0 || !requested_address.is_multiple_of(PAGE_SIZE) {
             return None;
         }
-        let address = UserVirtualAddress::new(VirtAddr::new(requested_address))?;
+        let address = user_page_start_from_raw(requested_address)?;
         Some(UserMappingPlacement::FixedNoReplace(address))
     } else if fixed_replace {
         if requested_address == 0 || !requested_address.is_multiple_of(PAGE_SIZE) {
             return None;
         }
-        let address = UserVirtualAddress::new(VirtAddr::new(requested_address))?;
+        let address = user_page_start_from_raw(requested_address)?;
         Some(UserMappingPlacement::FixedReplace(address))
     } else if requested_address == 0 {
         Some(UserMappingPlacement::Any)
     } else {
         None
     }
+}
+
+fn user_page_start_from_raw(address: u64) -> Option<UserPageStart> {
+    let address = UserVirtualAddress::new(VirtAddr::new(address))?;
+    UserPageStart::new(address)
 }
 
 fn mapping_source_from_arguments(

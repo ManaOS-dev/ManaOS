@@ -132,6 +132,7 @@ active roadmap can list only unfinished work.
 
 - [x] Make `PhysicalFrameStart` construction require `PhysAddr`.
 - [x] Make `UserVirtualAddress` construction require `VirtAddr`.
+- [x] Add `UserPageStart` for page-aligned user mapping APIs.
 
 ### Address Space Lifecycle
 

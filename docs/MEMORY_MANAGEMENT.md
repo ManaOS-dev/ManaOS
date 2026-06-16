@@ -39,6 +39,8 @@ The current physical frame allocator relies on these properties:
 - `UserVirtualAddress` construction accepts only `VirtAddr`, so syscall and
   ELF loader raw address fields are classified before they enter user address
   wrappers.
+- `UserPageStart` is required by user page mapping and unmapping APIs, so
+  4 KiB user-page alignment is established before page tables are mutated.
 - Registered ranges are normalized to 4 KiB pages and skip physical address
   zero.
 - Registered ranges are sorted and adjacent ranges are merged before

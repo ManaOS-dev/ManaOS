@@ -1,7 +1,7 @@
 //! User heap break tracking and page mapping.
 
 use super::{
-    address::{UserVirtualAddress, VirtAddr},
+    address::{UserPageStart, UserVirtualAddress, VirtAddr},
     address_space::UserAddressSpace,
     frame_allocator::PhysicalFrameAllocator,
     user_layout::USER_HEAP_END,
@@ -105,7 +105,8 @@ impl UserHeap {
         frame_allocator: &mut PhysicalFrameAllocator,
         mapped_end: u64,
     ) -> bool {
-        let mut page_start = self.mapped_end;
+        let mut page_start =
+            UserPageStart::new(self.mapped_end).expect("user heap mapped end must be page-aligned");
         while page_start.as_u64() < mapped_end {
             let Some(physical_address) =
                 frame_allocator.allocate_frame_for(FrameRangeOwner::UserHeap)
@@ -130,7 +131,7 @@ impl UserHeap {
             page_start = page_start
                 .checked_add(PAGE_SIZE)
                 .expect("user heap mapping address overflowed");
-            self.mapped_end = page_start;
+            self.mapped_end = page_start.as_address();
         }
         true
     }
@@ -141,7 +142,8 @@ impl UserHeap {
         frame_allocator: &mut PhysicalFrameAllocator,
         mapped_end: u64,
     ) {
-        let mut page_start = self.mapped_end;
+        let mut page_start =
+            UserPageStart::new(self.mapped_end).expect("user heap mapped end must be page-aligned");
         let mut unmapped_pages = 0_u64;
         while page_start.as_u64() > mapped_end {
             page_start = page_start
@@ -155,7 +157,7 @@ impl UserHeap {
                 ),
                 "shrinking user heap must unmap a mapped heap page"
             );
-            self.mapped_end = page_start;
+            self.mapped_end = page_start.as_address();
             unmapped_pages = unmapped_pages.saturating_add(1);
         }
         crate::log_info!(

@@ -1,7 +1,10 @@
 //! User address-space page-table ownership.
 
 use super::{
-    address::{PhysAddr, PhysicalFrameRange, PhysicalFrameStart, UserVirtualAddress, VirtAddr},
+    address::{
+        PhysAddr, PhysicalFrameRange, PhysicalFrameStart, UserPageStart, UserVirtualAddress,
+        VirtAddr,
+    },
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
 };
 use core::sync::atomic::{AtomicU64, Ordering};
@@ -57,26 +60,22 @@ impl UserAddressSpace {
     ///
     /// # Panics
     ///
-    /// Panics if the user virtual address is not page-aligned, if the target
-    /// page is already mapped, or if page-table frame allocation fails.
+    /// Panics if the target page is already mapped or if page-table frame
+    /// allocation fails.
     pub fn map_user_page(
         self,
         frame_allocator: &mut PhysicalFrameAllocator,
-        virtual_address: UserVirtualAddress,
+        virtual_page_start: UserPageStart,
         physical_start: PhysicalFrameStart,
         flags: PageTableFlags,
     ) {
-        assert!(
-            virtual_address.as_u64().is_multiple_of(PAGE_SIZE),
-            "user page virtual address must be 4KiB aligned"
-        );
-
         let level_4_table = level_4_table_from_frame(self.level_4_frame);
         // SAFETY: ManaOS keeps physical memory identity mapped in every kernel
         // address-space template, so the page-table frame is directly
         // reachable while building user mappings.
         let mut mapper = unsafe { OffsetPageTable::new(level_4_table, X86VirtAddr::new(0)) };
-        let page = Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_address.as_u64()));
+        let page =
+            Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_page_start.as_u64()));
         let frame = PhysFrame::containing_address(X86PhysAddr::new(physical_start.as_u64()));
 
         // SAFETY: The caller owns `physical_start` for the user mapping, and
@@ -100,26 +99,21 @@ impl UserAddressSpace {
     ///
     /// # Panics
     ///
-    /// Panics if the user virtual address is not page-aligned, the mapped
-    /// physical frame is not 4 KiB-aligned, or the frame allocator rejects the
-    /// expected owner.
+    /// Panics if the mapped physical frame is not 4 KiB-aligned or the frame
+    /// allocator rejects the expected owner.
     pub fn unmap_user_page_for(
         self,
         frame_allocator: &mut PhysicalFrameAllocator,
-        virtual_address: UserVirtualAddress,
+        virtual_page_start: UserPageStart,
         owner: FrameRangeOwner,
     ) -> bool {
-        assert!(
-            virtual_address.as_u64().is_multiple_of(PAGE_SIZE),
-            "user page virtual address must be 4KiB aligned"
-        );
-
         let level_4_table = level_4_table_from_frame(self.level_4_frame);
         // SAFETY: ManaOS keeps physical memory identity mapped in every kernel
         // address-space template, so the page-table frame is directly
         // reachable while removing user mappings.
         let mut mapper = unsafe { OffsetPageTable::new(level_4_table, X86VirtAddr::new(0)) };
-        let page = Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_address.as_u64()));
+        let page =
+            Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_page_start.as_u64()));
         let Ok((frame, flush)) = mapper.unmap(page) else {
             return false;
         };
@@ -367,9 +361,11 @@ pub fn verify_user_address_space_reclaim(
     let physical_start = frame_allocator.allocate_frame_for(FrameRangeOwner::UserElf)?;
     let virtual_address = UserVirtualAddress::new(VirtAddr::new(USER_ADDRESS_SPACE_RECLAIM_PROBE))
         .expect("user address-space reclaim probe must be a valid user address");
+    let virtual_page_start =
+        UserPageStart::new(virtual_address).expect("reclaim probe must be page-aligned");
     address_space.map_user_page(
         frame_allocator,
-        virtual_address,
+        virtual_page_start,
         physical_start,
         PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE | PageTableFlags::NO_EXECUTE,
     );

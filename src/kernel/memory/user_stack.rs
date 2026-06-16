@@ -1,7 +1,9 @@
 //! User-space bootstrap stack and page mapping.
 
 use crate::kernel::memory::{
-    address::{PhysicalFrameRange, PhysicalFrameStart, UserVirtualAddress, VirtAddr},
+    address::{
+        PhysicalFrameRange, PhysicalFrameStart, UserPageStart, UserVirtualAddress, VirtAddr,
+    },
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     user_layout::{USER_STACK_REGION_BASE, USER_STACK_SLOT_BYTES},
@@ -117,6 +119,8 @@ pub fn allocate_user_stack(
         .expect("user stack base address overflowed");
     let stack_base = UserVirtualAddress::new(VirtAddr::new(stack_base))
         .expect("user stack base must be a valid user address");
+    let stack_base_page =
+        UserPageStart::new(stack_base).expect("user stack base must be page-aligned");
     let stack_top = stack_base
         .checked_add(stack_size)
         .expect("user stack top address overflowed");
@@ -125,7 +129,7 @@ pub fn allocate_user_stack(
         let offset = index
             .checked_mul(PAGE_SIZE)
             .expect("user stack mapping offset overflowed");
-        let virtual_address = stack_base
+        let virtual_page_start = stack_base_page
             .checked_add(offset)
             .expect("user stack virtual address overflowed");
         let physical_start = PhysicalFrameStart::new(
@@ -138,7 +142,7 @@ pub fn allocate_user_stack(
         .expect("user stack physical page must remain aligned");
         address_space.map_user_page(
             frame_allocator,
-            virtual_address,
+            virtual_page_start,
             physical_start,
             PageTableFlags::PRESENT
                 | PageTableFlags::WRITABLE
@@ -236,20 +240,16 @@ pub fn prepare_initial_stack_bytes(
 ///
 /// # Panics
 ///
-/// Panics if the address is not page-aligned, the address is outside user
-/// space, a physical frame cannot be allocated, or page-table mapping fails.
+/// Panics if the address is outside the user program/mapping region, a
+/// physical frame cannot be allocated, or page-table mapping fails.
 pub fn allocate_and_map_user_page(
     address_space: UserAddressSpace,
     frame_allocator: &mut PhysicalFrameAllocator,
-    virtual_address: UserVirtualAddress,
+    virtual_page_start: UserPageStart,
     flags: PageTableFlags,
     owner: FrameRangeOwner,
 ) -> PhysicalFrameStart {
-    let virtual_address = virtual_address.as_u64();
-    assert!(
-        virtual_address.is_multiple_of(PAGE_SIZE),
-        "user page virtual address must be 4KiB aligned"
-    );
+    let virtual_address = virtual_page_start.as_u64();
     assert!(
         virtual_address < USER_STACK_REGION_BASE,
         "user page virtual address must stay below the user stack"
@@ -262,13 +262,7 @@ pub fn allocate_and_map_user_page(
     // SAFETY: `physical_address` is a freshly allocated identity-mapped frame.
     unsafe {
         core::ptr::write_bytes(page_pointer, 0, PAGE_SIZE_USIZE);
-        address_space.map_user_page(
-            frame_allocator,
-            UserVirtualAddress::new(VirtAddr::new(virtual_address))
-                .expect("validated user page address must remain valid"),
-            physical_address,
-            flags,
-        );
+        address_space.map_user_page(frame_allocator, virtual_page_start, physical_address, flags);
     }
 
     physical_address

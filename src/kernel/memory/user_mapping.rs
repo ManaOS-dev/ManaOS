@@ -1,7 +1,7 @@
 //! User private mapping tracking and page mapping.
 
 use super::{
-    address::{PhysicalFrameRange, UserVirtualAddress, VirtAddr},
+    address::{PhysicalFrameRange, UserPageStart, UserVirtualAddress, VirtAddr},
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     user_layout::{USER_MAPPING_BASE, USER_MAPPING_END},
@@ -123,9 +123,9 @@ pub enum UserMappingPlacement {
     /// Choose the next available address in the user mapping region.
     Any,
     /// Use the requested address only when the range is currently unmapped.
-    FixedNoReplace(UserVirtualAddress),
+    FixedNoReplace(UserPageStart),
     /// Use the requested address after replacing overlapping private mappings.
-    FixedReplace(UserVirtualAddress),
+    FixedReplace(UserPageStart),
 }
 
 impl UserMappingPlacement {
@@ -216,8 +216,8 @@ impl UserMappings {
             .next_empty_record_index()
             .ok_or(UserMappingError::OutOfMemory)?;
 
-        let start = UserVirtualAddress::new(VirtAddr::new(start_address))
-            .ok_or(UserMappingError::InvalidRequest)?;
+        let start =
+            user_page_start_from_raw(start_address).ok_or(UserMappingError::InvalidRequest)?;
         Self::map_pages(
             address_space,
             frame_allocator,
@@ -229,7 +229,7 @@ impl UserMappings {
         )?;
 
         self.records[record_index] = Some(UserMapping {
-            start,
+            start: start.as_address(),
             page_count,
             source: plan.source(),
         });
@@ -237,7 +237,7 @@ impl UserMappings {
             self.next_start = end_address;
         }
         Ok(UserMappingAllocation {
-            start,
+            start: start.as_address(),
             page_count,
             replaced_page_count,
         })
@@ -258,7 +258,7 @@ impl UserMappings {
         if !start_address.is_multiple_of(PAGE_SIZE) {
             return None;
         }
-        let start = UserVirtualAddress::new(VirtAddr::new(start_address))?;
+        let start = user_page_start_from_raw(start_address)?;
         let page_count = page_count_for_length(length)?;
         let end_address = start_address.checked_add(page_count.checked_mul(PAGE_SIZE)?)?;
         let record_index = self.find_containing_record_index(start_address, end_address)?;
@@ -337,7 +337,7 @@ impl UserMappings {
     fn map_pages(
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
-        start: UserVirtualAddress,
+        start: UserPageStart,
         length: u64,
         page_count: u64,
         writable: bool,
@@ -386,7 +386,7 @@ impl UserMappings {
     fn unmap_pages(
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
-        start: UserVirtualAddress,
+        start: UserPageStart,
         page_count: u64,
     ) {
         for page_index in 0..page_count {
@@ -406,7 +406,7 @@ impl UserMappings {
     fn unmap_prefix(
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
-        start: UserVirtualAddress,
+        start: UserPageStart,
         page_count: u64,
     ) {
         for page_index in 0..page_count {
@@ -520,7 +520,7 @@ impl UserMappings {
             let overlap_start = record_start.max(start_address);
             let overlap_end = record_end.min(end_address);
             let overlap_pages = (overlap_end - overlap_start) / PAGE_SIZE;
-            let overlap_start = UserVirtualAddress::new(VirtAddr::new(overlap_start))
+            let overlap_start = user_page_start_from_raw(overlap_start)
                 .expect("replacement overlap start must be a valid user address");
             Self::unmap_pages(address_space, frame_allocator, overlap_start, overlap_pages);
             replaced_pages = replaced_pages.saturating_add(overlap_pages);
@@ -608,10 +608,10 @@ impl UserMappings {
                 });
             }
             (0, _) => {
-                let right_start = UserVirtualAddress::new(VirtAddr::new(right_start_address))
+                let right_start = user_page_start_from_raw(right_start_address)
                     .expect("right split mapping start must be a valid user address");
                 self.records[record_index] = Some(UserMapping {
-                    start: right_start,
+                    start: right_start.as_address(),
                     page_count: right_pages,
                     source: record.source,
                 });
@@ -619,7 +619,7 @@ impl UserMappings {
             (_, _) => {
                 let split_record_index =
                     split_record_index.expect("middle unmap must reserve a split record");
-                let right_start = UserVirtualAddress::new(VirtAddr::new(right_start_address))
+                let right_start = user_page_start_from_raw(right_start_address)
                     .expect("right split mapping start must be a valid user address");
                 self.records[record_index] = Some(UserMapping {
                     start: record.start,
@@ -627,7 +627,7 @@ impl UserMappings {
                     source: record.source,
                 });
                 self.records[split_record_index] = Some(UserMapping {
-                    start: right_start,
+                    start: right_start.as_address(),
                     page_count: right_pages,
                     source: record.source,
                 });
@@ -659,18 +659,20 @@ fn page_initialize_length(length: u64, page_index: u64) -> Option<usize> {
     usize::try_from(remaining.min(PAGE_SIZE)).ok()
 }
 
-fn fixed_start_address(start: UserVirtualAddress, byte_len: u64) -> Result<u64, UserMappingError> {
+fn fixed_start_address(start: UserPageStart, byte_len: u64) -> Result<u64, UserMappingError> {
     let start_address = start.as_u64();
     let end_address = start_address
         .checked_add(byte_len)
         .ok_or(UserMappingError::InvalidRequest)?;
-    if !start_address.is_multiple_of(PAGE_SIZE)
-        || start_address < USER_MAPPING_BASE
-        || end_address > USER_MAPPING_END
-    {
+    if start_address < USER_MAPPING_BASE || end_address > USER_MAPPING_END {
         return Err(UserMappingError::InvalidRequest);
     }
     Ok(start_address)
+}
+
+fn user_page_start_from_raw(address: u64) -> Option<UserPageStart> {
+    let address = UserVirtualAddress::new(VirtAddr::new(address))?;
+    UserPageStart::new(address)
 }
 
 fn align_up_to_page(address: u64) -> Option<u64> {
@@ -679,7 +681,7 @@ fn align_up_to_page(address: u64) -> Option<u64> {
         .map(|address| address & !(PAGE_SIZE - 1))
 }
 
-fn user_page_start(start: UserVirtualAddress, page_index: u64) -> Option<UserVirtualAddress> {
+fn user_page_start(start: UserPageStart, page_index: u64) -> Option<UserPageStart> {
     let offset = page_index.checked_mul(PAGE_SIZE)?;
     start.checked_add(offset)
 }

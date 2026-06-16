@@ -118,19 +118,22 @@ pub fn verify_frame_allocator_rules() -> bool {
 /// Verify typed memory address wrapper self-check rules.
 pub fn verify_memory_address_wrapper_rules() -> bool {
     let user_virtual_address_ok = kernel::memory::address::verify_typed_user_virtual_address();
-    if user_virtual_address_ok {
+    let user_page_start_ok = kernel::memory::address::verify_typed_user_page_start();
+    let passed = user_virtual_address_ok && user_page_start_ok;
+    if passed {
         crate::log_info!(
             "memory",
-            "Memory address wrapper self-checks passed: user_virtual_address=true"
+            "Memory address wrapper self-checks passed: user_virtual_address=true user_page_start=true"
         );
     } else {
         crate::log_error!(
             "memory",
-            "Memory address wrapper self-checks failed: user_virtual_address={}",
-            user_virtual_address_ok
+            "Memory address wrapper self-checks failed: user_virtual_address={} user_page_start={}",
+            user_virtual_address_ok,
+            user_page_start_ok
         );
     }
-    user_virtual_address_ok
+    passed
 }
 
 /// Verify the kernel virtual range allocator self-check rules.

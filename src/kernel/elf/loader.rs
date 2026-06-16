@@ -1,6 +1,6 @@
 use crate::kernel::elf::parser::{ElfError, ElfFile, ProgramHeader};
 use crate::kernel::memory::{
-    address::{PhysicalFrameStart, UserVirtualAddress, UserVirtualRange, VirtAddr},
+    address::{PhysicalFrameStart, UserPageStart, UserVirtualAddress, UserVirtualRange, VirtAddr},
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     user_layout, user_stack,
@@ -150,8 +150,8 @@ enum LoadError {
 #[derive(Debug, Clone, Copy)]
 struct LoadSegmentRange {
     memory_range: UserVirtualRange,
-    first_page: UserVirtualAddress,
-    last_page: UserVirtualAddress,
+    first_page: UserPageStart,
+    last_page: UserPageStart,
     file_backed_end: u64,
 }
 
@@ -174,8 +174,12 @@ impl LoadSegmentRange {
             .ok_or(LoadError::SegmentAddressOverflow)?;
         let last_byte_address = UserVirtualAddress::new(VirtAddr::new(last_byte_address))
             .ok_or(LoadError::SegmentAddressOutOfRange)?;
-        let first_page = segment_start.align_down_to_page();
-        let last_page = last_byte_address.align_down_to_page();
+        let first_page = segment_start
+            .align_down_to_page()
+            .ok_or(LoadError::SegmentAddressOutOfRange)?;
+        let last_page = last_byte_address
+            .align_down_to_page()
+            .ok_or(LoadError::SegmentAddressOutOfRange)?;
         let file_backed_end = segment_start
             .as_u64()
             .checked_add(program_header.file_size())
@@ -394,7 +398,7 @@ fn copy_segment_page(
     image: &[u8],
     program_header: ProgramHeader,
     segment_range: LoadSegmentRange,
-    page_start: UserVirtualAddress,
+    page_start: UserPageStart,
     physical_address: PhysicalFrameStart,
 ) -> Result<(), LoadError> {
     let page_start = page_start.as_u64();
