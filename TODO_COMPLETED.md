@@ -141,6 +141,7 @@ active roadmap can list only unfinished work.
 - [x] Add a typed `brk` user heap request boundary and invalid ABI smoke coverage.
 - [x] Add a typed `munmap` user mapping request boundary and storage smoke coverage.
 - [x] Classify kernel stack guard-fault addresses as `VirtAddr` inside the task boundary.
+- [x] Keep user task kernel stack-top handoffs as `VirtAddr` until architecture and `SYSCALL` entry boundaries.
 
 ### Address Space Lifecycle
 

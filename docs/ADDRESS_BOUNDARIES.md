@@ -49,6 +49,9 @@ untyped cross-domain `u64` values:
 - `KernelStackGuardFault` stores guard, writable, and top addresses as
   `VirtAddr` after page-fault ABI values are classified at the kernel interrupt
   boundary.
+- User task kernel stack tops are kept as `VirtAddr` across scheduler handoff
+  paths and lower to raw `u64` only at the registered architecture installer
+  and `SYSCALL` entry stack-top atomic boundary.
 - `user_stack::allocate_and_map_user_page(...) -> PhysicalFrameStart` now
   returns a typed physical frame start instead of a raw physical `u64`.
 - `user_stack::map_user_range(...)` now accepts `UserVirtualAddress` and
@@ -153,6 +156,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - Kernel stack guard-fault lookup accepts `VirtAddr` after `kernel::interrupt`
   classifies the raw architecture page-fault address. Diagnostic formatting
   lowers those typed virtual addresses back to raw numbers only at log output.
+- Scheduler user-entry and timer-resume handoffs keep the selected user task
+  kernel stack top as `VirtAddr`; architecture provider calls and the `SYSCALL`
+  entry stack-top atomic are the remaining raw lowering points.
 - `task::UserEntryArguments` is constructed from typed user pointers, and
   `UserTaskContext` keeps its raw `u64` register layout private to the
   `repr(C)` architecture entry ABI.
@@ -212,6 +218,8 @@ Continue introducing wrappers in small steps:
 - `UserCString` for readable syscall string candidates before NUL validation.
 - `UserMappingUnmapRequest` for private `munmap` requests after syscall ABI
   classification.
+- `VirtAddr` for scheduler-owned user task kernel stack top handoffs before
+  architecture and `SYSCALL` entry boundaries.
 - `DmaPhysicalAddress` for physical addresses that may be programmed into
   device descriptors. This now exists in `kernel::memory::address`.
 - `StorageDataAddress` for the active DMA data buffer passed through generic

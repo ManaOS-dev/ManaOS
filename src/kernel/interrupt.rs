@@ -58,9 +58,12 @@ pub fn push_mouse_byte(byte: u8) {
 /// # Panics
 ///
 /// Panics if `stack_top` is zero.
-pub fn set_syscall_kernel_stack_top(stack_top: u64) {
-    assert!(stack_top != 0, "syscall kernel stack top must be non-zero");
-    SYSCALL_KERNEL_STACK_TOP.store(stack_top, Ordering::Release);
+pub fn set_syscall_kernel_stack_top(stack_top: VirtAddr) {
+    assert!(
+        stack_top.as_u64() != 0,
+        "syscall kernel stack top must be non-zero"
+    );
+    SYSCALL_KERNEL_STACK_TOP.store(stack_top.as_u64(), Ordering::Release);
 }
 
 /// Log page-fault diagnostics before the architecture handler panics.

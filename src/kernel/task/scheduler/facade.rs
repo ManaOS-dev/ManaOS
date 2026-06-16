@@ -15,10 +15,8 @@ use crate::kernel::memory::user_heap::UserHeapBreakRequest;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::sync::atomic::Ordering;
-pub(in crate::kernel::task) fn install_user_task_kernel_stack(kernel_stack_top: usize) {
-    let kernel_stack_top =
-        u64::try_from(kernel_stack_top).expect("kernel stack top must fit in u64");
-    architecture::install_kernel_stack(kernel_stack_top);
+pub(in crate::kernel::task) fn install_user_task_kernel_stack(kernel_stack_top: VirtAddr) {
+    architecture::install_kernel_stack(kernel_stack_top.as_u64());
     crate::kernel::interrupt::set_syscall_kernel_stack_top(kernel_stack_top);
 }
 
@@ -392,10 +390,10 @@ pub fn process_timer_tick(interrupted_user_mode: bool) {
             install_user_task_kernel_stack(kernel_stack_top);
             crate::log_info!(
                 "task",
-                "User task entered from timer context: task={} address_space={:#x} kernel_stack_top={:#x}",
+                "User task entered from timer context: task={} address_space={:#x} kernel_stack_top={:#x} kernel_stack_top_typed=true",
                 task_id,
                 address_space.level_4_frame().as_u64(),
-                kernel_stack_top
+                kernel_stack_top.as_u64()
             );
             // SAFETY: The current context pointer and user trap frame come
             // from tasks stored in the scheduler. The assembly entry saves the

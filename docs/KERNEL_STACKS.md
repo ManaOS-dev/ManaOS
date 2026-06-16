@@ -97,6 +97,10 @@ Policy:
   the task's user address space. The scheduler records that handoff in retained
   task snapshots so smoke can assert every finished user task had a nonzero
   resume handoff, address-space root, and kernel stack top.
+- The scheduler keeps the selected kernel stack top as `VirtAddr` through the
+  user-entry and timer-resume handoff paths. It lowers that value to raw `u64`
+  only when calling the registered architecture stack installer or publishing
+  the `SYSCALL` entry stack top.
 - On x86_64, installing the user task kernel stack means updating TSS
   `privilege_stack_table[0]` through an architecture-owned API registered from
   `main.rs`.

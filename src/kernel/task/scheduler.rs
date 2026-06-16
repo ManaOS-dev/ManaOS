@@ -280,10 +280,13 @@ impl UserTaskRuntime {
         self.syscall_frame_recorded || self.interrupt_frame_recorded
     }
 
-    fn record_resume_handoff(&mut self, address_space: UserAddressSpace, kernel_stack_top: usize) {
+    fn record_resume_handoff(
+        &mut self,
+        address_space: UserAddressSpace,
+        kernel_stack_top: VirtAddr,
+    ) {
         self.last_resume_address_space_root = address_space.level_4_frame().as_u64();
-        self.last_resume_kernel_stack_top =
-            u64::try_from(kernel_stack_top).expect("user task kernel stack top must fit in u64");
+        self.last_resume_kernel_stack_top = kernel_stack_top.as_u64();
         self.resume_handoff_count = self.resume_handoff_count.saturating_add(1);
     }
 }
@@ -432,14 +435,14 @@ enum SwitchAction {
     SwitchKernel {
         current_context: *mut u64,
         next_context: *const u64,
-        next_user_kernel_stack_top: Option<usize>,
+        next_user_kernel_stack_top: Option<VirtAddr>,
         next_user_address_space: Option<UserAddressSpace>,
     },
     EnterUser {
         current_context: *mut u64,
         task_id: u64,
         trap_frame: UserTrapFrame,
-        kernel_stack_top: usize,
+        kernel_stack_top: VirtAddr,
         address_space: UserAddressSpace,
     },
 }
@@ -447,7 +450,7 @@ enum SwitchAction {
 /// Prepared one-shot user task entry state.
 pub(super) struct OneShotUserTask {
     pub(super) trap_frame: UserTrapFrame,
-    pub(super) kernel_stack_top: usize,
+    pub(super) kernel_stack_top: VirtAddr,
     pub(super) address_space: UserAddressSpace,
 }
 
@@ -535,8 +538,8 @@ impl Task {
         self.kernel_stack.as_ref().map(KernelStack::byte_len)
     }
 
-    fn kernel_stack_top(&self) -> Option<usize> {
-        self.kernel_stack.as_ref().map(KernelStack::top)
+    fn kernel_stack_top(&self) -> Option<VirtAddr> {
+        self.kernel_stack.as_ref().map(KernelStack::virtual_top)
     }
 
     fn kernel_stack_guard_page_virtual_start(&self) -> Option<VirtAddr> {

@@ -12,7 +12,7 @@ reviewable unit before implementing it.
 ### Typed Address Boundaries
 
 - [ ] Replace remaining raw physical address parameters with `PhysAddr` in memory APIs beyond `PhysicalFrameStart` construction.
-- [ ] Replace remaining raw virtual address parameters with `VirtAddr` in memory APIs beyond `UserVirtualAddress` construction.
+- [ ] Replace remaining raw virtual address parameters with `VirtAddr` beyond `UserVirtualAddress` construction and typed kernel stack-top handoffs.
 - [ ] Add remaining typed page-aligned address wrappers where alignment is required by construction beyond user page starts.
 - [ ] Replace raw `u64` address values in scheduler diagnostics snapshots.
 - [ ] Replace raw `u64` address values in task metadata where feasible.

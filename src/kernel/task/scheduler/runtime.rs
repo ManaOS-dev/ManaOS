@@ -979,7 +979,7 @@ impl Scheduler {
         }
     }
 
-    pub(in crate::kernel::task) fn user_kernel_stack_top(&self, index: usize) -> Option<usize> {
+    pub(in crate::kernel::task) fn user_kernel_stack_top(&self, index: usize) -> Option<VirtAddr> {
         match &self.tasks[index].kind {
             TaskKind::User(_) => Some(
                 self.tasks[index]
@@ -1158,7 +1158,7 @@ impl Scheduler {
         current_context: *mut u64,
         next_index: usize,
         next_task_id: u64,
-        kernel_stack_top: usize,
+        kernel_stack_top: VirtAddr,
         address_space: UserAddressSpace,
     ) -> SwitchAction {
         let TaskKind::User(user_runtime) = &mut self.tasks[next_index].kind else {
@@ -1181,7 +1181,7 @@ impl Scheduler {
         current_context: *mut u64,
         next_index: usize,
         next_task_id: u64,
-        kernel_stack_top: usize,
+        kernel_stack_top: VirtAddr,
         address_space: UserAddressSpace,
     ) -> SwitchAction {
         let next_context = self.tasks[next_index].context.as_pointer();
@@ -1194,9 +1194,9 @@ impl Scheduler {
         if !self.user_resume_logged {
             crate::log_info!(
                 "task",
-                "User task resumed from timer context: task={} kernel_stack_top={:#x}",
+                "User task resumed from timer context: task={} kernel_stack_top={:#x} kernel_stack_top_typed=true",
                 next_task_id,
-                kernel_stack_top
+                kernel_stack_top.as_u64()
             );
             self.user_resume_logged = true;
         }
