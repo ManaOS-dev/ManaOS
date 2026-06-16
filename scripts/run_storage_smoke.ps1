@@ -102,6 +102,7 @@ $expectedPatterns = @(
     "User program spawn errno smoke passed: missing=-2 relative=-22 directory=-21 device=-95 invalid_image=-22 oom=-12",
     "Loading user ELF from filesystem: path=/disk/bin/smoke_demo",
     "User address space prepared: pml4=",
+    "ELF header validated: .*entry_point_typed=true",
     "ELF segment mapped: .*perms=R-X file_backed_range_typed=true",
     "ELF segment mapped: .*perms=R-- file_backed_range_typed=true",
     "ELF segment mapped: .*perms=RW- file_backed_range_typed=true",

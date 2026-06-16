@@ -106,6 +106,9 @@ untyped cross-domain `u64` values:
 - `task::UserMappingRequest` stores the requested `mmap` address only as
   `UserMappingPlacement`. Scheduler diagnostics derive the displayed requested
   address from that typed placement instead of retaining a raw syscall address.
+- ELF entry points are converted to `UserVirtualAddress` immediately after
+  header validation. Loader metadata and entry-segment membership checks use
+  that typed value instead of reusing the raw ELF header field.
 - `UserAddressSpace` represents a task-owned user PML4 root and is passed to
   ELF and user stack mapping helpers instead of relying on the active CR3.
 - `paging::map_kernel_writable_no_execute_range(...)` is the boundary that
@@ -211,6 +214,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 
 - `kernel::elf::LoadedElf::entry_point() -> UserVirtualAddress` exposes a typed
   user virtual entry point.
+- `kernel::elf::load_user_program(...)` and metadata validation keep the entry
+  point as `UserVirtualAddress` after header validation; the raw ELF header
+  field is not retained across segment membership checks.
 - `kernel::elf::load_user_program(address_space, ...)` maps loadable segments
   into the supplied user address-space root.
 - `ProgramHeader::virtual_address() -> u64` remains raw because it exposes a

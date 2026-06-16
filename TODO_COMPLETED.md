@@ -149,6 +149,7 @@ active roadmap can list only unfinished work.
 - [x] Keep ELF load-segment file-backed payload ranges typed as `UserVirtualRange` before page-copy calculations.
 - [x] Keep user pointer page-table permission probes typed as `UserReadableRange` or `UserWritableRange` before raw slice creation.
 - [x] Keep scheduler-owned `mmap` requested addresses typed as `UserMappingPlacement` before diagnostics formatting.
+- [x] Keep ELF entry points typed as `UserVirtualAddress` immediately after header validation.
 
 ### Address Space Lifecycle
 
