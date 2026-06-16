@@ -111,6 +111,7 @@ user pointer page-table permission probe の `UserReadableRange` / `UserWritable
 scheduler-owned `mmap` requested address の `UserMappingPlacement` boundary 化、
 ELF entry point の `UserVirtualAddress` boundary 化、
 ELF heap start の `UserPageStart` boundary 化、
+private `mmap` automatic placement search start の `UserPageStart` boundary 化、
 per-process page table、
 user address-space reclaim、kernel stack reclaim、
 user pointer validation、mapping permission checks、identity mapping audit、

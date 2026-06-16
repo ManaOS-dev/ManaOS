@@ -151,6 +151,7 @@ active roadmap can list only unfinished work.
 - [x] Keep scheduler-owned `mmap` requested addresses typed as `UserMappingPlacement` before diagnostics formatting.
 - [x] Keep ELF entry points typed as `UserVirtualAddress` immediately after header validation.
 - [x] Keep ELF heap starts typed as `UserPageStart` while accumulating load-segment ends.
+- [x] Keep private `mmap` automatic placement search starts typed as `UserPageStart`.
 
 ### Address Space Lifecycle
 
