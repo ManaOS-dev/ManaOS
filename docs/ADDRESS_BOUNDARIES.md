@@ -43,6 +43,9 @@ untyped cross-domain `u64` values:
 - `UserHeapBreakRequest` represents `brk` requests after syscall ABI address
   classification, so scheduler and heap code do not receive raw break
   addresses.
+- `KernelStackGuardFault` stores guard, writable, and top addresses as
+  `VirtAddr` after page-fault ABI values are classified at the kernel interrupt
+  boundary.
 - `user_stack::allocate_and_map_user_page(...) -> PhysicalFrameStart` now
   returns a typed physical frame start instead of a raw physical `u64`.
 - `user_stack::map_user_range(...)` now accepts `UserVirtualAddress` and
@@ -143,6 +146,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - Initial user stack argument layout uses a local `UserVirtualAddress` cursor;
   raw writes are limited to copying bytes and pointer values into already
   reserved stack slots.
+- Kernel stack guard-fault lookup accepts `VirtAddr` after `kernel::interrupt`
+  classifies the raw architecture page-fault address. Diagnostic formatting
+  lowers those typed virtual addresses back to raw numbers only at log output.
 - `task::UserEntryArguments` is constructed from typed user pointers, and
   `UserTaskContext` keeps its raw `u64` register layout private to the
   `repr(C)` architecture entry ABI.

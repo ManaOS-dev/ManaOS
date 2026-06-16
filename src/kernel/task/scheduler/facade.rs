@@ -9,6 +9,7 @@ use super::{
     UserVirtualAddress, PREEMPTION_STATE, SCHEDULER, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
 use crate::kernel::filesystem::{FileDescriptorTable, SpawnDescriptorInheritanceSnapshot};
+use crate::kernel::memory::address::VirtAddr;
 use crate::kernel::memory::user_heap::UserHeapBreakRequest;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -543,7 +544,7 @@ pub fn verify_scheduler_transition_invariants() -> bool {
 
 /// Return guard-fault diagnostics when `fault_address` is inside a known kernel
 /// stack guard page.
-pub fn get_kernel_stack_guard_fault(fault_address: u64) -> Option<KernelStackGuardFault> {
+pub fn get_kernel_stack_guard_fault(fault_address: VirtAddr) -> Option<KernelStackGuardFault> {
     SCHEDULER.try_lock().and_then(|scheduler| {
         scheduler
             .as_ref()

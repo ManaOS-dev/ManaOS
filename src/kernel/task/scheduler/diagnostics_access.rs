@@ -9,6 +9,7 @@ use super::{
     UserPreemptionReasonDiagnostics, UserResumePathDiagnostics, UserTrapFrameDiagnosticsSnapshot,
     UserVirtualMemorySnapshot, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
+use crate::kernel::memory::address::VirtAddr;
 use crate::kernel::task::context::UserTrapFrame;
 use alloc::vec::Vec;
 use core::sync::atomic::Ordering;
@@ -200,7 +201,7 @@ impl Scheduler {
 
     pub(in crate::kernel::task::scheduler) fn get_kernel_stack_guard_fault(
         &self,
-        fault_address: u64,
+        fault_address: VirtAddr,
     ) -> Option<KernelStackGuardFault> {
         self.tasks
             .iter()

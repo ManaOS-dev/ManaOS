@@ -18,8 +18,9 @@ use super::reclaim::FinishedUserTaskReclaim;
 use super::stack::{KernelStack, KernelStackFaultOwner, KernelStackGuardFault, KernelStackReclaim};
 use super::state::TaskState;
 use crate::kernel::filesystem::{FileDescriptorTable, SpawnDescriptorInheritanceSnapshot};
-use crate::kernel::memory::address::UserVirtualAddress;
-use crate::kernel::memory::address::{UserVirtualRange, UserWritableRange};
+use crate::kernel::memory::address::{
+    UserVirtualAddress, UserVirtualRange, UserWritableRange, VirtAddr,
+};
 use crate::kernel::memory::address_space::{self, UserAddressSpace, UserAddressSpaceReclaim};
 use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
 use crate::kernel::memory::user_heap::UserHeap;
@@ -537,19 +538,19 @@ impl Task {
         self.kernel_stack.as_ref().map(KernelStack::top)
     }
 
-    fn kernel_stack_guard_page_virtual_start(&self) -> Option<u64> {
+    fn kernel_stack_guard_page_virtual_start(&self) -> Option<VirtAddr> {
         self.kernel_stack
             .as_ref()
             .map(KernelStack::guard_page_virtual_start)
     }
 
-    fn kernel_stack_writable_virtual_start(&self) -> Option<u64> {
+    fn kernel_stack_writable_virtual_start(&self) -> Option<VirtAddr> {
         self.kernel_stack
             .as_ref()
             .map(KernelStack::writable_virtual_start)
     }
 
-    fn kernel_stack_virtual_top(&self) -> Option<u64> {
+    fn kernel_stack_virtual_top(&self) -> Option<VirtAddr> {
         self.kernel_stack.as_ref().map(KernelStack::virtual_top)
     }
 
@@ -565,7 +566,7 @@ impl Task {
             .map(KernelStack::writable_page_count)
     }
 
-    fn kernel_stack_guard_fault(&self, fault_address: u64) -> Option<KernelStackGuardFault> {
+    fn kernel_stack_guard_fault(&self, fault_address: VirtAddr) -> Option<KernelStackGuardFault> {
         let kernel_stack = self.kernel_stack.as_ref()?;
         if !kernel_stack.contains_guard_address(fault_address) {
             return None;
@@ -580,7 +581,7 @@ impl Task {
         ))
     }
 
-    fn contains_kernel_stack_writable_range(&self, start_address: u64, byte_len: u64) -> bool {
+    fn contains_kernel_stack_writable_range(&self, start_address: VirtAddr, byte_len: u64) -> bool {
         self.kernel_stack.as_ref().is_some_and(|kernel_stack| {
             kernel_stack.contains_writable_range(start_address, byte_len)
         })
@@ -754,9 +755,9 @@ impl Scheduler {
             "Kernel task stack prepared: task={} bytes={} guard_virtual={:#x} writable_virtual={:#x} virtual_top={:#x} reserved_pages={} writable_pages={} guard_unmapped=true writable_mapped=true",
             task_identifier.as_u64(),
             kernel_stack_bytes,
-            kernel_stack_guard_page_virtual_start,
-            kernel_stack_writable_virtual_start,
-            kernel_stack_virtual_top,
+            kernel_stack_guard_page_virtual_start.as_u64(),
+            kernel_stack_writable_virtual_start.as_u64(),
+            kernel_stack_virtual_top.as_u64(),
             kernel_stack_reserved_pages,
             kernel_stack_writable_pages
         );
@@ -833,9 +834,9 @@ impl Scheduler {
             request.address_space.level_4_frame().as_u64(),
             request.heap_start.as_u64(),
             kernel_stack_bytes,
-            kernel_stack_guard_page_virtual_start,
-            kernel_stack_writable_virtual_start,
-            kernel_stack_virtual_top,
+            kernel_stack_guard_page_virtual_start.as_u64(),
+            kernel_stack_writable_virtual_start.as_u64(),
+            kernel_stack_virtual_top.as_u64(),
             kernel_stack_reserved_pages,
             kernel_stack_writable_pages
         );

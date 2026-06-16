@@ -9,12 +9,12 @@ pub fn verify_kernel_stack_guard_fault_diagnostics() {
         .expect("kernel stack guard diagnostics must classify a scheduler-owned stack");
     crate::log_info!(
         "fault",
-        "Kernel stack guard diagnostics verified: owner={} task={} guard={:#x} writable_start={:#x} stack_top={:#x}",
+        "Kernel stack guard diagnostics verified: owner={} task={} guard={:#x} writable_start={:#x} stack_top={:#x} guard_fault_address_typed=true",
         diagnostic.owner().as_str(),
         diagnostic.task_identifier(),
-        diagnostic.guard_page_start(),
-        diagnostic.writable_start(),
-        diagnostic.stack_top()
+        diagnostic.guard_page_start().as_u64(),
+        diagnostic.writable_start().as_u64(),
+        diagnostic.stack_top().as_u64()
     );
 }
 

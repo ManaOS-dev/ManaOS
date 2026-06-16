@@ -17,7 +17,10 @@
 //! - [`set_syscall_kernel_stack_top`] - Install the next SYSCALL kernel stack
 //! - [`syscall_entry`] - Ring 3 syscall entry
 
-use crate::kernel::task::{context::UserTrapFrame, UserTrapFrameSource};
+use crate::kernel::{
+    memory::address::VirtAddr,
+    task::{context::UserTrapFrame, UserTrapFrameSource},
+};
 use crate::shared::TimerInterruptFrame;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
@@ -63,16 +66,19 @@ pub fn set_syscall_kernel_stack_top(stack_top: u64) {
 /// Log page-fault diagnostics before the architecture handler panics.
 pub fn process_page_fault(fault_address: u64, error_code: u64, instruction_pointer: u64) {
     let task_id = crate::kernel::task::get_current_task_id();
-    if let Some(guard_fault) = crate::kernel::task::get_kernel_stack_guard_fault(fault_address) {
+    let typed_fault_address = VirtAddr::new(fault_address);
+    if let Some(guard_fault) =
+        crate::kernel::task::get_kernel_stack_guard_fault(typed_fault_address)
+    {
         crate::log_error!(
             "fault",
             "Kernel stack guard page fault: owner={} task={} fault_address={:#018x} guard={:#018x} writable_start={:#018x} stack_top={:#018x} access={} mode={} present={} instruction={:#018x} raw_error={:#x}",
             guard_fault.owner().as_str(),
             guard_fault.task_identifier(),
             fault_address,
-            guard_fault.guard_page_start(),
-            guard_fault.writable_start(),
-            guard_fault.stack_top(),
+            guard_fault.guard_page_start().as_u64(),
+            guard_fault.writable_start().as_u64(),
+            guard_fault.stack_top().as_u64(),
             PageFaultAccess::from_error_code(error_code).as_str(),
             PageFaultMode::from_error_code(error_code).as_str(),
             PageFaultPresence::from_error_code(error_code).as_str(),

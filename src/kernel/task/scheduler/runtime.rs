@@ -8,6 +8,7 @@ use super::{
     UserTrapFrame, UserTrapFrameSource, UserVirtualAddress, UserVirtualRange,
     UserWaitpidCompletion, UserWaitpidRequest, UserWritableRange, USER_TASK_PREEMPTION_ENABLED,
 };
+use crate::kernel::memory::address::VirtAddr;
 use crate::kernel::memory::user_pointer;
 
 const USER_WAIT_STATUS_BYTES: u64 = core::mem::size_of::<i32>() as u64;
@@ -711,6 +712,7 @@ impl Scheduler {
         let task_id = current_task.get_id();
         let trap_frame_byte_len = u64::try_from(core::mem::size_of::<UserTrapFrame>())
             .expect("user trap frame size must fit in u64");
+        let trap_frame_storage_address = VirtAddr::new(trap_frame_storage_address);
         let trap_frame_on_kernel_stack = current_task
             .contains_kernel_stack_writable_range(trap_frame_storage_address, trap_frame_byte_len);
         let TaskKind::User(user_runtime) = &mut current_task.kind else {
@@ -733,7 +735,7 @@ impl Scheduler {
                 "task",
                 "User syscall trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rdi={:#x} rsi={:#x} rdx={:#x} r10={:#x} r8={:#x} r9={:#x}",
                 task_id,
-                trap_frame_storage_address,
+                trap_frame_storage_address.as_u64(),
                 trap_frame_on_kernel_stack,
                 user_runtime.saved_frame.instruction_pointer,
                 user_runtime.saved_frame.stack_pointer,
@@ -749,7 +751,7 @@ impl Scheduler {
                 "task",
                 "User timer trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rcx={:#x} r11={:#x}",
                 task_id,
-                trap_frame_storage_address,
+                trap_frame_storage_address.as_u64(),
                 trap_frame_on_kernel_stack,
                 user_runtime.saved_frame.instruction_pointer,
                 user_runtime.saved_frame.stack_pointer,

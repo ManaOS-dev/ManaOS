@@ -37,9 +37,9 @@ impl KernelStackFaultOwner {
 pub struct KernelStackGuardFault {
     task_identifier: u64,
     owner: KernelStackFaultOwner,
-    guard_page_start: u64,
-    writable_start: u64,
-    stack_top: u64,
+    guard_page_start: VirtAddr,
+    writable_start: VirtAddr,
+    stack_top: VirtAddr,
 }
 
 impl KernelStackGuardFault {
@@ -47,9 +47,9 @@ impl KernelStackGuardFault {
     pub(super) const fn new(
         task_identifier: u64,
         owner: KernelStackFaultOwner,
-        guard_page_start: u64,
-        writable_start: u64,
-        stack_top: u64,
+        guard_page_start: VirtAddr,
+        writable_start: VirtAddr,
+        stack_top: VirtAddr,
     ) -> Self {
         Self {
             task_identifier,
@@ -71,17 +71,17 @@ impl KernelStackGuardFault {
     }
 
     /// Return the start address of the unmapped guard page.
-    pub const fn guard_page_start(self) -> u64 {
+    pub const fn guard_page_start(self) -> VirtAddr {
         self.guard_page_start
     }
 
     /// Return the first mapped writable stack address.
-    pub const fn writable_start(self) -> u64 {
+    pub const fn writable_start(self) -> VirtAddr {
         self.writable_start
     }
 
     /// Return the guarded stack top address.
-    pub const fn stack_top(self) -> u64 {
+    pub const fn stack_top(self) -> VirtAddr {
         self.stack_top
     }
 }
@@ -239,12 +239,13 @@ impl KernelStack {
 
     /// Return the lowest mapped writable virtual address in this stack.
     pub(super) fn base(&self) -> usize {
-        usize::try_from(self.writable_virtual_start()).expect("kernel stack base must fit in usize")
+        usize::try_from(self.writable_virtual_start().as_u64())
+            .expect("kernel stack base must fit in usize")
     }
 
     /// Return one byte past the highest mapped writable address in this stack.
     pub(super) fn top(&self) -> usize {
-        usize::try_from(self.virtual_top()).expect("kernel stack top must fit in usize")
+        usize::try_from(self.virtual_top().as_u64()).expect("kernel stack top must fit in usize")
     }
 
     /// Return the writable stack size in bytes.
@@ -254,21 +255,21 @@ impl KernelStack {
     }
 
     /// Return the reserved guard page virtual start address.
-    pub(super) fn guard_page_virtual_start(&self) -> u64 {
-        self.virtual_reservation.guard_page_start().as_u64()
+    pub(super) fn guard_page_virtual_start(&self) -> VirtAddr {
+        self.virtual_reservation.guard_page_start()
     }
 
     /// Return whether `address` is inside this stack's unmapped guard page.
-    pub(super) fn contains_guard_address(&self, address: u64) -> bool {
-        let guard_start = self.guard_page_virtual_start();
+    pub(super) fn contains_guard_address(&self, address: VirtAddr) -> bool {
+        let guard_start = self.guard_page_virtual_start().as_u64();
         let guard_end = guard_start
             .checked_add(PAGE_SIZE_U64)
             .expect("kernel stack guard range end overflowed");
-        address >= guard_start && address < guard_end
+        address.as_u64() >= guard_start && address.as_u64() < guard_end
     }
 
     /// Return whether a byte range is fully inside this stack's writable pages.
-    pub(super) fn contains_writable_range(&self, start_address: u64, byte_len: u64) -> bool {
+    pub(super) fn contains_writable_range(&self, start_address: VirtAddr, byte_len: u64) -> bool {
         if byte_len == 0 {
             return false;
         }
@@ -276,17 +277,18 @@ impl KernelStack {
         let Some(end_address) = start_address.checked_add(byte_len) else {
             return false;
         };
-        start_address >= self.writable_virtual_start() && end_address <= self.virtual_top()
+        start_address.as_u64() >= self.writable_virtual_start().as_u64()
+            && end_address.as_u64() <= self.virtual_top().as_u64()
     }
 
     /// Return the first virtual address reserved for future writable stack mapping.
-    pub(super) fn writable_virtual_start(&self) -> u64 {
-        self.virtual_reservation.writable_start().as_u64()
+    pub(super) fn writable_virtual_start(&self) -> VirtAddr {
+        self.virtual_reservation.writable_start()
     }
 
     /// Return the future guarded stack virtual top address.
-    pub(super) fn virtual_top(&self) -> u64 {
-        self.virtual_reservation.stack_top().as_u64()
+    pub(super) fn virtual_top(&self) -> VirtAddr {
+        self.virtual_reservation.stack_top()
     }
 
     /// Return the number of reserved virtual pages including the guard page.
