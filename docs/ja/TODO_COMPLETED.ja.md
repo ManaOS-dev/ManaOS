@@ -106,6 +106,7 @@ scheduler resume handoff diagnostic snapshot の `PhysicalFrameStart` / `VirtAdd
 user virtual-memory scheduler snapshot の `UserVirtualAddress` boundary 化、
 pending user `read` destination の `UserWritableRange` boundary 化、
 blocking `waitpid` status destination の `UserWritableRange` boundary 化、
+ELF load-segment file-backed payload range の `UserVirtualRange` boundary 化、
 per-process page table、
 user address-space reclaim、kernel stack reclaim、
 user pointer validation、mapping permission checks、identity mapping audit、

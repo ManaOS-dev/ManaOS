@@ -205,6 +205,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   field parsed directly from the ELF file. Loader validation converts accepted
   loadable segments to a local typed `UserVirtualRange` before page mapping and
   file-backed copying.
+- ELF load-segment file-backed payload ranges remain `UserVirtualRange` values
+  before page-copy calculations. Raw offsets are local to checked file/page
+  overlap arithmetic.
 
 ### Storage And AHCI DMA
 

@@ -104,6 +104,8 @@ private user mapping は syscall byte length を ABI validation 後に `PageCoun
 
 ELF file の program header field は file format 上 raw `u64` です。loader validation が成功した
 segment だけを local typed `UserVirtualRange` へ変換して mapping と copy を行います。
+ELF load segment の file-backed payload range は page-copy 計算の直前まで
+`UserVirtualRange` として保持します。raw offset は checked file/page overlap arithmetic の局所変数へ閉じます。
 
 ### Storage と AHCI DMA
 
