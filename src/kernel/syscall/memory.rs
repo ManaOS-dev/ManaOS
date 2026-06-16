@@ -126,7 +126,6 @@ pub(super) fn sys_mmap(
 
     let writable = protection & contract::PROT_WRITE != 0;
     let request = crate::kernel::task::UserMappingRequest::new(
-        requested_address,
         placement,
         mapping_source.user_mapping_source(),
         length,

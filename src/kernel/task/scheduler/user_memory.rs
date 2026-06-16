@@ -81,9 +81,9 @@ impl Scheduler {
         }
         crate::log_info!(
             "syscall",
-            "mmap -> task={} requested={:#x} start={:#x} length={} pages={} protection={:#x} flags={:#x} placement={} source={} active_pages={} file_private_records={} page_count_typed=true",
+            "mmap -> task={} requested={:#x} start={:#x} length={} pages={} protection={:#x} flags={:#x} placement={} source={} active_pages={} file_private_records={} page_count_typed=true mapping_request_typed=true",
             task_id,
-            request.requested_address(),
+            request.requested_address_for_diagnostics(),
             allocation.start().as_u64(),
             request.length(),
             mapped_page_count,

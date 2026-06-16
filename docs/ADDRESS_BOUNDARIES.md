@@ -103,6 +103,9 @@ untyped cross-domain `u64` values:
   `map_private(...)` returns typed page counts, and `unmap_range(...)` accepts
   a typed unmap request before returning typed page counts for scheduler
   diagnostics.
+- `task::UserMappingRequest` stores the requested `mmap` address only as
+  `UserMappingPlacement`. Scheduler diagnostics derive the displayed requested
+  address from that typed placement instead of retaining a raw syscall address.
 - `UserAddressSpace` represents a task-owned user PML4 root and is passed to
   ELF and user stack mapping helpers instead of relying on the active CR3.
 - `paging::map_kernel_writable_no_execute_range(...)` is the boundary that
@@ -161,6 +164,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - `kernel::memory::user_mapping::UserMappings` converts syscall byte lengths
   into `PageCount` after ABI validation, then uses typed page counts for mapping
   records, successful allocations, typed unmap requests, and unmap results.
+- The scheduler-owned `mmap` request keeps fixed requested addresses as
+  `UserPageStart` inside `UserMappingPlacement`; the syscall raw requested
+  address is used only to choose that placement or reject the request.
 - `kernel::memory::user_heap::UserHeap` accepts `UserHeapBreakRequest` after
   `sys_brk` classifies the raw ABI value as either a current-break query or a
   validated user virtual address.

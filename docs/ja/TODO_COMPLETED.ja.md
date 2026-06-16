@@ -108,6 +108,7 @@ pending user `read` destination の `UserWritableRange` boundary 化、
 blocking `waitpid` status destination の `UserWritableRange` boundary 化、
 ELF load-segment file-backed payload range の `UserVirtualRange` boundary 化、
 user pointer page-table permission probe の `UserReadableRange` / `UserWritableRange` boundary 化、
+scheduler-owned `mmap` requested address の `UserMappingPlacement` boundary 化、
 per-process page table、
 user address-space reclaim、kernel stack reclaim、
 user pointer validation、mapping permission checks、identity mapping audit、

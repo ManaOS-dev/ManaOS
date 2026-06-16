@@ -48,7 +48,6 @@ static USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT: AtomicU64 = AtomicU64::new(0);
 /// Syscall-time private user mapping request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserMappingRequest {
-    requested_address: u64,
     placement: UserMappingPlacement,
     source: UserMappingSource,
     length: u64,
@@ -92,7 +91,6 @@ impl UserReadRequest {
 impl UserMappingRequest {
     /// Create a private user mapping request.
     pub const fn new(
-        requested_address: u64,
         placement: UserMappingPlacement,
         source: UserMappingSource,
         length: u64,
@@ -101,7 +99,6 @@ impl UserMappingRequest {
         flags: u64,
     ) -> Self {
         Self {
-            requested_address,
             placement,
             source,
             length,
@@ -111,9 +108,13 @@ impl UserMappingRequest {
         }
     }
 
-    /// Return the raw requested address syscall argument.
-    pub const fn requested_address(self) -> u64 {
-        self.requested_address
+    /// Return the requested address for diagnostics.
+    pub const fn requested_address_for_diagnostics(self) -> u64 {
+        match self.placement {
+            UserMappingPlacement::Any => 0,
+            UserMappingPlacement::FixedNoReplace(address)
+            | UserMappingPlacement::FixedReplace(address) => address.as_u64(),
+        }
     }
 
     /// Return the placement policy for this mapping.

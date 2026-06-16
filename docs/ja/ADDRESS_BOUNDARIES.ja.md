@@ -56,6 +56,9 @@ kernel ownership boundary では型付き address に変換することです。
 - `KernelVirtualRangeAllocator::new(...)` と `allocate_pages(...)` は `PageCount` を受け取ります。
 - `process::UserProgramSpawnRequest::new(...)` と `user_stack::allocate_user_stack(...)` は user stack page mapping 前に `PageCount` を受け取ります。
 - `UserMappings` は private mapping record count を `PageCount` として保持します。`map_private(...)` は typed page count を返し、`unmap_range(...)` は typed unmap request を受け取ってから scheduler diagnostics 用の typed page count を返します。
+- `task::UserMappingRequest` は requested `mmap` address を `UserMappingPlacement`
+  としてだけ保持します。scheduler diagnostics の requested address 表示は typed placement から導出し、
+  raw syscall address を保持しません。
 - `UserAddressSpace`: task-owned user PML4 root。
 - `paging::map_kernel_writable_no_execute_range(...)`: reserved virtual range と owned physical frame range を mapped kernel pages にする境界。
 - `paging::unmap_kernel_range_and_free_frames(...)`: kernel virtual mapping を外し、owner check 後に physical frame を返す境界。
@@ -103,6 +106,8 @@ scheduler task snapshot は last resume address-space root を `PhysicalFrameSta
 user virtual-memory task snapshot は heap base、heap break、private mapping next-start address を `UserVirtualAddress` として保持し、console / serial smoke diagnostics の formatting 時だけ raw number にします。
 user stack allocation の page count は `PageCount` で分類してから frame allocation と stack slot mapping に進みます。
 private user mapping は syscall byte length を ABI validation 後に `PageCount` へ変換し、mapping record、successful allocation、unmap result で typed page count を使います。
+`mmap` request は fixed requested address を `UserMappingPlacement` 内の `UserPageStart`
+として保持します。syscall raw requested address は placement の選択または request rejection にだけ使います。
 `munmap` request は syscall ABI argument を `UserMappingUnmapRequest` へ分類してから scheduler と mapping tracker へ渡します。
 `UserTaskContext` の raw register layout は architecture entry ABI のために private に保ちます。
 
