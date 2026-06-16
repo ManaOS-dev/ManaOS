@@ -150,6 +150,7 @@ active roadmap can list only unfinished work.
 - [x] Keep user pointer page-table permission probes typed as `UserReadableRange` or `UserWritableRange` before raw slice creation.
 - [x] Keep scheduler-owned `mmap` requested addresses typed as `UserMappingPlacement` before diagnostics formatting.
 - [x] Keep ELF entry points typed as `UserVirtualAddress` immediately after header validation.
+- [x] Keep ELF heap starts typed as `UserPageStart` while accumulating load-segment ends.
 
 ### Address Space Lifecycle
 

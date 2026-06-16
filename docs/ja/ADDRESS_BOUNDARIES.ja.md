@@ -62,6 +62,9 @@ kernel ownership boundary では型付き address に変換することです。
 - ELF entry point は header validation 直後に `UserVirtualAddress` へ変換します。
   loader metadata と entry segment membership check は raw ELF header field を再利用せず、
   typed value を使います。
+- ELF heap start は各 load segment end を user page へ align した後、
+  `UserPageStart` として集計します。`LoadedElf` は final heap start を
+  `UserVirtualAddress` として公開します。
 - `UserAddressSpace`: task-owned user PML4 root。
 - `paging::map_kernel_writable_no_execute_range(...)`: reserved virtual range と owned physical frame range を mapped kernel pages にする境界。
 - `paging::unmap_kernel_range_and_free_frames(...)`: kernel virtual mapping を外し、owner check 後に physical frame を返す境界。
@@ -120,6 +123,8 @@ ELF file の program header field は file format 上 raw `u64` です。loader 
 segment だけを local typed `UserVirtualRange` へ変換して mapping と copy を行います。
 ELF entry point は header validation 後に `UserVirtualAddress` として保持し、
 entry segment membership check でも typed value を使います。
+ELF loader は `LoadedElf::heap_start()` を導出する間、最大の page-aligned segment end を
+`UserPageStart` として保持します。
 ELF load segment の file-backed payload range は page-copy 計算の直前まで
 `UserVirtualRange` として保持します。raw offset は checked file/page overlap arithmetic の局所変数へ閉じます。
 

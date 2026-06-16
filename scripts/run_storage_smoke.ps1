@@ -106,6 +106,7 @@ $expectedPatterns = @(
     "ELF segment mapped: .*perms=R-X file_backed_range_typed=true",
     "ELF segment mapped: .*perms=R-- file_backed_range_typed=true",
     "ELF segment mapped: .*perms=RW- file_backed_range_typed=true",
+    "User ELF demo loaded: .*heap_start_typed=true",
     "User stack mapping verified: pages=4 .*guard_unmapped=true page_count_typed=true",
     "User program entry vectors staged: argument_count=2 environment_count=1",
     "User task spawned\. task_id=.* address_space=",

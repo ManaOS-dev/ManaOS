@@ -109,6 +109,9 @@ untyped cross-domain `u64` values:
 - ELF entry points are converted to `UserVirtualAddress` immediately after
   header validation. Loader metadata and entry-segment membership checks use
   that typed value instead of reusing the raw ELF header field.
+- ELF heap starts are accumulated as `UserPageStart` values after each load
+  segment end is aligned to a user page. `LoadedElf` exposes the final heap
+  start as `UserVirtualAddress`.
 - `UserAddressSpace` represents a task-owned user PML4 root and is passed to
   ELF and user stack mapping helpers instead of relying on the active CR3.
 - `paging::map_kernel_writable_no_execute_range(...)` is the boundary that
@@ -217,6 +220,8 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - `kernel::elf::load_user_program(...)` and metadata validation keep the entry
   point as `UserVirtualAddress` after header validation; the raw ELF header
   field is not retained across segment membership checks.
+- The ELF loader keeps the maximum page-aligned segment end as `UserPageStart`
+  while deriving `LoadedElf::heap_start()`.
 - `kernel::elf::load_user_program(address_space, ...)` maps loadable segments
   into the supplied user address-space root.
 - `ProgramHeader::virtual_address() -> u64` remains raw because it exposes a

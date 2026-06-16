@@ -47,7 +47,7 @@ pub fn load_user_program(
         .unwrap_or_else(|error| panic!("failed to load user ELF: {}", error.message()));
     crate::log_info!(
         "elf",
-        "User ELF demo loaded: path={} entry={:#x} heap_start={:#x}",
+        "User ELF demo loaded: path={} entry={:#x} heap_start={:#x} heap_start_typed=true",
         source_path,
         loaded.entry_point().as_u64(),
         loaded.heap_start().as_u64()
@@ -61,7 +61,7 @@ pub fn validate_user_program_image(image: &[u8], source_path: &str) -> bool {
         Ok(loaded) => {
             crate::log_info!(
                 "elf",
-                "User ELF image validated: path={} entry={:#x} heap_start={:#x}",
+                "User ELF image validated: path={} entry={:#x} heap_start={:#x} heap_start_typed=true",
                 source_path,
                 loaded.entry_point().as_u64(),
                 loaded.heap_start().as_u64()
@@ -240,7 +240,7 @@ fn load_user_elf(
 
     let mut load_segments = 0_u16;
     let mut entry_segment_found = false;
-    let mut heap_start = 0_u64;
+    let mut heap_start = None;
     for program_header in elf.program_headers() {
         let program_header = program_header.map_err(LoadError::Elf)?;
         if !program_header.is_load() {
@@ -248,7 +248,8 @@ fn load_user_elf(
         }
         validate_load_segment(image, program_header)?;
         let segment_range = LoadSegmentRange::from_program_header(program_header)?;
-        heap_start = heap_start.max(align_up_to_page(segment_range.end_exclusive())?);
+        let segment_heap_start = align_up_to_user_page(segment_range.end_exclusive())?;
+        heap_start = Some(max_user_page_start(heap_start, segment_heap_start));
         if executable_segment_contains_entry(program_header, entry_point) {
             entry_segment_found = true;
         }
@@ -274,16 +275,25 @@ fn load_user_elf(
 
     Ok(LoadedElf {
         entry_point,
-        heap_start: UserVirtualAddress::new(VirtAddr::new(heap_start))
-            .ok_or(LoadError::SegmentAddressOutOfRange)?,
+        heap_start: heap_start.ok_or(LoadError::NoLoadSegments)?.as_address(),
     })
 }
 
-fn align_up_to_page(address: u64) -> Result<u64, LoadError> {
-    address
+fn align_up_to_user_page(address: u64) -> Result<UserPageStart, LoadError> {
+    let aligned_address = address
         .checked_add(PAGE_SIZE - 1)
         .map(|address| address & !(PAGE_SIZE - 1))
-        .ok_or(LoadError::SegmentAddressOverflow)
+        .ok_or(LoadError::SegmentAddressOverflow)?;
+    let address = UserVirtualAddress::new(VirtAddr::new(aligned_address))
+        .ok_or(LoadError::SegmentAddressOutOfRange)?;
+    UserPageStart::new(address).ok_or(LoadError::SegmentAddressOutOfRange)
+}
+
+fn max_user_page_start(current: Option<UserPageStart>, candidate: UserPageStart) -> UserPageStart {
+    match current {
+        Some(current) if current.as_u64() >= candidate.as_u64() => current,
+        _ => candidate,
+    }
 }
 
 fn validate_entry_point(entry_point: u64) -> Result<UserVirtualAddress, LoadError> {
@@ -487,7 +497,7 @@ fn load_user_elf_metadata(image: &[u8]) -> Result<LoadedElf, LoadError> {
     let entry_point = validate_entry_point(elf.entry())?;
     let mut load_segments = 0_u16;
     let mut entry_segment_found = false;
-    let mut heap_start = 0_u64;
+    let mut heap_start = None;
     for program_header in elf.program_headers() {
         let program_header = program_header.map_err(LoadError::Elf)?;
         if !program_header.is_load() {
@@ -495,7 +505,8 @@ fn load_user_elf_metadata(image: &[u8]) -> Result<LoadedElf, LoadError> {
         }
         validate_load_segment(image, program_header)?;
         let segment_range = LoadSegmentRange::from_program_header(program_header)?;
-        heap_start = heap_start.max(align_up_to_page(segment_range.end_exclusive())?);
+        let segment_heap_start = align_up_to_user_page(segment_range.end_exclusive())?;
+        heap_start = Some(max_user_page_start(heap_start, segment_heap_start));
         if executable_segment_contains_entry(program_header, entry_point) {
             entry_segment_found = true;
         }
@@ -509,8 +520,7 @@ fn load_user_elf_metadata(image: &[u8]) -> Result<LoadedElf, LoadError> {
     }
     Ok(LoadedElf {
         entry_point,
-        heap_start: UserVirtualAddress::new(VirtAddr::new(heap_start))
-            .ok_or(LoadError::SegmentAddressOutOfRange)?,
+        heap_start: heap_start.ok_or(LoadError::NoLoadSegments)?.as_address(),
     })
 }
 
