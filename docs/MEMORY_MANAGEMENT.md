@@ -39,7 +39,8 @@ The current physical frame allocator relies on these properties:
 - `FrameCount` construction rejects zero counts and byte-length overflow before
   frame allocator APIs accept contiguous frame counts.
 - `PageCount` construction rejects zero counts and byte-length overflow before
-  kernel virtual range allocator and user stack APIs accept 4 KiB page counts.
+  kernel virtual range allocator, user stack, and private user mapping APIs
+  accept 4 KiB page counts.
 - `UserVirtualAddress` construction accepts only `VirtAddr`, so syscall and
   ELF loader raw address fields are classified before they enter user address
   wrappers.
@@ -162,6 +163,10 @@ address space.
 User stack allocation also accepts `PageCount`, so spawn and execve callers
 classify the stack size as pages before frame allocation and stack slot mapping.
 
+Private user mappings convert syscall byte lengths into `PageCount` after ABI
+validation, then keep successful allocation and unmap page counts typed until
+scheduler diagnostics fold them into aggregate counters.
+
 This keeps the guard-page stack work incremental:
 
 - reserve `N + 1` virtual pages for each guarded kernel stack,
@@ -228,6 +233,8 @@ mapping ownership and cache rules are defined. The static user layout keeps the
 `0x0000_7fff_f000_0000`. `munmap` removes page-aligned ranges inside tracked
 private mapping records, splits the remaining sides into separate records when
 needed, and returns removed physical frames to the `UserMapping` owner pool.
+Mapping records and successful unmap results use `PageCount` for non-zero page
+counts; lifetime and diagnostic totals remain `u64` because they can be zero.
 
 The one-shot user runtime registers the boot-owned frame allocator only while
 user code can issue syscalls, so syscall dispatch can allocate and free user

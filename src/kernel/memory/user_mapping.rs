@@ -1,7 +1,9 @@
 //! User private mapping tracking and page mapping.
 
 use super::{
-    address::{FrameCount, PhysicalFrameRange, UserPageStart, UserVirtualAddress, VirtAddr},
+    address::{
+        FrameCount, PageCount, PhysicalFrameRange, UserPageStart, UserVirtualAddress, VirtAddr,
+    },
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     user_layout::{USER_MAPPING_BASE, USER_MAPPING_END},
@@ -16,7 +18,7 @@ const MAX_USER_MAPPINGS: usize = 32;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserMappingAllocation {
     start: UserVirtualAddress,
-    page_count: u64,
+    page_count: PageCount,
     replaced_page_count: u64,
 }
 
@@ -26,8 +28,8 @@ impl UserMappingAllocation {
         self.start
     }
 
-    /// Return the number of mapped 4 KiB pages.
-    pub const fn page_count(self) -> u64 {
+    /// Return the typed count of mapped 4 KiB pages.
+    pub const fn page_count(self) -> PageCount {
         self.page_count
     }
 
@@ -40,15 +42,13 @@ impl UserMappingAllocation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct UserMapping {
     start: UserVirtualAddress,
-    page_count: u64,
+    page_count: PageCount,
     source: UserMappingSource,
 }
 
 impl UserMapping {
     fn end_exclusive(self) -> Option<u64> {
-        self.start
-            .as_u64()
-            .checked_add(self.page_count.checked_mul(PAGE_SIZE)?)
+        self.start.as_u64().checked_add(self.page_count.byte_len())
     }
 }
 
@@ -182,9 +182,7 @@ impl UserMappings {
     ) -> Result<UserMappingAllocation, UserMappingError> {
         let length = plan.length();
         let page_count = page_count_for_length(length).ok_or(UserMappingError::InvalidRequest)?;
-        let byte_len = page_count
-            .checked_mul(PAGE_SIZE)
-            .ok_or(UserMappingError::InvalidRequest)?;
+        let byte_len = page_count.byte_len();
         let start_address = self.start_address_for_placement(plan.placement(), byte_len)?;
         let end_address = start_address
             .checked_add(byte_len)
@@ -254,13 +252,13 @@ impl UserMappings {
         frame_allocator: &mut PhysicalFrameAllocator,
         start_address: u64,
         length: u64,
-    ) -> Option<u64> {
+    ) -> Option<PageCount> {
         if !start_address.is_multiple_of(PAGE_SIZE) {
             return None;
         }
         let start = user_page_start_from_raw(start_address)?;
         let page_count = page_count_for_length(length)?;
-        let end_address = start_address.checked_add(page_count.checked_mul(PAGE_SIZE)?)?;
+        let end_address = start_address.checked_add(page_count.byte_len())?;
         let record_index = self.find_containing_record_index(start_address, end_address)?;
         let record = self.records[record_index].expect("containing record must exist");
         let record_start = record.start.as_u64();
@@ -287,10 +285,10 @@ impl UserMappings {
         );
         crate::log_info!(
             "memory",
-            "User {} mapping unmapped: start={:#x} pages={} records={} active_pages={}",
+            "User {} mapping unmapped: start={:#x} pages={} records={} active_pages={} page_count_typed=true",
             source.as_str(),
             start.as_u64(),
-            page_count,
+            page_count.as_u64(),
             self.active_records(),
             self.active_pages()
         );
@@ -301,7 +299,7 @@ impl UserMappings {
     pub fn active_pages(&self) -> u64 {
         self.records
             .iter()
-            .filter_map(|record| record.as_ref().map(|mapping| mapping.page_count))
+            .filter_map(|record| record.as_ref().map(|mapping| mapping.page_count.as_u64()))
             .fold(0_u64, u64::saturating_add)
     }
 
@@ -339,11 +337,12 @@ impl UserMappings {
         frame_allocator: &mut PhysicalFrameAllocator,
         start: UserPageStart,
         length: u64,
-        page_count: u64,
+        page_count: PageCount,
         writable: bool,
         initialize_page: &mut impl FnMut(u64, &mut [u8]) -> Result<(), UserMappingError>,
     ) -> Result<(), UserMappingError> {
         let flags = user_page_flags(writable);
+        let page_count = page_count.as_u64();
         let mut mapped_pages = 0_u64;
         while mapped_pages < page_count {
             let Some(page_start) = user_page_start(start, mapped_pages) else {
@@ -387,9 +386,9 @@ impl UserMappings {
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
         start: UserPageStart,
-        page_count: u64,
+        page_count: PageCount,
     ) {
-        for page_index in 0..page_count {
+        for page_index in 0..page_count.as_u64() {
             let page_start =
                 user_page_start(start, page_index).expect("tracked mapping page must be valid");
             assert!(
@@ -522,8 +521,9 @@ impl UserMappings {
             let overlap_pages = (overlap_end - overlap_start) / PAGE_SIZE;
             let overlap_start = user_page_start_from_raw(overlap_start)
                 .expect("replacement overlap start must be a valid user address");
+            let overlap_pages = page_count(overlap_pages);
             Self::unmap_pages(address_space, frame_allocator, overlap_start, overlap_pages);
-            replaced_pages = replaced_pages.saturating_add(overlap_pages);
+            replaced_pages = replaced_pages.saturating_add(overlap_pages.as_u64());
 
             let left_pages = (overlap_start.as_u64() - record_start) / PAGE_SIZE;
             let right_pages = (record_end - overlap_end) / PAGE_SIZE;
@@ -603,7 +603,7 @@ impl UserMappings {
             (_, 0) => {
                 self.records[record_index] = Some(UserMapping {
                     start: record.start,
-                    page_count: left_pages,
+                    page_count: page_count(left_pages),
                     source: record.source,
                 });
             }
@@ -612,7 +612,7 @@ impl UserMappings {
                     .expect("right split mapping start must be a valid user address");
                 self.records[record_index] = Some(UserMapping {
                     start: right_start.as_address(),
-                    page_count: right_pages,
+                    page_count: page_count(right_pages),
                     source: record.source,
                 });
             }
@@ -623,12 +623,12 @@ impl UserMappings {
                     .expect("right split mapping start must be a valid user address");
                 self.records[record_index] = Some(UserMapping {
                     start: record.start,
-                    page_count: left_pages,
+                    page_count: page_count(left_pages),
                     source: record.source,
                 });
                 self.records[split_record_index] = Some(UserMapping {
                     start: right_start.as_address(),
-                    page_count: right_pages,
+                    page_count: page_count(right_pages),
                     source: record.source,
                 });
             }
@@ -645,12 +645,12 @@ fn user_page_flags(writable: bool) -> PageTableFlags {
     flags
 }
 
-fn page_count_for_length(length: u64) -> Option<u64> {
+fn page_count_for_length(length: u64) -> Option<PageCount> {
     if length == 0 {
         return None;
     }
     let rounded_length = length.checked_add(PAGE_SIZE - 1)? & !(PAGE_SIZE - 1);
-    Some(rounded_length / PAGE_SIZE)
+    PageCount::new(rounded_length / PAGE_SIZE)
 }
 
 fn page_initialize_length(length: u64, page_index: u64) -> Option<usize> {
@@ -677,6 +677,10 @@ fn user_page_start_from_raw(address: u64) -> Option<UserPageStart> {
 
 const fn single_frame_count() -> FrameCount {
     FrameCount::new(1).expect("single-frame count must be valid")
+}
+
+fn page_count(count: u64) -> PageCount {
+    PageCount::new(count).expect("user mapping page count must be valid")
 }
 
 fn align_up_to_page(address: u64) -> Option<u64> {

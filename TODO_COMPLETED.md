@@ -136,6 +136,7 @@ active roadmap can list only unfinished work.
 - [x] Add `FrameCount` for frame allocator APIs.
 - [x] Add `PageCount` for kernel virtual range allocator APIs.
 - [x] Add `PageCount` for user stack APIs.
+- [x] Add `PageCount` for user mapping APIs.
 
 ### Address Space Lifecycle
 

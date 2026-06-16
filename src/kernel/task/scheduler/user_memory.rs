@@ -60,9 +60,10 @@ impl Scheduler {
             ),
             initialize_page,
         )?;
+        let mapped_page_count = allocation.page_count().as_u64();
         user_runtime.mapping_total_mapped_pages = user_runtime
             .mapping_total_mapped_pages
-            .saturating_add(allocation.page_count());
+            .saturating_add(mapped_page_count);
         user_runtime.mapping_total_released_pages = user_runtime
             .mapping_total_released_pages
             .saturating_add(allocation.replaced_page_count());
@@ -79,12 +80,12 @@ impl Scheduler {
         }
         crate::log_info!(
             "syscall",
-            "mmap -> task={} requested={:#x} start={:#x} length={} pages={} protection={:#x} flags={:#x} placement={} source={} active_pages={} file_private_records={}",
+            "mmap -> task={} requested={:#x} start={:#x} length={} pages={} protection={:#x} flags={:#x} placement={} source={} active_pages={} file_private_records={} page_count_typed=true",
             task_id,
             request.requested_address(),
             allocation.start().as_u64(),
             request.length(),
-            allocation.page_count(),
+            mapped_page_count,
             request.protection(),
             request.flags(),
             request.placement().as_str(),
@@ -113,9 +114,10 @@ impl Scheduler {
             start_address,
             length,
         )?;
+        let unmapped_page_count = unmapped_pages.as_u64();
         user_runtime.mapping_total_released_pages = user_runtime
             .mapping_total_released_pages
-            .saturating_add(unmapped_pages);
+            .saturating_add(unmapped_page_count);
         user_runtime.mapping_peak_active_pages = user_runtime
             .mapping_peak_active_pages
             .max(user_runtime.mappings.active_pages());
@@ -124,14 +126,14 @@ impl Scheduler {
             .max(user_runtime.mappings.active_records());
         crate::log_info!(
             "syscall",
-            "munmap -> task={} start={:#x} length={} pages={} unmapped=true active_pages={} active_records={}",
+            "munmap -> task={} start={:#x} length={} pages={} unmapped=true active_pages={} active_records={} page_count_typed=true",
             task_id,
             start_address,
             length,
-            unmapped_pages,
+            unmapped_page_count,
             user_runtime.mappings.active_pages(),
             user_runtime.mappings.active_records()
         );
-        Some(unmapped_pages)
+        Some(unmapped_page_count)
     }
 }
