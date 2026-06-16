@@ -10,7 +10,9 @@ use super::{
 use crate::kernel::memory::{
     address::{UserPageStart, UserVirtualAddress, VirtAddr},
     user_heap::UserHeapBreakRequest,
-    user_mapping::{UserMappingError, UserMappingPlacement, UserMappingSource},
+    user_mapping::{
+        UserMappingError, UserMappingPlacement, UserMappingSource, UserMappingUnmapRequest,
+    },
 };
 /// Handle a user heap break syscall.
 pub(super) fn sys_brk(requested_break: u64) -> u64 {
@@ -183,17 +185,14 @@ pub(super) fn sys_mmap(
 
 /// Handle a private memory unmapping syscall.
 pub(super) fn sys_munmap(start_address: u64, length: u64) -> u64 {
-    if start_address == 0 || length == 0 || !start_address.is_multiple_of(PAGE_SIZE) {
+    let Some(request) = UserMappingUnmapRequest::from_syscall_arguments(start_address, length)
+    else {
         return ERROR_INVALID_ARGUMENT;
-    }
+    };
 
     let Some(result) = crate::kernel::memory::runtime_allocator::with_user_runtime_frame_allocator(
         |frame_allocator| {
-            crate::kernel::task::process_current_user_unmapping(
-                frame_allocator,
-                start_address,
-                length,
-            )
+            crate::kernel::task::process_current_user_unmapping(frame_allocator, request)
         },
     ) else {
         return ERROR_NOT_IMPLEMENTED;

@@ -43,6 +43,9 @@ untyped cross-domain `u64` values:
 - `UserHeapBreakRequest` represents `brk` requests after syscall ABI address
   classification, so scheduler and heap code do not receive raw break
   addresses.
+- `UserMappingUnmapRequest` represents `munmap` requests after syscall ABI
+  address classification, so scheduler and mapping code do not receive raw
+  unmap start addresses.
 - `KernelStackGuardFault` stores guard, writable, and top addresses as
   `VirtAddr` after page-fault ABI values are classified at the kernel interrupt
   boundary.
@@ -77,9 +80,10 @@ untyped cross-domain `u64` values:
 - `process::UserProgramSpawnRequest::new(...)` and
   `user_stack::allocate_user_stack(...)` accept `PageCount` before mapping
   user stack pages.
-- `UserMappings` stores private mapping record counts as `PageCount`, and
-  `map_private(...)` / `unmap_range(...)` return typed page counts before
-  scheduler diagnostics fold them into aggregate counters.
+- `UserMappings` stores private mapping record counts as `PageCount`;
+  `map_private(...)` returns typed page counts, and `unmap_range(...)` accepts
+  a typed unmap request before returning typed page counts for scheduler
+  diagnostics.
 - `UserAddressSpace` represents a task-owned user PML4 root and is passed to
   ELF and user stack mapping helpers instead of relying on the active CR3.
 - `paging::map_kernel_writable_no_execute_range(...)` is the boundary that
@@ -137,7 +141,7 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   frames, and page count.
 - `kernel::memory::user_mapping::UserMappings` converts syscall byte lengths
   into `PageCount` after ABI validation, then uses typed page counts for mapping
-  records, successful allocations, and unmap results.
+  records, successful allocations, typed unmap requests, and unmap results.
 - `kernel::memory::user_heap::UserHeap` accepts `UserHeapBreakRequest` after
   `sys_brk` classifies the raw ABI value as either a current-break query or a
   validated user virtual address.
@@ -206,6 +210,8 @@ Continue introducing wrappers in small steps:
 - `UserReadableRange` and `UserWritableRange` for syscall copy direction before
   page-table permission checks.
 - `UserCString` for readable syscall string candidates before NUL validation.
+- `UserMappingUnmapRequest` for private `munmap` requests after syscall ABI
+  classification.
 - `DmaPhysicalAddress` for physical addresses that may be programmed into
   device descriptors. This now exists in `kernel::memory::address`.
 - `StorageDataAddress` for the active DMA data buffer passed through generic

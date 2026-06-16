@@ -18,7 +18,7 @@ reviewable unit before implementing it.
 - [ ] Replace raw `u64` address values in task metadata where feasible.
 - [ ] Replace raw `u64` address values in storage DMA setup boundaries.
 - [ ] Replace raw `u64` address values in ELF segment mapping boundaries.
-- [ ] Replace raw `u64` address values in syscall memory helpers.
+- [ ] Replace remaining raw `u64` address values in syscall memory helpers beyond typed `brk` and `munmap` requests.
 - [ ] Add conversion helpers with explicit checked failure modes.
 - [ ] Add docs for when raw numeric addresses are still allowed.
 - [ ] Add compile-time layout assertions where typed wrappers cross assembly-facing structs.

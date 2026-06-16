@@ -2,7 +2,7 @@
 
 use super::{
     PhysicalFrameAllocator, Scheduler, TaskKind, UserMappingError, UserMappingPlan,
-    UserMappingRequest, UserMappingSource,
+    UserMappingRequest, UserMappingSource, UserMappingUnmapRequest,
 };
 use crate::kernel::memory::user_heap::UserHeapBreakRequest;
 
@@ -100,8 +100,7 @@ impl Scheduler {
     pub(in crate::kernel::task::scheduler) fn process_current_user_unmapping(
         &mut self,
         frame_allocator: &mut PhysicalFrameAllocator,
-        start_address: u64,
-        length: u64,
+        request: UserMappingUnmapRequest,
     ) -> Option<u64> {
         let current_task = &mut self.tasks[self.current_index];
         let task_id = current_task.get_id();
@@ -109,12 +108,10 @@ impl Scheduler {
             return None;
         };
         let address_space = user_runtime.address_space?;
-        let unmapped_pages = user_runtime.mappings.unmap_range(
-            address_space,
-            frame_allocator,
-            start_address,
-            length,
-        )?;
+        let unmapped_pages =
+            user_runtime
+                .mappings
+                .unmap_range(address_space, frame_allocator, request)?;
         let unmapped_page_count = unmapped_pages.as_u64();
         user_runtime.mapping_total_released_pages = user_runtime
             .mapping_total_released_pages
@@ -127,10 +124,10 @@ impl Scheduler {
             .max(user_runtime.mappings.active_records());
         crate::log_info!(
             "syscall",
-            "munmap -> task={} start={:#x} length={} pages={} unmapped=true active_pages={} active_records={} page_count_typed=true",
+            "munmap -> task={} start={:#x} length={} pages={} unmapped=true active_pages={} active_records={} unmap_request_typed=true page_count_typed=true",
             task_id,
-            start_address,
-            length,
+            request.start().as_u64(),
+            request.length(),
             unmapped_page_count,
             user_runtime.mappings.active_pages(),
             user_runtime.mappings.active_records()

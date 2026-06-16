@@ -139,6 +139,7 @@ active roadmap can list only unfinished work.
 - [x] Add `PageCount` for user mapping APIs.
 - [x] Add `PageCount` for paging helper APIs.
 - [x] Add a typed `brk` user heap request boundary and invalid ABI smoke coverage.
+- [x] Add a typed `munmap` user mapping request boundary and storage smoke coverage.
 - [x] Classify kernel stack guard-fault addresses as `VirtAddr` inside the task boundary.
 
 ### Address Space Lifecycle

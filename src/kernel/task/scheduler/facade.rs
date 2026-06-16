@@ -5,8 +5,9 @@ use super::{
     KernelStackGuardFault, PhysicalFrameAllocator, PreemptionStateDiagnostics, Scheduler,
     SchedulerDiagnostics, SchedulerTaskSnapshot, SwitchAction, TaskEntry, UserAddressSpace,
     UserAddressSpaceReclaim, UserEntryArguments, UserMappingError, UserMappingRequest,
-    UserReadRequest, UserTaskExit, UserTaskSpawnRequest, UserTrapFrame, UserTrapFrameSource,
-    UserVirtualAddress, PREEMPTION_STATE, SCHEDULER, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
+    UserMappingUnmapRequest, UserReadRequest, UserTaskExit, UserTaskSpawnRequest, UserTrapFrame,
+    UserTrapFrameSource, UserVirtualAddress, PREEMPTION_STATE, SCHEDULER,
+    USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
 use crate::kernel::filesystem::{FileDescriptorTable, SpawnDescriptorInheritanceSnapshot};
 use crate::kernel::memory::address::VirtAddr;
@@ -231,13 +232,12 @@ pub fn process_current_user_mapping(
 /// Process a private `munmap` request for the currently running user task.
 pub fn process_current_user_unmapping(
     frame_allocator: &mut PhysicalFrameAllocator,
-    start_address: u64,
-    length: u64,
+    request: UserMappingUnmapRequest,
 ) -> Option<u64> {
     let mut scheduler = SCHEDULER.lock();
-    scheduler.as_mut().and_then(|scheduler| {
-        scheduler.process_current_user_unmapping(frame_allocator, start_address, length)
-    })
+    scheduler
+        .as_mut()
+        .and_then(|scheduler| scheduler.process_current_user_unmapping(frame_allocator, request))
 }
 
 /// Prepare the current user task to block until `wake_tick`.

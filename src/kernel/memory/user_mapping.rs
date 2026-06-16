@@ -117,6 +117,43 @@ impl UserMappingPlan {
     }
 }
 
+/// A private user unmapping request after syscall ABI address classification.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserMappingUnmapRequest {
+    start: UserPageStart,
+    length: u64,
+    page_count: PageCount,
+}
+
+impl UserMappingUnmapRequest {
+    /// Convert raw syscall `munmap` arguments into a private unmapping request.
+    pub fn from_syscall_arguments(start_address: u64, length: u64) -> Option<Self> {
+        let start = user_page_start_from_raw(start_address)?;
+        let page_count = page_count_for_length(length)?;
+
+        Some(Self {
+            start,
+            length,
+            page_count,
+        })
+    }
+
+    /// Return the first page in the unmapping request.
+    pub const fn start(self) -> UserPageStart {
+        self.start
+    }
+
+    /// Return the raw requested byte length for diagnostics.
+    pub const fn length(self) -> u64 {
+        self.length
+    }
+
+    /// Return the rounded 4 KiB page count covered by this request.
+    pub const fn page_count(self) -> PageCount {
+        self.page_count
+    }
+}
+
 /// Placement policy for a private user mapping request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UserMappingPlacement {
@@ -250,14 +287,11 @@ impl UserMappings {
         &mut self,
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
-        start_address: u64,
-        length: u64,
+        request: UserMappingUnmapRequest,
     ) -> Option<PageCount> {
-        if !start_address.is_multiple_of(PAGE_SIZE) {
-            return None;
-        }
-        let start = user_page_start_from_raw(start_address)?;
-        let page_count = page_count_for_length(length)?;
+        let start = request.start();
+        let page_count = request.page_count();
+        let start_address = start.as_u64();
         let end_address = start_address.checked_add(page_count.byte_len())?;
         let record_index = self.find_containing_record_index(start_address, end_address)?;
         let record = self.records[record_index].expect("containing record must exist");

@@ -25,7 +25,8 @@ use crate::kernel::memory::address_space::{self, UserAddressSpace, UserAddressSp
 use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
 use crate::kernel::memory::user_heap::UserHeap;
 use crate::kernel::memory::user_mapping::{
-    UserMappingError, UserMappingPlacement, UserMappingPlan, UserMappingSource, UserMappings,
+    UserMappingError, UserMappingPlacement, UserMappingPlan, UserMappingSource,
+    UserMappingUnmapRequest, UserMappings,
 };
 use crate::kernel::memory::virtual_allocator::{
     new_dynamic_mapping_allocator, KernelVirtualRangeAllocator,
