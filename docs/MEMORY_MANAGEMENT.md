@@ -38,6 +38,8 @@ The current physical frame allocator relies on these properties:
   read.
 - `FrameCount` construction rejects zero counts and byte-length overflow before
   frame allocator APIs accept contiguous frame counts.
+- `PageCount` construction rejects zero counts and byte-length overflow before
+  kernel virtual range allocator APIs accept virtual page counts.
 - `UserVirtualAddress` construction accepts only `VirtAddr`, so syscall and
   ELF loader raw address fields are classified before they enter user address
   wrappers.
@@ -152,6 +154,10 @@ The kernel now has a reusable allocator for reserved higher-half virtual
 address ranges intended for dynamic mappings. It reserves virtual addresses;
 page-table mapping, unmapping, and physical frame ownership remain separate
 responsibilities.
+
+The allocator accepts `PageCount` for managed-range construction and individual
+allocations, so callers classify raw page counts before reserving virtual
+address space.
 
 This keeps the guard-page stack work incremental:
 

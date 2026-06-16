@@ -1,6 +1,6 @@
 use crate::kernel::memory::{
     address::{
-        FrameCount, FramebufferPhysicalRange, KernelVirtualAddress, KernelVirtualRange,
+        FrameCount, FramebufferPhysicalRange, KernelVirtualAddress, KernelVirtualRange, PageCount,
         PhysAddr as KernelPhysAddr, PhysicalFrameRange, PhysicalFrameStart,
         VirtAddr as KernelVirtAddr,
     },
@@ -254,7 +254,7 @@ pub fn verify_kernel_dynamic_mapping_lifecycle(
     frame_allocator: &mut PhysicalFrameAllocator,
 ) -> bool {
     let mut virtual_allocator = new_dynamic_mapping_allocator();
-    let Some(virtual_range) = virtual_allocator.allocate_pages(2) else {
+    let Some(virtual_range) = virtual_allocator.allocate_pages(page_count(2)) else {
         return false;
     };
     let Some(physical_range) =
@@ -275,7 +275,7 @@ pub fn verify_kernel_dynamic_mapping_lifecycle(
     let unmapped = is_kernel_range_unmapped(virtual_range);
     let virtual_released = virtual_allocator.free_pages(virtual_range);
 
-    let Some(reused_virtual_range) = virtual_allocator.allocate_pages(2) else {
+    let Some(reused_virtual_range) = virtual_allocator.allocate_pages(page_count(2)) else {
         return false;
     };
     let Some(reused_physical_range) =
@@ -408,6 +408,10 @@ fn mapping_flags_for_address(address: KernelVirtAddr) -> Option<PageTableFlags> 
 
 const fn frame_count(count: u64) -> FrameCount {
     FrameCount::new(count).expect("paging frame count must be valid")
+}
+
+const fn page_count(count: u64) -> PageCount {
+    PageCount::new(count).expect("paging page count must be valid")
 }
 
 unsafe fn create_pml4(frame_allocator: &mut PhysicalFrameAllocator) -> PhysFrame {

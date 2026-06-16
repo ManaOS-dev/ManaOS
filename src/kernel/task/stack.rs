@@ -1,7 +1,7 @@
 //! Kernel task stack owner metadata.
 
 use crate::kernel::memory::address::{
-    FrameCount, KernelVirtualRange, PhysicalFrameRange, VirtAddr,
+    FrameCount, KernelVirtualRange, PageCount, PhysicalFrameRange, VirtAddr,
 };
 use crate::kernel::memory::frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator};
 use crate::kernel::memory::paging;
@@ -88,12 +88,18 @@ impl KernelStackGuardFault {
 
 struct KernelStackVirtualReservation {
     range: KernelVirtualRange,
-    writable_page_count: u64,
+    writable_page_count: PageCount,
 }
 
 impl KernelStackVirtualReservation {
-    fn new(allocator: &mut KernelVirtualRangeAllocator, writable_page_count: u64) -> Option<Self> {
-        let reserved_page_count = writable_page_count.checked_add(KERNEL_STACK_GUARD_PAGES)?;
+    fn new(
+        allocator: &mut KernelVirtualRangeAllocator,
+        writable_page_count: PageCount,
+    ) -> Option<Self> {
+        let reserved_page_count = writable_page_count
+            .as_u64()
+            .checked_add(KERNEL_STACK_GUARD_PAGES)?;
+        let reserved_page_count = PageCount::new(reserved_page_count)?;
         let range = allocator.allocate_pages(reserved_page_count)?;
         Some(Self {
             range,
@@ -106,8 +112,11 @@ impl KernelStackVirtualReservation {
     }
 
     fn guard_range(&self) -> KernelVirtualRange {
-        KernelVirtualRange::new(self.guard_page_start(), KERNEL_STACK_GUARD_PAGES)
-            .expect("kernel stack guard range must be valid")
+        KernelVirtualRange::new(
+            self.guard_page_start(),
+            page_count(KERNEL_STACK_GUARD_PAGES),
+        )
+        .expect("kernel stack guard range must be valid")
     }
 
     fn writable_start(&self) -> VirtAddr {
@@ -135,7 +144,7 @@ impl KernelStackVirtualReservation {
     }
 
     fn writable_page_count(&self) -> u64 {
-        self.writable_page_count
+        self.writable_page_count.as_u64()
     }
 }
 
@@ -184,11 +193,10 @@ impl KernelStack {
                 * usize::try_from(DEFAULT_KERNEL_STACK_WRITABLE_PAGES)
                     .expect("kernel stack page count must fit in usize")
         );
-        let virtual_reservation = KernelStackVirtualReservation::new(
-            virtual_range_allocator,
-            DEFAULT_KERNEL_STACK_WRITABLE_PAGES,
-        )
-        .expect("kernel stack virtual reservation allocator must have capacity");
+        let writable_page_count = page_count(DEFAULT_KERNEL_STACK_WRITABLE_PAGES);
+        let virtual_reservation =
+            KernelStackVirtualReservation::new(virtual_range_allocator, writable_page_count)
+                .expect("kernel stack virtual reservation allocator must have capacity");
         let writable_frame_count = FrameCount::new(DEFAULT_KERNEL_STACK_WRITABLE_PAGES)
             .expect("kernel stack frame count must be valid");
         let physical_range = frame_allocator
@@ -327,4 +335,8 @@ impl KernelStack {
             virtual_pages,
         }
     }
+}
+
+const fn page_count(count: u64) -> PageCount {
+    PageCount::new(count).expect("kernel stack page count must be valid")
 }

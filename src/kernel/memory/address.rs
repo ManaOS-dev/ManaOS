@@ -146,27 +146,48 @@ impl KernelVirtualAddress {
     }
 }
 
+/// A non-zero count of 4 KiB virtual pages.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PageCount(u64);
+
+impl PageCount {
+    /// Create a non-zero page count with a representable byte length.
+    pub const fn new(count: u64) -> Option<Self> {
+        if count == 0 || count > u64::MAX / PAGE_SIZE {
+            None
+        } else {
+            Some(Self(count))
+        }
+    }
+
+    /// Return the raw page count as a `u64`.
+    pub const fn as_u64(self) -> u64 {
+        self.0
+    }
+
+    /// Return the byte length represented by this page count.
+    pub const fn byte_len(self) -> u64 {
+        self.0 * PAGE_SIZE
+    }
+}
+
 /// A reserved kernel virtual range for future dynamic mappings.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct KernelVirtualRange {
     start: VirtAddr,
-    page_count: u64,
+    page_count: PageCount,
 }
 
 impl KernelVirtualRange {
     /// Create a non-empty 4 KiB-aligned kernel virtual range.
-    pub const fn new(start: VirtAddr, page_count: u64) -> Option<Self> {
-        if page_count == 0
-            || !start.as_u64().is_multiple_of(PAGE_SIZE)
+    pub const fn new(start: VirtAddr, page_count: PageCount) -> Option<Self> {
+        if !start.as_u64().is_multiple_of(PAGE_SIZE)
             || start.as_u64() < KERNEL_DYNAMIC_MAPPING_START
         {
             return None;
         }
 
-        let Some(byte_len) = page_count.checked_mul(PAGE_SIZE) else {
-            return None;
-        };
-        let Some(_) = start.as_u64().checked_add(byte_len) else {
+        let Some(_) = start.as_u64().checked_add(page_count.byte_len()) else {
             return None;
         };
 
@@ -180,18 +201,12 @@ impl KernelVirtualRange {
 
     /// Return the number of 4 KiB pages in the range.
     pub const fn page_count(self) -> u64 {
-        self.page_count
+        self.page_count.as_u64()
     }
 
     /// Return the byte length of the range.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `page_count * 4096` overflows `u64`.
     pub const fn byte_len(self) -> u64 {
-        self.page_count
-            .checked_mul(PAGE_SIZE)
-            .expect("kernel virtual range byte length overflowed")
+        self.page_count.byte_len()
     }
 
     /// Return the first virtual address after this range.
@@ -482,6 +497,18 @@ pub fn verify_typed_frame_count() -> bool {
 
     valid_count.is_some_and(|frame_count| {
         frame_count.as_u64() == 2 && frame_count.byte_len() == 2 * PAGE_SIZE
+    }) && zero_count.is_none()
+        && overflowing_count.is_none()
+}
+
+/// Verify the typed virtual page count construction contract.
+pub fn verify_typed_page_count() -> bool {
+    let valid_count = PageCount::new(2);
+    let zero_count = PageCount::new(0);
+    let overflowing_count = PageCount::new((u64::MAX / PAGE_SIZE) + 1);
+
+    valid_count.is_some_and(|page_count| {
+        page_count.as_u64() == 2 && page_count.byte_len() == 2 * PAGE_SIZE
     }) && zero_count.is_none()
         && overflowing_count.is_none()
 }

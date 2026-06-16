@@ -61,8 +61,11 @@ untyped cross-domain `u64` values:
 - `KernelVirtualAddress` represents identity-mapped kernel virtual addresses
   such as the framebuffer backbuffer before display initialization converts it
   to a raw pointer.
-- `KernelVirtualRange` represents reserved higher-half kernel virtual ranges
-  for future dynamic mappings without implying that pages are already mapped.
+- `PageCount` and `KernelVirtualRange` represent non-zero virtual page counts
+  and reserved higher-half kernel virtual ranges for future dynamic mappings
+  without implying that pages are already mapped.
+- `KernelVirtualRangeAllocator::new(...)` and `allocate_pages(...)` accept
+  `PageCount` before reserving higher-half kernel virtual ranges.
 - `UserAddressSpace` represents a task-owned user PML4 root and is passed to
   ELF and user stack mapping helpers instead of relying on the active CR3.
 - `paging::map_kernel_writable_no_execute_range(...)` is the boundary that
@@ -106,6 +109,8 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - Internal page-table helpers use local `PhysAddr` / `VirtAddr` arithmetic for
   page alignment, range ends, and page walks before converting to `x86_64`
   address types at mapper boundaries.
+- `KernelVirtualRangeAllocator` accepts `PageCount` for managed virtual range
+  sizing and individual higher-half virtual reservations.
 - UEFI memory-map descriptors still expose raw physical starts because they are
   firmware ABI records; paging wraps those starts before internal identity-map
   calculations.
@@ -164,6 +169,8 @@ Continue introducing wrappers in small steps:
   range. This now exists in `kernel::memory::address`.
 - `KernelVirtualAddress` for mapped kernel virtual addresses. This now exists
   in `kernel::memory::address`.
+- `PageCount` for non-zero virtual page counts passed into kernel virtual range
+  allocator APIs.
 - `KernelVirtualRange` for non-empty page-aligned higher-half virtual ranges
   reserved by the kernel dynamic mapping allocator. This now exists in
   `kernel::memory::address`.
