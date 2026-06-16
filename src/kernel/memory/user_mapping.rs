@@ -313,17 +313,19 @@ impl UserMappings {
 
         let source = record.source;
         Self::unmap_pages(address_space, frame_allocator, start, page_count);
+        let right_start =
+            user_page_start_from_raw(end_address).expect("right split start must be page-aligned");
         self.apply_record_unmap(
             record_index,
             split_record_index,
             record,
             left_pages,
             right_pages,
-            end_address,
+            right_start,
         );
         crate::log_info!(
             "memory",
-            "User {} mapping unmapped: start={:#x} pages={} records={} active_pages={} page_count_typed=true",
+            "User {} mapping unmapped: start={:#x} pages={} records={} active_pages={} page_count_typed=true split_start_typed=true",
             source.as_str(),
             start.as_u64(),
             page_count.as_u64(),
@@ -566,6 +568,8 @@ impl UserMappings {
 
             let left_pages = (overlap_start.as_u64() - record_start) / PAGE_SIZE;
             let right_pages = (record_end - overlap_end) / PAGE_SIZE;
+            let right_start = user_page_start_from_raw(overlap_end)
+                .expect("replacement right split start must be page-aligned");
             let split_record_index = if left_pages > 0 && right_pages > 0 {
                 Some(
                     self.next_empty_record_index()
@@ -580,7 +584,7 @@ impl UserMappings {
                 record,
                 left_pages,
                 right_pages,
-                overlap_end,
+                right_start,
             );
         }
         replaced_pages
@@ -640,7 +644,7 @@ impl UserMappings {
         record: UserMapping,
         left_pages: u64,
         right_pages: u64,
-        right_start_address: u64,
+        right_start: UserPageStart,
     ) {
         match (left_pages, right_pages) {
             (0, 0) => self.records[record_index] = None,
@@ -652,8 +656,6 @@ impl UserMappings {
                 });
             }
             (0, _) => {
-                let right_start = user_page_start_from_raw(right_start_address)
-                    .expect("right split mapping start must be a valid user address");
                 self.records[record_index] = Some(UserMapping {
                     start: right_start.as_address(),
                     page_count: page_count(right_pages),
@@ -663,8 +665,6 @@ impl UserMappings {
             (_, _) => {
                 let split_record_index =
                     split_record_index.expect("middle unmap must reserve a split record");
-                let right_start = user_page_start_from_raw(right_start_address)
-                    .expect("right split mapping start must be a valid user address");
                 self.records[record_index] = Some(UserMapping {
                     start: record.start,
                     page_count: page_count(left_pages),

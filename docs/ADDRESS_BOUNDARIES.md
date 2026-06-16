@@ -103,7 +103,9 @@ untyped cross-domain `u64` values:
   `map_private(...)` returns typed page counts, and `unmap_range(...)` accepts
   a typed unmap request before returning typed page counts for scheduler
   diagnostics. Automatic placement search cursors are kept as `UserPageStart`
-  values before allocation diagnostics lower them for display.
+  values before allocation diagnostics lower them for display. Split record
+  starts created by `munmap` or fixed replacement are also passed as
+  `UserPageStart` values before record updates.
 - `task::UserMappingRequest` stores the requested `mmap` address only as
   `UserMappingPlacement`. Scheduler diagnostics derive the displayed requested
   address from that typed placement instead of retaining a raw syscall address.
@@ -173,6 +175,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   records, successful allocations, typed unmap requests, and unmap results.
   Its automatic placement cursor remains a `UserPageStart` so the next private
   mapping search cannot retain an unaligned raw virtual address.
+  When an unmap or fixed replacement splits a record, the right-side record
+  start is classified as `UserPageStart` before `UserMappings` mutates the
+  record table.
 - The scheduler-owned `mmap` request keeps fixed requested addresses as
   `UserPageStart` inside `UserMappingPlacement`; the syscall raw requested
   address is used only to choose that placement or reject the request.

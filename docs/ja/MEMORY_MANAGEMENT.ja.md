@@ -158,6 +158,7 @@ mapping request は fixed requested address を `UserMappingPlacement` 内の `U
 として保持し、scheduler diagnostics の raw 表示値は typed placement から導出します。
 automatic placement の next search cursor も `UserPageStart` として保持し、
 allocation diagnostics の formatting 前まで page-aligned typed value を保ちます。
+record split は record table を更新する前に右側 start を `UserPageStart` として分類します。
 mapping record と successful unmap result は non-zero page count を `PageCount` として保持し、
 lifetime / diagnostic total は 0 になり得るため `u64` counter のままです。
 

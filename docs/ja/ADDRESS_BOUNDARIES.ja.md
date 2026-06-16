@@ -55,7 +55,7 @@ kernel ownership boundary では型付き address に変換することです。
 - `KernelVirtualRange`: future dynamic mapping 用 higher-half kernel virtual range。
 - `KernelVirtualRangeAllocator::new(...)` と `allocate_pages(...)` は `PageCount` を受け取ります。
 - `process::UserProgramSpawnRequest::new(...)` と `user_stack::allocate_user_stack(...)` は user stack page mapping 前に `PageCount` を受け取ります。
-- `UserMappings` は private mapping record count を `PageCount` として保持します。`map_private(...)` は typed page count を返し、`unmap_range(...)` は typed unmap request を受け取ってから scheduler diagnostics 用の typed page count を返します。automatic placement search cursor は allocation diagnostics の formatting 前まで `UserPageStart` として保持します。
+- `UserMappings` は private mapping record count を `PageCount` として保持します。`map_private(...)` は typed page count を返し、`unmap_range(...)` は typed unmap request を受け取ってから scheduler diagnostics 用の typed page count を返します。automatic placement search cursor と split record start は record update / diagnostics formatting 前まで `UserPageStart` として保持します。
 - `task::UserMappingRequest` は requested `mmap` address を `UserMappingPlacement`
   としてだけ保持します。scheduler diagnostics の requested address 表示は typed placement から導出し、
   raw syscall address を保持しません。
@@ -113,6 +113,8 @@ user virtual-memory task snapshot は heap base、heap break、private mapping n
 user stack allocation の page count は `PageCount` で分類してから frame allocation と stack slot mapping に進みます。
 private user mapping は syscall byte length を ABI validation 後に `PageCount` へ変換し、mapping record、successful allocation、unmap result で typed page count を使います。
 automatic placement cursor は `UserPageStart` のまま保持するため、次の private mapping search は unaligned raw virtual address を保持しません。
+`munmap` または fixed replacement が record を分割するとき、右側 record start は record table 更新前に
+`UserPageStart` として分類します。
 `mmap` request は fixed requested address を `UserMappingPlacement` 内の `UserPageStart`
 として保持します。syscall raw requested address は placement の選択または request rejection にだけ使います。
 `munmap` request は syscall ABI argument を `UserMappingUnmapRequest` へ分類してから scheduler と mapping tracker へ渡します。

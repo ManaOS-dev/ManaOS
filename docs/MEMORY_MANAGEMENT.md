@@ -243,8 +243,10 @@ Mapping requests keep fixed requested addresses as `UserPageStart` values
 inside `UserMappingPlacement`; scheduler diagnostics derive raw display values
 from that typed placement. Automatic placement keeps the next search cursor as
 `UserPageStart` before allocation diagnostics lower it for display. Mapping
-records and successful unmap results use `PageCount` for non-zero page counts;
-lifetime and diagnostic totals remain `u64` because they can be zero.
+record splits classify the right-side start as `UserPageStart` before mutating
+the record table. Mapping records and successful unmap results use `PageCount`
+for non-zero page counts; lifetime and diagnostic totals remain `u64` because
+they can be zero.
 
 The one-shot user runtime registers the boot-owned frame allocator only while
 user code can issue syscalls, so syscall dispatch can allocate and free user
