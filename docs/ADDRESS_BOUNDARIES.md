@@ -46,7 +46,7 @@ untyped cross-domain `u64` values:
   `PhysicalFrameStart` internally instead of crossing virtual and physical
   domains with raw `u64` parameters.
 - `paging::map_kernel_mmio_range(...)` now accepts `PhysAddr` for the MMIO
-  physical base address.
+  physical base address and returns `PageCount` for the mapped page coverage.
 - PCI AHCI discovery stores BAR5 as `PhysAddr` and keeps that type through
   AHCI controller initialization and HBA MMIO mapping.
 - `PhysicalFrameAllocator::add_region(...)` and `reserve_region*` accept
@@ -62,7 +62,8 @@ untyped cross-domain `u64` values:
   such as the framebuffer backbuffer before display initialization converts it
   to a raw pointer.
 - `PageCount` represents non-zero 4 KiB page counts before callers reserve
-  virtual ranges, allocate user stacks, or track private user mappings.
+  virtual ranges, allocate user stacks, track private user mappings, or map
+  paging helper byte ranges.
 - `KernelVirtualRange` represents reserved higher-half kernel virtual ranges
   for future dynamic mappings without implying that pages are already mapped.
 - `KernelVirtualRangeAllocator::new(...)` and `allocate_pages(...)` accept
@@ -180,7 +181,7 @@ Continue introducing wrappers in small steps:
 - `KernelVirtualAddress` for mapped kernel virtual addresses. This now exists
   in `kernel::memory::address`.
 - `PageCount` for non-zero 4 KiB page counts passed through kernel virtual
-  range allocator, user stack, and user mapping APIs.
+  range allocator, user stack, user mapping, and paging helper APIs.
 - `KernelVirtualRange` for non-empty page-aligned higher-half virtual ranges
   reserved by the kernel dynamic mapping allocator. This now exists in
   `kernel::memory::address`.

@@ -298,18 +298,19 @@ fn verify_local_apic_eoi_provider(
     // SAFETY: The MADT Local APIC address describes an MMIO register page, and
     // this boot-time mapping keeps it identity-mapped before arch-owned Local
     // APIC register access reads it for EOI-provider diagnostics.
-    unsafe {
+    let mapped_page_count = unsafe {
         kernel::memory::paging::map_kernel_mmio_range(
             frame_allocator,
             kernel::memory::address::PhysAddr::new(configured_local_apic.physical_address()),
             LOCAL_APIC_MMIO_MAPPING_SIZE,
-        );
-    }
+        )
+    };
     crate::log_info!(
         "arch",
-        "Local APIC MMIO mapped: address={:#x} size={}",
+        "Local APIC MMIO mapped: address={:#x} size={} pages={} page_count_typed=true",
         configured_local_apic.physical_address(),
-        LOCAL_APIC_MMIO_MAPPING_SIZE
+        LOCAL_APIC_MMIO_MAPPING_SIZE,
+        mapped_page_count.as_u64()
     );
     // SAFETY: The Local APIC MMIO page was just identity-mapped for boot-time
     // diagnostics, and this read does not enable APIC interrupt routing.
@@ -337,18 +338,19 @@ fn stage_ioapic_redirection_entries(
     // SAFETY: The MADT IOAPIC address describes an MMIO register page, and this
     // boot-time mapping keeps it identity-mapped as writable uncached memory
     // before arch-owned IOAPIC register access reads or writes it.
-    unsafe {
+    let mapped_page_count = unsafe {
         kernel::memory::paging::map_kernel_mmio_range(
             frame_allocator,
             kernel::memory::address::PhysAddr::new(configured_ioapic.physical_address()),
             IOAPIC_MMIO_MAPPING_SIZE,
-        );
-    }
+        )
+    };
     crate::log_info!(
         "arch",
-        "IOAPIC MMIO mapped: address={:#x} size={}",
+        "IOAPIC MMIO mapped: address={:#x} size={} pages={} page_count_typed=true",
         configured_ioapic.physical_address(),
-        IOAPIC_MMIO_MAPPING_SIZE
+        IOAPIC_MMIO_MAPPING_SIZE,
+        mapped_page_count.as_u64()
     );
     // SAFETY: The IOAPIC MMIO page was just identity-mapped for boot-time
     // access, and routing remains disabled because only masked entries are

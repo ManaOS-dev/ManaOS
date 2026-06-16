@@ -39,8 +39,8 @@ The current physical frame allocator relies on these properties:
 - `FrameCount` construction rejects zero counts and byte-length overflow before
   frame allocator APIs accept contiguous frame counts.
 - `PageCount` construction rejects zero counts and byte-length overflow before
-  kernel virtual range allocator, user stack, and private user mapping APIs
-  accept 4 KiB page counts.
+  kernel virtual range allocator, user stack, private user mapping, and paging
+  helper APIs accept 4 KiB page counts.
 - `UserVirtualAddress` construction accepts only `VirtAddr`, so syscall and
   ELF loader raw address fields are classified before they enter user address
   wrappers.
@@ -166,6 +166,10 @@ classify the stack size as pages before frame allocation and stack slot mapping.
 Private user mappings convert syscall byte lengths into `PageCount` after ABI
 validation, then keep successful allocation and unmap page counts typed until
 scheduler diagnostics fold them into aggregate counters.
+
+MMIO identity mapping converts byte ranges into `PageCount` before paging
+helpers walk 4 KiB pages. APIC smoke logs report the returned typed page count
+for Local APIC and IOAPIC register mappings.
 
 This keeps the guard-page stack work incremental:
 

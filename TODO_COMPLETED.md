@@ -137,6 +137,7 @@ active roadmap can list only unfinished work.
 - [x] Add `PageCount` for kernel virtual range allocator APIs.
 - [x] Add `PageCount` for user stack APIs.
 - [x] Add `PageCount` for user mapping APIs.
+- [x] Add `PageCount` for paging helper APIs.
 
 ### Address Space Lifecycle
 

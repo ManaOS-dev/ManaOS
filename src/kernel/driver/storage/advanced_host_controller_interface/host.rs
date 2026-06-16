@@ -20,14 +20,18 @@ pub(super) fn map_memory(
     // SAFETY: base address register 5 is reported by a PCI mass-storage SATA
     // controller and points to the Advanced Host Controller Interface host bus
     // adapter MMIO register block.
-    unsafe {
+    let mapped_page_count = unsafe {
         paging::map_kernel_mmio_range(
             frame_allocator,
             base_address_register5,
             HOST_BUS_ADAPTER_MEMORY_SIZE,
-        );
-    }
-    crate::log_debug!("ahci", "HBA MMIO mapping complete.");
+        )
+    };
+    crate::log_debug!(
+        "ahci",
+        "HBA MMIO mapping complete: pages={} page_count_typed=true",
+        mapped_page_count.as_u64()
+    );
 
     base_address_register5.as_usize() as *mut HbaMemory
 }

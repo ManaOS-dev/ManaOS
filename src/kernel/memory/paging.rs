@@ -87,6 +87,8 @@ pub fn is_user_range_mapped_writable(user_pointer: usize, length: usize) -> bool
 
 /// Identity-map a kernel MMIO range as writable and uncached.
 ///
+/// Returns the typed number of 4 KiB pages covered by the byte range.
+///
 /// # Panics
 ///
 /// Panics if the range is empty, overflows, or page-table mapping fails.
@@ -99,15 +101,9 @@ pub unsafe fn map_kernel_mmio_range(
     frame_allocator: &mut PhysicalFrameAllocator,
     physical_start: KernelPhysAddr,
     size: u64,
-) {
-    assert!(size > 0, "MMIO mapping size must be non-zero");
-
+) -> PageCount {
     let start_page_address = physical_start.align_down_to_page();
-    let end_address = physical_start
-        .checked_add(size - 1)
-        .expect("MMIO mapping end address overflowed");
-    let end_page_address = end_address.align_down_to_page();
-    let page_count = ((end_page_address.as_u64() - start_page_address.as_u64()) / PAGE_SIZE) + 1;
+    let page_count = page_count_for_byte_range(physical_start, size);
     let flags = PageTableFlags::PRESENT
         | PageTableFlags::WRITABLE
         | PageTableFlags::NO_CACHE
@@ -132,6 +128,7 @@ pub unsafe fn map_kernel_mmio_range(
             flags,
         );
     }
+    page_count
 }
 
 /// Map owned physical frames into a kernel-only writable non-executable range.
@@ -541,10 +538,10 @@ unsafe fn map_identity_pages(
     mapper: &mut OffsetPageTable,
     frame_allocator: &mut PhysicalFrameAllocator,
     start_address: KernelPhysAddr,
-    page_count: u64,
+    page_count: PageCount,
     flags: PageTableFlags,
 ) {
-    for index in 0..page_count {
+    for index in 0..page_count.as_u64() {
         let offset = index
             .checked_mul(PAGE_SIZE)
             .expect("identity mapping offset overflowed");
@@ -579,6 +576,19 @@ unsafe fn map_identity_pages(
             ),
         }
     }
+}
+
+fn page_count_for_byte_range(start_address: KernelPhysAddr, byte_len: u64) -> PageCount {
+    assert!(byte_len > 0, "MMIO mapping size must be non-zero");
+    let start_page_address = start_address.align_down_to_page();
+    let end_address = start_address
+        .checked_add(byte_len - 1)
+        .expect("MMIO mapping end address overflowed");
+    let end_page_address = end_address.align_down_to_page();
+    let count = ((end_page_address.as_u64() - start_page_address.as_u64()) / PAGE_SIZE)
+        .checked_add(1)
+        .expect("MMIO mapping page count overflowed");
+    PageCount::new(count).expect("MMIO mapping page count byte length overflowed")
 }
 
 unsafe fn map_framebuffer(
