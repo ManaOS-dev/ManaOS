@@ -61,11 +61,15 @@ untyped cross-domain `u64` values:
 - `KernelVirtualAddress` represents identity-mapped kernel virtual addresses
   such as the framebuffer backbuffer before display initialization converts it
   to a raw pointer.
-- `PageCount` and `KernelVirtualRange` represent non-zero virtual page counts
-  and reserved higher-half kernel virtual ranges for future dynamic mappings
-  without implying that pages are already mapped.
+- `PageCount` represents non-zero 4 KiB page counts before callers reserve
+  virtual ranges or allocate user stacks.
+- `KernelVirtualRange` represents reserved higher-half kernel virtual ranges
+  for future dynamic mappings without implying that pages are already mapped.
 - `KernelVirtualRangeAllocator::new(...)` and `allocate_pages(...)` accept
   `PageCount` before reserving higher-half kernel virtual ranges.
+- `process::UserProgramSpawnRequest::new(...)` and
+  `user_stack::allocate_user_stack(...)` accept `PageCount` before mapping
+  user stack pages.
 - `UserAddressSpace` represents a task-owned user PML4 root and is passed to
   ELF and user stack mapping helpers instead of relying on the active CR3.
 - `paging::map_kernel_writable_no_execute_range(...)` is the boundary that
@@ -118,9 +122,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 ### User Memory
 
 - `kernel::memory::user_stack::allocate_user_stack(address_space, ..., pages)
-  -> AllocatedUserStack` maps into a specific user address space and returns a
-  typed user stack range with base, top, physical backing frames, and page
-  count.
+  -> AllocatedUserStack` accepts `PageCount`, maps into a specific user address
+  space, and returns a typed user stack range with base, top, physical backing
+  frames, and page count.
 - `PreparedUserStack` exposes typed user virtual `stack_pointer`,
   `argument_values_pointer`, and `environment_values_pointer`.
 - Initial user stack argument layout uses a local `UserVirtualAddress` cursor;
@@ -169,8 +173,8 @@ Continue introducing wrappers in small steps:
   range. This now exists in `kernel::memory::address`.
 - `KernelVirtualAddress` for mapped kernel virtual addresses. This now exists
   in `kernel::memory::address`.
-- `PageCount` for non-zero virtual page counts passed into kernel virtual range
-  allocator APIs.
+- `PageCount` for non-zero 4 KiB page counts passed into kernel virtual range
+  allocator and user stack APIs.
 - `KernelVirtualRange` for non-empty page-aligned higher-half virtual ranges
   reserved by the kernel dynamic mapping allocator. This now exists in
   `kernel::memory::address`.

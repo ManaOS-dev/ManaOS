@@ -146,7 +146,7 @@ impl KernelVirtualAddress {
     }
 }
 
-/// A non-zero count of 4 KiB virtual pages.
+/// A non-zero count of 4 KiB pages.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PageCount(u64);
 

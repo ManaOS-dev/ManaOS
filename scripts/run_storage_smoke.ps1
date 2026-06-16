@@ -103,7 +103,7 @@ $expectedPatterns = @(
     "ELF segment mapped: .*perms=R-X",
     "ELF segment mapped: .*perms=R--",
     "ELF segment mapped: .*perms=RW-",
-    "User stack mapping verified: pages=4 .*guard_unmapped=true",
+    "User stack mapping verified: pages=4 .*guard_unmapped=true page_count_typed=true",
     "User program entry vectors staged: argument_count=2 environment_count=1",
     "User task spawned\. task_id=.* address_space=",
     "User task current directory inherited: parent=0 child=.* cwd=/",

@@ -42,7 +42,7 @@
 use alloc::{string::String, vec::Vec};
 
 use crate::kernel::memory::{
-    address::{UserCString, UserReadableRange, UserVirtualRange, UserWritableRange},
+    address::{PageCount, UserCString, UserReadableRange, UserVirtualRange, UserWritableRange},
     user_pointer,
 };
 use crate::kernel::task::{context::UserTrapFrame, UserTrapFrameSource};
@@ -84,8 +84,8 @@ const MAX_USER_STRING_LENGTH: usize = 256;
 const MAX_USER_ENTRY_ARGUMENT_COUNT: usize = 8;
 const MAX_USER_ENTRY_ENVIRONMENT_COUNT: usize = 8;
 const MAX_USER_ENTRY_COPIED_STRING_BYTES: usize = 4096;
-const EXECVE_USER_STACK_PAGES: u64 = 4;
-const SPAWN_USER_STACK_PAGES: u64 = 4;
+const EXECVE_USER_STACK_PAGES: PageCount = page_count(4);
+const SPAWN_USER_STACK_PAGES: PageCount = page_count(4);
 const PAGE_SIZE: u64 = 4096;
 const NANOSECONDS_PER_SECOND: u64 = 1_000_000_000;
 const NANOSECONDS_PER_TIMER_TICK: u64 =
@@ -610,7 +610,7 @@ fn sys_spawn(
         staging.path,
         entry_vectors.argument_count(),
         entry_vectors.environment_count(),
-        SPAWN_USER_STACK_PAGES
+        SPAWN_USER_STACK_PAGES.as_u64()
     );
     crate::log_info!(
         "syscall",
@@ -1345,4 +1345,8 @@ fn filesystem_error_to_linux(error: crate::kernel::filesystem::FileSystemError) 
         crate::kernel::filesystem::FileSystemError::IsDirectory => ERROR_IS_DIRECTORY,
         crate::kernel::filesystem::FileSystemError::WouldBlock => ERROR_TRY_AGAIN,
     }
+}
+
+const fn page_count(count: u64) -> PageCount {
+    PageCount::new(count).expect("syscall user stack page count must be valid")
 }

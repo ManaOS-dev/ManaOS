@@ -2,8 +2,8 @@
 
 use crate::kernel::memory::{
     address::{
-        FrameCount, PhysicalFrameRange, PhysicalFrameStart, UserPageStart, UserVirtualAddress,
-        VirtAddr,
+        FrameCount, PageCount, PhysicalFrameRange, PhysicalFrameStart, UserPageStart,
+        UserVirtualAddress, VirtAddr,
     },
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
@@ -26,7 +26,7 @@ pub struct AllocatedUserStack {
     base: UserVirtualAddress,
     top: UserVirtualAddress,
     physical_range: PhysicalFrameRange,
-    page_count: u64,
+    page_count: PageCount,
 }
 
 impl AllocatedUserStack {
@@ -40,8 +40,8 @@ impl AllocatedUserStack {
         self.top
     }
 
-    /// Return the number of writable 4 KiB pages in this stack.
-    pub fn page_count(&self) -> u64 {
+    /// Return the typed writable 4 KiB page count in this stack.
+    pub fn page_count(&self) -> PageCount {
         self.page_count
     }
 
@@ -51,9 +51,7 @@ impl AllocatedUserStack {
     }
 
     fn byte_len(self) -> u64 {
-        self.page_count
-            .checked_mul(PAGE_SIZE)
-            .expect("user stack byte length overflowed")
+        self.page_count.byte_len()
     }
 }
 
@@ -98,16 +96,19 @@ impl PreparedUserStack {
 pub fn allocate_user_stack(
     address_space: UserAddressSpace,
     frame_allocator: &mut PhysicalFrameAllocator,
-    pages: u64,
+    pages: PageCount,
 ) -> AllocatedUserStack {
-    assert!(pages > 0, "user stack must contain at least one page");
-    let frame_count = FrameCount::new(pages).expect("user stack frame count must be valid");
+    let frame_count =
+        FrameCount::new(pages.as_u64()).expect("user stack frame count must be valid");
     let physical_range = frame_allocator
         .allocate_frames_for(frame_count, FrameRangeOwner::UserStack)
-        .unwrap_or_else(|| panic!("OOM: failed to allocate {pages} pages for user stack"));
-    let stack_size = pages
-        .checked_mul(PAGE_SIZE)
-        .expect("user stack size overflowed");
+        .unwrap_or_else(|| {
+            panic!(
+                "OOM: failed to allocate {} pages for user stack",
+                pages.as_u64()
+            )
+        });
+    let stack_size = pages.byte_len();
     assert!(
         stack_size < USER_STACK_SLOT_BYTES - PAGE_SIZE,
         "user stack must fit inside one virtual stack slot"
@@ -127,7 +128,7 @@ pub fn allocate_user_stack(
         .checked_add(stack_size)
         .expect("user stack top address overflowed");
 
-    for index in 0..pages {
+    for index in 0..pages.as_u64() {
         let offset = index
             .checked_mul(PAGE_SIZE)
             .expect("user stack mapping offset overflowed");
@@ -274,15 +275,11 @@ pub fn allocate_and_map_user_page(
 ///
 /// # Panics
 ///
-/// Panics if the stack has no pages or the stack size overflows.
+/// Panics if the stack size cannot fit the host `usize` type.
 pub fn verify_user_stack_mapping(
     address_space: UserAddressSpace,
     stack: AllocatedUserStack,
 ) -> bool {
-    assert!(
-        stack.page_count() > 0,
-        "user stack verification requires at least one page"
-    );
     let stack_size =
         usize::try_from(stack.byte_len()).expect("user stack verification size overflowed");
     let guard_page = stack

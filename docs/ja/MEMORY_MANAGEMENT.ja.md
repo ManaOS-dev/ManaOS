@@ -37,7 +37,7 @@ physical frame allocator は、以下の前提に依存します。
 - `FrameCount` construction は zero count と byte-length overflow を拒否してから、frame
   allocator API に contiguous frame count を渡します。
 - `PageCount` construction は zero count と byte-length overflow を拒否してから、kernel
-  virtual range allocator API に virtual page count を渡します。
+  virtual range allocator API と user stack API に 4 KiB page count を渡します。
 - `UserVirtualAddress` construction は `VirtAddr` だけを受け取るため、syscall や ELF loader の
   raw address field は user address wrapper に入る前に分類してから渡します。
 - user page mapping/unmapping API は `UserPageStart` を要求するため、page table を変更する前に
@@ -118,6 +118,8 @@ kernel には dynamic mapping 用の reusable higher-half virtual address range 
 
 allocator は managed range construction と個別 allocation に `PageCount` を受け取るため、
 caller は virtual address space を予約する前に raw page count を分類します。
+user stack allocation も `PageCount` を受け取るため、spawn / execve caller は stack size を
+page count として分類してから frame allocation と stack slot mapping に進みます。
 
 guarded stack work では以下のように使います。
 

@@ -20,7 +20,7 @@ use crate::kernel::{
     elf::{self, LoadedElf},
     filesystem::{self, FileDescriptor, FileSystemError, FileType},
     memory::{
-        address::UserVirtualAddress,
+        address::{PageCount, UserVirtualAddress},
         address_space::{self, UserAddressSpace},
         frame_allocator::PhysicalFrameAllocator,
         user_stack::{self, AllocatedUserStack, PreparedUserStack},
@@ -45,7 +45,7 @@ const ERROR_NOT_SUPPORTED: isize = -95;
 pub struct UserProgramSpawnRequest<'a> {
     path: &'a str,
     entry_vectors: UserProgramEntryVectors<'a>,
-    user_stack_pages: u64,
+    user_stack_pages: PageCount,
     kernel_probe_address: Option<usize>,
 }
 
@@ -54,7 +54,7 @@ impl<'a> UserProgramSpawnRequest<'a> {
     pub const fn new(
         path: &'a str,
         entry_vectors: UserProgramEntryVectors<'a>,
-        user_stack_pages: u64,
+        user_stack_pages: PageCount,
     ) -> Self {
         Self {
             path,
@@ -237,7 +237,7 @@ fn load_user_elf(
 fn allocate_and_verify_user_stack(
     frame_allocator: &mut PhysicalFrameAllocator,
     user_address_space: UserAddressSpace,
-    user_stack_pages: u64,
+    user_stack_pages: PageCount,
 ) -> AllocatedUserStack {
     let user_stack =
         user_stack::allocate_user_stack(user_address_space, frame_allocator, user_stack_pages);
@@ -247,8 +247,8 @@ fn allocate_and_verify_user_stack(
     );
     crate::log_info!(
         "memory",
-        "User stack mapping verified: pages={} base={:#x} top={:#x} guard_unmapped=true",
-        user_stack.page_count(),
+        "User stack mapping verified: pages={} base={:#x} top={:#x} guard_unmapped=true page_count_typed=true",
+        user_stack.page_count().as_u64(),
         user_stack.base().as_u64(),
         user_stack.top().as_u64()
     );

@@ -7,6 +7,8 @@ pub use scheduler_diagnostics::{
     verify_scheduler_task_snapshots,
 };
 
+use crate::kernel::memory::address::PageCount;
+
 /// Number of active user processes spawned by the storage smoke lifecycle.
 pub const USER_SMOKE_PARENT_TASK_COUNT: usize = 5;
 /// Number of user-spawned child processes created by marked smoke parents.
@@ -40,7 +42,7 @@ const ACTIVE_USER_DRAIN_SPIN_LIMIT: usize = 10_000_000;
 fn spawn_user_smoke_task(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
     user_elf_path: &str,
-    user_stack_pages: u64,
+    user_stack_pages: PageCount,
 ) -> u64 {
     let user_entry_arguments: [&[u8]; 2] = [user_elf_path.as_bytes(), b"--storage-smoke"];
     let user_entry_environment: [&[u8]; 1] = [b"MANAOS_BOOT=storage-smoke"];
@@ -60,21 +62,21 @@ fn spawn_user_smoke_task(
 
 fn spawn_wait_user_smoke_task(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
-    user_stack_pages: u64,
+    user_stack_pages: PageCount,
 ) -> u64 {
     spawn_file_demo_marker_task(frame_allocator, user_stack_pages, b"--spawn-wait-smoke")
 }
 
 fn spawn_orphan_parent_user_smoke_task(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
-    user_stack_pages: u64,
+    user_stack_pages: PageCount,
 ) -> u64 {
     spawn_file_demo_marker_task(frame_allocator, user_stack_pages, b"--orphan-parent-smoke")
 }
 
 fn spawn_file_demo_marker_task(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
-    user_stack_pages: u64,
+    user_stack_pages: PageCount,
     marker_argument: &[u8],
 ) -> u64 {
     let user_elf_path = "/disk/bin/file_demo";
@@ -95,7 +97,7 @@ fn spawn_file_demo_marker_task(
 
 fn spawn_user_shell_smoke_task(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
-    user_stack_pages: u64,
+    user_stack_pages: PageCount,
 ) -> u64 {
     crate::kernel::driver::input::keyboard::clear_stdin_buffer();
     let original_file_descriptors = crate::kernel::task::clone_current_file_descriptor_table()
@@ -128,7 +130,7 @@ pub fn run_user_smoke_demo(
 ) {
     crate::kernel::task::set_preemption_enabled(false);
 
-    let user_stack_pages = 4;
+    let user_stack_pages = page_count(4);
     let user_elf_path = "/disk/bin/smoke_demo";
     verify_spawn_path_errno_smoke(frame_allocator, user_stack_pages);
     let user_task_ids = [
@@ -189,7 +191,7 @@ pub fn run_user_smoke_demo(
 
 fn run_initial_user_shell_smoke(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
-    user_stack_pages: u64,
+    user_stack_pages: PageCount,
 ) {
     let user_task_id = spawn_user_shell_smoke_task(frame_allocator, user_stack_pages);
     assert!(
@@ -572,7 +574,7 @@ fn assert_distinct_user_task_ids(user_task_ids: [u64; USER_SMOKE_PARENT_TASK_COU
 
 fn verify_spawn_path_errno_smoke(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
-    user_stack_pages: u64,
+    user_stack_pages: PageCount,
 ) {
     let missing_result = verify_spawn_error(
         frame_allocator,
@@ -621,7 +623,7 @@ fn verify_spawn_path_errno_smoke(
 fn verify_spawn_error(
     frame_allocator: &mut crate::kernel::memory::frame_allocator::PhysicalFrameAllocator,
     path: &str,
-    user_stack_pages: u64,
+    user_stack_pages: PageCount,
     expected_error: crate::kernel::process::UserProgramSpawnError,
 ) -> isize {
     let entry_arguments: [&[u8]; 0] = [];
@@ -637,6 +639,10 @@ fn verify_spawn_error(
         "spawn path failure must classify the expected error"
     );
     error.as_syscall_result()
+}
+
+const fn page_count(count: u64) -> PageCount {
+    PageCount::new(count).expect("user smoke stack page count must be valid")
 }
 
 fn verify_bootstrap_child_exit_collection(user_task_ids: [u64; USER_SMOKE_PARENT_TASK_COUNT]) {
