@@ -119,20 +119,26 @@ pub fn verify_frame_allocator_rules() -> bool {
 pub fn verify_memory_address_wrapper_rules() -> bool {
     let user_virtual_address_ok = kernel::memory::address::verify_typed_user_virtual_address();
     let user_page_start_ok = kernel::memory::address::verify_typed_user_page_start();
+    let user_virtual_range_ok = kernel::memory::address::verify_typed_user_virtual_range();
     let frame_count_ok = kernel::memory::address::verify_typed_frame_count();
     let page_count_ok = kernel::memory::address::verify_typed_page_count();
-    let passed = user_virtual_address_ok && user_page_start_ok && frame_count_ok && page_count_ok;
+    let passed = user_virtual_address_ok
+        && user_page_start_ok
+        && user_virtual_range_ok
+        && frame_count_ok
+        && page_count_ok;
     if passed {
         crate::log_info!(
             "memory",
-            "Memory address wrapper self-checks passed: user_virtual_address=true user_page_start=true frame_count=true page_count=true"
+            "Memory address wrapper self-checks passed: user_virtual_address=true user_page_start=true user_virtual_range=true frame_count=true page_count=true"
         );
     } else {
         crate::log_error!(
             "memory",
-            "Memory address wrapper self-checks failed: user_virtual_address={} user_page_start={} frame_count={} page_count={}",
+            "Memory address wrapper self-checks failed: user_virtual_address={} user_page_start={} user_virtual_range={} frame_count={} page_count={}",
             user_virtual_address_ok,
             user_page_start_ok,
+            user_virtual_range_ok,
             frame_count_ok,
             page_count_ok
         );

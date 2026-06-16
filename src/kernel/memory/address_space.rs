@@ -3,7 +3,7 @@
 use super::{
     address::{
         FrameCount, PhysAddr, PhysicalFrameRange, PhysicalFrameStart, UserPageStart,
-        UserVirtualAddress, VirtAddr,
+        UserReadableRange, UserVirtualAddress, UserVirtualRange, UserWritableRange, VirtAddr,
     },
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
 };
@@ -18,7 +18,6 @@ use x86_64::{
 };
 
 const PAGE_SIZE: u64 = 4096;
-const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 const PROCESS_USER_PML4_START: usize = 128;
 const PROCESS_USER_PML4_END_EXCLUSIVE: usize = 256;
 const USER_ADDRESS_SPACE_RECLAIM_PROBE: u64 = 0x0000_4000_0000_0000;
@@ -131,15 +130,14 @@ impl UserAddressSpace {
     }
 
     /// Return whether the range is mapped as readable non-executable user data.
-    pub fn is_user_range_mapped_readable(self, user_pointer: usize, length: usize) -> bool {
-        self.validate_user_mapping(user_pointer, length, PageTableFlags::NO_EXECUTE)
+    pub fn is_user_range_mapped_readable(self, range: UserReadableRange) -> bool {
+        self.validate_user_mapping(range.as_range(), PageTableFlags::NO_EXECUTE)
     }
 
     /// Return whether the range is mapped as writable non-executable user data.
-    pub fn is_user_range_mapped_writable(self, user_pointer: usize, length: usize) -> bool {
+    pub fn is_user_range_mapped_writable(self, range: UserWritableRange) -> bool {
         self.validate_user_mapping(
-            user_pointer,
-            length,
+            range.as_range(),
             PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
         )
     }
@@ -190,35 +188,32 @@ impl UserAddressSpace {
         user_stack_pointer: usize,
         user_entry_pointer: usize,
     ) -> bool {
-        self.is_user_range_mapped_readable(user_stack_pointer, 1)
-            && self.is_user_range_mapped_writable(user_stack_pointer, 1)
-            && !self.is_user_range_mapped_readable(user_entry_pointer, 1)
-            && !self.is_user_range_mapped_writable(user_entry_pointer, 1)
+        let Some(user_stack_read_range) = readable_single_byte_range(user_stack_pointer) else {
+            return false;
+        };
+        let Some(user_stack_write_range) = writable_single_byte_range(user_stack_pointer) else {
+            return false;
+        };
+        let Some(user_entry_read_range) = readable_single_byte_range(user_entry_pointer) else {
+            return false;
+        };
+        let Some(user_entry_write_range) = writable_single_byte_range(user_entry_pointer) else {
+            return false;
+        };
+
+        self.is_user_range_mapped_readable(user_stack_read_range)
+            && self.is_user_range_mapped_writable(user_stack_write_range)
+            && !self.is_user_range_mapped_readable(user_entry_read_range)
+            && !self.is_user_range_mapped_writable(user_entry_write_range)
     }
 
     fn validate_user_mapping(
         self,
-        user_pointer: usize,
-        length: usize,
+        range: UserVirtualRange,
         required_flags: PageTableFlags,
     ) -> bool {
-        if length == 0 {
-            return true;
-        }
-
-        if user_pointer == 0 {
-            return false;
-        }
-
-        let Some(last_byte_pointer) = user_pointer.checked_add(length - 1) else {
-            return false;
-        };
-        if last_byte_pointer >= USER_SPACE_END {
-            return false;
-        }
-
-        let first_page_start = VirtAddr::new(user_pointer as u64).align_down_to_page();
-        let last_page_start = VirtAddr::new(last_byte_pointer as u64).align_down_to_page();
+        let first_page_start = VirtAddr::new(range.start().as_u64()).align_down_to_page();
+        let last_page_start = VirtAddr::new(range.end_exclusive() - 1).align_down_to_page();
 
         let mut page_start = first_page_start;
         loop {
@@ -262,6 +257,22 @@ impl UserAddressSpace {
             TranslateResult::NotMapped | TranslateResult::InvalidFrameAddress(_) => None,
         }
     }
+}
+
+fn readable_single_byte_range(user_pointer: usize) -> Option<UserReadableRange> {
+    let range = user_single_byte_range(user_pointer)?;
+    Some(UserReadableRange::new(range))
+}
+
+fn writable_single_byte_range(user_pointer: usize) -> Option<UserWritableRange> {
+    let range = user_single_byte_range(user_pointer)?;
+    Some(UserWritableRange::new(range))
+}
+
+fn user_single_byte_range(user_pointer: usize) -> Option<UserVirtualRange> {
+    let pointer = u64::try_from(user_pointer).ok()?;
+    let start = UserVirtualAddress::new(VirtAddr::new(pointer))?;
+    UserVirtualRange::new(start, 1)
 }
 
 /// Record the kernel address-space root after paging is initialized.

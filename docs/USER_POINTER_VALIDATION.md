@@ -22,6 +22,9 @@ The implementation entry point is `kernel::memory::user_pointer`.
 - Non-zero syscall pointer arguments are converted from raw `u64` ABI values to
   `UserVirtualRange`, then wrapped as `UserReadableRange` or
   `UserWritableRange` before the copy helpers run.
+- Page-table permission probes consume those copy-direction wrappers. Raw
+  `usize` pointers are used only when creating the final kernel slice or reading
+  one already-classified user byte.
 - NUL-terminated path arguments are additionally wrapped as `UserCString`
   before `copy_cstr_from_user` scans readable bytes for the terminator.
 - Syscalls return Linux-like `-EFAULT` (`ERROR_BAD_ADDRESS`) when pointer
@@ -67,9 +70,8 @@ nonzero status storage through the waiting parent's address space.
 - Kernel/user mapping permission self-checks should prove that kernel-only pages
   are not `USER_ACCESSIBLE` and user pages carry the expected readable/writable
   permissions.
-- `UserReadableRange`, `UserWritableRange`, and `UserCString` encode syscall
-  pointer intent, but page-table permission checks still happen inside the copy
-  helpers.
+- `UserCString` still represents a candidate readable range until a terminating
+  NUL byte is found; it is not yet a fully validated C-string type.
 - Execute permission is enforced for syscall data pointers by rejecting
   executable user pages. Future instruction-fetch page-fault checks should
   still report executable permission faults separately.

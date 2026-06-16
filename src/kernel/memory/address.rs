@@ -489,6 +489,34 @@ pub fn verify_typed_user_page_start() -> bool {
         && low_address.is_some_and(|address| address.align_down_to_page().is_none())
 }
 
+/// Verify the typed user virtual range and copy-direction wrapper contracts.
+pub fn verify_typed_user_virtual_range() -> bool {
+    let start = UserVirtualAddress::new(VirtAddr::new(PAGE_SIZE))
+        .expect("test user virtual range start must be valid");
+    let valid_range = UserVirtualRange::new(start, 8);
+    let zero_length_rejected = UserVirtualRange::new(start, 0).is_none();
+    let ceiling_start = UserVirtualAddress::new(VirtAddr::new(USER_SPACE_END - 1))
+        .expect("last user byte address must be valid");
+    let overflow_rejected = UserVirtualRange::new(ceiling_start, 2).is_none();
+    let syscall_range = UserVirtualRange::from_syscall_arguments(PAGE_SIZE, 4);
+
+    valid_range.is_some_and(|range| {
+        let readable_range = UserReadableRange::new(range);
+        let writable_range = UserWritableRange::new(range);
+        range.start() == start
+            && range.byte_len() == 8
+            && range.end_exclusive() == PAGE_SIZE + 8
+            && readable_range.as_range() == range
+            && writable_range.as_range() == range
+    }) && zero_length_rejected
+        && overflow_rejected
+        && syscall_range.is_some_and(|range| {
+            range.start() == start
+                && range.byte_len() == 4
+                && range.end_exclusive() == PAGE_SIZE + 4
+        })
+}
+
 /// Verify the typed physical frame count construction contract.
 pub fn verify_typed_frame_count() -> bool {
     let valid_count = FrameCount::new(2);

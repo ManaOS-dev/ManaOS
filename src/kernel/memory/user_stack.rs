@@ -3,7 +3,7 @@
 use crate::kernel::memory::{
     address::{
         FrameCount, PageCount, PhysicalFrameRange, PhysicalFrameStart, UserPageStart,
-        UserVirtualAddress, VirtAddr,
+        UserReadableRange, UserVirtualAddress, UserVirtualRange, UserWritableRange, VirtAddr,
     },
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
@@ -188,7 +188,7 @@ pub fn prepare_initial_stack_bytes(
     let stack_size = usize::try_from(stack.byte_len())
         .expect("user stack size must fit in usize before preparing arguments");
     assert!(
-        address_space.is_user_range_mapped_writable(stack_base.as_usize(), stack_size,),
+        address_space.is_user_range_mapped_writable(writable_user_range(stack_base, stack_size)),
         "user entry arguments require a mapped writable user stack"
     );
     assert!(
@@ -287,12 +287,22 @@ pub fn verify_user_stack_mapping(
         .as_u64()
         .checked_sub(PAGE_SIZE)
         .expect("user stack guard address underflowed");
+    let guard_page = UserVirtualAddress::new(VirtAddr::new(guard_page))
+        .expect("user stack guard must be a valid user address");
 
-    address_space.is_user_range_mapped_writable(stack.base().as_usize(), stack_size)
-        && !address_space.is_user_range_mapped_readable(
-            usize::try_from(guard_page).expect("user stack guard must fit in usize"),
-            PAGE_SIZE_USIZE,
-        )
+    address_space.is_user_range_mapped_writable(writable_user_range(stack.base(), stack_size))
+        && !address_space
+            .is_user_range_mapped_readable(readable_user_range(guard_page, PAGE_SIZE_USIZE))
+}
+
+fn readable_user_range(start: UserVirtualAddress, byte_len: usize) -> UserReadableRange {
+    let range = UserVirtualRange::new(start, byte_len).expect("user readable range must be valid");
+    UserReadableRange::new(range)
+}
+
+fn writable_user_range(start: UserVirtualAddress, byte_len: usize) -> UserWritableRange {
+    let range = UserVirtualRange::new(start, byte_len).expect("user writable range must be valid");
+    UserWritableRange::new(range)
 }
 
 struct UserStackCursor {

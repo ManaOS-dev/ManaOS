@@ -31,6 +31,9 @@ kernel ownership boundary では型付き address に変換することです。
 - `DmaPhysicalAddress`: AHCI descriptor、FIS buffer、command table、PRDT へ program できる physical address。
 - `UserVirtualAddress` / `UserVirtualRange`: syscall copy validation 前の non-null user virtual address と byte range。
 - `UserReadableRange` / `UserWritableRange` / `UserCString`: copy direction と string policy。
+- user data page-table permission probe は final raw slice creation 前に
+  `UserReadableRange` / `UserWritableRange` を受け取ります。raw `usize` pointer は
+  最後の kernel slice / byte read boundary と diagnostic ABI input に閉じます。
 - `UserReadRequest`: syscall ABI pointer classification 後の pending `read` destination を `UserWritableRange` として保持し、scheduler wait state が raw user pointer を保持しないようにします。
 - blocking `waitpid`: syscall ABI pointer classification 後の deferred status-write destination を `UserWritableRange` として保持し、scheduler wait completion が raw user pointer を保持しないようにします。
 - `UserHeapBreakRequest`: syscall ABI address classification 後の `brk` request。scheduler と heap code は raw break address を受け取りません。
@@ -90,6 +93,9 @@ keyboard-backed `read` の pending wait は、task address space が再び activ
 `UserWritableRange` として保持し、copy 前に page-table permission を再検証します。
 blocking `waitpid` の pending wait は、parent task address space が再び active になるまで optional status destination を
 `UserWritableRange` として保持し、wait status 書き込み前に page-table permission を再検証します。
+`paging` と per-process `UserAddressSpace` の user data permission check は
+`UserReadableRange` または `UserWritableRange` を受け取ります。syscall pointer classification 後に
+raw pointer / length pair を受け取りません。
 `brk` request は `sys_brk` で raw ABI value を current-break query または validated user virtual address に分類してから `UserHeap` へ渡します。
 kernel stack guard-fault lookup は `kernel::interrupt` で raw architecture page-fault address を `VirtAddr` へ分類してから scheduler boundary へ渡します。
 user entry と timer-resume の handoff は、選択した user task の kernel stack top を `VirtAddr` として保持します。architecture provider call と `SYSCALL` entry stack-top atomic が残る raw lowering point です。

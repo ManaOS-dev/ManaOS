@@ -1,8 +1,8 @@
 use crate::kernel::memory::{
     address::{
         FrameCount, FramebufferPhysicalRange, KernelVirtualAddress, KernelVirtualRange, PageCount,
-        PhysAddr as KernelPhysAddr, PhysicalFrameRange, PhysicalFrameStart,
-        VirtAddr as KernelVirtAddr,
+        PhysAddr as KernelPhysAddr, PhysicalFrameRange, PhysicalFrameStart, UserReadableRange,
+        UserVirtualRange, UserWritableRange, VirtAddr as KernelVirtAddr,
     },
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     virtual_allocator::new_dynamic_mapping_allocator,
@@ -21,7 +21,6 @@ use x86_64::{
 };
 
 const PAGE_SIZE: u64 = 4096;
-const USER_SPACE_END: usize = 0x0000_8000_0000_0000;
 
 /// Initialize a new page table with identity mapping and switch to it.
 ///
@@ -72,15 +71,14 @@ pub unsafe fn init<'a>(
 }
 
 /// Return whether the whole user range is mapped as readable non-executable user data.
-pub fn is_user_range_mapped_readable(user_pointer: usize, length: usize) -> bool {
-    validate_user_mapping(user_pointer, length, PageTableFlags::NO_EXECUTE)
+pub fn is_user_range_mapped_readable(range: UserReadableRange) -> bool {
+    validate_user_mapping(range.as_range(), PageTableFlags::NO_EXECUTE)
 }
 
 /// Return whether the whole user range is mapped as writable non-executable user data.
-pub fn is_user_range_mapped_writable(user_pointer: usize, length: usize) -> bool {
+pub fn is_user_range_mapped_writable(range: UserWritableRange) -> bool {
     validate_user_mapping(
-        user_pointer,
-        length,
+        range.as_range(),
         PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
     )
 }
@@ -327,28 +325,9 @@ pub fn is_kernel_range_unmapped(range: KernelVirtualRange) -> bool {
     true
 }
 
-fn validate_user_mapping(
-    user_pointer: usize,
-    length: usize,
-    required_flags: PageTableFlags,
-) -> bool {
-    if length == 0 {
-        return true;
-    }
-
-    if user_pointer == 0 {
-        return false;
-    }
-
-    let Some(last_byte_pointer) = user_pointer.checked_add(length - 1) else {
-        return false;
-    };
-    if last_byte_pointer >= USER_SPACE_END {
-        return false;
-    }
-
-    let first_page_start = KernelVirtAddr::new(user_pointer as u64).align_down_to_page();
-    let last_page_start = KernelVirtAddr::new(last_byte_pointer as u64).align_down_to_page();
+fn validate_user_mapping(range: UserVirtualRange, required_flags: PageTableFlags) -> bool {
+    let first_page_start = KernelVirtAddr::new(range.start().as_u64()).align_down_to_page();
+    let last_page_start = KernelVirtAddr::new(range.end_exclusive() - 1).align_down_to_page();
 
     let (level_4_frame, _) = Cr3::read();
     let level_4_table = level_4_frame.start_address().as_u64() as *mut PageTable;
