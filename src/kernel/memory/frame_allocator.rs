@@ -1,6 +1,6 @@
 //! A reusable physical frame allocator with owner tracking.
 
-use super::address::{PhysAddr, PhysicalFrameRange, PhysicalFrameStart};
+use super::address::{FrameCount, PhysAddr, PhysicalFrameRange, PhysicalFrameStart};
 
 mod verification;
 
@@ -149,8 +149,8 @@ impl PhysicalFrameAllocator {
     }
 
     /// Register a conventional memory region (call before `ExitBootServices`).
-    pub fn add_region(&mut self, start: PhysAddr, pages: u64) {
-        let Some(region) = normalize_region(start, pages) else {
+    pub fn add_region(&mut self, start: PhysAddr, frame_count: FrameCount) {
+        let Some(region) = normalize_region(start, frame_count) else {
             return;
         };
 
@@ -159,13 +159,18 @@ impl PhysicalFrameAllocator {
     }
 
     /// Register a reserved physical memory region.
-    pub fn reserve_region(&mut self, start: PhysAddr, pages: u64) {
-        self.reserve_region_for(start, pages, FrameRangeOwner::FirmwareReserved);
+    pub fn reserve_region(&mut self, start: PhysAddr, frame_count: FrameCount) {
+        self.reserve_region_for(start, frame_count, FrameRangeOwner::FirmwareReserved);
     }
 
     /// Register a reserved physical memory region with an explicit owner.
-    pub fn reserve_region_for(&mut self, start: PhysAddr, pages: u64, owner: FrameRangeOwner) {
-        let Some(region) = normalize_reserved_region(start, pages) else {
+    pub fn reserve_region_for(
+        &mut self,
+        start: PhysAddr,
+        frame_count: FrameCount,
+        owner: FrameRangeOwner,
+    ) {
+        let Some(region) = normalize_reserved_region(start, frame_count) else {
             return;
         };
 
@@ -181,47 +186,48 @@ impl PhysicalFrameAllocator {
 
     /// Allocate a single 4KiB frame for `owner`.
     pub fn allocate_frame_for(&mut self, owner: FrameRangeOwner) -> Option<PhysicalFrameStart> {
-        self.allocate_frames_for(1, owner)
-            .map(PhysicalFrameRange::start)
+        self.allocate_frames_for(
+            FrameCount::new(1).expect("single-frame count must be valid"),
+            owner,
+        )
+        .map(PhysicalFrameRange::start)
     }
 
-    /// Allocate `n` contiguous 4KiB frames.
+    /// Allocate a contiguous 4KiB frame range.
     /// Contiguous allocation is only guaranteed within a single region.
-    pub fn allocate_frames(&mut self, n: u64) -> Option<PhysicalFrameRange> {
-        self.allocate_frames_for(n, FrameRangeOwner::UnknownUsed)
+    pub fn allocate_frames(&mut self, frame_count: FrameCount) -> Option<PhysicalFrameRange> {
+        self.allocate_frames_for(frame_count, FrameRangeOwner::UnknownUsed)
     }
 
-    /// Allocate `n` contiguous 4KiB frames for `owner`.
+    /// Allocate a contiguous 4KiB frame range for `owner`.
     ///
     /// Contiguous allocation is only guaranteed within a single region.
     pub fn allocate_frames_for(
         &mut self,
-        n: u64,
+        frame_count: FrameCount,
         owner: FrameRangeOwner,
     ) -> Option<PhysicalFrameRange> {
-        if n == 0 {
-            return None;
-        }
         assert_ne!(
             owner,
             FrameRangeOwner::Free,
             "allocated frames must record a non-free owner"
         );
 
+        let frames = frame_count.as_u64();
         for index in 0..self.tracked_count {
             let tracked = self.tracked_ranges[index];
-            if tracked.state != FrameRangeState::Free || tracked.region.pages < n {
+            if tracked.state != FrameRangeState::Free || tracked.region.pages < frames {
                 continue;
             }
 
             let candidate_region = Region {
                 start: tracked.region.start,
-                pages: n,
+                pages: frames,
             };
             if self.mark_range_used(candidate_region, owner) {
                 let start = PhysicalFrameStart::new(PhysAddr::new(candidate_region.start))
                     .expect("frame allocator returned an unaligned physical frame");
-                return PhysicalFrameRange::new(start, n);
+                return PhysicalFrameRange::new(start, frame_count);
             }
         }
 
@@ -237,7 +243,7 @@ impl PhysicalFrameAllocator {
         self.mark_range_free(
             Region {
                 start: range.start().as_u64(),
-                pages: range.page_count(),
+                pages: range.frame_count().as_u64(),
             },
             owner,
         )
@@ -679,9 +685,9 @@ impl PhysicalFrameAllocator {
     }
 }
 
-fn normalize_region(start: PhysAddr, pages: u64) -> Option<Region> {
+fn normalize_region(start: PhysAddr, frame_count: FrameCount) -> Option<Region> {
     let start = start.as_u64();
-    let byte_count = pages.checked_mul(FRAME_SIZE)?;
+    let byte_count = frame_count.byte_len();
     let end = start.checked_add(byte_count)?;
     let aligned_start = align_up(start.max(FRAME_SIZE), FRAME_SIZE)?;
     if aligned_start >= end {
@@ -694,9 +700,9 @@ fn normalize_region(start: PhysAddr, pages: u64) -> Option<Region> {
     })
 }
 
-fn normalize_reserved_region(start: PhysAddr, pages: u64) -> Option<Region> {
+fn normalize_reserved_region(start: PhysAddr, frame_count: FrameCount) -> Option<Region> {
     let start = start.as_u64();
-    let byte_count = pages.checked_mul(FRAME_SIZE)?;
+    let byte_count = frame_count.byte_len();
     let end = start.checked_add(byte_count)?;
     let aligned_start = align_up(start, FRAME_SIZE)?;
     if aligned_start >= end {

@@ -2,7 +2,8 @@
 
 use crate::kernel::memory::{
     address::{
-        PhysicalFrameRange, PhysicalFrameStart, UserPageStart, UserVirtualAddress, VirtAddr,
+        FrameCount, PhysicalFrameRange, PhysicalFrameStart, UserPageStart, UserVirtualAddress,
+        VirtAddr,
     },
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
@@ -100,8 +101,9 @@ pub fn allocate_user_stack(
     pages: u64,
 ) -> AllocatedUserStack {
     assert!(pages > 0, "user stack must contain at least one page");
+    let frame_count = FrameCount::new(pages).expect("user stack frame count must be valid");
     let physical_range = frame_allocator
-        .allocate_frames_for(pages, FrameRangeOwner::UserStack)
+        .allocate_frames_for(frame_count, FrameRangeOwner::UserStack)
         .unwrap_or_else(|| panic!("OOM: failed to allocate {pages} pages for user stack"));
     let stack_size = pages
         .checked_mul(PAGE_SIZE)

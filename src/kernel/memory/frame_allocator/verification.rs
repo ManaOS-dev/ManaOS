@@ -4,16 +4,20 @@ use super::{
     FrameAllocatorOwnerStatistics, FrameAllocatorStatistics, FrameRangeOwner,
     PhysicalFrameAllocator, FRAME_SIZE,
 };
-use crate::kernel::memory::address::{PhysAddr, PhysicalFrameStart};
+use crate::kernel::memory::address::{FrameCount, PhysAddr, PhysicalFrameStart};
+
+const fn frame_count(count: u64) -> FrameCount {
+    FrameCount::new(count).expect("verification frame count must be valid")
+}
 
 /// Verify the frame-zero skip behavior for multi-frame allocations.
 #[allow(dead_code)]
 pub fn verify_zero_address_skip_for_multi_frame_allocations() -> bool {
     let mut frame_allocator = PhysicalFrameAllocator::new();
-    frame_allocator.add_region(PhysAddr::new(0), 3);
+    frame_allocator.add_region(PhysAddr::new(0), frame_count(3));
 
     frame_allocator
-        .allocate_frames(2)
+        .allocate_frames(frame_count(2))
         .map(|range| range.start().as_u64())
         == Some(FRAME_SIZE)
 }
@@ -33,10 +37,10 @@ pub fn verify_typed_physical_frame_start() -> bool {
 #[allow(dead_code)]
 pub fn verify_reserved_used_and_free_range_tracking() -> bool {
     let mut frame_allocator = PhysicalFrameAllocator::new();
-    frame_allocator.reserve_region(PhysAddr::new(0), 1);
-    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 4);
+    frame_allocator.reserve_region(PhysAddr::new(0), frame_count(1));
+    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), frame_count(4));
 
-    if frame_allocator.allocate_frames(2).is_none() {
+    if frame_allocator.allocate_frames(frame_count(2)).is_none() {
         return false;
     }
 
@@ -52,7 +56,7 @@ pub fn verify_reserved_used_and_free_range_tracking() -> bool {
 #[allow(dead_code)]
 pub fn verify_duplicate_allocation_rejection() -> bool {
     let mut frame_allocator = PhysicalFrameAllocator::new();
-    frame_allocator.add_region(PhysAddr::new(0), 4);
+    frame_allocator.add_region(PhysAddr::new(0), frame_count(4));
 
     let Some(first_frame) = frame_allocator.allocate_frame() else {
         return false;
@@ -74,11 +78,11 @@ pub fn verify_duplicate_allocation_rejection() -> bool {
 #[allow(dead_code)]
 pub fn verify_contiguous_allocation_boundaries() -> bool {
     let mut frame_allocator = PhysicalFrameAllocator::new();
-    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 1);
-    frame_allocator.add_region(PhysAddr::new(3 * FRAME_SIZE), 2);
+    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), frame_count(1));
+    frame_allocator.add_region(PhysAddr::new(3 * FRAME_SIZE), frame_count(2));
 
     frame_allocator
-        .allocate_frames(2)
+        .allocate_frames(frame_count(2))
         .map(|range| range.start().as_u64())
         == Some(3 * FRAME_SIZE)
 }
@@ -87,8 +91,8 @@ pub fn verify_contiguous_allocation_boundaries() -> bool {
 #[allow(dead_code)]
 pub fn verify_reserved_range_exclusion() -> bool {
     let mut frame_allocator = PhysicalFrameAllocator::new();
-    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 4);
-    frame_allocator.reserve_region(PhysAddr::new(2 * FRAME_SIZE), 1);
+    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), frame_count(4));
+    frame_allocator.reserve_region(PhysAddr::new(2 * FRAME_SIZE), frame_count(1));
 
     let Some(first_frame) = frame_allocator.allocate_frame() else {
         return false;
@@ -111,16 +115,16 @@ pub fn verify_reserved_range_exclusion() -> bool {
 #[allow(dead_code)]
 pub fn verify_owner_tracking() -> bool {
     let mut frame_allocator = PhysicalFrameAllocator::new();
-    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 8);
+    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), frame_count(8));
 
     if frame_allocator
-        .allocate_frames_for(2, FrameRangeOwner::KernelHeap)
+        .allocate_frames_for(frame_count(2), FrameRangeOwner::KernelHeap)
         .is_none()
     {
         return false;
     }
     if frame_allocator
-        .allocate_frames_for(3, FrameRangeOwner::UserElf)
+        .allocate_frames_for(frame_count(3), FrameRangeOwner::UserElf)
         .is_none()
     {
         return false;
@@ -140,10 +144,10 @@ pub fn verify_owner_tracking() -> bool {
 #[allow(dead_code)]
 pub fn verify_released_frame_reuse() -> bool {
     let mut frame_allocator = PhysicalFrameAllocator::new();
-    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), 3);
+    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), frame_count(3));
 
     let Some(dynamic_range) =
-        frame_allocator.allocate_frames_for(2, FrameRangeOwner::DynamicKernelMapping)
+        frame_allocator.allocate_frames_for(frame_count(2), FrameRangeOwner::DynamicKernelMapping)
     else {
         return false;
     };
@@ -160,7 +164,8 @@ pub fn verify_released_frame_reuse() -> bool {
         frame_allocator.free_frames_for(dynamic_range, FrameRangeOwner::DynamicKernelMapping);
     let double_free_rejected =
         !frame_allocator.free_frames_for(dynamic_range, FrameRangeOwner::DynamicKernelMapping);
-    let Some(reused_range) = frame_allocator.allocate_frames_for(2, FrameRangeOwner::KernelStack)
+    let Some(reused_range) =
+        frame_allocator.allocate_frames_for(frame_count(2), FrameRangeOwner::KernelStack)
     else {
         return false;
     };
@@ -183,14 +188,22 @@ pub fn verify_released_frame_reuse() -> bool {
 #[allow(dead_code)]
 pub fn verify_explicit_owner_coverage() -> bool {
     let mut frame_allocator = PhysicalFrameAllocator::new();
-    frame_allocator.reserve_region_for(PhysAddr::new(0), 1, FrameRangeOwner::KernelImage);
-    frame_allocator.reserve_region_for(PhysAddr::new(FRAME_SIZE), 1, FrameRangeOwner::Mmio);
+    frame_allocator.reserve_region_for(
+        PhysAddr::new(0),
+        frame_count(1),
+        FrameRangeOwner::KernelImage,
+    );
+    frame_allocator.reserve_region_for(
+        PhysAddr::new(FRAME_SIZE),
+        frame_count(1),
+        FrameRangeOwner::Mmio,
+    );
     frame_allocator.reserve_region_for(
         PhysAddr::new(2 * FRAME_SIZE),
-        1,
+        frame_count(1),
         FrameRangeOwner::GuardPage,
     );
-    frame_allocator.add_region(PhysAddr::new(3 * FRAME_SIZE), 20);
+    frame_allocator.add_region(PhysAddr::new(3 * FRAME_SIZE), frame_count(20));
 
     let allocation_plan = [
         (FrameRangeOwner::PageTable, 1),
@@ -206,7 +219,10 @@ pub fn verify_explicit_owner_coverage() -> bool {
     ];
 
     for (owner, pages) in allocation_plan {
-        if frame_allocator.allocate_frames_for(pages, owner).is_none() {
+        if frame_allocator
+            .allocate_frames_for(frame_count(pages), owner)
+            .is_none()
+        {
             return false;
         }
     }

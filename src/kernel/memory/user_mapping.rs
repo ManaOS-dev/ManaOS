@@ -1,7 +1,7 @@
 //! User private mapping tracking and page mapping.
 
 use super::{
-    address::{PhysicalFrameRange, UserPageStart, UserVirtualAddress, VirtAddr},
+    address::{FrameCount, PhysicalFrameRange, UserPageStart, UserVirtualAddress, VirtAddr},
     address_space::UserAddressSpace,
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     user_layout::{USER_MAPPING_BASE, USER_MAPPING_END},
@@ -427,7 +427,7 @@ impl UserMappings {
         frame_allocator: &mut PhysicalFrameAllocator,
         physical_address: super::address::PhysicalFrameStart,
     ) {
-        let physical_range = PhysicalFrameRange::new(physical_address, 1)
+        let physical_range = PhysicalFrameRange::new(physical_address, single_frame_count())
             .expect("single user mapping frame range must be valid");
         assert!(
             frame_allocator.free_frames_for(physical_range, FrameRangeOwner::UserMapping),
@@ -673,6 +673,10 @@ fn fixed_start_address(start: UserPageStart, byte_len: u64) -> Result<u64, UserM
 fn user_page_start_from_raw(address: u64) -> Option<UserPageStart> {
     let address = UserVirtualAddress::new(VirtAddr::new(address))?;
     UserPageStart::new(address)
+}
+
+const fn single_frame_count() -> FrameCount {
+    FrameCount::new(1).expect("single-frame count must be valid")
 }
 
 fn align_up_to_page(address: u64) -> Option<u64> {

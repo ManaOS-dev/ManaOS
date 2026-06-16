@@ -1,6 +1,6 @@
 use crate::kernel::memory::{
     address::{
-        FramebufferPhysicalRange, KernelVirtualAddress, KernelVirtualRange,
+        FrameCount, FramebufferPhysicalRange, KernelVirtualAddress, KernelVirtualRange,
         PhysAddr as KernelPhysAddr, PhysicalFrameRange, PhysicalFrameStart,
         VirtAddr as KernelVirtAddr,
     },
@@ -240,7 +240,7 @@ pub fn unmap_kernel_range_and_free_frames(
         let physical_start =
             PhysicalFrameStart::new(KernelPhysAddr::new(frame.start_address().as_u64()))
                 .expect("unmapped physical frame must be 4KiB-aligned");
-        let physical_range = PhysicalFrameRange::new(physical_start, 1)
+        let physical_range = PhysicalFrameRange::new(physical_start, frame_count(1))
             .expect("single unmapped frame range must be valid");
         assert!(
             frame_allocator.free_frames_for(physical_range, owner),
@@ -258,7 +258,7 @@ pub fn verify_kernel_dynamic_mapping_lifecycle(
         return false;
     };
     let Some(physical_range) =
-        frame_allocator.allocate_frames_for(2, FrameRangeOwner::DynamicKernelMapping)
+        frame_allocator.allocate_frames_for(frame_count(2), FrameRangeOwner::DynamicKernelMapping)
     else {
         return false;
     };
@@ -279,7 +279,7 @@ pub fn verify_kernel_dynamic_mapping_lifecycle(
         return false;
     };
     let Some(reused_physical_range) =
-        frame_allocator.allocate_frames_for(2, FrameRangeOwner::DynamicKernelMapping)
+        frame_allocator.allocate_frames_for(frame_count(2), FrameRangeOwner::DynamicKernelMapping)
     else {
         return false;
     };
@@ -404,6 +404,10 @@ fn mapping_flags_for_address(address: KernelVirtAddr) -> Option<PageTableFlags> 
         TranslateResult::Mapped { flags, .. } => Some(flags),
         TranslateResult::NotMapped | TranslateResult::InvalidFrameAddress(_) => None,
     }
+}
+
+const fn frame_count(count: u64) -> FrameCount {
+    FrameCount::new(count).expect("paging frame count must be valid")
 }
 
 unsafe fn create_pml4(frame_allocator: &mut PhysicalFrameAllocator) -> PhysFrame {

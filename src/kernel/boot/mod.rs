@@ -15,7 +15,9 @@
 use crate::kernel::driver::display::font::FontAssets;
 use crate::kernel::driver::display::framebuffer::{self, FrameBufferInfo};
 use crate::kernel::driver::display::renderer;
-use crate::kernel::memory::address::{FramebufferPhysicalRange, KernelVirtualAddress, PhysAddr};
+use crate::kernel::memory::address::{
+    FrameCount, FramebufferPhysicalRange, KernelVirtualAddress, PhysAddr,
+};
 use crate::kernel::memory::frame_allocator::FrameRangeOwner;
 use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
 use crate::kernel::memory::heap;
@@ -49,8 +51,10 @@ pub fn initialize<'a>(
     }
     crate::log_info!("paging", "Page table switched.");
 
+    let heap_frame_count =
+        FrameCount::new(heap::HEAP_PAGES).expect("kernel heap frame count must be valid");
     let heap_range = frame_allocator
-        .allocate_frames_for(heap::HEAP_PAGES, FrameRangeOwner::KernelHeap)
+        .allocate_frames_for(heap_frame_count, FrameRangeOwner::KernelHeap)
         .expect("OOM: failed to allocate pages for kernel heap");
     // SAFETY: heap_range was allocated from the frame allocator and is
     // exclusively reserved for the kernel heap.

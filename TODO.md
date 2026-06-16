@@ -15,7 +15,6 @@ reviewable unit before implementing it.
 - [ ] Replace remaining raw virtual address parameters with `VirtAddr` in memory APIs beyond `UserVirtualAddress` construction.
 - [ ] Add remaining typed page-aligned address wrappers where alignment is required by construction beyond user page starts.
 - [ ] Add typed page count wrappers for APIs that distinguish bytes from pages.
-- [ ] Add typed frame count wrappers for frame allocator APIs.
 - [ ] Replace raw `u64` address values in scheduler diagnostics snapshots.
 - [ ] Replace raw `u64` address values in task metadata where feasible.
 - [ ] Replace raw `u64` address values in storage DMA setup boundaries.

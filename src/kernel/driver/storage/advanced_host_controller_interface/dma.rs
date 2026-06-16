@@ -1,7 +1,7 @@
 //! Advanced Host Controller Interface DMA buffer allocation.
 
 use crate::kernel::memory::{
-    address::DmaPhysicalAddress,
+    address::{DmaPhysicalAddress, FrameCount},
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
 };
 
@@ -22,7 +22,9 @@ pub(super) fn allocate(frame_allocator: &mut PhysicalFrameAllocator) -> Option<A
     let command_list = frame_allocator.allocate_frame_for(FrameRangeOwner::AhciDma)?;
     let received_fis = frame_allocator.allocate_frame_for(FrameRangeOwner::AhciDma)?;
     let command_table = frame_allocator.allocate_frame_for(FrameRangeOwner::AhciDma)?;
-    let data = frame_allocator.allocate_frames_for(DATA_BUFFER_PAGES, FrameRangeOwner::AhciDma)?;
+    let data_frame_count =
+        FrameCount::new(DATA_BUFFER_PAGES).expect("AHCI data frame count must be valid");
+    let data = frame_allocator.allocate_frames_for(data_frame_count, FrameRangeOwner::AhciDma)?;
     let command_list_address = command_list.as_dma_address();
     let received_fis_address = received_fis.as_dma_address();
     let command_table_address = command_table.as_dma_address();

@@ -279,21 +279,46 @@ impl PhysicalFrameStart {
     }
 }
 
+/// A non-zero count of 4 KiB physical frames.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FrameCount(u64);
+
+impl FrameCount {
+    /// Create a non-zero frame count with a representable byte length.
+    pub const fn new(count: u64) -> Option<Self> {
+        if count == 0 || count > u64::MAX / PAGE_SIZE {
+            None
+        } else {
+            Some(Self(count))
+        }
+    }
+
+    /// Return the raw frame count as a `u64`.
+    pub const fn as_u64(self) -> u64 {
+        self.0
+    }
+
+    /// Return the byte length represented by this frame count.
+    pub const fn byte_len(self) -> u64 {
+        self.0 * PAGE_SIZE
+    }
+}
+
 /// A contiguous owned range of 4 KiB physical frames.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PhysicalFrameRange {
     start: PhysicalFrameStart,
-    page_count: u64,
+    frame_count: FrameCount,
 }
 
 impl PhysicalFrameRange {
-    /// Create a physical frame range from a start address and page count.
-    pub const fn new(start: PhysicalFrameStart, page_count: u64) -> Option<Self> {
-        if page_count == 0 {
+    /// Create a physical frame range from a start address and frame count.
+    pub const fn new(start: PhysicalFrameStart, frame_count: FrameCount) -> Option<Self> {
+        let Some(_) = start.as_u64().checked_add(frame_count.byte_len()) else {
             return None;
-        }
+        };
 
-        Some(Self { start, page_count })
+        Some(Self { start, frame_count })
     }
 
     /// Return the first physical frame in the range.
@@ -303,18 +328,18 @@ impl PhysicalFrameRange {
 
     /// Return the number of 4 KiB pages in the range.
     pub const fn page_count(self) -> u64 {
-        self.page_count
+        self.frame_count.as_u64()
+    }
+
+    /// Return the number of 4 KiB frames in the range.
+    pub const fn frame_count(self) -> FrameCount {
+        self.frame_count
     }
 
     /// Return the byte length of the range.
     ///
-    /// # Panics
-    ///
-    /// Panics if `page_count * 4096` overflows `u64`.
     pub const fn byte_len(self) -> u64 {
-        self.page_count
-            .checked_mul(PAGE_SIZE)
-            .expect("physical frame range byte length overflowed")
+        self.frame_count.byte_len()
     }
 }
 
@@ -447,6 +472,18 @@ pub fn verify_typed_user_page_start() -> bool {
         })
     }) && unaligned_address.is_some_and(|address| UserPageStart::new(address).is_none())
         && low_address.is_some_and(|address| address.align_down_to_page().is_none())
+}
+
+/// Verify the typed physical frame count construction contract.
+pub fn verify_typed_frame_count() -> bool {
+    let valid_count = FrameCount::new(2);
+    let zero_count = FrameCount::new(0);
+    let overflowing_count = FrameCount::new((u64::MAX / PAGE_SIZE) + 1);
+
+    valid_count.is_some_and(|frame_count| {
+        frame_count.as_u64() == 2 && frame_count.byte_len() == 2 * PAGE_SIZE
+    }) && zero_count.is_none()
+        && overflowing_count.is_none()
 }
 
 /// A non-empty byte range fully contained in user virtual address space.

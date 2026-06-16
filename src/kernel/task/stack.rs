@@ -1,6 +1,8 @@
 //! Kernel task stack owner metadata.
 
-use crate::kernel::memory::address::{KernelVirtualRange, PhysicalFrameRange, VirtAddr};
+use crate::kernel::memory::address::{
+    FrameCount, KernelVirtualRange, PhysicalFrameRange, VirtAddr,
+};
 use crate::kernel::memory::frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator};
 use crate::kernel::memory::paging;
 use crate::kernel::memory::virtual_allocator::KernelVirtualRangeAllocator;
@@ -187,11 +189,10 @@ impl KernelStack {
             DEFAULT_KERNEL_STACK_WRITABLE_PAGES,
         )
         .expect("kernel stack virtual reservation allocator must have capacity");
+        let writable_frame_count = FrameCount::new(DEFAULT_KERNEL_STACK_WRITABLE_PAGES)
+            .expect("kernel stack frame count must be valid");
         let physical_range = frame_allocator
-            .allocate_frames_for(
-                DEFAULT_KERNEL_STACK_WRITABLE_PAGES,
-                FrameRangeOwner::KernelStack,
-            )
+            .allocate_frames_for(writable_frame_count, FrameRangeOwner::KernelStack)
             .expect("OOM: failed to allocate kernel stack frames");
         let physical_stack_pointer = physical_range.start().as_usize() as *mut u8;
 

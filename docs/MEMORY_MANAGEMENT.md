@@ -36,6 +36,8 @@ The current physical frame allocator relies on these properties:
 - `PhysicalFrameStart` construction accepts only `PhysAddr`, so callers must
   classify raw hardware or page-table addresses at the boundary where they are
   read.
+- `FrameCount` construction rejects zero counts and byte-length overflow before
+  frame allocator APIs accept contiguous frame counts.
 - `UserVirtualAddress` construction accepts only `VirtAddr`, so syscall and
   ELF loader raw address fields are classified before they enter user address
   wrappers.

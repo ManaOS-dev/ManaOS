@@ -48,6 +48,7 @@ $expectedPatterns = @(
     "Frame allocator self-checks passed: .*typed_frame_start=true",
     "Memory address wrapper self-checks passed: user_virtual_address=true",
     "Memory address wrapper self-checks passed: .*user_page_start=true",
+    "Memory address wrapper self-checks passed: .*frame_count=true",
     "Kernel virtual range allocator self-checks passed: non_overlapping_reuse=true exhaustion_rejection=true",
     "ACPI parser self-check passed: rsdp=true root_table=true madt=true",
     "ACPI root table verified",

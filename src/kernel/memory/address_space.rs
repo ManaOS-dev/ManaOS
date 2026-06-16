@@ -2,8 +2,8 @@
 
 use super::{
     address::{
-        PhysAddr, PhysicalFrameRange, PhysicalFrameStart, UserPageStart, UserVirtualAddress,
-        VirtAddr,
+        FrameCount, PhysAddr, PhysicalFrameRange, PhysicalFrameStart, UserPageStart,
+        UserVirtualAddress, VirtAddr,
     },
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
 };
@@ -121,8 +121,8 @@ impl UserAddressSpace {
 
         let physical_start = PhysicalFrameStart::new(PhysAddr::new(frame.start_address().as_u64()))
             .expect("unmapped user page frame must be 4KiB aligned");
-        let physical_range =
-            PhysicalFrameRange::new(physical_start, 1).expect("single-frame range must be valid");
+        let physical_range = PhysicalFrameRange::new(physical_start, single_frame_count())
+            .expect("single-frame range must be valid");
         assert!(
             frame_allocator.free_frames_for(physical_range, owner),
             "unmapped user page frame owner did not match expected owner"
@@ -529,7 +529,12 @@ fn free_page_table_frame(
 }
 
 fn one_frame_range(frame: PhysicalFrameStart) -> PhysicalFrameRange {
-    PhysicalFrameRange::new(frame, 1).expect("single-frame range must be non-empty")
+    PhysicalFrameRange::new(frame, single_frame_count())
+        .expect("single-frame range must be non-empty")
+}
+
+const fn single_frame_count() -> FrameCount {
+    FrameCount::new(1).expect("single-frame count must be valid")
 }
 
 struct AddressSpaceFrameAllocator<'a> {

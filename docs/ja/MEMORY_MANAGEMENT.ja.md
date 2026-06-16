@@ -34,6 +34,8 @@ physical frame allocator は、以下の前提に依存します。
   に渡せないようにします。
 - `PhysicalFrameStart` construction は `PhysAddr` だけを受け取るため、hardware register や
   page table から読んだ raw address は境界で physical address として分類してから渡します。
+- `FrameCount` construction は zero count と byte-length overflow を拒否してから、frame
+  allocator API に contiguous frame count を渡します。
 - `UserVirtualAddress` construction は `VirtAddr` だけを受け取るため、syscall や ELF loader の
   raw address field は user address wrapper に入る前に分類してから渡します。
 - user page mapping/unmapping API は `UserPageStart` を要求するため、page table を変更する前に

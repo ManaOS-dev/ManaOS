@@ -106,15 +106,20 @@ pub(crate) fn import_boot_memory_map<'a>(
     memory_descriptors: impl Iterator<Item = &'a MemoryDescriptor>,
 ) {
     for descriptor in memory_descriptors {
+        let Some(frame_count) = kernel::memory::address::FrameCount::new(descriptor.page_count)
+        else {
+            continue;
+        };
+
         if descriptor.ty == MemoryType::CONVENTIONAL {
             frame_allocator.add_region(
                 kernel::memory::address::PhysAddr::new(descriptor.phys_start),
-                descriptor.page_count,
+                frame_count,
             );
         } else {
             frame_allocator.reserve_region_for(
                 kernel::memory::address::PhysAddr::new(descriptor.phys_start),
-                descriptor.page_count,
+                frame_count,
                 boot_memory_owner_for(descriptor.ty),
             );
         }
@@ -156,9 +161,11 @@ pub(crate) fn allocate_backbuffer(
     framebuffer_size: u64,
 ) -> kernel::memory::address::KernelVirtualAddress {
     let backbuffer_pages = framebuffer_size.div_ceil(4096);
+    let backbuffer_frame_count = kernel::memory::address::FrameCount::new(backbuffer_pages)
+        .expect("framebuffer backbuffer frame count must be non-zero");
     let backbuffer_physical_range = frame_allocator
         .allocate_frames_for(
-            backbuffer_pages,
+            backbuffer_frame_count,
             kernel::memory::frame_allocator::FrameRangeOwner::FramebufferBackbuffer,
         )
         .expect("OOM: failed to allocate framebuffer backbuffer");

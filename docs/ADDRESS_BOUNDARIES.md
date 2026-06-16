@@ -29,8 +29,9 @@ untyped cross-domain `u64` values:
 - `kernel::memory::address::PhysAddr` represents raw physical byte addresses.
 - `kernel::memory::address::VirtAddr` represents raw virtual byte addresses
   for internal arithmetic that must not mix with physical addresses.
-- `PhysicalFrameStart` and `PhysicalFrameRange` represent allocatable 4 KiB
-  frame starts and contiguous frame ownership.
+- `PhysicalFrameStart`, `FrameCount`, and `PhysicalFrameRange` represent
+  allocatable 4 KiB frame starts, non-zero frame counts, and contiguous frame
+  ownership.
 - `DmaPhysicalAddress` represents physical addresses that may be programmed
   into AHCI command headers, received-FIS buffers, command tables, and PRDT
   entries.
@@ -49,7 +50,8 @@ untyped cross-domain `u64` values:
 - PCI AHCI discovery stores BAR5 as `PhysAddr` and keeps that type through
   AHCI controller initialization and HBA MMIO mapping.
 - `PhysicalFrameAllocator::add_region(...)` and `reserve_region*` accept
-  `PhysAddr` physical starts before normalizing frame ranges.
+  `PhysAddr` physical starts and `FrameCount` frame counts before normalizing
+  frame ranges.
 - `AhciDmaBuffers` stores `DmaPhysicalAddress` fields internally, and
   `dma::split_address(...)` accepts `DmaPhysicalAddress`.
 - `StorageDataAddress` represents the active DMA data buffer used by
@@ -92,8 +94,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   before registering regions with the frame allocator.
 - `PhysicalFrameAllocator::allocate_frame() -> Option<PhysicalFrameStart>` returns
   a typed 4 KiB-aligned physical frame start.
-- `PhysicalFrameAllocator::allocate_frames(n) -> Option<PhysicalFrameRange>`
-  returns the typed physical start and page count of a contiguous frame range.
+- `PhysicalFrameAllocator::allocate_frames(FrameCount) ->
+  Option<PhysicalFrameRange>` returns the typed physical start and frame count
+  of a contiguous frame range.
 - `kernel::memory::heap::init(heap_range: PhysicalFrameRange)` accepts a typed
   physical frame range that is also used as a virtual range while identity
   mapping is active.
@@ -153,7 +156,9 @@ Continue introducing wrappers in small steps:
 - `VirtAddr` for virtual byte addresses. This now exists in
   `kernel::memory::address`.
 - `PhysicalFrameStart` for 4 KiB-aligned physical frame starts.
-- `PhysicalFrameRange` for frame start plus page count. This is now the return
+- `FrameCount` for non-zero physical frame counts passed into frame allocator
+  APIs.
+- `PhysicalFrameRange` for frame start plus frame count. This is now the return
   type for contiguous physical frame allocations.
 - `FramebufferPhysicalRange` for the active graphics-mode framebuffer physical
   range. This now exists in `kernel::memory::address`.
