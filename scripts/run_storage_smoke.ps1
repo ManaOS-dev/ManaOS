@@ -287,6 +287,7 @@ $expectedPatterns = @(
     "resume_handoff_snapshots\s+= 10",
     "resume_address_space_root_snapshots\s+= 10",
     "resume_kernel_stack_snapshots\s+= 10",
+    "resume_snapshot_addresses_typed\s+= true",
     "fully_reclaimed_user_tasks\s+= 10",
     "user_image_snapshots\s+= 10",
     "released_mmap_snapshots\s+= 10",

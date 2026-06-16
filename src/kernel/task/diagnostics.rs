@@ -1,6 +1,7 @@
 //! Scheduler diagnostics snapshots.
 
 use super::state::TaskState;
+use crate::kernel::memory::address::{PhysicalFrameStart, VirtAddr};
 
 /// Maximum bytes retained for a task image path diagnostic.
 pub(super) const USER_IMAGE_PATH_DIAGNOSTIC_BYTES: usize = 256;
@@ -501,8 +502,8 @@ pub(super) struct TaskRuntimeDiagnosticsSnapshot {
     address_space_owned: bool,
     kernel_stack_owned: bool,
     resume_handoff_count: u64,
-    last_resume_address_space_root: u64,
-    last_resume_kernel_stack_top: u64,
+    last_resume_address_space_root: Option<PhysicalFrameStart>,
+    last_resume_kernel_stack_top: Option<VirtAddr>,
     trap_frame: UserTrapFrameDiagnosticsSnapshot,
 }
 
@@ -545,8 +546,8 @@ impl TaskRuntimeDiagnosticsSnapshot {
         address_space_owned: bool,
         kernel_stack_owned: bool,
         resume_handoff_count: u64,
-        last_resume_address_space_root: u64,
-        last_resume_kernel_stack_top: u64,
+        last_resume_address_space_root: Option<PhysicalFrameStart>,
+        last_resume_kernel_stack_top: Option<VirtAddr>,
         trap_frame: UserTrapFrameDiagnosticsSnapshot,
     ) -> Self {
         Self {
@@ -723,11 +724,27 @@ impl SchedulerTaskSnapshot {
 
     /// Return the last user address-space root selected before entry or resume.
     pub const fn last_resume_address_space_root(&self) -> u64 {
+        match self.status.runtime.last_resume_address_space_root {
+            Some(address_space_root) => address_space_root.as_u64(),
+            None => 0,
+        }
+    }
+
+    /// Return the typed last user address-space root selected before entry or resume.
+    pub const fn last_resume_address_space_root_frame(&self) -> Option<PhysicalFrameStart> {
         self.status.runtime.last_resume_address_space_root
     }
 
     /// Return the last kernel stack top selected before user entry or resume.
     pub const fn last_resume_kernel_stack_top(&self) -> u64 {
+        match self.status.runtime.last_resume_kernel_stack_top {
+            Some(kernel_stack_top) => kernel_stack_top.as_u64(),
+            None => 0,
+        }
+    }
+
+    /// Return the typed last kernel stack top selected before user entry or resume.
+    pub const fn last_resume_kernel_stack_top_address(&self) -> Option<VirtAddr> {
         self.status.runtime.last_resume_kernel_stack_top
     }
 

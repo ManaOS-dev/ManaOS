@@ -725,15 +725,31 @@ fn record_resume_handoff_snapshot(
         snapshot.resume_handoff_count() > 0,
         "finished user task snapshots must retain a scheduler resume handoff"
     );
+    let address_space_root = snapshot
+        .last_resume_address_space_root_frame()
+        .expect("finished user task snapshots must retain a typed resume address-space root");
+    let kernel_stack_top = snapshot
+        .last_resume_kernel_stack_top_address()
+        .expect("finished user task snapshots must retain a typed resume kernel stack top");
     assert_ne!(
-        snapshot.last_resume_address_space_root(),
+        address_space_root.as_u64(),
         0,
         "finished user task snapshots must retain their last resume address-space root"
     );
     assert_ne!(
-        snapshot.last_resume_kernel_stack_top(),
+        kernel_stack_top.as_u64(),
         0,
         "finished user task snapshots must retain their last resume kernel stack top"
+    );
+    assert_eq!(
+        snapshot.last_resume_address_space_root(),
+        address_space_root.as_u64(),
+        "raw resume address-space root diagnostics must lower from the typed snapshot"
+    );
+    assert_eq!(
+        snapshot.last_resume_kernel_stack_top(),
+        kernel_stack_top.as_u64(),
+        "raw resume kernel stack diagnostics must lower from the typed snapshot"
     );
     counters.resume_handoff_snapshots = counters.resume_handoff_snapshots.saturating_add(1);
     counters.resume_address_space_root_snapshots = counters
@@ -961,6 +977,16 @@ fn log_scheduler_task_snapshot_counters(
             LogField::new(
                 "resume_kernel_stack_snapshots",
                 format_args!("{}", counters.resume_kernel_stack_snapshots),
+            ),
+            LogField::new(
+                "resume_snapshot_addresses_typed",
+                format_args!(
+                    "{}",
+                    counters.resume_address_space_root_snapshots
+                        == counters.resume_handoff_snapshots
+                        && counters.resume_kernel_stack_snapshots
+                            == counters.resume_handoff_snapshots
+                ),
             ),
             LogField::new(
                 "fully_reclaimed_user_tasks",

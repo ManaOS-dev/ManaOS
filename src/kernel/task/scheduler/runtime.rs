@@ -811,8 +811,8 @@ impl Scheduler {
         user_runtime.restored_user_trap_frame_bytes = 0;
         user_runtime.runtime_trap_frame_restore_count = 0;
         user_runtime.resume_handoff_count = 0;
-        user_runtime.last_resume_address_space_root = 0;
-        user_runtime.last_resume_kernel_stack_top = 0;
+        user_runtime.last_resume_address_space_root = None;
+        user_runtime.last_resume_kernel_stack_top = None;
         current_task.context.clear();
 
         crate::log_info!(

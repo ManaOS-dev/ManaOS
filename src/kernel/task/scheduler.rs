@@ -19,7 +19,7 @@ use super::stack::{KernelStack, KernelStackFaultOwner, KernelStackGuardFault, Ke
 use super::state::TaskState;
 use crate::kernel::filesystem::{FileDescriptorTable, SpawnDescriptorInheritanceSnapshot};
 use crate::kernel::memory::address::{
-    UserVirtualAddress, UserVirtualRange, UserWritableRange, VirtAddr,
+    PhysicalFrameStart, UserVirtualAddress, UserVirtualRange, UserWritableRange, VirtAddr,
 };
 use crate::kernel::memory::address_space::{self, UserAddressSpace, UserAddressSpaceReclaim};
 use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
@@ -223,8 +223,8 @@ struct UserTaskRuntime {
     last_preemption_reason: UserPreemptionReasonDiagnostics,
     last_resume_path: UserResumePathDiagnostics,
     resume_handoff_count: u64,
-    last_resume_address_space_root: u64,
-    last_resume_kernel_stack_top: u64,
+    last_resume_address_space_root: Option<PhysicalFrameStart>,
+    last_resume_kernel_stack_top: Option<VirtAddr>,
     address_space_reclaiming: bool,
 }
 
@@ -258,8 +258,8 @@ impl UserTaskRuntime {
             last_preemption_reason: UserPreemptionReasonDiagnostics::None,
             last_resume_path: UserResumePathDiagnostics::None,
             resume_handoff_count: 0,
-            last_resume_address_space_root: 0,
-            last_resume_kernel_stack_top: 0,
+            last_resume_address_space_root: None,
+            last_resume_kernel_stack_top: None,
             address_space_reclaiming: false,
         }
     }
@@ -285,8 +285,8 @@ impl UserTaskRuntime {
         address_space: UserAddressSpace,
         kernel_stack_top: VirtAddr,
     ) {
-        self.last_resume_address_space_root = address_space.level_4_frame().as_u64();
-        self.last_resume_kernel_stack_top = kernel_stack_top.as_u64();
+        self.last_resume_address_space_root = Some(address_space.level_4_frame());
+        self.last_resume_kernel_stack_top = Some(kernel_stack_top);
         self.resume_handoff_count = self.resume_handoff_count.saturating_add(1);
     }
 }

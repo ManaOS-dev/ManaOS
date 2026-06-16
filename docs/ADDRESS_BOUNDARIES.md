@@ -52,6 +52,10 @@ untyped cross-domain `u64` values:
 - User task kernel stack tops are kept as `VirtAddr` across scheduler handoff
   paths and lower to raw `u64` only at the registered architecture installer
   and `SYSCALL` entry stack-top atomic boundary.
+- Scheduler task snapshots retain the last resume address-space root as
+  `PhysicalFrameStart` and the last resume kernel stack top as `VirtAddr`;
+  raw numeric values are produced only by console and smoke formatting
+  accessors.
 - `user_stack::allocate_and_map_user_page(...) -> PhysicalFrameStart` now
   returns a typed physical frame start instead of a raw physical `u64`.
 - `user_stack::map_user_range(...)` now accepts `UserVirtualAddress` and
@@ -159,6 +163,10 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - Scheduler user-entry and timer-resume handoffs keep the selected user task
   kernel stack top as `VirtAddr`; architecture provider calls and the `SYSCALL`
   entry stack-top atomic are the remaining raw lowering points.
+- Scheduler task snapshots keep the last resume address-space root as
+  `PhysicalFrameStart` and the last resume kernel stack top as `VirtAddr`.
+  Console and serial smoke diagnostics lower those values to raw numbers only
+  when formatting diagnostic output.
 - `task::UserEntryArguments` is constructed from typed user pointers, and
   `UserTaskContext` keeps its raw `u64` register layout private to the
   `repr(C)` architecture entry ABI.
@@ -220,6 +228,8 @@ Continue introducing wrappers in small steps:
   classification.
 - `VirtAddr` for scheduler-owned user task kernel stack top handoffs before
   architecture and `SYSCALL` entry boundaries.
+- `PhysicalFrameStart` and `VirtAddr` for scheduler resume handoff diagnostic
+  snapshots before console or smoke output formatting.
 - `DmaPhysicalAddress` for physical addresses that may be programmed into
   device descriptors. This now exists in `kernel::memory::address`.
 - `StorageDataAddress` for the active DMA data buffer passed through generic
