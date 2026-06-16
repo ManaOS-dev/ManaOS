@@ -143,6 +143,7 @@ active roadmap can list only unfinished work.
 - [x] Classify kernel stack guard-fault addresses as `VirtAddr` inside the task boundary.
 - [x] Keep user task kernel stack-top handoffs as `VirtAddr` until architecture and `SYSCALL` entry boundaries.
 - [x] Keep scheduler resume handoff diagnostic snapshots typed as `PhysicalFrameStart` and `VirtAddr` before console and smoke output formatting.
+- [x] Keep user virtual-memory scheduler diagnostics snapshots typed as `UserVirtualAddress` before console and smoke output formatting.
 
 ### Address Space Lifecycle
 

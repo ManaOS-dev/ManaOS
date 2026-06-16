@@ -1,7 +1,7 @@
 //! Scheduler diagnostics snapshots.
 
 use super::state::TaskState;
-use crate::kernel::memory::address::{PhysicalFrameStart, VirtAddr};
+use crate::kernel::memory::address::{PhysicalFrameStart, UserVirtualAddress, VirtAddr};
 
 /// Maximum bytes retained for a task image path diagnostic.
 pub(super) const USER_IMAGE_PATH_DIAGNOSTIC_BYTES: usize = 256;
@@ -329,14 +329,18 @@ impl UserImageDiagnosticsSnapshot {
 /// Snapshot of one user task's heap bookkeeping.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct UserHeapDiagnosticsSnapshot {
-    base: u64,
-    current_break: u64,
+    base: UserVirtualAddress,
+    current_break: UserVirtualAddress,
     mapped_pages: u64,
 }
 
 impl UserHeapDiagnosticsSnapshot {
     /// Create a user heap diagnostics snapshot.
-    pub(super) const fn new(base: u64, current_break: u64, mapped_pages: u64) -> Self {
+    pub(super) const fn new(
+        base: UserVirtualAddress,
+        current_break: UserVirtualAddress,
+        mapped_pages: u64,
+    ) -> Self {
         Self {
             base,
             current_break,
@@ -348,7 +352,7 @@ impl UserHeapDiagnosticsSnapshot {
 /// Snapshot of one user task's active private mapping state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct UserMappingActiveDiagnosticsSnapshot {
-    next_start: u64,
+    next_start: UserVirtualAddress,
     active_pages: u64,
     active_records: u64,
     file_private_records: u64,
@@ -357,7 +361,7 @@ pub(super) struct UserMappingActiveDiagnosticsSnapshot {
 impl UserMappingActiveDiagnosticsSnapshot {
     /// Create active private mapping diagnostics.
     pub(super) const fn new(
-        next_start: u64,
+        next_start: UserVirtualAddress,
         active_pages: u64,
         active_records: u64,
         file_private_records: u64,
@@ -424,11 +428,21 @@ impl UserVirtualMemorySnapshot {
 
     /// Return the first virtual address managed by `brk`.
     pub const fn heap_base(self) -> u64 {
+        self.heap.base.as_u64()
+    }
+
+    /// Return the typed first virtual address managed by `brk`.
+    pub const fn heap_base_address(self) -> UserVirtualAddress {
         self.heap.base
     }
 
     /// Return the current user heap break.
     pub const fn heap_break(self) -> u64 {
+        self.heap.current_break.as_u64()
+    }
+
+    /// Return the typed current user heap break.
+    pub const fn heap_break_address(self) -> UserVirtualAddress {
         self.heap.current_break
     }
 
@@ -439,6 +453,11 @@ impl UserVirtualMemorySnapshot {
 
     /// Return the next private mapping address candidate.
     pub const fn mapping_next_start(self) -> u64 {
+        self.mapping_active.next_start.as_u64()
+    }
+
+    /// Return the typed next private mapping address candidate.
+    pub const fn mapping_next_start_address(self) -> UserVirtualAddress {
         self.mapping_active.next_start
     }
 

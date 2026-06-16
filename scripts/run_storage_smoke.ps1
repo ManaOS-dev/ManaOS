@@ -290,6 +290,8 @@ $expectedPatterns = @(
     "resume_snapshot_addresses_typed\s+= true",
     "fully_reclaimed_user_tasks\s+= 10",
     "user_image_snapshots\s+= 10",
+    "typed_user_vm_address_snapshots\s+= 10",
+    "user_vm_snapshot_addresses_typed\s+= true",
     "released_mmap_snapshots\s+= 10",
     "Frame allocator diagnostics snapshot",
     "page_table\s+= [0-9]+",

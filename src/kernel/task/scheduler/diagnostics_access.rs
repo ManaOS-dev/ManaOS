@@ -147,8 +147,8 @@ impl Scheduler {
                         let user_image = user_runtime.image.snapshot();
                         let user_virtual_memory = UserVirtualMemorySnapshot::new(
                             UserHeapDiagnosticsSnapshot::new(
-                                user_runtime.heap.base().as_u64(),
-                                user_runtime.heap.current_break().as_u64(),
+                                user_runtime.heap.base(),
+                                user_runtime.heap.current_break(),
                                 user_runtime.heap.mapped_pages(),
                             ),
                             UserMappingActiveDiagnosticsSnapshot::new(

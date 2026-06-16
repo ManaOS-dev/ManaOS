@@ -192,7 +192,7 @@ pub enum UserMappingError {
 /// Private user mappings owned by one user task.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserMappings {
-    next_start: u64,
+    next_start: UserVirtualAddress,
     records: [Option<UserMapping>; MAX_USER_MAPPINGS],
 }
 
@@ -200,7 +200,8 @@ impl UserMappings {
     /// Create an empty private mapping table.
     pub const fn new() -> Self {
         Self {
-            next_start: USER_MAPPING_BASE,
+            next_start: UserVirtualAddress::new(VirtAddr::new(USER_MAPPING_BASE))
+                .expect("user mapping base must be a valid user virtual address"),
             records: [None; MAX_USER_MAPPINGS],
         }
     }
@@ -269,7 +270,8 @@ impl UserMappings {
             source: plan.source(),
         });
         if matches!(plan.placement(), UserMappingPlacement::Any) {
-            self.next_start = end_address;
+            self.next_start = UserVirtualAddress::new(VirtAddr::new(end_address))
+                .expect("next mapping search start must be a valid user virtual address");
         }
         Ok(UserMappingAllocation {
             start: start.as_address(),
@@ -362,7 +364,7 @@ impl UserMappings {
     }
 
     /// Return the next mapping search start.
-    pub const fn next_start(&self) -> u64 {
+    pub const fn next_start(&self) -> UserVirtualAddress {
         self.next_start
     }
 
@@ -479,7 +481,7 @@ impl UserMappings {
     ) -> Result<u64, UserMappingError> {
         match placement {
             UserMappingPlacement::Any => self
-                .next_available_start(self.next_start, byte_len)
+                .next_available_start(self.next_start.as_u64(), byte_len)
                 .ok_or(UserMappingError::OutOfMemory),
             UserMappingPlacement::FixedReplace(start) => fixed_start_address(start, byte_len),
             UserMappingPlacement::FixedNoReplace(start) => {

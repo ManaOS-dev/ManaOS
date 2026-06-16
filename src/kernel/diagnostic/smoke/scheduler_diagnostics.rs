@@ -528,6 +528,7 @@ struct SchedulerTaskSnapshotCounters {
     finished_user_tasks: u64,
     fully_reclaimed_user_tasks: u64,
     user_vm_snapshots: u64,
+    typed_user_vm_address_snapshots: u64,
     user_image_snapshots: u64,
     published_execve_image_snapshots: u64,
     unreplaced_user_image_snapshots: u64,
@@ -553,6 +554,7 @@ impl SchedulerTaskSnapshotCounters {
             finished_user_tasks: 0,
             fully_reclaimed_user_tasks: 0,
             user_vm_snapshots: 0,
+            typed_user_vm_address_snapshots: 0,
             user_image_snapshots: 0,
             published_execve_image_snapshots: 0,
             unreplaced_user_image_snapshots: 0,
@@ -650,7 +652,7 @@ fn record_scheduler_user_task_snapshot(
         }
     }
     counters.user_image_snapshots = counters.user_image_snapshots.saturating_add(1);
-    let verification = verify_user_task_snapshot(snapshot);
+    let verification = verify_user_task_snapshot(snapshot, counters);
     counters.user_vm_snapshots = counters.user_vm_snapshots.saturating_add(1);
     if verification.released_mappings {
         counters.anonymous_mapping_release_snapshots = counters
@@ -835,6 +837,10 @@ fn verify_scheduler_task_snapshot_counts(
         "scheduler snapshots must include virtual memory bookkeeping for every user task"
     );
     assert_eq!(
+        counters.typed_user_vm_address_snapshots, expected_user_tasks,
+        "scheduler snapshots must keep user virtual memory addresses typed"
+    );
+    assert_eq!(
         counters.user_image_snapshots, expected_user_tasks,
         "scheduler snapshots must include execve image diagnostics for every user task"
     );
@@ -1014,21 +1020,64 @@ fn log_scheduler_task_snapshot_counters(
             ),
         ],
     );
+    log_scheduler_task_snapshot_address_counters(counters);
+}
+
+fn log_scheduler_task_snapshot_address_counters(counters: SchedulerTaskSnapshotCounters) {
+    crate::kernel::diagnostic::log::log_kv(
+        LogLevel::Info,
+        "task",
+        format_args!("Scheduler task snapshot address diagnostics verified"),
+        &[
+            LogField::new(
+                "typed_user_vm_address_snapshots",
+                format_args!("{}", counters.typed_user_vm_address_snapshots),
+            ),
+            LogField::new(
+                "user_vm_snapshot_addresses_typed",
+                format_args!(
+                    "{}",
+                    counters.typed_user_vm_address_snapshots == counters.user_vm_snapshots
+                ),
+            ),
+        ],
+    );
 }
 
 fn verify_user_task_snapshot(
     snapshot: &crate::kernel::task::SchedulerTaskSnapshot,
+    counters: &mut SchedulerTaskSnapshotCounters,
 ) -> UserTaskSnapshotVerification {
     let user_virtual_memory = snapshot
         .user_virtual_memory()
         .expect("user task snapshots must include virtual memory bookkeeping");
+    let heap_base = user_virtual_memory.heap_base_address();
+    let heap_break = user_virtual_memory.heap_break_address();
+    let mapping_next_start = user_virtual_memory.mapping_next_start_address();
+    assert_eq!(
+        user_virtual_memory.heap_base(),
+        heap_base.as_u64(),
+        "raw heap base diagnostics must lower from the typed snapshot"
+    );
+    assert_eq!(
+        user_virtual_memory.heap_break(),
+        heap_break.as_u64(),
+        "raw heap break diagnostics must lower from the typed snapshot"
+    );
+    assert_eq!(
+        user_virtual_memory.mapping_next_start(),
+        mapping_next_start.as_u64(),
+        "raw private mapping next-start diagnostics must lower from the typed snapshot"
+    );
+    counters.typed_user_vm_address_snapshots =
+        counters.typed_user_vm_address_snapshots.saturating_add(1);
     assert_eq!(
         user_virtual_memory.heap_mapped_pages(),
         0,
         "execve must reset user heap bookkeeping before task exit"
     );
     assert_eq!(
-        user_virtual_memory.mapping_next_start(),
+        mapping_next_start.as_u64(),
         crate::kernel::memory::user_layout::USER_MAPPING_BASE,
         "execve must reset private mapping placement bookkeeping before task exit"
     );

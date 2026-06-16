@@ -103,6 +103,7 @@ kernel virtual range allocator API、user stack API、user mapping API、paging 
 kernel stack guard-fault address の `VirtAddr` boundary 化、
 user task kernel stack top handoff の `VirtAddr` boundary 化、
 scheduler resume handoff diagnostic snapshot の `PhysicalFrameStart` / `VirtAddr` boundary 化、
+user virtual-memory scheduler snapshot の `UserVirtualAddress` boundary 化、
 per-process page table、
 user address-space reclaim、kernel stack reclaim、
 user pointer validation、mapping permission checks、identity mapping audit、

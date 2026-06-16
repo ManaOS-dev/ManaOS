@@ -56,6 +56,9 @@ untyped cross-domain `u64` values:
   `PhysicalFrameStart` and the last resume kernel stack top as `VirtAddr`;
   raw numeric values are produced only by console and smoke formatting
   accessors.
+- User virtual-memory task snapshots retain the `brk` heap base, current break,
+  and next private mapping search start as `UserVirtualAddress`; raw numeric
+  values are produced only by console and smoke formatting accessors.
 - `user_stack::allocate_and_map_user_page(...) -> PhysicalFrameStart` now
   returns a typed physical frame start instead of a raw physical `u64`.
 - `user_stack::map_user_range(...)` now accepts `UserVirtualAddress` and
@@ -167,6 +170,10 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   `PhysicalFrameStart` and the last resume kernel stack top as `VirtAddr`.
   Console and serial smoke diagnostics lower those values to raw numbers only
   when formatting diagnostic output.
+- User virtual-memory task snapshots keep heap base, heap break, and private
+  mapping next-start addresses as `UserVirtualAddress`. Console and serial
+  smoke diagnostics lower those values to raw numbers only when formatting
+  diagnostic output.
 - `task::UserEntryArguments` is constructed from typed user pointers, and
   `UserTaskContext` keeps its raw `u64` register layout private to the
   `repr(C)` architecture entry ABI.
@@ -230,6 +237,8 @@ Continue introducing wrappers in small steps:
   architecture and `SYSCALL` entry boundaries.
 - `PhysicalFrameStart` and `VirtAddr` for scheduler resume handoff diagnostic
   snapshots before console or smoke output formatting.
+- `UserVirtualAddress` for user virtual-memory scheduler snapshots before
+  console or smoke output formatting.
 - `DmaPhysicalAddress` for physical addresses that may be programmed into
   device descriptors. This now exists in `kernel::memory::address`.
 - `StorageDataAddress` for the active DMA data buffer passed through generic
