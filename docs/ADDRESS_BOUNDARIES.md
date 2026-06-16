@@ -43,6 +43,9 @@ untyped cross-domain `u64` values:
 - `UserReadRequest` stores pending `read` destinations as `UserWritableRange`
   after syscall ABI pointer classification, so scheduler wait state does not
   retain a raw user pointer.
+- Blocking `waitpid` stores deferred status-write destinations as
+  `UserWritableRange` after syscall ABI pointer classification, so scheduler
+  wait completions do not retain raw user pointers.
 - `UserHeapBreakRequest` represents `brk` requests after syscall ABI address
   classification, so scheduler and heap code do not receive raw break
   addresses.
@@ -186,6 +189,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - Pending keyboard-backed `read` waits retain the validated destination as
   `UserWritableRange` until the task address space is active again, then
   revalidate page-table permissions before copying bytes.
+- Blocking `waitpid` waits retain the optional status destination as
+  `UserWritableRange` until the parent task address space is active again,
+  then revalidate page-table permissions before writing the wait status.
 - `kernel::memory::user_pointer::copy_cstr_from_user` accepts `UserCString`,
   which wraps a readable range capped by the syscall path-length policy.
 
@@ -238,6 +244,8 @@ Continue introducing wrappers in small steps:
   page-table permission checks.
 - `UserReadRequest` for scheduler-retained pending `read` destinations after
   raw syscall pointer classification.
+- `UserWritableRange` for scheduler-retained blocking `waitpid` status
+  destinations after raw syscall pointer classification.
 - `UserCString` for readable syscall string candidates before NUL validation.
 - `UserMappingUnmapRequest` for private `munmap` requests after syscall ABI
   classification.

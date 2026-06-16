@@ -5,13 +5,12 @@ use super::{
     PhysicalFrameAllocator, Scheduler, SwitchAction, TaskIdentifier, TaskKind, TaskState,
     UserAddressSpace, UserAddressSpaceReclaim, UserHeap, UserMappings,
     UserPreemptionReasonDiagnostics, UserReadRequest, UserResumePathDiagnostics, UserTaskExit,
-    UserTrapFrame, UserTrapFrameSource, UserVirtualAddress, UserVirtualRange,
-    UserWaitpidCompletion, UserWaitpidRequest, UserWritableRange, USER_TASK_PREEMPTION_ENABLED,
+    UserTrapFrame, UserTrapFrameSource, UserVirtualAddress, UserWaitpidCompletion,
+    UserWaitpidRequest, UserWritableRange, USER_TASK_PREEMPTION_ENABLED,
 };
 use crate::kernel::memory::address::VirtAddr;
 use crate::kernel::memory::user_pointer;
 
-const USER_WAIT_STATUS_BYTES: u64 = core::mem::size_of::<i32>() as u64;
 impl Scheduler {
     pub(in crate::kernel::task) fn activate_user_task(&mut self, task_id: u64) -> bool {
         let Some(task_index) = self.get_task_index(task_id) else {
@@ -291,7 +290,7 @@ impl Scheduler {
     pub(in crate::kernel::task) fn prepare_current_user_waitpid(
         &mut self,
         child_task_id: Option<u64>,
-        status_pointer: Option<u64>,
+        status_buffer: Option<UserWritableRange>,
     ) -> Option<u64> {
         let current_task = &mut self.tasks[self.current_index];
         let task_id = current_task.get_id();
@@ -307,7 +306,7 @@ impl Scheduler {
             return None;
         }
 
-        user_runtime.waitpid_request = Some(UserWaitpidRequest::new(child_task_id, status_pointer));
+        user_runtime.waitpid_request = Some(UserWaitpidRequest::new(child_task_id, status_buffer));
         match child_task_id {
             Some(child_task_id) => crate::log_info!(
                 "task",
@@ -527,7 +526,7 @@ impl Scheduler {
         parent_runtime.waitpid_request = None;
         parent_runtime.waitpid_completion = Some(UserWaitpidCompletion::new(
             exit.task_id(),
-            request.status_pointer,
+            request.status_buffer,
             exit.wait_status(),
         ));
         parent_runtime.saved_frame.rax = exit.task_id();
@@ -554,15 +553,15 @@ impl Scheduler {
             return None;
         };
         let completion = user_runtime.waitpid_completion.take()?;
-        if let Some(status_pointer) = completion.status_pointer {
-            write_user_wait_status(status_pointer, completion.wait_status);
+        if let Some(status_buffer) = completion.status_buffer {
+            write_user_wait_status(status_buffer, completion.wait_status);
         }
         crate::log_info!(
             "task",
             "User task waitpid completed: task={} child={} status_stored={}",
             task_id,
             completion.child_task_id,
-            completion.status_pointer.is_some()
+            completion.status_buffer.is_some()
         );
         Some(())
     }
@@ -1239,10 +1238,8 @@ impl Scheduler {
     }
 }
 
-fn write_user_wait_status(status_pointer: u64, wait_status: u32) {
-    let range = UserVirtualRange::from_syscall_arguments(status_pointer, USER_WAIT_STATUS_BYTES)
-        .expect("validated waitpid status pointer must remain in user range");
-    let buffer = user_pointer::copy_to_user(UserWritableRange::new(range))
+fn write_user_wait_status(status_buffer: UserWritableRange, wait_status: u32) {
+    let buffer = user_pointer::copy_to_user(status_buffer)
         .expect("validated blocked waitpid status pointer must remain writable");
     buffer[..core::mem::size_of::<u32>()].copy_from_slice(&wait_status.to_ne_bytes());
 }

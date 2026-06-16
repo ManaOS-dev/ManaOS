@@ -145,6 +145,7 @@ active roadmap can list only unfinished work.
 - [x] Keep scheduler resume handoff diagnostic snapshots typed as `PhysicalFrameStart` and `VirtAddr` before console and smoke output formatting.
 - [x] Keep user virtual-memory scheduler diagnostics snapshots typed as `UserVirtualAddress` before console and smoke output formatting.
 - [x] Keep pending user `read` destinations typed as `UserWritableRange` before scheduler wait-state retention.
+- [x] Keep blocking `waitpid` status destinations typed as `UserWritableRange` before scheduler wait-completion retention.
 
 ### Address Space Lifecycle
 

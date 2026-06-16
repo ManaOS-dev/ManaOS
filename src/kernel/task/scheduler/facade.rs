@@ -10,7 +10,7 @@ use super::{
     USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
 use crate::kernel::filesystem::{FileDescriptorTable, SpawnDescriptorInheritanceSnapshot};
-use crate::kernel::memory::address::VirtAddr;
+use crate::kernel::memory::address::{UserWritableRange, VirtAddr};
 use crate::kernel::memory::user_heap::UserHeapBreakRequest;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -180,12 +180,12 @@ pub fn collect_waitable_child_exit(
 /// Prepare the current user task to block in `waitpid`.
 pub fn prepare_current_user_waitpid(
     child_task_id: Option<u64>,
-    status_pointer: Option<u64>,
+    status_buffer: Option<UserWritableRange>,
 ) -> Option<u64> {
     let mut scheduler = SCHEDULER.lock();
     scheduler
         .as_mut()
-        .and_then(|scheduler| scheduler.prepare_current_user_waitpid(child_task_id, status_pointer))
+        .and_then(|scheduler| scheduler.prepare_current_user_waitpid(child_task_id, status_buffer))
 }
 
 /// Prepare the current user task to block in `read`.

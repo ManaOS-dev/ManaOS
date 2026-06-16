@@ -19,7 +19,7 @@ use super::stack::{KernelStack, KernelStackFaultOwner, KernelStackGuardFault, Ke
 use super::state::TaskState;
 use crate::kernel::filesystem::{FileDescriptorTable, SpawnDescriptorInheritanceSnapshot};
 use crate::kernel::memory::address::{
-    PhysicalFrameStart, UserVirtualAddress, UserVirtualRange, UserWritableRange, VirtAddr,
+    PhysicalFrameStart, UserVirtualAddress, UserWritableRange, VirtAddr,
 };
 use crate::kernel::memory::address_space::{self, UserAddressSpace, UserAddressSpaceReclaim};
 use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
@@ -292,14 +292,14 @@ impl UserTaskRuntime {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct UserWaitpidRequest {
     child_task_id: Option<u64>,
-    status_pointer: Option<u64>,
+    status_buffer: Option<UserWritableRange>,
 }
 
 impl UserWaitpidRequest {
-    const fn new(child_task_id: Option<u64>, status_pointer: Option<u64>) -> Self {
+    const fn new(child_task_id: Option<u64>, status_buffer: Option<UserWritableRange>) -> Self {
         Self {
             child_task_id,
-            status_pointer,
+            status_buffer,
         }
     }
 
@@ -314,15 +314,19 @@ impl UserWaitpidRequest {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct UserWaitpidCompletion {
     child_task_id: u64,
-    status_pointer: Option<u64>,
+    status_buffer: Option<UserWritableRange>,
     wait_status: u32,
 }
 
 impl UserWaitpidCompletion {
-    const fn new(child_task_id: u64, status_pointer: Option<u64>, wait_status: u32) -> Self {
+    const fn new(
+        child_task_id: u64,
+        status_buffer: Option<UserWritableRange>,
+        wait_status: u32,
+    ) -> Self {
         Self {
             child_task_id,
-            status_pointer,
+            status_buffer,
             wait_status,
         }
     }
