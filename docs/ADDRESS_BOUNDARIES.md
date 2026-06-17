@@ -21,7 +21,8 @@ kernel ownership boundaries:
 - Kernel virtual pointers should be created only after a mapping helper proves
   the target range is mapped in the active address space.
 - Architecture entry-point function pointers should be classified before
-  architecture initialization lowers them into CPU register or MSR writes.
+  architecture initialization lowers them into IDT gates, CPU registers, or
+  MSR writes.
 
 ## Implemented Address Boundaries
 
@@ -88,6 +89,9 @@ untyped cross-domain `u64` values:
   programmed into the `SYSCALL` LSTAR MSR. The composition root passes this
   typed value into architecture initialization, and raw numeric lowering stays
   inside the final MSR write boundary.
+- `arch::x86_64::interrupt_descriptor_table` classifies the assembly timer
+  interrupt entry target as an `InterruptEntryAddress` before lowering it into
+  the IDT gate.
 - User task kernel stack tops are kept as `VirtAddr` across scheduler handoff
   paths and through the task architecture facade. They lower to raw `u64` only
   when that facade invokes the registered architecture installer and at the
@@ -392,6 +396,8 @@ Continue introducing wrappers in small steps:
   storage parsing. This now exists in `kernel::memory::address`.
 - `SyscallEntryAddress` for the architecture-owned virtual entry point
   programmed into x86_64 `SYSCALL` LSTAR.
+- `InterruptEntryAddress` for architecture-owned interrupt entry points
+  programmed into x86_64 IDT gates.
 
 The next implementation steps should focus on the remaining architecture ABI
 boundaries. They should avoid broad mechanical renames until the remaining

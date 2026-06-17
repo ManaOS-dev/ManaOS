@@ -20,7 +20,7 @@ kernel ownership boundary では型付き address に変換することです。
   low/high half に分割します。
 - kernel virtual pointer は、mapping helper が active address space に target range が
   mapped されていることを証明した後にだけ作ります。
-- architecture entry-point function pointer は、CPU register / MSR write に下げる前に
+- architecture entry-point function pointer は、IDT gate、CPU register、MSR write に下げる前に
   architecture initialization boundary で分類します。
 
 ## 実装済みの address boundary
@@ -61,6 +61,8 @@ kernel ownership boundary では型付き address に変換することです。
 - `arch::x86_64::SyscallEntryAddress`: `SYSCALL` LSTAR MSR に program する virtual entry target。
   composition root は architecture initialization に typed value を渡し、raw number への lowering は
   final MSR write boundary の中だけに閉じます。
+- `arch::x86_64::interrupt_descriptor_table` は assembly timer interrupt entry target を
+  `InterruptEntryAddress` として分類してから IDT gate へ下ろします。
 - user task kernel stack top は scheduler handoff path と task architecture facade では `VirtAddr` として保持し、facade が registered architecture installer を呼ぶ境界と `SYSCALL` entry stack-top atomic の境界でだけ raw `u64` へ下ろします。
 - kernel task stack top は `TaskContext::from_stack(...)` に `VirtAddr` として渡し、
   constructor が stack pointer を align した後、private assembly-facing context layout へ下ろします。
@@ -239,6 +241,7 @@ storage smoke はこの typed DMA setup boundary を assert します。
 - `DmaPhysicalAddress`: device descriptor に program できる physical address。
 - `StorageDataAddress`: generic storage parsing に渡す active DMA data buffer。
 - `SyscallEntryAddress`: x86_64 `SYSCALL` LSTAR に program する architecture-owned virtual entry point。
+- `InterruptEntryAddress`: x86_64 IDT gate に program する architecture-owned interrupt entry point。
 
 ## 移行順
 

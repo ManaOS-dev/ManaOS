@@ -173,6 +173,7 @@ active roadmap can list only unfinished work.
 - [x] Add storage smoke coverage for typed user entry argument pointer handoffs before first-entry context lowering.
 - [x] Read user trap-frame RIP/RSP through typed `UserVirtualAddress` accessors before diagnostics and `execve` publication lower them for output.
 - [x] Pass the x86_64 syscall entry target through a typed `SyscallEntryAddress` before lowering it into the LSTAR MSR.
+- [x] Classify the x86_64 timer interrupt entry stub through a typed `InterruptEntryAddress` before lowering it into the IDT gate.
 
 ### Address Space Lifecycle
 

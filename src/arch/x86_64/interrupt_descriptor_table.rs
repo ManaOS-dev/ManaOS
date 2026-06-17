@@ -201,6 +201,26 @@ extern "C" {
     fn timer_interrupt_handler_entry();
 }
 
+#[derive(Clone, Copy)]
+struct InterruptEntryAddress(VirtAddr);
+
+impl InterruptEntryAddress {
+    fn from_function(function: unsafe extern "C" fn()) -> Self {
+        let pointer = function as *const ();
+        let address =
+            u64::try_from(pointer.addr()).expect("interrupt entry address must fit in u64");
+        Self(VirtAddr::new(address))
+    }
+
+    const fn as_x86_address(self) -> VirtAddr {
+        self.0
+    }
+
+    fn as_u64(self) -> u64 {
+        self.0.as_u64()
+    }
+}
+
 static INTERRUPT_DESCRIPTOR_TABLE: LazyLock<InterruptDescriptorTable> = LazyLock::new(|| {
     let mut table = InterruptDescriptorTable::new();
     table.breakpoint.set_handler_fn(breakpoint_handler);
@@ -220,9 +240,9 @@ static INTERRUPT_DESCRIPTOR_TABLE: LazyLock<InterruptDescriptorTable> = LazyLock
     // SAFETY: `timer_interrupt_handler_entry` is an interrupt entry stub that
     // preserves registers, calls the Rust timer hook, and returns with `iretq`.
     unsafe {
-        table[InterruptIndex::Timer.as_u8()].set_handler_addr(VirtAddr::new(
-            timer_interrupt_handler_entry as *const () as u64,
-        ));
+        let timer_entry_address =
+            InterruptEntryAddress::from_function(timer_interrupt_handler_entry);
+        table[InterruptIndex::Timer.as_u8()].set_handler_addr(timer_entry_address.as_x86_address());
     }
     table[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
     table[InterruptIndex::Mouse.as_u8()].set_handler_fn(mouse_interrupt_handler);
@@ -232,6 +252,12 @@ static INTERRUPT_DESCRIPTOR_TABLE: LazyLock<InterruptDescriptorTable> = LazyLock
 
 pub fn initialize() {
     INTERRUPT_DESCRIPTOR_TABLE.load();
+    let timer_entry_address = InterruptEntryAddress::from_function(timer_interrupt_handler_entry);
+    crate::log_info!(
+        "arch",
+        "IDT timer entry initialized: address={:#x} timer_entry_typed=true",
+        timer_entry_address.as_u64()
+    );
 }
 
 extern "x86-interrupt" fn page_fault_handler(
