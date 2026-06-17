@@ -100,7 +100,8 @@ pub unsafe fn map_kernel_mmio_range(
     physical_start: KernelPhysAddr,
     size: u64,
 ) -> PageCount {
-    let start_page_address = physical_start.align_down_to_page();
+    let start_page_address = PhysicalFrameStart::new(physical_start.align_down_to_page())
+        .expect("MMIO mapping start page must be 4KiB-aligned");
     let page_count = page_count_for_byte_range(physical_start, size);
     let flags = PageTableFlags::PRESENT
         | PageTableFlags::WRITABLE
@@ -520,7 +521,7 @@ fn is_executable_memory_type(memory_type: MemoryType) -> bool {
 unsafe fn map_identity_pages(
     mapper: &mut OffsetPageTable,
     frame_allocator: &mut PhysicalFrameAllocator,
-    start_address: KernelPhysAddr,
+    start_address: PhysicalFrameStart,
     page_count: PageCount,
     flags: PageTableFlags,
 ) {
@@ -529,8 +530,10 @@ unsafe fn map_identity_pages(
             .checked_mul(PAGE_SIZE)
             .expect("identity mapping offset overflowed");
         let address = start_address
+            .as_address()
             .checked_add(offset)
-            .expect("identity mapping address overflowed");
+            .and_then(PhysicalFrameStart::new)
+            .expect("identity mapping physical frame start overflowed or lost alignment");
         let raw_address = address.as_u64();
         let page = x86_64::structures::paging::Page::<Size4KiB>::containing_address(
             X86VirtAddr::new(raw_address),

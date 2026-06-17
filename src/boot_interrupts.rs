@@ -307,7 +307,7 @@ fn verify_local_apic_eoi_provider(
     };
     crate::log_info!(
         "arch",
-        "Local APIC MMIO mapped: address={:#x} size={} pages={} page_count_typed=true",
+        "Local APIC MMIO mapped: address={:#x} size={} pages={} page_count_typed=true physical_page_start_typed=true",
         configured_local_apic.physical_address(),
         LOCAL_APIC_MMIO_MAPPING_SIZE,
         mapped_page_count.as_u64()
@@ -347,7 +347,7 @@ fn stage_ioapic_redirection_entries(
     };
     crate::log_info!(
         "arch",
-        "IOAPIC MMIO mapped: address={:#x} size={} pages={} page_count_typed=true",
+        "IOAPIC MMIO mapped: address={:#x} size={} pages={} page_count_typed=true physical_page_start_typed=true",
         configured_ioapic.physical_address(),
         IOAPIC_MMIO_MAPPING_SIZE,
         mapped_page_count.as_u64()

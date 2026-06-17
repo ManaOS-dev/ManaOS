@@ -61,6 +61,7 @@ kernel ownership boundary では型付き address に変換することです。
 - `user_stack::allocate_and_map_user_page(...) -> PhysicalFrameStart`。
 - `user_stack::map_user_range(...)` の internal user virtual / physical frame boundary。
 - `paging::map_kernel_mmio_range(...)` の MMIO physical base `PhysAddr` と mapped page coverage の `PageCount`。
+  identity-mapped page start は page-table mutation 前に `PhysicalFrameStart` として分類します。
 - PCI AHCI discovery から controller initialization / HBA MMIO mapping までの BAR5 `PhysAddr`。
 - `PhysicalFrameAllocator::add_region(...)` と `reserve_region*` の `PhysAddr` physical start と `FrameCount` frame count。
 - `AhciDmaBuffers` 内部の `DmaPhysicalAddress`。storage smoke は command-list、

@@ -99,6 +99,8 @@ untyped cross-domain `u64` values:
   domains with raw `u64` parameters.
 - `paging::map_kernel_mmio_range(...)` now accepts `PhysAddr` for the MMIO
   physical base address and returns `PageCount` for the mapped page coverage.
+  The identity-mapped page start is classified as `PhysicalFrameStart` before
+  page-table mutation.
 - PCI AHCI discovery stores BAR5 as `PhysAddr` and keeps that type through
   AHCI controller initialization and HBA MMIO mapping.
 - `PhysicalFrameAllocator::add_region(...)` and `reserve_region*` accept
