@@ -33,6 +33,24 @@ pub fn verify_typed_physical_frame_start() -> bool {
     }) && unaligned_frame_start.is_none()
 }
 
+/// Verify that tracked allocator region starts stay typed as physical addresses.
+#[allow(dead_code)]
+pub fn verify_typed_tracked_region_start() -> bool {
+    let mut frame_allocator = PhysicalFrameAllocator::new();
+    frame_allocator.add_region(PhysAddr::new(FRAME_SIZE), frame_count(4));
+    frame_allocator.reserve_region(PhysAddr::new(2 * FRAME_SIZE), frame_count(1));
+
+    let Some(first_frame) = frame_allocator.allocate_frame() else {
+        return false;
+    };
+    let Some(second_frame) = frame_allocator.allocate_frame() else {
+        return false;
+    };
+
+    first_frame.as_address() == PhysAddr::new(FRAME_SIZE)
+        && second_frame.as_address() == PhysAddr::new(3 * FRAME_SIZE)
+}
+
 /// Verify reserved, used, and free frame range tracking.
 #[allow(dead_code)]
 pub fn verify_reserved_used_and_free_range_tracking() -> bool {

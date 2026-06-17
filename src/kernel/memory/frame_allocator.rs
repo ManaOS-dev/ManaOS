@@ -8,7 +8,8 @@ pub use verification::{
     verify_contiguous_allocation_boundaries, verify_duplicate_allocation_rejection,
     verify_explicit_owner_coverage, verify_owner_tracking, verify_released_frame_reuse,
     verify_reserved_range_exclusion, verify_reserved_used_and_free_range_tracking,
-    verify_typed_physical_frame_start, verify_zero_address_skip_for_multi_frame_allocations,
+    verify_typed_physical_frame_start, verify_typed_tracked_region_start,
+    verify_zero_address_skip_for_multi_frame_allocations,
 };
 
 const MAX_REGIONS: usize = 128;
@@ -17,7 +18,7 @@ const FRAME_SIZE: u64 = 4096;
 
 #[derive(Clone, Copy)]
 struct Region {
-    start: u64,
+    start: PhysAddr,
     pages: u64,
 }
 
@@ -137,10 +138,16 @@ impl PhysicalFrameAllocator {
     /// Create an empty physical frame allocator.
     pub const fn new() -> Self {
         Self {
-            regions: [Region { start: 0, pages: 0 }; MAX_REGIONS],
+            regions: [Region {
+                start: PhysAddr::new(0),
+                pages: 0,
+            }; MAX_REGIONS],
             count: 0,
             tracked_ranges: [TrackedRange {
-                region: Region { start: 0, pages: 0 },
+                region: Region {
+                    start: PhysAddr::new(0),
+                    pages: 0,
+                },
                 state: FrameRangeState::Reserved,
                 owner: FrameRangeOwner::FirmwareReserved,
             }; MAX_TRACKED_RANGES],
@@ -225,7 +232,7 @@ impl PhysicalFrameAllocator {
                 pages: frames,
             };
             if self.mark_range_used(candidate_region, owner) {
-                let start = PhysicalFrameStart::new(PhysAddr::new(candidate_region.start))
+                let start = PhysicalFrameStart::new(candidate_region.start)
                     .expect("frame allocator returned an unaligned physical frame");
                 return PhysicalFrameRange::new(start, frame_count);
             }
@@ -242,7 +249,7 @@ impl PhysicalFrameAllocator {
 
         self.mark_range_free(
             Region {
-                start: range.start().as_u64(),
+                start: range.start().as_address(),
                 pages: range.frame_count().as_u64(),
             },
             owner,
@@ -359,7 +366,7 @@ impl PhysicalFrameAllocator {
         }
 
         let mut index = 0;
-        while index < self.count && self.regions[index].start < region.start {
+        while index < self.count && self.regions[index].start.as_u64() < region.start.as_u64() {
             index += 1;
         }
 
@@ -407,7 +414,9 @@ impl PhysicalFrameAllocator {
         }
 
         let mut index = 0;
-        while index < self.tracked_count && self.tracked_ranges[index].region.start < region.start {
+        while index < self.tracked_count
+            && self.tracked_ranges[index].region.start.as_u64() < region.start.as_u64()
+        {
             index += 1;
         }
 
@@ -468,22 +477,26 @@ impl PhysicalFrameAllocator {
                 index += 1;
                 continue;
             };
-            let overlap_start = tracked.region.start.max(reserved_region.start);
-            let overlap_end = tracked_end.min(reserved_end);
+            let overlap_start = tracked
+                .region
+                .start
+                .as_u64()
+                .max(reserved_region.start.as_u64());
+            let overlap_end = tracked_end.as_u64().min(reserved_end.as_u64());
             if overlap_start >= overlap_end {
                 index += 1;
                 continue;
             }
 
-            let before_pages = (overlap_start - tracked.region.start) / FRAME_SIZE;
-            let after_pages = (tracked_end - overlap_end) / FRAME_SIZE;
+            let before_pages = (overlap_start - tracked.region.start.as_u64()) / FRAME_SIZE;
+            let after_pages = (tracked_end.as_u64() - overlap_end) / FRAME_SIZE;
             if before_pages > 0 && after_pages > 0 {
                 self.tracked_ranges[index].region.pages = before_pages;
                 self.insert_tracked_range_at(
                     index + 1,
                     TrackedRange {
                         region: Region {
-                            start: overlap_end,
+                            start: PhysAddr::new(overlap_end),
                             pages: after_pages,
                         },
                         state: FrameRangeState::Free,
@@ -495,7 +508,7 @@ impl PhysicalFrameAllocator {
                 self.tracked_ranges[index].region.pages = before_pages;
                 index += 1;
             } else if after_pages > 0 {
-                self.tracked_ranges[index].region.start = overlap_end;
+                self.tracked_ranges[index].region.start = PhysAddr::new(overlap_end);
                 self.tracked_ranges[index].region.pages = after_pages;
                 index += 1;
             } else {
@@ -519,12 +532,15 @@ impl PhysicalFrameAllocator {
             let Some(tracked_end) = region_end(tracked.region) else {
                 return false;
             };
-            if used_region.start < tracked.region.start || used_end > tracked_end {
+            if used_region.start.as_u64() < tracked.region.start.as_u64()
+                || used_end.as_u64() > tracked_end.as_u64()
+            {
                 continue;
             }
 
-            let before_pages = (used_region.start - tracked.region.start) / FRAME_SIZE;
-            let after_pages = (tracked_end - used_end) / FRAME_SIZE;
+            let before_pages =
+                (used_region.start.as_u64() - tracked.region.start.as_u64()) / FRAME_SIZE;
+            let after_pages = (tracked_end.as_u64() - used_end.as_u64()) / FRAME_SIZE;
             self.tracked_ranges[index] = TrackedRange {
                 region: used_region,
                 state: FrameRangeState::Used,
@@ -595,12 +611,15 @@ impl PhysicalFrameAllocator {
             let Some(tracked_end) = region_end(tracked.region) else {
                 return false;
             };
-            if freed_region.start < tracked.region.start || freed_end > tracked_end {
+            if freed_region.start.as_u64() < tracked.region.start.as_u64()
+                || freed_end.as_u64() > tracked_end.as_u64()
+            {
                 continue;
             }
 
-            let before_pages = (freed_region.start - tracked.region.start) / FRAME_SIZE;
-            let after_pages = (tracked_end - freed_end) / FRAME_SIZE;
+            let before_pages =
+                (freed_region.start.as_u64() - tracked.region.start.as_u64()) / FRAME_SIZE;
+            let after_pages = (tracked_end.as_u64() - freed_end.as_u64()) / FRAME_SIZE;
             self.tracked_ranges[index] = TrackedRange {
                 region: freed_region,
                 state: FrameRangeState::Free,
@@ -695,7 +714,7 @@ fn normalize_region(start: PhysAddr, frame_count: FrameCount) -> Option<Region> 
     }
 
     Some(Region {
-        start: aligned_start,
+        start: PhysAddr::new(aligned_start),
         pages: (end - aligned_start) / FRAME_SIZE,
     })
 }
@@ -710,7 +729,7 @@ fn normalize_reserved_region(start: PhysAddr, frame_count: FrameCount) -> Option
     }
 
     Some(Region {
-        start: aligned_start,
+        start: PhysAddr::new(aligned_start),
         pages: (end - aligned_start) / FRAME_SIZE,
     })
 }
@@ -720,7 +739,7 @@ fn align_up(value: u64, alignment: u64) -> Option<u64> {
     value.checked_add(mask).map(|value| value & !mask)
 }
 
-fn region_end(region: Region) -> Option<u64> {
+fn region_end(region: Region) -> Option<PhysAddr> {
     region
         .pages
         .checked_mul(FRAME_SIZE)

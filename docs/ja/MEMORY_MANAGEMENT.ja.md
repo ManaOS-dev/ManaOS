@@ -34,6 +34,8 @@ physical frame allocator は、以下の前提に依存します。
   に渡せないようにします。
 - `PhysicalFrameStart` construction は `PhysAddr` だけを受け取るため、hardware register や
   page table から読んだ raw address は境界で physical address として分類してから渡します。
+- tracked allocator range は physical start を `PhysAddr` として保持し、sort や byte-distance
+  calculation が必要な箇所だけ raw number に下げます。
 - `FrameCount` construction は zero count と byte-length overflow を拒否してから、frame
   allocator API に contiguous frame count を渡します。
 - `PageCount` construction は zero count と byte-length overflow を拒否してから、kernel

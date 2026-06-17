@@ -36,6 +36,8 @@ The current physical frame allocator relies on these properties:
 - `PhysicalFrameStart` construction accepts only `PhysAddr`, so callers must
   classify raw hardware or page-table addresses at the boundary where they are
   read.
+- Tracked allocator ranges store their physical starts as `PhysAddr` and lower
+  them to raw numbers only for ordering and byte-distance calculations.
 - `FrameCount` construction rejects zero counts and byte-length overflow before
   frame allocator APIs accept contiguous frame counts.
 - `PageCount` construction rejects zero counts and byte-length overflow before

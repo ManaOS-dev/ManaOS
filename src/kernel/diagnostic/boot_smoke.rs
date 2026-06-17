@@ -82,6 +82,8 @@ pub fn verify_frame_allocator_rules() -> bool {
     let owner_tracking_ok = kernel::memory::frame_allocator::verify_owner_tracking();
     let released_frame_reuse_ok = kernel::memory::frame_allocator::verify_released_frame_reuse();
     let typed_frame_start_ok = kernel::memory::frame_allocator::verify_typed_physical_frame_start();
+    let typed_region_start_ok =
+        kernel::memory::frame_allocator::verify_typed_tracked_region_start();
     let owner_coverage_ok = kernel::memory::frame_allocator::verify_explicit_owner_coverage();
     let passed = zero_skip_ok
         && range_tracking_ok
@@ -91,16 +93,17 @@ pub fn verify_frame_allocator_rules() -> bool {
         && owner_tracking_ok
         && released_frame_reuse_ok
         && typed_frame_start_ok
+        && typed_region_start_ok
         && owner_coverage_ok;
     if passed {
         crate::log_info!(
             "memory",
-            "Frame allocator self-checks passed: zero_skip=true range_tracking=true duplicate_allocation=true contiguous_boundaries=true reserved_exclusion=true owner_tracking=true released_frame_reuse=true typed_frame_start=true owner_coverage=true"
+            "Frame allocator self-checks passed: zero_skip=true range_tracking=true duplicate_allocation=true contiguous_boundaries=true reserved_exclusion=true owner_tracking=true released_frame_reuse=true typed_frame_start=true typed_region_start=true owner_coverage=true"
         );
     } else {
         crate::log_error!(
             "memory",
-            "Frame allocator self-checks failed: zero_skip={} range_tracking={} duplicate_allocation={} contiguous_boundaries={} reserved_exclusion={} owner_tracking={} released_frame_reuse={} typed_frame_start={} owner_coverage={}",
+            "Frame allocator self-checks failed: zero_skip={} range_tracking={} duplicate_allocation={} contiguous_boundaries={} reserved_exclusion={} owner_tracking={} released_frame_reuse={} typed_frame_start={} typed_region_start={} owner_coverage={}",
             zero_skip_ok,
             range_tracking_ok,
             duplicate_allocation_ok,
@@ -109,6 +112,7 @@ pub fn verify_frame_allocator_rules() -> bool {
             owner_tracking_ok,
             released_frame_reuse_ok,
             typed_frame_start_ok,
+            typed_region_start_ok,
             owner_coverage_ok
         );
     }
