@@ -40,6 +40,9 @@ untyped cross-domain `u64` values:
 - `UserReadableRange`, `UserWritableRange`, and `UserCString` represent syscall
   copy direction and string policy before `copy_from_user`, `copy_to_user`, and
   `copy_cstr_from_user`.
+- Syscall copy helpers classify raw pointer/length ABI pairs directly into
+  `UserReadableRange`, `UserWritableRange`, or `UserCString` constructors before
+  any page-table permission probe or string scan runs.
 - User data page-table permission probes accept `UserReadableRange` and
   `UserWritableRange` before final raw slice creation. Raw `usize` pointers are
   limited to the final kernel slice/read boundary and diagnostic ABI inputs.
@@ -258,6 +261,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   then revalidate page-table permissions before writing the wait status.
 - `kernel::memory::user_pointer::copy_cstr_from_user` accepts `UserCString`,
   which wraps a readable range capped by the syscall path-length policy.
+- Syscall buffer helpers use `UserReadableRange`, `UserWritableRange`, and
+  `UserCString` syscall constructors so raw pointer/length pairs do not leak
+  past copy-direction classification.
 - User data permission checks in `paging` and per-process `UserAddressSpace`
   consume `UserReadableRange` or `UserWritableRange`; they no longer accept raw
   pointer/length pairs after syscall pointer classification has succeeded.

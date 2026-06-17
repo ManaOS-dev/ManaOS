@@ -121,6 +121,8 @@ ELF load-segment memory/page range の `UserVirtualRange` / `UserPageStart` boun
 private `mmap` syscall length の `UserMappingLength` boundary 化、
 user pointer page-table permission probe の `UserReadableRange` / `UserWritableRange` boundary 化、
 user pointer permission page walk の `UserPageStart` boundary 化、
+syscall copy pointer / length pair の `UserReadableRange` / `UserWritableRange` / `UserCString`
+constructor boundary 化、
 user address-space permission self-check probe address の `VirtAddr` / `UserVirtualAddress` boundary 化、
 scheduler-owned `mmap` requested address の `UserMappingPlacement` boundary 化、
 ELF entry point の `UserVirtualAddress` boundary 化、

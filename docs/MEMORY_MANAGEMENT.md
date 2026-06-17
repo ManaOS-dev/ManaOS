@@ -50,6 +50,9 @@ The current physical frame allocator relies on these properties:
   4 KiB user-page alignment is established before page tables are mutated.
 - User permission probes derive `UserPageStart` first/last page boundaries from
   `UserVirtualRange` before walking active or per-process page tables.
+- Syscall buffer helpers classify raw pointer/length ABI arguments into
+  `UserReadableRange`, `UserWritableRange`, or `UserCString` before copy
+  direction reaches page-table permission probes or string scanning.
 - Registered ranges are normalized to 4 KiB pages and skip physical address
   zero.
 - Registered ranges are sorted and adjacent ranges are merged before
@@ -268,6 +271,9 @@ User pointer copy helpers and per-process address-space probes derive
 permission-check page walks from `UserVirtualRange::first_page_start()` and
 `last_page_start()`. The walkers therefore compare `UserPageStart` boundaries
 before lowering to raw numbers for `x86_64` page-table translation.
+The syscall copy helper layer now constructs readable, writable, or C-string
+candidate ranges through direction-specific constructors, so the raw ABI
+pointer/length pair is classified before it can reach the lower copy helpers.
 
 ## User Address Spaces
 

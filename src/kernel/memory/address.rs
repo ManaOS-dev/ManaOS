@@ -549,6 +549,24 @@ pub fn verify_typed_user_virtual_range_page_bounds() -> bool {
     })
 }
 
+/// Verify typed syscall copy-direction range constructor contracts.
+pub fn verify_typed_user_copy_ranges() -> bool {
+    let valid_start = PAGE_SIZE;
+    let readable_range = UserReadableRange::from_syscall_arguments(valid_start, 4);
+    let writable_range = UserWritableRange::from_syscall_arguments(valid_start, 4);
+    let string_range = UserCString::from_syscall_arguments(valid_start, 4);
+    let zero_pointer_rejected = UserReadableRange::from_syscall_arguments(0, 1).is_none();
+    let zero_length_rejected = UserWritableRange::from_syscall_arguments(valid_start, 0).is_none();
+
+    readable_range.is_some_and(|range| range.as_range().start().as_u64() == valid_start)
+        && writable_range.is_some_and(|range| range.as_range().byte_len() == 4)
+        && string_range.is_some_and(|range| {
+            range.as_readable_range().as_range().end_exclusive() == valid_start + 4
+        })
+        && zero_pointer_rejected
+        && zero_length_rejected
+}
+
 /// Verify the typed physical frame count construction contract.
 pub fn verify_typed_frame_count() -> bool {
     let valid_count = FrameCount::new(2);
@@ -653,6 +671,12 @@ impl UserReadableRange {
         Self(range)
     }
 
+    /// Convert raw syscall ABI pointer and length arguments into a readable range.
+    pub fn from_syscall_arguments(user_pointer: u64, byte_len: u64) -> Option<Self> {
+        let range = UserVirtualRange::from_syscall_arguments(user_pointer, byte_len)?;
+        Some(Self::new(range))
+    }
+
     /// Return the underlying user virtual range.
     pub const fn as_range(self) -> UserVirtualRange {
         self.0
@@ -669,6 +693,12 @@ impl UserCString {
         Self(range)
     }
 
+    /// Convert raw syscall ABI pointer and length arguments into a C-string candidate.
+    pub fn from_syscall_arguments(user_pointer: u64, byte_len: u64) -> Option<Self> {
+        let range = UserReadableRange::from_syscall_arguments(user_pointer, byte_len)?;
+        Some(Self::new(range))
+    }
+
     /// Return the underlying readable user range.
     pub const fn as_readable_range(self) -> UserReadableRange {
         self.0
@@ -683,6 +713,12 @@ impl UserWritableRange {
     /// Create a writable user range from a validated user virtual range.
     pub const fn new(range: UserVirtualRange) -> Self {
         Self(range)
+    }
+
+    /// Convert raw syscall ABI pointer and length arguments into a writable range.
+    pub fn from_syscall_arguments(user_pointer: u64, byte_len: u64) -> Option<Self> {
+        let range = UserVirtualRange::from_syscall_arguments(user_pointer, byte_len)?;
+        Some(Self::new(range))
     }
 
     /// Return the underlying user virtual range.

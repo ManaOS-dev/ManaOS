@@ -46,6 +46,9 @@ physical frame allocator は、以下の前提に依存します。
   4 KiB user-page alignment を確定します。
 - user permission probe は active / per-process page table を歩く前に、
   `UserVirtualRange` から first / last page boundary を `UserPageStart` として導出します。
+- syscall buffer helper は raw pointer / length ABI argument を
+  `UserReadableRange`、`UserWritableRange`、または `UserCString` へ分類してから、
+  copy direction を page-table permission probe や string scan に渡します。
 - registered range は 4 KiB page に正規化し、physical address zero を避けます。
 - registered range は sort し、隣接 range は merge します。
 - allocation は tracked free range を scan し、owner が release するまで同じ physical frame を
@@ -176,6 +179,9 @@ user pointer copy helper と per-process address-space probe は、
 `UserVirtualRange::first_page_start()` / `last_page_start()` から permission-check page walk を導出します。
 walker は `x86_64` page-table translation 用に raw number へ下げる前に、
 `UserPageStart` boundary を比較します。
+syscall copy helper layer は readable、writable、C-string candidate range を
+direction-specific constructor 経由で作るため、raw ABI pointer / length pair は
+lower copy helper に届く前に分類されます。
 
 ## user address spaces
 

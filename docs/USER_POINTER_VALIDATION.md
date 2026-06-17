@@ -19,9 +19,9 @@ The implementation entry point is `kernel::memory::user_pointer`.
   as long as the terminator itself is readable.
 - NUL-terminated pointer arrays must copy each pointer slot with
   `copy_from_user` before scanning the pointed-to strings.
-- Non-zero syscall pointer arguments are converted from raw `u64` ABI values to
-  `UserVirtualRange`, then wrapped as `UserReadableRange` or
-  `UserWritableRange` before the copy helpers run.
+- Non-zero syscall pointer arguments are converted from raw `u64` ABI values by
+  copy-direction constructors on `UserReadableRange`, `UserWritableRange`, or
+  `UserCString` before the copy helpers run.
 - Page-table permission probes consume those copy-direction wrappers. Raw
   `usize` pointers are used only when creating the final kernel slice or reading
   one already-classified user byte.
@@ -31,8 +31,9 @@ The implementation entry point is `kernel::memory::user_pointer`.
 - User address-space permission self-checks keep representative kernel probes as
   `VirtAddr` and representative user probes as `UserVirtualAddress` before
   forming the single-byte readable or writable ranges used by the probe.
-- NUL-terminated path arguments are additionally wrapped as `UserCString`
-  before `copy_cstr_from_user` scans readable bytes for the terminator.
+- NUL-terminated path arguments are additionally wrapped as `UserCString` by
+  the syscall constructor before `copy_cstr_from_user` scans readable bytes for
+  the terminator.
 - Syscalls return Linux-like `-EFAULT` (`ERROR_BAD_ADDRESS`) when pointer
   validation fails.
 

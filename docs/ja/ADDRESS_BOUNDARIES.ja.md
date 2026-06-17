@@ -31,6 +31,9 @@ kernel ownership boundary では型付き address に変換することです。
 - `DmaPhysicalAddress`: AHCI descriptor、FIS buffer、command table、PRDT へ program できる physical address。
 - `UserVirtualAddress` / `UserVirtualRange`: syscall copy validation 前の non-null user virtual address と byte range。
 - `UserReadableRange` / `UserWritableRange` / `UserCString`: copy direction と string policy。
+- syscall copy helper は raw pointer / length ABI pair を、page-table permission probe や
+  string scan の前に `UserReadableRange`、`UserWritableRange`、または `UserCString`
+  constructor へ直接分類します。
 - user data page-table permission probe は final raw slice creation 前に
   `UserReadableRange` / `UserWritableRange` を受け取ります。raw `usize` pointer は
   最後の kernel slice / byte read boundary と diagnostic ABI input に閉じます。
@@ -125,6 +128,9 @@ blocking `waitpid` の pending wait は、parent task address space が再び ac
 `paging` と per-process `UserAddressSpace` の user data permission check は
 `UserReadableRange` または `UserWritableRange` を受け取ります。syscall pointer classification 後に
 raw pointer / length pair を受け取りません。
+syscall buffer helper は `UserReadableRange`、`UserWritableRange`、`UserCString` の
+syscall constructor を使うため、raw pointer / length pair は copy-direction classification を
+越えて漏れません。
 permission check の page walk boundary は `UserVirtualRange` から `UserPageStart` として導出し、
 active / per-process page-table probe が user page start を raw virtual address として扱わないようにします。
 per-process address-space permission self-check は kernel probe を `VirtAddr`、user probe を

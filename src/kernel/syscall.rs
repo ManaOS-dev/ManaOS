@@ -42,9 +42,7 @@
 use alloc::{string::String, vec::Vec};
 
 use crate::kernel::memory::{
-    address::{
-        PageCount, UserCString, UserReadableRange, UserVirtualRange, UserWritableRange, VirtAddr,
-    },
+    address::{PageCount, UserCString, UserReadableRange, UserWritableRange, VirtAddr},
     user_pointer,
 };
 use crate::kernel::task::{context::UserTrapFrame, UserTrapFrameSource};
@@ -1190,15 +1188,13 @@ fn copy_user_entry_string_value(
     user_string_pointer: u64,
     copied_string_bytes: &mut usize,
 ) -> Result<Vec<u8>, u64> {
-    let range = UserVirtualRange::from_syscall_arguments(
+    let user_string = UserCString::from_syscall_arguments(
         user_string_pointer,
         u64::try_from(MAX_USER_ENTRY_COPIED_STRING_BYTES)
             .expect("max user entry string bytes must fit in u64"),
     )
     .ok_or(ERROR_BAD_ADDRESS)?;
-    let Some(value) =
-        user_pointer::copy_cstr_bytes_from_user(UserCString::new(UserReadableRange::new(range)))
-    else {
+    let Some(value) = user_pointer::copy_cstr_bytes_from_user(user_string) else {
         return Err(ERROR_BAD_ADDRESS);
     };
 
@@ -1220,8 +1216,8 @@ fn copy_input_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static [u8]> 
         return Some(&[]);
     }
 
-    let range = UserVirtualRange::from_syscall_arguments(user_pointer, byte_len)?;
-    user_pointer::copy_from_user(UserReadableRange::new(range))
+    let range = UserReadableRange::from_syscall_arguments(user_pointer, byte_len)?;
+    user_pointer::copy_from_user(range)
 }
 
 fn copy_output_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static mut [u8]> {
@@ -1233,16 +1229,15 @@ fn copy_output_buffer(user_pointer: u64, byte_len: u64) -> Option<&'static mut [
 }
 
 fn output_buffer_range(user_pointer: u64, byte_len: u64) -> Option<UserWritableRange> {
-    let range = UserVirtualRange::from_syscall_arguments(user_pointer, byte_len)?;
-    Some(UserWritableRange::new(range))
+    UserWritableRange::from_syscall_arguments(user_pointer, byte_len)
 }
 
 fn copy_path_argument(user_pointer: u64) -> Option<alloc::string::String> {
-    let range = UserVirtualRange::from_syscall_arguments(
+    let path = UserCString::from_syscall_arguments(
         user_pointer,
         u64::try_from(MAX_USER_STRING_LENGTH).expect("max user path length must fit in u64"),
     )?;
-    user_pointer::copy_cstr_from_user(UserCString::new(UserReadableRange::new(range)))
+    user_pointer::copy_cstr_from_user(path)
 }
 
 fn write_user_file_stat(buffer: &mut [u8], metadata: crate::kernel::filesystem::FileMetadata) {
