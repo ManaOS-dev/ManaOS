@@ -289,6 +289,10 @@ clears PML4 entries `128..256`, which cover the linked user program range and
 the current user stack slot range. Low identity mappings and higher-half kernel
 mappings remain shared and non-user-accessible so kernel code can run after a
 CR3 switch while Ring 3 cannot access kernel pages.
+Scheduler user-entry and timer-resume paths keep the selected user task kernel
+stack top as `VirtAddr` through `kernel::task::architecture::install_kernel_stack(...)`.
+That facade lowers to raw `u64` only when invoking the registered
+architecture-owned stack installer.
 
 ELF loading and user stack allocation now map pages into an explicit
 `UserAddressSpace` instead of the active CR3. Initial stack strings and pointer

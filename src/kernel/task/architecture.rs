@@ -1,5 +1,6 @@
 //! Architecture callback boundary for task switching.
 
+use crate::kernel::memory::address::VirtAddr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Architecture function that switches between two saved kernel contexts.
@@ -127,7 +128,7 @@ pub unsafe fn enter_user_mode_once(context: *const u64) {
 ///
 /// Panics if the architecture kernel stack installer has not been registered by
 /// the composition root.
-pub fn install_kernel_stack(stack_top: u64) {
+pub fn install_kernel_stack(stack_top: VirtAddr) {
     let function = KERNEL_STACK_INSTALL_FUNCTION.load(Ordering::Acquire);
     assert!(
         function != 0,
@@ -137,5 +138,5 @@ pub fn install_kernel_stack(stack_top: u64) {
     // SAFETY: The stored value came from register_kernel_stack_installer and
     // zero was handled above as the unregistered state.
     let function: KernelStackInstallFunction = unsafe { core::mem::transmute(function) };
-    function(stack_top);
+    function(stack_top.as_u64());
 }

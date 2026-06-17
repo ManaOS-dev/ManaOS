@@ -51,7 +51,7 @@ kernel ownership boundary では型付き address に変換することです。
 - `UserMappingUnmapRequest`: syscall ABI address classification 後の `munmap` request。scheduler と mapping code は raw unmap start address を受け取りません。
 - `UserMappingLength`: syscall ABI validation 後の private `mmap` byte length。scheduler と mapping code は page count を導出するための raw length value を受け取りません。
 - `KernelStackGuardFault`: `kernel::interrupt` が raw page-fault address を分類した後の guard / writable / top `VirtAddr`。
-- user task kernel stack top は scheduler handoff path では `VirtAddr` として保持し、registered architecture installer と `SYSCALL` entry stack-top atomic の境界でだけ raw `u64` へ下ろします。
+- user task kernel stack top は scheduler handoff path と task architecture facade では `VirtAddr` として保持し、facade が registered architecture installer を呼ぶ境界と `SYSCALL` entry stack-top atomic の境界でだけ raw `u64` へ下ろします。
 - user trap-frame storage address は `kernel::task::record_current_user_trap_frame(...)`
   の前に `VirtAddr` へ分類し、scheduler metadata が raw kernel stack address を受け取らないようにします。
 - scheduler task snapshot は last resume address-space root を `PhysicalFrameStart`、last resume kernel stack top を `VirtAddr` として保持し、console / smoke output formatting の境界でだけ raw number へ下ろします。
@@ -145,7 +145,7 @@ memory API に渡します。
 heap growth / shrink helper は aligned mapped-end boundary を `UserPageStart` として保持し、
 comparison や diagnostics の直前だけ raw number へ下げます。
 kernel stack guard-fault lookup は `kernel::interrupt` で raw architecture page-fault address を `VirtAddr` へ分類してから scheduler boundary へ渡します。
-user entry と timer-resume の handoff は、選択した user task の kernel stack top を `VirtAddr` として保持します。architecture provider call と `SYSCALL` entry stack-top atomic が残る raw lowering point です。
+user entry と timer-resume の handoff は、選択した user task の kernel stack top を task architecture facade まで `VirtAddr` として保持します。facade 内の architecture provider call と `SYSCALL` entry stack-top atomic が残る raw lowering point です。
 syscall / timer trap-frame storage address は architecture/shared ABI の capture point だけ raw のままです。
 kernel interrupt / syscall bridge は captured `UserTrapFrame` を task scheduler に記録する前に
 `VirtAddr` へ変換します。
@@ -208,7 +208,7 @@ storage smoke はこの typed DMA setup boundary を assert します。
 - `UserCString`: NUL validation 前の syscall string candidate。
 - `UserMappingUnmapRequest`: syscall ABI classification 後の private `munmap` request。
 - `UserMappingLength`: syscall ABI classification 後の private `mmap` length。
-- `VirtAddr`: architecture / `SYSCALL` entry boundary 前の scheduler-owned user task kernel stack top handoff。
+- `VirtAddr`: task architecture facade / `SYSCALL` entry raw boundary 前の scheduler-owned user task kernel stack top handoff。
 - `PhysicalFrameStart` / `VirtAddr`: console / smoke output formatting 前の scheduler resume handoff diagnostic snapshot。
 - `UserVirtualAddress`: console / smoke output formatting 前の user virtual-memory scheduler snapshot。
 - `DmaPhysicalAddress`: device descriptor に program できる physical address。

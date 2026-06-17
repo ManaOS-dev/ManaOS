@@ -66,7 +66,9 @@ typed address boundary では、`PhysicalFrameStart`、`UserVirtualAddress`、`U
 `FrameCount`、`PageCount` の主要境界、typed `brk` / `munmap` request、kernel stack top handoff、
 permission probe / page-walk boundary、ELF entry / heap start、ELF load segment memory/page range、
 private `mmap` length、private mapping record、AHCI DMA setup address、trap-frame storage address の
-typed 化が完了済みです。user entry / trap-frame register layout は compile-time offset assertion で
+typed 化が完了済みです。user task kernel stack top handoff は task architecture facade まで
+`VirtAddr` を保ち、architecture callback 呼び出し境界だけで raw `u64` に下ろします。
+user entry / trap-frame register layout は compile-time offset assertion で
 guard され、first-entry の `argv` / `envp` handoff は storage smoke の
 `entry_arguments_typed=true` assertion で確認します。
 

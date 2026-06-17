@@ -76,8 +76,9 @@ untyped cross-domain `u64` values:
   `VirtAddr` after page-fault ABI values are classified at the kernel interrupt
   boundary.
 - User task kernel stack tops are kept as `VirtAddr` across scheduler handoff
-  paths and lower to raw `u64` only at the registered architecture installer
-  and `SYSCALL` entry stack-top atomic boundary.
+  paths and through the task architecture facade. They lower to raw `u64` only
+  when that facade invokes the registered architecture installer and at the
+  `SYSCALL` entry stack-top atomic boundary.
 - User trap-frame storage addresses are classified as `VirtAddr` before
   `kernel::task::record_current_user_trap_frame(...)`, so scheduler metadata
   does not receive a raw kernel stack address.
@@ -231,8 +232,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   classifies the raw architecture page-fault address. Diagnostic formatting
   lowers those typed virtual addresses back to raw numbers only at log output.
 - Scheduler user-entry and timer-resume handoffs keep the selected user task
-  kernel stack top as `VirtAddr`; architecture provider calls and the `SYSCALL`
-  entry stack-top atomic are the remaining raw lowering points.
+  kernel stack top as `VirtAddr` through the task architecture facade; the
+  registered architecture provider invocation inside that facade and the
+  `SYSCALL` entry stack-top atomic are the remaining raw lowering points.
 - Syscall and timer trap-frame storage addresses are raw only at the
   architecture/shared ABI capture point. The kernel interrupt and syscall
   bridges convert them to `VirtAddr` before the task scheduler records the
@@ -347,8 +349,9 @@ Continue introducing wrappers in small steps:
   classification.
 - `UserMappingLength` for private `mmap` lengths after syscall ABI
   classification.
-- `VirtAddr` for scheduler-owned user task kernel stack top handoffs before
-  architecture and `SYSCALL` entry boundaries.
+- `VirtAddr` for scheduler-owned user task kernel stack top handoffs through
+  the task architecture facade before architecture and `SYSCALL` entry raw
+  boundaries.
 - `PhysicalFrameStart` and `VirtAddr` for scheduler resume handoff diagnostic
   snapshots before console or smoke output formatting.
 - `UserVirtualAddress` for user virtual-memory scheduler snapshots before

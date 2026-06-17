@@ -192,6 +192,9 @@ function pointer を numeric address に下ろす場所は boot smoke call site 
 `kernel::memory::address_space::UserAddressSpace` は user PML4 root を含む physical frame を所有します。
 creation は active kernel template を copy し、linked user program range と user stack slot range を
 覆う PML4 entries `128..256` を clear します。
+scheduler の user-entry / timer-resume path は、選択した user task kernel stack top を
+`kernel::task::architecture::install_kernel_stack(...)` まで `VirtAddr` として保持します。
+この facade が architecture-owned stack installer を呼ぶ瞬間だけ raw `u64` へ下ろします。
 
 ELF loading と user stack allocation は active CR3 ではなく explicit `UserAddressSpace` へ map します。
 one-shot user lifecycle は Ring 3 entry 前に task address space へ切り替え、`SYS_EXIT` 後に kernel
