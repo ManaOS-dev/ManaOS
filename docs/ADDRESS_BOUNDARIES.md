@@ -123,6 +123,9 @@ untyped cross-domain `u64` values:
   page-table mutation.
 - PCI AHCI discovery stores BAR5 as `PhysAddr` and keeps that type through
   AHCI controller initialization and HBA MMIO mapping.
+- APIC routing configuration stores Local APIC and IOAPIC MMIO physical bases
+  as `ApicMmioAddress` before Local APIC, IOAPIC, and Local APIC timer
+  register wrappers lower them to pointer-sized MMIO addresses.
 - `PhysicalFrameAllocator::add_region(...)` and `reserve_region*` accept
   `PhysAddr` physical starts and `FrameCount` frame counts before normalizing
   frame ranges.
@@ -394,6 +397,8 @@ Continue introducing wrappers in small steps:
   device descriptors. This now exists in `kernel::memory::address`.
 - `StorageDataAddress` for the active DMA data buffer passed through generic
   storage parsing. This now exists in `kernel::memory::address`.
+- `ApicMmioAddress` for APIC-family MMIO physical bases before architecture
+  register access lowers them to pointer-sized addresses.
 - `SyscallEntryAddress` for the architecture-owned virtual entry point
   programmed into x86_64 `SYSCALL` LSTAR.
 - `InterruptEntryAddress` for architecture-owned interrupt entry points

@@ -1,6 +1,6 @@
 //! Interrupt controller selection and initialization.
 
-use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use pic8259::ChainedPics;
 use spin::Mutex;
 
@@ -80,7 +80,7 @@ use registers::{IoApicRegisters, LocalApicRegisters};
 mod configuration;
 
 pub use configuration::{
-    ApicRoutingConfiguration, ApicRoutingProviderStatus, EndOfInterruptStatus,
+    ApicMmioAddress, ApicRoutingConfiguration, ApicRoutingProviderStatus, EndOfInterruptStatus,
     InterruptControllerKind, IoApicConfiguration, IoApicRedirectionEntry, IoApicRedirectionPlan,
     IoApicRedirectionStagingStatus, IoApicRoutingActivationStatus, IoApicTimerRouteMaskStatus,
     LegacyIrqRoute, LegacyPicBoundaryStatus, LocalApicConfiguration, LocalApicEoiProviderStatus,
@@ -95,7 +95,7 @@ static LEGACY_INTERRUPT_CONTROLLERS: Mutex<ChainedPics> =
 
 static APIC_ROUTING_PROVIDER: Mutex<ApicRoutingProviderState> =
     Mutex::new(ApicRoutingProviderState::new());
-static LOCAL_APIC_EOI_BASE_ADDRESS: AtomicUsize = AtomicUsize::new(0);
+static LOCAL_APIC_EOI_BASE_ADDRESS: AtomicU64 = AtomicU64::new(0);
 static IOAPIC_ROUTING_ACTIVE: AtomicBool = AtomicBool::new(false);
 static APIC_END_OF_INTERRUPT_COUNT: AtomicU64 = AtomicU64::new(0);
 static LEGACY_END_OF_INTERRUPT_COUNT: AtomicU64 = AtomicU64::new(0);
@@ -154,8 +154,7 @@ pub fn configure_apic_routing_provider(configuration: &ApicRoutingConfiguration)
     let mut provider = APIC_ROUTING_PROVIDER.lock();
     provider.configured = true;
     provider.configuration = *configuration;
-    let local_apic_address = usize::try_from(configuration.local_apic().physical_address())
-        .expect("Local APIC MMIO address must fit in usize");
+    let local_apic_address = configuration.local_apic().physical_address().as_u64();
     LOCAL_APIC_EOI_BASE_ADDRESS.store(local_apic_address, Ordering::Release);
 }
 
@@ -243,11 +242,12 @@ pub unsafe fn stage_masked_ioapic_redirection_entries() -> Option<IoApicRedirect
 /// The configured Local APIC MMIO physical page must be identity-mapped as
 /// readable kernel memory.
 pub unsafe fn inspect_local_apic_eoi_provider() -> Option<LocalApicEoiProviderStatus> {
-    let base_address = LOCAL_APIC_EOI_BASE_ADDRESS.load(Ordering::Acquire);
-    if base_address == 0 {
+    let raw_base_address = LOCAL_APIC_EOI_BASE_ADDRESS.load(Ordering::Acquire);
+    if raw_base_address == 0 {
         return None;
     }
 
+    let base_address = ApicMmioAddress::new(raw_base_address);
     let registers = LocalApicRegisters::new(base_address);
     // SAFETY: The caller guarantees the Local APIC MMIO page is mapped, and the
     // APIC ID register is a readable architectural Local APIC register.
@@ -269,7 +269,7 @@ pub unsafe fn inspect_local_apic_eoi_provider() -> Option<LocalApicEoiProviderSt
 
     Some(LocalApicEoiProviderStatus::new(
         flags,
-        u64::try_from(base_address).expect("Local APIC MMIO address must fit in u64"),
+        base_address.as_u64(),
         local_apic_id_from_register(id_register),
         version,
         maximum_lvt_entry_from_version(version),
@@ -297,11 +297,12 @@ pub unsafe fn activate_ioapic_routing() -> Option<IoApicRoutingActivationStatus>
     };
 
     let plan = IoApicRedirectionPlan::from_configuration(&configuration);
-    let local_apic_base_address = LOCAL_APIC_EOI_BASE_ADDRESS.load(Ordering::Acquire);
-    if local_apic_base_address == 0 {
+    let raw_local_apic_base_address = LOCAL_APIC_EOI_BASE_ADDRESS.load(Ordering::Acquire);
+    if raw_local_apic_base_address == 0 {
         return None;
     }
 
+    let local_apic_base_address = ApicMmioAddress::new(raw_local_apic_base_address);
     let local_apic_registers = LocalApicRegisters::new(local_apic_base_address);
     let ioapic_registers = IoApicRegisters::new(configuration.ioapic().physical_address());
     let mut status = IoApicRoutingActivationStatus::new(plan.entry_count());
@@ -414,8 +415,12 @@ fn should_mask_legacy_pic_for_apic_backend() -> bool {
     }
 
     provider.configuration.local_apic().is_enabled()
-        && provider.configuration.local_apic().physical_address() != 0
-        && provider.configuration.ioapic().physical_address() != 0
+        && !provider
+            .configuration
+            .local_apic()
+            .physical_address()
+            .is_zero()
+        && !provider.configuration.ioapic().physical_address().is_zero()
 }
 
 fn redirection_entry_for_legacy_irq(
@@ -661,11 +666,12 @@ pub fn has_ioapic_routing() -> bool {
 }
 
 unsafe fn notify_local_apic_end_of_interrupt() {
-    let base_address = LOCAL_APIC_EOI_BASE_ADDRESS.load(Ordering::Acquire);
+    let raw_base_address = LOCAL_APIC_EOI_BASE_ADDRESS.load(Ordering::Acquire);
     assert!(
-        base_address != 0,
+        raw_base_address != 0,
         "Local APIC EOI provider must be configured before APIC routing"
     );
+    let base_address = ApicMmioAddress::new(raw_base_address);
     let registers = LocalApicRegisters::new(base_address);
     // SAFETY: APIC routing is active only after the Local APIC MMIO page has
     // been mapped and the EOI provider has been configured.

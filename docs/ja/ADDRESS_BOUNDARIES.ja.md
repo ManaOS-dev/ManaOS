@@ -78,6 +78,9 @@ kernel ownership boundary では型付き address に変換することです。
 - `paging::map_kernel_mmio_range(...)` の MMIO physical base `PhysAddr` と mapped page coverage の `PageCount`。
   identity-mapped page start は page-table mutation 前に `PhysicalFrameStart` として分類します。
 - PCI AHCI discovery から controller initialization / HBA MMIO mapping までの BAR5 `PhysAddr`。
+- APIC routing configuration は Local APIC / IOAPIC MMIO physical base を
+  `ApicMmioAddress` として保持し、Local APIC / IOAPIC / Local APIC timer register
+  wrapper が pointer-sized MMIO address へ下ろす直前まで raw に戻しません。
 - `PhysicalFrameAllocator::add_region(...)` と `reserve_region*` の `PhysAddr` physical start と `FrameCount` frame count。
 - `AhciDmaBuffers` 内部の `DmaPhysicalAddress`。storage smoke は command-list、
   received-FIS、command-table、data-buffer setup が final register split 直前まで
@@ -240,6 +243,8 @@ storage smoke はこの typed DMA setup boundary を assert します。
 - `UserVirtualAddress`: console / smoke output formatting 前の user virtual-memory scheduler snapshot。
 - `DmaPhysicalAddress`: device descriptor に program できる physical address。
 - `StorageDataAddress`: generic storage parsing に渡す active DMA data buffer。
+- `ApicMmioAddress`: architecture register access が pointer-sized address へ下ろす前の
+  APIC-family MMIO physical base。
 - `SyscallEntryAddress`: x86_64 `SYSCALL` LSTAR に program する architecture-owned virtual entry point。
 - `InterruptEntryAddress`: x86_64 IDT gate に program する architecture-owned interrupt entry point。
 

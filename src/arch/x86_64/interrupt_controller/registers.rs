@@ -1,13 +1,15 @@
 //! Local APIC and IOAPIC MMIO register wrappers.
 
-use super::{IOAPIC_REGISTER_SELECT_OFFSET, IOAPIC_REGISTER_WINDOW_OFFSET};
+use super::{ApicMmioAddress, IOAPIC_REGISTER_SELECT_OFFSET, IOAPIC_REGISTER_WINDOW_OFFSET};
 pub(super) struct LocalApicRegisters {
     base_address: usize,
 }
 
 impl LocalApicRegisters {
-    pub(super) const fn new(base_address: usize) -> Self {
-        Self { base_address }
+    pub(super) fn new(base_address: ApicMmioAddress) -> Self {
+        Self {
+            base_address: base_address.as_usize(),
+        }
     }
 
     pub(super) unsafe fn read(&self, register: usize) -> u32 {
@@ -38,14 +40,13 @@ pub(super) struct IoApicRegisters {
 }
 
 impl IoApicRegisters {
-    pub(super) fn new(physical_address: u64) -> Self {
+    pub(super) fn new(physical_address: ApicMmioAddress) -> Self {
         assert!(
-            physical_address.is_multiple_of(4),
+            physical_address.as_u64().is_multiple_of(4),
             "IOAPIC MMIO address must be 4-byte aligned"
         );
         Self {
-            base_address: usize::try_from(physical_address)
-                .expect("IOAPIC MMIO address must fit in usize"),
+            base_address: physical_address.as_usize(),
         }
     }
 

@@ -27,21 +27,51 @@ pub enum InterruptControllerKind {
     LocalApicIoApic,
 }
 
+/// Physical MMIO base address for Local APIC and IOAPIC register windows.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ApicMmioAddress(u64);
+
+impl ApicMmioAddress {
+    /// Create an APIC MMIO physical address from an ACPI-reported base.
+    pub const fn new(physical_address: u64) -> Self {
+        Self(physical_address)
+    }
+
+    /// Return whether the APIC MMIO address is unavailable.
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+
+    /// Return the raw physical address for diagnostics or final MMIO mapping.
+    pub const fn as_u64(self) -> u64 {
+        self.0
+    }
+
+    /// Return the APIC MMIO address as a host pointer-sized integer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the APIC MMIO address does not fit in `usize`.
+    pub(in crate::arch::x86_64) fn as_usize(self) -> usize {
+        usize::try_from(self.0).expect("APIC MMIO address must fit in usize")
+    }
+}
+
 /// Local APIC configuration supplied by the kernel composition root.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct LocalApicConfiguration {
-    physical_address: u64,
+    physical_address: ApicMmioAddress,
     apic_id: u32,
     enabled: bool,
     online_capable: bool,
 }
 
 impl LocalApicConfiguration {
-    const EMPTY: Self = Self::new(0, 0, false, false);
+    const EMPTY: Self = Self::new(ApicMmioAddress::new(0), 0, false, false);
 
     /// Create a Local APIC configuration record.
     pub const fn new(
-        physical_address: u64,
+        physical_address: ApicMmioAddress,
         apic_id: u32,
         enabled: bool,
         online_capable: bool,
@@ -55,7 +85,7 @@ impl LocalApicConfiguration {
     }
 
     /// Return the Local APIC MMIO physical address.
-    pub const fn physical_address(self) -> u64 {
+    pub const fn physical_address(self) -> ApicMmioAddress {
         self.physical_address
     }
 
@@ -79,15 +109,19 @@ impl LocalApicConfiguration {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct IoApicConfiguration {
     id: u8,
-    physical_address: u64,
+    physical_address: ApicMmioAddress,
     global_system_interrupt_base: u32,
 }
 
 impl IoApicConfiguration {
-    const EMPTY: Self = Self::new(0, 0, 0);
+    const EMPTY: Self = Self::new(0, ApicMmioAddress::new(0), 0);
 
     /// Create an IOAPIC configuration record.
-    pub const fn new(id: u8, physical_address: u64, global_system_interrupt_base: u32) -> Self {
+    pub const fn new(
+        id: u8,
+        physical_address: ApicMmioAddress,
+        global_system_interrupt_base: u32,
+    ) -> Self {
         Self {
             id,
             physical_address,
@@ -101,7 +135,7 @@ impl IoApicConfiguration {
     }
 
     /// Return the IOAPIC MMIO physical address.
-    pub const fn physical_address(self) -> u64 {
+    pub const fn physical_address(self) -> ApicMmioAddress {
         self.physical_address
     }
 

@@ -29,14 +29,14 @@ fn configure_apic_routing_provider(
     frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
 ) {
     let local_apic_configuration = arch::x86_64::interrupt_controller::LocalApicConfiguration::new(
-        madt.local_apic_address(),
+        arch::x86_64::interrupt_controller::ApicMmioAddress::new(madt.local_apic_address()),
         u32::from(local_apic.apic_id()),
         local_apic.is_enabled(),
         local_apic.is_online_capable(),
     );
     let ioapic_configuration = arch::x86_64::interrupt_controller::IoApicConfiguration::new(
         ioapic.id(),
-        ioapic.physical_address(),
+        arch::x86_64::interrupt_controller::ApicMmioAddress::new(ioapic.physical_address()),
         ioapic.global_system_interrupt_base(),
     );
     let mut routing_configuration =
@@ -90,7 +90,7 @@ fn log_apic_routing_provider_status(
             ),
             LogField::new(
                 "local_apic_address",
-                format_args!("{:#x}", configured_local_apic.physical_address()),
+                format_args!("{:#x}", configured_local_apic.physical_address().as_u64()),
             ),
             LogField::new(
                 "local_apic_id",
@@ -107,7 +107,7 @@ fn log_apic_routing_provider_status(
             LogField::new("ioapic_id", format_args!("{}", configured_ioapic.id())),
             LogField::new(
                 "ioapic_address",
-                format_args!("{:#x}", configured_ioapic.physical_address()),
+                format_args!("{:#x}", configured_ioapic.physical_address().as_u64()),
             ),
             LogField::new(
                 "ioapic_gsi_base",
@@ -301,14 +301,16 @@ fn verify_local_apic_eoi_provider(
     let mapped_page_count = unsafe {
         kernel::memory::paging::map_kernel_mmio_range(
             frame_allocator,
-            kernel::memory::address::PhysAddr::new(configured_local_apic.physical_address()),
+            kernel::memory::address::PhysAddr::new(
+                configured_local_apic.physical_address().as_u64(),
+            ),
             LOCAL_APIC_MMIO_MAPPING_SIZE,
         )
     };
     crate::log_info!(
         "arch",
-        "Local APIC MMIO mapped: address={:#x} size={} pages={} page_count_typed=true physical_page_start_typed=true",
-        configured_local_apic.physical_address(),
+        "Local APIC MMIO mapped: address={:#x} size={} pages={} apic_mmio_address_typed=true page_count_typed=true physical_page_start_typed=true",
+        configured_local_apic.physical_address().as_u64(),
         LOCAL_APIC_MMIO_MAPPING_SIZE,
         mapped_page_count.as_u64()
     );
@@ -341,14 +343,14 @@ fn stage_ioapic_redirection_entries(
     let mapped_page_count = unsafe {
         kernel::memory::paging::map_kernel_mmio_range(
             frame_allocator,
-            kernel::memory::address::PhysAddr::new(configured_ioapic.physical_address()),
+            kernel::memory::address::PhysAddr::new(configured_ioapic.physical_address().as_u64()),
             IOAPIC_MMIO_MAPPING_SIZE,
         )
     };
     crate::log_info!(
         "arch",
-        "IOAPIC MMIO mapped: address={:#x} size={} pages={} page_count_typed=true physical_page_start_typed=true",
-        configured_ioapic.physical_address(),
+        "IOAPIC MMIO mapped: address={:#x} size={} pages={} apic_mmio_address_typed=true page_count_typed=true physical_page_start_typed=true",
+        configured_ioapic.physical_address().as_u64(),
         IOAPIC_MMIO_MAPPING_SIZE,
         mapped_page_count.as_u64()
     );

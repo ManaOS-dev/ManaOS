@@ -174,6 +174,7 @@ active roadmap can list only unfinished work.
 - [x] Read user trap-frame RIP/RSP through typed `UserVirtualAddress` accessors before diagnostics and `execve` publication lower them for output.
 - [x] Pass the x86_64 syscall entry target through a typed `SyscallEntryAddress` before lowering it into the LSTAR MSR.
 - [x] Classify the x86_64 timer interrupt entry stub through a typed `InterruptEntryAddress` before lowering it into the IDT gate.
+- [x] Keep APIC MMIO physical bases typed as `ApicMmioAddress` before Local APIC, IOAPIC, and Local APIC timer register access lowers them to pointer-sized addresses.
 
 ### Address Space Lifecycle
 

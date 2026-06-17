@@ -1,6 +1,7 @@
 //! Interval timer selection and initialization.
 
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use super::interrupt_controller::ApicMmioAddress;
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 const INTERRUPT_CONTROLLER_1_OFFSET: u8 = 32;
 const LOCAL_APIC_LVT_TIMER_REGISTER: usize = 0x320;
@@ -22,11 +23,11 @@ const LOCAL_APIC_TIMER_ACTIVE_RUNNING_FLAG: u8 = 1 << 1;
 const LOCAL_APIC_TIMER_ACTIVE_MASKED_FLAG: u8 = 1 << 2;
 const LOCAL_APIC_TIMER_ACTIVE_PERIODIC_FLAG: u8 = 1 << 3;
 
-static LOCAL_APIC_TIMER_CALIBRATION_BASE_ADDRESS: AtomicUsize = AtomicUsize::new(0);
+static LOCAL_APIC_TIMER_CALIBRATION_BASE_ADDRESS: AtomicU64 = AtomicU64::new(0);
 static LOCAL_APIC_TIMER_CALIBRATION_START_TICKS: AtomicU64 = AtomicU64::new(0);
 static LOCAL_APIC_TIMER_CALIBRATION_INITIAL_COUNT_READBACK: AtomicU32 = AtomicU32::new(0);
 static LOCAL_APIC_TIMER_ACTIVE: AtomicBool = AtomicBool::new(false);
-static LOCAL_APIC_TIMER_ACTIVE_BASE_ADDRESS: AtomicUsize = AtomicUsize::new(0);
+static LOCAL_APIC_TIMER_ACTIVE_BASE_ADDRESS: AtomicU64 = AtomicU64::new(0);
 static LOCAL_APIC_TIMER_ACTIVE_START_TICKS: AtomicU64 = AtomicU64::new(0);
 static LOCAL_APIC_TIMER_ACTIVE_INITIAL_COUNT: AtomicU32 = AtomicU32::new(0);
 
@@ -302,7 +303,7 @@ pub unsafe fn start_masked_local_apic_timer_calibration(
     // SAFETY: The same mapped Local APIC timer initial-count register was just
     // programmed and can be read back for diagnostics.
     let initial_count_readback = unsafe { registers.read(LOCAL_APIC_TIMER_INITIAL_COUNT_REGISTER) };
-    LOCAL_APIC_TIMER_CALIBRATION_BASE_ADDRESS.store(base_address, Ordering::Release);
+    LOCAL_APIC_TIMER_CALIBRATION_BASE_ADDRESS.store(base_address.as_u64(), Ordering::Release);
     LOCAL_APIC_TIMER_CALIBRATION_START_TICKS.store(start_ticks, Ordering::Release);
     LOCAL_APIC_TIMER_CALIBRATION_INITIAL_COUNT_READBACK
         .store(initial_count_readback, Ordering::Release);
@@ -320,11 +321,12 @@ pub unsafe fn start_masked_local_apic_timer_calibration(
 pub unsafe fn inspect_masked_local_apic_timer_calibration(
     current_ticks: u64,
 ) -> Option<LocalApicTimerCalibrationStatus> {
-    let base_address = LOCAL_APIC_TIMER_CALIBRATION_BASE_ADDRESS.load(Ordering::Acquire);
-    if base_address == 0 {
+    let raw_base_address = LOCAL_APIC_TIMER_CALIBRATION_BASE_ADDRESS.load(Ordering::Acquire);
+    if raw_base_address == 0 {
         return None;
     }
 
+    let base_address = ApicMmioAddress::new(raw_base_address);
     let registers = LocalApicTimerRegisters::new(base_address);
     // SAFETY: The caller guarantees that the Local APIC MMIO page remains
     // mapped and readable for calibration diagnostics.
@@ -354,8 +356,7 @@ pub unsafe fn inspect_masked_local_apic_timer_calibration(
 
     Some(LocalApicTimerCalibrationStatus {
         flags,
-        physical_address: u64::try_from(base_address)
-            .expect("Local APIC timer MMIO address must fit in u64"),
+        physical_address: base_address.as_u64(),
         start_ticks,
         current_ticks,
         lvt_timer,
@@ -391,8 +392,7 @@ pub unsafe fn activate_local_apic_timer_from_calibration(
         reload_count != 0,
         "Local APIC timer reload count must be non-zero"
     );
-    let base_address = usize::try_from(calibration.physical_address())
-        .expect("Local APIC timer MMIO address must fit in usize");
+    let base_address = ApicMmioAddress::new(calibration.physical_address());
     let registers = LocalApicTimerRegisters::new(base_address);
     // SAFETY: The caller guarantees that interrupts are disabled and the Local
     // APIC timer registers are exclusively programmed during activation.
@@ -409,7 +409,7 @@ pub unsafe fn activate_local_apic_timer_from_calibration(
         registers.write(LOCAL_APIC_TIMER_INITIAL_COUNT_REGISTER, reload_count);
     }
 
-    LOCAL_APIC_TIMER_ACTIVE_BASE_ADDRESS.store(base_address, Ordering::Release);
+    LOCAL_APIC_TIMER_ACTIVE_BASE_ADDRESS.store(base_address.as_u64(), Ordering::Release);
     LOCAL_APIC_TIMER_ACTIVE_START_TICKS.store(activation_ticks, Ordering::Release);
     LOCAL_APIC_TIMER_ACTIVE_INITIAL_COUNT.store(reload_count, Ordering::Release);
     LOCAL_APIC_TIMER_ACTIVE.store(true, Ordering::Release);
@@ -428,11 +428,12 @@ pub unsafe fn activate_local_apic_timer_from_calibration(
 pub unsafe fn inspect_active_local_apic_timer(
     current_ticks: u64,
 ) -> Option<LocalApicTimerActiveStatus> {
-    let base_address = LOCAL_APIC_TIMER_ACTIVE_BASE_ADDRESS.load(Ordering::Acquire);
-    if base_address == 0 {
+    let raw_base_address = LOCAL_APIC_TIMER_ACTIVE_BASE_ADDRESS.load(Ordering::Acquire);
+    if raw_base_address == 0 {
         return None;
     }
 
+    let base_address = ApicMmioAddress::new(raw_base_address);
     let registers = LocalApicTimerRegisters::new(base_address);
     // SAFETY: The caller guarantees that the active Local APIC timer MMIO page
     // remains mapped and readable for diagnostics.
@@ -460,8 +461,7 @@ pub unsafe fn inspect_active_local_apic_timer(
 
     Some(LocalApicTimerActiveStatus {
         flags,
-        physical_address: u64::try_from(base_address)
-            .expect("Local APIC timer MMIO address must fit in u64"),
+        physical_address: base_address.as_u64(),
         activation_ticks,
         current_ticks,
         lvt_timer,
@@ -478,14 +478,17 @@ pub fn has_local_apic_timer() -> bool {
     super::interrupt_controller::has_local_apic()
 }
 
-fn local_apic_timer_base_address() -> Option<usize> {
+fn local_apic_timer_base_address() -> Option<ApicMmioAddress> {
     let status = super::interrupt_controller::get_apic_routing_provider_status();
     let local_apic = status.local_apic();
-    if !status.is_configured() || !local_apic.is_enabled() || local_apic.physical_address() == 0 {
+    if !status.is_configured()
+        || !local_apic.is_enabled()
+        || local_apic.physical_address().is_zero()
+    {
         return None;
     }
 
-    usize::try_from(local_apic.physical_address()).ok()
+    Some(local_apic.physical_address())
 }
 
 struct LocalApicTimerRegisters {
@@ -493,8 +496,10 @@ struct LocalApicTimerRegisters {
 }
 
 impl LocalApicTimerRegisters {
-    const fn new(base_address: usize) -> Self {
-        Self { base_address }
+    fn new(base_address: ApicMmioAddress) -> Self {
+        Self {
+            base_address: base_address.as_usize(),
+        }
     }
 
     unsafe fn read(&self, register: usize) -> u32 {
