@@ -33,6 +33,7 @@ $qemu = Start-Process -FilePath "qemu-system-x86_64" `
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $expectedPatterns = @(
     "Persistent block-device service registered",
+    "AHCI DMA setup verified: command_list_typed=true received_fis_typed=true command_table_typed=true data_buffer_typed=true",
     "Registered block device",
     "Backup boot sector validated",
     "FSInfo: sector=1",

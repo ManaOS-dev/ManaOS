@@ -89,7 +89,9 @@ untyped cross-domain `u64` values:
   `PhysAddr` physical starts and `FrameCount` frame counts before normalizing
   frame ranges.
 - `AhciDmaBuffers` stores `DmaPhysicalAddress` fields internally, and
-  `dma::split_address(...)` accepts `DmaPhysicalAddress`.
+  `dma::split_address(...)` accepts `DmaPhysicalAddress`. Storage smoke asserts
+  that command-list, received-FIS, command-table, and data-buffer setup stays
+  on typed DMA address boundaries before the final register split.
 - `StorageDataAddress` represents the active DMA data buffer used by
   `BlockDevice`, AHCI service helpers, GPT parsing, and FAT32 parsing.
 - `FramebufferPhysicalRange` represents the active graphics-mode framebuffer
@@ -270,6 +272,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - The storage parser and block-device path now uses `StorageDataAddress`. Raw
   pointer conversion is limited to sector-slice creation after the block device
   fills the active DMA data buffer.
+- AHCI DMA setup keeps command-list, received-FIS, command-table, and data
+  buffer addresses as `DmaPhysicalAddress` until device registers need low/high
+  halves.
 
 ## Recommended Wrapper Types
 

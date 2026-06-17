@@ -64,7 +64,8 @@ storage smoke で走る scheduler invariant check が完了済みです。
 
 typed address boundary では、`PhysicalFrameStart`、`UserVirtualAddress`、`UserPageStart`、
 `FrameCount`、`PageCount` の主要境界、typed `brk` / `munmap` request、kernel stack top handoff、
-permission probe、ELF entry / heap start、private mapping record、trap-frame storage address の
+permission probe、ELF entry / heap start、private mapping record、AHCI DMA setup address、
+trap-frame storage address の
 typed 化が完了済みです。user entry / trap-frame register layout は compile-time offset assertion で
 guard され、first-entry の `argv` / `envp` handoff は storage smoke の
 `entry_arguments_typed=true` assertion で確認します。

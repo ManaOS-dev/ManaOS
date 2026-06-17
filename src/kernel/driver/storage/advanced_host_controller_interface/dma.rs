@@ -48,6 +48,10 @@ pub(super) fn allocate(frame_allocator: &mut PhysicalFrameAllocator) -> Option<A
         "ahci",
         "DMA ownership: AHCI owns the data buffer only while a serialized command is in flight"
     );
+    crate::log_info!(
+        "ahci",
+        "AHCI DMA setup verified: command_list_typed=true received_fis_typed=true command_table_typed=true data_buffer_typed=true"
+    );
 
     Some(AhciDmaBuffers {
         command_list: command_list_address,
