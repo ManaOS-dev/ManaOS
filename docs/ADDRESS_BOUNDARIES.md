@@ -85,6 +85,11 @@ untyped cross-domain `u64` values:
 - `KernelStackGuardFault` stores guard, writable, and top addresses as
   `VirtAddr` after page-fault ABI values are classified at the kernel interrupt
   boundary.
+- `shared::PageFaultReport` carries the faulting virtual address, error bits,
+  and instruction pointer from the architecture exception path through the
+  registered reporter callback. The architecture layer classifies the raw CR2
+  and exception-frame values before dispatch, and `kernel::interrupt`
+  converts the virtual address fields into `VirtAddr` before diagnostics.
 - `arch::x86_64::SyscallEntryAddress` represents the virtual entry target
   programmed into the `SYSCALL` LSTAR MSR. The composition root passes this
   typed value into architecture initialization, and raw numeric lowering stays
@@ -258,8 +263,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   raw writes are limited to copying bytes and pointer values into already
   reserved stack slots.
 - Kernel stack guard-fault lookup accepts `VirtAddr` after `kernel::interrupt`
-  classifies the raw architecture page-fault address. Diagnostic formatting
-  lowers those typed virtual addresses back to raw numbers only at log output.
+  receives a `shared::PageFaultReport` and classifies the page-fault virtual
+  address. Diagnostic formatting lowers those typed virtual addresses back to
+  raw numbers only at log output.
 - Scheduler user-entry and timer-resume handoffs keep the selected user task
   kernel stack top as `VirtAddr` through the task architecture facade; the
   registered architecture provider invocation inside that facade and the
@@ -403,6 +409,9 @@ Continue introducing wrappers in small steps:
   programmed into x86_64 `SYSCALL` LSTAR.
 - `InterruptEntryAddress` for architecture-owned interrupt entry points
   programmed into x86_64 IDT gates.
+- `PageFaultReport`, `PageFaultAddress`, `PageFaultErrorBits`, and
+  `PageFaultInstructionPointer` for the shared page-fault callback boundary
+  before kernel diagnostics classify those virtual addresses as `VirtAddr`.
 
 The next implementation steps should focus on the remaining architecture ABI
 boundaries. They should avoid broad mechanical renames until the remaining

@@ -103,6 +103,7 @@ $expectedPatterns = @(
     "User address-space reclaim self-check passed: user_pages=1 page_table_pages=4",
     "Kernel task stack prepared: .*guard_unmapped=true writable_mapped=true kernel_stack_top_typed=true context_stack_top_typed=true",
     "Kernel stack guard diagnostics verified: .*guard_fault_address_typed=true",
+    "Page fault report self-check passed: page_fault_report_typed=true fault_address_typed=true instruction_pointer_typed=true error_bits_typed=true",
     "User program spawn errno smoke passed: missing=-2 relative=-22 directory=-21 device=-95 invalid_image=-22 oom=-12",
     "Loading user ELF from filesystem: path=/disk/bin/smoke_demo",
     "User address space prepared: pml4=",

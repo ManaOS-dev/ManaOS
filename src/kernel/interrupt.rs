@@ -21,7 +21,7 @@ use crate::kernel::{
     memory::address::VirtAddr,
     task::{context::UserTrapFrame, UserTrapFrameSource},
 };
-use crate::shared::TimerInterruptFrame;
+use crate::shared::{PageFaultErrorBits, PageFaultReport, TimerInterruptFrame};
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 static SYSCALL_KERNEL_STACK_TOP: AtomicU64 = AtomicU64::new(0);
@@ -67,9 +67,11 @@ pub fn set_syscall_kernel_stack_top(stack_top: VirtAddr) {
 }
 
 /// Log page-fault diagnostics before the architecture handler panics.
-pub fn process_page_fault(fault_address: u64, error_code: u64, instruction_pointer: u64) {
+pub fn process_page_fault(report: PageFaultReport) {
     let task_id = crate::kernel::task::get_current_task_id();
-    let typed_fault_address = VirtAddr::new(fault_address);
+    let typed_fault_address = VirtAddr::new(report.fault_address().as_u64());
+    let typed_instruction_pointer = VirtAddr::new(report.instruction_pointer().as_u64());
+    let error_bits = report.error_bits();
     if let Some(guard_fault) =
         crate::kernel::task::get_kernel_stack_guard_fault(typed_fault_address)
     {
@@ -78,27 +80,27 @@ pub fn process_page_fault(fault_address: u64, error_code: u64, instruction_point
             "Kernel stack guard page fault: owner={} task={} fault_address={:#018x} guard={:#018x} writable_start={:#018x} stack_top={:#018x} access={} mode={} present={} instruction={:#018x} raw_error={:#x}",
             guard_fault.owner().as_str(),
             guard_fault.task_identifier(),
-            fault_address,
+            typed_fault_address.as_u64(),
             guard_fault.guard_page_start().as_u64(),
             guard_fault.writable_start().as_u64(),
             guard_fault.stack_top().as_u64(),
-            PageFaultAccess::from_error_code(error_code).as_str(),
-            PageFaultMode::from_error_code(error_code).as_str(),
-            PageFaultPresence::from_error_code(error_code).as_str(),
-            instruction_pointer,
-            error_code
+            PageFaultAccess::from_error_bits(error_bits).as_str(),
+            PageFaultMode::from_error_bits(error_bits).as_str(),
+            PageFaultPresence::from_error_bits(error_bits).as_str(),
+            typed_instruction_pointer.as_u64(),
+            error_bits.as_u64()
         );
     }
     crate::log_error!(
         "fault",
         "Page fault: task={} address={:#018x} access={} mode={} present={} instruction={:#018x} raw_error={:#x}",
         TaskIdentifierDisplay(task_id),
-        fault_address,
-        PageFaultAccess::from_error_code(error_code).as_str(),
-        PageFaultMode::from_error_code(error_code).as_str(),
-        PageFaultPresence::from_error_code(error_code).as_str(),
-        instruction_pointer,
-        error_code
+        typed_fault_address.as_u64(),
+        PageFaultAccess::from_error_bits(error_bits).as_str(),
+        PageFaultMode::from_error_bits(error_bits).as_str(),
+        PageFaultPresence::from_error_bits(error_bits).as_str(),
+        typed_instruction_pointer.as_u64(),
+        error_bits.as_u64()
     );
 }
 
@@ -166,10 +168,11 @@ impl PageFaultAccess {
     const WRITE_BIT: u64 = 1 << 1;
     const INSTRUCTION_FETCH_BIT: u64 = 1 << 4;
 
-    fn from_error_code(error_code: u64) -> Self {
-        if error_code & Self::INSTRUCTION_FETCH_BIT != 0 {
+    fn from_error_bits(error_bits: PageFaultErrorBits) -> Self {
+        let error_bits = error_bits.as_u64();
+        if error_bits & Self::INSTRUCTION_FETCH_BIT != 0 {
             Self::InstructionFetch
-        } else if error_code & Self::WRITE_BIT != 0 {
+        } else if error_bits & Self::WRITE_BIT != 0 {
             Self::Write
         } else {
             Self::Read
@@ -194,8 +197,8 @@ enum PageFaultMode {
 impl PageFaultMode {
     const USER_BIT: u64 = 1 << 2;
 
-    fn from_error_code(error_code: u64) -> Self {
-        if error_code & Self::USER_BIT != 0 {
+    fn from_error_bits(error_bits: PageFaultErrorBits) -> Self {
+        if error_bits.as_u64() & Self::USER_BIT != 0 {
             Self::User
         } else {
             Self::Kernel
@@ -219,8 +222,8 @@ enum PageFaultPresence {
 impl PageFaultPresence {
     const PRESENT_BIT: u64 = 1;
 
-    fn from_error_code(error_code: u64) -> Self {
-        if error_code & Self::PRESENT_BIT != 0 {
+    fn from_error_bits(error_bits: PageFaultErrorBits) -> Self {
+        if error_bits.as_u64() & Self::PRESENT_BIT != 0 {
             Self::ProtectionViolation
         } else {
             Self::NotPresent

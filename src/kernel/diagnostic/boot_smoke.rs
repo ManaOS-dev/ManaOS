@@ -18,6 +18,18 @@ pub fn verify_kernel_stack_guard_fault_diagnostics() {
     );
 }
 
+/// Verify the shared page-fault report boundary.
+pub fn verify_page_fault_report_rules() {
+    assert!(
+        crate::shared::verify_typed_page_fault_report(),
+        "page-fault report wrapper smoke must pass"
+    );
+    crate::log_info!(
+        "fault",
+        "Page fault report self-check passed: page_fault_report_typed=true fault_address_typed=true instruction_pointer_typed=true error_bits_typed=true"
+    );
+}
+
 /// Verify the in-kernel filesystem smoke paths.
 pub fn verify_kernel_filesystem() {
     crate::log_info!("fs", "Standard output is connected to /dev/console.");

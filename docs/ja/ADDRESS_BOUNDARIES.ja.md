@@ -58,6 +58,10 @@ kernel ownership boundary では型付き address に変換することです。
 - `UserMappingUnmapRequest`: syscall ABI address classification 後の `munmap` request。scheduler と mapping code は raw unmap start address を受け取りません。
 - `UserMappingLength`: syscall ABI validation 後の private `mmap` byte length。scheduler と mapping code は page count を導出するための raw length value を受け取りません。
 - `KernelStackGuardFault`: `kernel::interrupt` が raw page-fault address を分類した後の guard / writable / top `VirtAddr`。
+- `shared::PageFaultReport`: architecture exception path から registered reporter callback まで
+  page fault の fault address、error bits、instruction pointer を保持します。architecture layer は
+  raw CR2 と exception-frame value を dispatch 前に分類し、`kernel::interrupt` は
+  diagnostics 前に virtual address field を `VirtAddr` へ変換します。
 - `arch::x86_64::SyscallEntryAddress`: `SYSCALL` LSTAR MSR に program する virtual entry target。
   composition root は architecture initialization に typed value を渡し、raw number への lowering は
   final MSR write boundary の中だけに閉じます。
@@ -171,7 +175,8 @@ kernel address-space switch と template smoke check は、それを `PhysicalFr
 `brk` request は `sys_brk` で raw ABI value を current-break query または validated user virtual address に分類してから `UserHeap` へ渡します。
 heap growth / shrink helper は aligned mapped-end boundary を `UserPageStart` として保持し、
 comparison や diagnostics の直前だけ raw number へ下げます。
-kernel stack guard-fault lookup は `kernel::interrupt` で raw architecture page-fault address を `VirtAddr` へ分類してから scheduler boundary へ渡します。
+kernel stack guard-fault lookup は `kernel::interrupt` が `shared::PageFaultReport` を受け取り、
+page-fault virtual address を `VirtAddr` へ分類してから scheduler boundary へ渡します。
 user entry と timer-resume の handoff は、選択した user task の kernel stack top を task architecture facade まで `VirtAddr` として保持します。facade 内の architecture provider call と `SYSCALL` entry stack-top atomic が残る raw lowering point です。
 syscall / timer trap-frame storage address は architecture/shared ABI の capture point だけ raw のままです。
 kernel interrupt / syscall bridge は captured `UserTrapFrame` を task scheduler に記録する前に
@@ -247,6 +252,9 @@ storage smoke はこの typed DMA setup boundary を assert します。
   APIC-family MMIO physical base。
 - `SyscallEntryAddress`: x86_64 `SYSCALL` LSTAR に program する architecture-owned virtual entry point。
 - `InterruptEntryAddress`: x86_64 IDT gate に program する architecture-owned interrupt entry point。
+- `PageFaultReport` / `PageFaultAddress` / `PageFaultErrorBits` /
+  `PageFaultInstructionPointer`: kernel diagnostics が virtual address を `VirtAddr` として分類する前の
+  shared page-fault callback boundary。
 
 ## 移行順
 

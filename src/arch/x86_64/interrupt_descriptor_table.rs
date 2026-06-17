@@ -1,5 +1,8 @@
 use crate::serial_println;
-use crate::shared::TimerInterruptFrame;
+use crate::shared::{
+    PageFaultAddress, PageFaultErrorBits, PageFaultInstructionPointer, PageFaultReport,
+    TimerInterruptFrame,
+};
 use core::mem;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use spin::LazyLock;
@@ -55,7 +58,7 @@ pub struct InterruptProcessors {
 }
 
 /// Callback invoked before the page fault handler panics.
-pub type PageFaultReporter = fn(fault_address: u64, error_code: u64, instruction_pointer: u64);
+pub type PageFaultReporter = fn(PageFaultReport);
 
 /// IDT vector diagnostics for unexpected external interrupts.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -266,9 +269,12 @@ extern "x86-interrupt" fn page_fault_handler(
 ) {
     use x86_64::registers::control::Cr2;
     let fault_address = Cr2::read_raw();
-    let error_code_bits = error_code.bits();
-    let instruction_pointer = stack_frame.instruction_pointer.as_u64();
-    call_page_fault_reporter(fault_address, error_code_bits, instruction_pointer);
+    let report = PageFaultReport::new(
+        PageFaultAddress::new(fault_address),
+        PageFaultErrorBits::new(error_code.bits()),
+        PageFaultInstructionPointer::new(stack_frame.instruction_pointer.as_u64()),
+    );
+    call_page_fault_reporter(report);
     panic!("[EXCEPT] PAGE FAULT\nAddr: {fault_address:#x}\nCode: {error_code:?}\n{stack_frame:#?}");
 }
 
@@ -447,7 +453,7 @@ fn call_mouse_byte_processor(byte: u8) {
     processor(byte);
 }
 
-fn call_page_fault_reporter(fault_address: u64, error_code: u64, instruction_pointer: u64) {
+fn call_page_fault_reporter(report: PageFaultReport) {
     let reporter = PAGE_FAULT_REPORTER.load(Ordering::Acquire);
     if reporter == 0 {
         return;
@@ -456,5 +462,5 @@ fn call_page_fault_reporter(fault_address: u64, error_code: u64, instruction_poi
     // SAFETY: register_page_fault_reporter stores only valid PageFaultReporter
     // function pointers.
     let reporter: PageFaultReporter = unsafe { core::mem::transmute(reporter) };
-    reporter(fault_address, error_code, instruction_pointer);
+    reporter(report);
 }
