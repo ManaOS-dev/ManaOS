@@ -48,6 +48,8 @@ The current physical frame allocator relies on these properties:
   wrappers.
 - `UserPageStart` is required by user page mapping and unmapping APIs, so
   4 KiB user-page alignment is established before page tables are mutated.
+- User permission probes derive `UserPageStart` first/last page boundaries from
+  `UserVirtualRange` before walking active or per-process page tables.
 - Registered ranges are normalized to 4 KiB pages and skip physical address
   zero.
 - Registered ranges are sorted and adjacent ranges are merged before
@@ -261,6 +263,11 @@ The one-shot user runtime registers the boot-owned frame allocator only while
 user code can issue syscalls, so syscall dispatch can allocate and free user
 heap and anonymous mapping frames without making the console or architecture
 layers own the allocator.
+
+User pointer copy helpers and per-process address-space probes derive
+permission-check page walks from `UserVirtualRange::first_page_start()` and
+`last_page_start()`. The walkers therefore compare `UserPageStart` boundaries
+before lowering to raw numbers for `x86_64` page-table translation.
 
 ## User Address Spaces
 

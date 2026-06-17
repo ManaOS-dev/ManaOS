@@ -1,8 +1,8 @@
 use crate::kernel::memory::{
     address::{
         FrameCount, FramebufferPhysicalRange, KernelVirtualAddress, KernelVirtualRange, PageCount,
-        PhysAddr as KernelPhysAddr, PhysicalFrameRange, PhysicalFrameStart, UserReadableRange,
-        UserVirtualRange, UserWritableRange, VirtAddr as KernelVirtAddr,
+        PhysAddr as KernelPhysAddr, PhysicalFrameRange, PhysicalFrameStart, UserPageStart,
+        UserReadableRange, UserVirtualRange, UserWritableRange, VirtAddr as KernelVirtAddr,
     },
     frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator},
     virtual_allocator::new_dynamic_mapping_allocator,
@@ -326,8 +326,12 @@ pub fn is_kernel_range_unmapped(range: KernelVirtualRange) -> bool {
 }
 
 fn validate_user_mapping(range: UserVirtualRange, required_flags: PageTableFlags) -> bool {
-    let first_page_start = KernelVirtAddr::new(range.start().as_u64()).align_down_to_page();
-    let last_page_start = KernelVirtAddr::new(range.end_exclusive() - 1).align_down_to_page();
+    let Some(first_page_start) = range.first_page_start() else {
+        return false;
+    };
+    let Some(last_page_start) = range.last_page_start() else {
+        return false;
+    };
 
     let (level_4_frame, _) = Cr3::read();
     let level_4_table = level_4_frame.start_address().as_u64() as *mut PageTable;
@@ -356,7 +360,7 @@ fn validate_user_mapping(range: UserVirtualRange, required_flags: PageTableFlags
 
 fn is_page_mapped_with_flags(
     mapper: &OffsetPageTable,
-    page_start: KernelVirtAddr,
+    page_start: UserPageStart,
     required_flags: PageTableFlags,
 ) -> bool {
     let required_flags = required_flags | PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;

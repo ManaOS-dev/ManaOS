@@ -505,7 +505,6 @@ pub fn verify_typed_user_virtual_range() -> bool {
         .expect("last user byte address must be valid");
     let overflow_rejected = UserVirtualRange::new(ceiling_start, 2).is_none();
     let syscall_range = UserVirtualRange::from_syscall_arguments(PAGE_SIZE, 4);
-
     valid_range.is_some_and(|range| {
         let readable_range = UserReadableRange::new(range);
         let writable_range = UserWritableRange::new(range);
@@ -521,6 +520,33 @@ pub fn verify_typed_user_virtual_range() -> bool {
                 && range.byte_len() == 4
                 && range.end_exclusive() == PAGE_SIZE + 4
         })
+}
+
+/// Verify typed user virtual range page-boundary helper contracts.
+pub fn verify_typed_user_virtual_range_page_bounds() -> bool {
+    let start = UserVirtualAddress::new(VirtAddr::new(PAGE_SIZE))
+        .expect("test user virtual range start must be valid");
+    let Some(byte_len) = usize::try_from(PAGE_SIZE)
+        .ok()
+        .and_then(|page_size| page_size.checked_add(8))
+    else {
+        return false;
+    };
+    let valid_range = UserVirtualRange::new(start, byte_len);
+    let low_start = UserVirtualAddress::new(VirtAddr::new(1))
+        .expect("low user virtual range start must be valid");
+    let low_range = UserVirtualRange::new(low_start, 1);
+
+    valid_range.is_some_and(|range| {
+        range
+            .first_page_start()
+            .is_some_and(|page_start| page_start.as_u64() == PAGE_SIZE)
+            && range
+                .last_page_start()
+                .is_some_and(|page_start| page_start.as_u64() == 2 * PAGE_SIZE)
+    }) && low_range.is_some_and(|range| {
+        range.first_page_start().is_none() && range.last_page_start().is_none()
+    })
 }
 
 /// Verify the typed physical frame count construction contract.
@@ -598,6 +624,22 @@ impl UserVirtualRange {
             .as_u64()
             .checked_add(self.byte_len as u64)
             .expect("user virtual range end overflowed")
+    }
+
+    /// Return the first user page touched by this range.
+    pub const fn first_page_start(self) -> Option<UserPageStart> {
+        self.start.align_down_to_page()
+    }
+
+    /// Return the last user page touched by this range.
+    pub const fn last_page_start(self) -> Option<UserPageStart> {
+        let Some(last_byte) = self.end_exclusive().checked_sub(1) else {
+            return None;
+        };
+        let Some(last_address) = UserVirtualAddress::new(VirtAddr::new(last_byte)) else {
+            return None;
+        };
+        last_address.align_down_to_page()
     }
 }
 

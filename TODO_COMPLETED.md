@@ -150,6 +150,7 @@ active roadmap can list only unfinished work.
 - [x] Keep ELF load-segment memory and page ranges typed as `UserVirtualRange` and `UserPageStart` before mapping helpers consume them, with storage smoke coverage.
 - [x] Keep private `mmap` syscall lengths typed as `UserMappingLength` before scheduler and mapping helpers consume them, with storage smoke coverage.
 - [x] Keep user pointer page-table permission probes typed as `UserReadableRange` or `UserWritableRange` before raw slice creation.
+- [x] Keep user pointer permission page walks typed as `UserPageStart` boundaries before page-table probes consume them, with storage smoke coverage.
 - [x] Keep user address-space permission self-check probe addresses typed as `VirtAddr` and `UserVirtualAddress`.
 - [x] Keep scheduler-owned `mmap` requested addresses typed as `UserMappingPlacement` before diagnostics formatting.
 - [x] Keep ELF entry points typed as `UserVirtualAddress` immediately after header validation.

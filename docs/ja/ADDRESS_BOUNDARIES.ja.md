@@ -34,6 +34,8 @@ kernel ownership boundary では型付き address に変換することです。
 - user data page-table permission probe は final raw slice creation 前に
   `UserReadableRange` / `UserWritableRange` を受け取ります。raw `usize` pointer は
   最後の kernel slice / byte read boundary と diagnostic ABI input に閉じます。
+- user data page-table permission walk は、page-table flags を見る前に
+  `UserVirtualRange` から first / last user page を `UserPageStart` として導出します。
 - user address-space permission self-check は kernel probe address を `VirtAddr`、代表 user address を
   `UserVirtualAddress` として受け取り、その後 copy-direction probe range を作ります。
 - `UserReadRequest`: syscall ABI pointer classification 後の pending `read` destination を `UserWritableRange` として保持し、scheduler wait state が raw user pointer を保持しないようにします。
@@ -123,6 +125,8 @@ blocking `waitpid` の pending wait は、parent task address space が再び ac
 `paging` と per-process `UserAddressSpace` の user data permission check は
 `UserReadableRange` または `UserWritableRange` を受け取ります。syscall pointer classification 後に
 raw pointer / length pair を受け取りません。
+permission check の page walk boundary は `UserVirtualRange` から `UserPageStart` として導出し、
+active / per-process page-table probe が user page start を raw virtual address として扱わないようにします。
 per-process address-space permission self-check は kernel probe を `VirtAddr`、user probe を
 `UserVirtualAddress` のまま保持し、raw `usize` への lowering は final diagnostics と kernel slice
 construction の境界に限定します。

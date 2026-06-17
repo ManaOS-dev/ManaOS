@@ -210,8 +210,12 @@ impl UserAddressSpace {
         range: UserVirtualRange,
         required_flags: PageTableFlags,
     ) -> bool {
-        let first_page_start = VirtAddr::new(range.start().as_u64()).align_down_to_page();
-        let last_page_start = VirtAddr::new(range.end_exclusive() - 1).align_down_to_page();
+        let Some(first_page_start) = range.first_page_start() else {
+            return false;
+        };
+        let Some(last_page_start) = range.last_page_start() else {
+            return false;
+        };
 
         let mut page_start = first_page_start;
         loop {
@@ -232,13 +236,14 @@ impl UserAddressSpace {
 
     fn is_page_mapped_with_flags(
         self,
-        page_start: VirtAddr,
+        page_start: UserPageStart,
         required_flags: PageTableFlags,
     ) -> bool {
         let required_flags =
             required_flags | PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+        let address = page_start.as_address().as_address();
 
-        match self.mapping_flags_for_address(page_start) {
+        match self.mapping_flags_for_address(address) {
             Some(flags) => flags.contains(required_flags),
             None => false,
         }

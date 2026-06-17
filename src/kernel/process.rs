@@ -276,7 +276,7 @@ fn verify_user_program_mappings(
         );
         crate::log_info!(
             "memory",
-            "Kernel/user mapping permission self-check passed: pml4={:#x} permission_addresses_typed=true",
+            "Kernel/user mapping permission self-check passed: pml4={:#x} permission_addresses_typed=true permission_page_bounds_typed=true",
             user_address_space.level_4_frame().as_u64()
         );
     }
@@ -286,7 +286,7 @@ fn verify_user_program_mappings(
     );
     crate::log_info!(
         "memory",
-        "Syscall user data permission self-check passed: permission_addresses_typed=true"
+        "Syscall user data permission self-check passed: permission_addresses_typed=true permission_page_bounds_typed=true"
     );
 }
 

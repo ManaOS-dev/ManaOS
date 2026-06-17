@@ -44,6 +44,8 @@ physical frame allocator は、以下の前提に依存します。
   raw address field は user address wrapper に入る前に分類してから渡します。
 - user page mapping/unmapping API は `UserPageStart` を要求するため、page table を変更する前に
   4 KiB user-page alignment を確定します。
+- user permission probe は active / per-process page table を歩く前に、
+  `UserVirtualRange` から first / last page boundary を `UserPageStart` として導出します。
 - registered range は 4 KiB page に正規化し、physical address zero を避けます。
 - registered range は sort し、隣接 range は merge します。
 - allocation は tracked free range を scan し、owner が release するまで同じ physical frame を
@@ -169,6 +171,11 @@ private typed mapping range を使い、comparison の直前だけ address を r
 mapping record は start を `UserPageStart`、non-zero page count を `PageCount` として保持し、
 successful unmap result も non-zero page count を `PageCount` として保持します。
 lifetime / diagnostic total は 0 になり得るため `u64` counter のままです。
+
+user pointer copy helper と per-process address-space probe は、
+`UserVirtualRange::first_page_start()` / `last_page_start()` から permission-check page walk を導出します。
+walker は `x86_64` page-table translation 用に raw number へ下げる前に、
+`UserPageStart` boundary を比較します。
 
 ## user address spaces
 

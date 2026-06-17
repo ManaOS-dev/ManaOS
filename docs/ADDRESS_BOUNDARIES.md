@@ -43,6 +43,9 @@ untyped cross-domain `u64` values:
 - User data page-table permission probes accept `UserReadableRange` and
   `UserWritableRange` before final raw slice creation. Raw `usize` pointers are
   limited to the final kernel slice/read boundary and diagnostic ABI inputs.
+- User data page-table permission walks derive first and last user pages as
+  `UserPageStart` values from `UserVirtualRange` before querying page-table
+  flags.
 - User address-space permission self-checks accept `VirtAddr` for kernel probe
   addresses and `UserVirtualAddress` for representative user addresses before
   forming copy-direction probe ranges.
@@ -244,6 +247,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - `kernel::memory::user_pointer::copy_from_user` accepts
   `UserReadableRange`, and `copy_to_user` accepts `UserWritableRange`; syscall
   helpers convert raw ABI arguments first.
+- `UserVirtualRange` derives permission-check page-walk boundaries as
+  `UserPageStart` values, so active and per-process user page-table probes do
+  not use untyped virtual addresses for user page starts.
 - Pending keyboard-backed `read` waits retain the validated destination as
   `UserWritableRange` until the task address space is active again, then
   revalidate page-table permissions before copying bytes.

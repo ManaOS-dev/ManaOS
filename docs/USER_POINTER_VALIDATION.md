@@ -25,6 +25,9 @@ The implementation entry point is `kernel::memory::user_pointer`.
 - Page-table permission probes consume those copy-direction wrappers. Raw
   `usize` pointers are used only when creating the final kernel slice or reading
   one already-classified user byte.
+- Permission probes derive their first and last page-walk positions as
+  `UserPageStart` values from `UserVirtualRange` before translating page-table
+  entries.
 - User address-space permission self-checks keep representative kernel probes as
   `VirtAddr` and representative user probes as `UserVirtualAddress` before
   forming the single-byte readable or writable ranges used by the probe.
