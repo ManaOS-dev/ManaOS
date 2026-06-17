@@ -149,6 +149,11 @@ scheduler-backed contract:
 - wait collection は reclaimed runtime resource に依存しません。`waitpid` は scheduler metadata と child exit
   record だけを消費します。
 
+現在の timer scheduler quantum は named one-tick policy です。1 tick は current single-core
+round-robin smoke を deterministic に保つための値で、process lifecycle と fairness test が増えるまでは
+この値を維持します。scheduler diagnostics は `timer_quantum_ticks` を公開し、storage smoke が
+この値を assert します。
+
 ## parent-child lifecycle states
 
 現在の scheduler は、kernel task または user task を spawn するときに parent task identifier を

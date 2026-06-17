@@ -7,7 +7,8 @@ use super::{
     TaskStatusDiagnosticsSnapshot, UserHeapDiagnosticsSnapshot,
     UserMappingActiveDiagnosticsSnapshot, UserMappingLifecycleDiagnosticsSnapshot,
     UserPreemptionReasonDiagnostics, UserResumePathDiagnostics, UserTrapFrameDiagnosticsSnapshot,
-    UserVirtualMemorySnapshot, USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
+    UserVirtualMemorySnapshot, SCHEDULER_TIMER_QUANTUM_TICKS,
+    USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT,
 };
 use crate::kernel::memory::address::VirtAddr;
 use crate::kernel::task::context::UserTrapFrame;
@@ -72,6 +73,7 @@ impl Scheduler {
                 finished_tasks,
             ),
             context_switches: self.context_switch_count,
+            timer_quantum_ticks: SCHEDULER_TIMER_QUANTUM_TICKS,
             timer_preemptions: self.timer_preemption_count,
             user_entries: self.user_entry_count,
             one_shot_user_entries: self.one_shot_user_entry_count,

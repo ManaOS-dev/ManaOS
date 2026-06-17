@@ -276,6 +276,7 @@ $expectedPatterns = @(
     "reclaimed_kernel_stack_virtual_pages\s+= 50",
     "address_space_reclaim_guard_checks\s+= 10",
     "scheduler_transition_invariant_checks\s+= 1",
+    "timer_quantum_ticks\s+= 1",
     "timer_user_entries\s+= [1-9][0-9]*",
     "timer_user_entries_from_preempted_user\s+= [1-9][0-9]*",
     "finished_tasks\s+= 10",

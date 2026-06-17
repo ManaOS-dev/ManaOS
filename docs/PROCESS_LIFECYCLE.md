@@ -244,6 +244,12 @@ The future general process model must keep these invariants:
 - Orphan handling must stay explicit. Until ManaOS starts a dedicated user
   `init`, task `0` is the initial process for reparented children.
 
+The current timer scheduler quantum is a named one-tick policy. One tick keeps
+the existing single-core round-robin smoke deterministic while the process
+lifecycle and fairness tests are still growing. Scheduler diagnostics expose
+`timer_quantum_ticks`, and storage smoke asserts it before future work raises
+or makes the policy runtime-configurable.
+
 The current initial-process reparenting policy is scheduler-owned. When a user
 task exits, the scheduler moves live user children and uncollected child exit
 records whose recorded parent is the exiting task to task `0`. Reparenting

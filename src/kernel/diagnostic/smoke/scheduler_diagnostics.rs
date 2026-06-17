@@ -486,6 +486,10 @@ fn log_scheduler_switch_diagnostics(diagnostics: &crate::kernel::task::Scheduler
                 format_args!("{}", diagnostics.context_switches()),
             ),
             LogField::new(
+                "timer_quantum_ticks",
+                format_args!("{}", diagnostics.timer_quantum_ticks()),
+            ),
+            LogField::new(
                 "timer_preemptions",
                 format_args!("{}", diagnostics.timer_preemptions()),
             ),

@@ -847,6 +847,7 @@ pub struct SchedulerDiagnostics {
     pub(super) active_user_address_spaces: u64,
     pub(super) states: TaskStateDiagnostics,
     pub(super) context_switches: u64,
+    pub(super) timer_quantum_ticks: u64,
     pub(super) timer_preemptions: u64,
     pub(super) user_entries: u64,
     pub(super) one_shot_user_entries: u64,
@@ -915,6 +916,11 @@ impl SchedulerDiagnostics {
     /// Return the number of timer-driven scheduler context switches.
     pub const fn context_switches(self) -> u64 {
         self.context_switches
+    }
+
+    /// Return the configured timer ticks granted before scheduler rotation.
+    pub const fn timer_quantum_ticks(self) -> u64 {
+        self.timer_quantum_ticks
     }
 
     /// Return the number of timer preemptions from user mode.

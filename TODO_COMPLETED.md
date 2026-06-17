@@ -177,6 +177,7 @@ active roadmap can list only unfinished work.
 ### Scheduler State Machine
 
 - [x] Add a scheduler invariant check that runs during storage smoke.
+- [x] Add a named one-tick scheduler quantum policy with rationale comments and smoke diagnostics.
 
 ## Immediate Priorities
 

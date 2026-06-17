@@ -149,7 +149,8 @@ spurious vector diagnostics、trap frame layout、timer preemption、scheduler d
 
 context switch/task refactoring では context responsibility split、ABI docs、
 trap-frame offset verification、process lifecycle module、scheduler-owned exit queue、
-return-window invariant、preemption state normalization、task metadata model が完了済みです。
+return-window invariant、preemption state normalization、task metadata model、
+named one-tick scheduler quantum policy と storage-smoke diagnostics が完了済みです。
 
 ### Tooling, Tests, And Documentation
 

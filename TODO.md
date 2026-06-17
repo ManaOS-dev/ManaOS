@@ -139,7 +139,6 @@ reviewable unit before implementing it.
 
 ### Timer And Preemption Policy
 
-- [ ] Add configurable scheduler quantum constants with rationale comments.
 - [ ] Add diagnostics for missed timer ticks.
 - [ ] Add diagnostics for timer ticks skipped while interrupts are masked.
 - [ ] Add a preemption disable counter for critical scheduler sections.

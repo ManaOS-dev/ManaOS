@@ -6,7 +6,8 @@ use super::{
     UserAddressSpace, UserAddressSpaceReclaim, UserHeap, UserMappings,
     UserPreemptionReasonDiagnostics, UserReadRequest, UserResumePathDiagnostics, UserTaskExit,
     UserTrapFrame, UserTrapFrameSource, UserVirtualAddress, UserWaitpidCompletion,
-    UserWaitpidRequest, UserWritableRange, USER_TASK_PREEMPTION_ENABLED,
+    UserWaitpidRequest, UserWritableRange, SCHEDULER_TIMER_QUANTUM_TICKS,
+    USER_TASK_PREEMPTION_ENABLED,
 };
 use crate::kernel::memory::address::VirtAddr;
 use crate::kernel::memory::user_pointer;
@@ -88,7 +89,7 @@ impl Scheduler {
             return None;
         }
         self.tasks[task_index].context.clear();
-        self.current_index = task_index;
+        self.set_current_index(task_index);
         self.activate_user_task(task_id);
         self.user_entry_count = self.user_entry_count.saturating_add(1);
         self.one_shot_user_entry_count = self.one_shot_user_entry_count.saturating_add(1);
@@ -133,7 +134,7 @@ impl Scheduler {
             if !bootstrap_task.state.resume_blocked() {
                 bootstrap_task.state.prepare_to_run();
             }
-            self.current_index = 0;
+            self.set_current_index(0);
         }
         self.deactivate_user_task(task_id);
         self.finished_task_count = self.finished_task_count.saturating_add(1);
@@ -395,7 +396,7 @@ impl Scheduler {
             if !bootstrap_task.state.resume_blocked() {
                 bootstrap_task.state.prepare_to_run();
             }
-            self.current_index = 0;
+            self.set_current_index(0);
         }
         if let Some(wake_tick) = wake_tick {
             self.user_sleep_block_count = self.user_sleep_block_count.saturating_add(1);
@@ -772,6 +773,13 @@ impl Scheduler {
         }
     }
 
+    fn set_current_index(&mut self, next_index: usize) {
+        if self.current_index != next_index {
+            self.current_timer_quantum_ticks = 0;
+        }
+        self.current_index = next_index;
+    }
+
     pub(in crate::kernel::task) fn replace_current_user_image(
         &mut self,
         address_space: UserAddressSpace,
@@ -1029,6 +1037,11 @@ impl Scheduler {
             return None;
         }
 
+        self.current_timer_quantum_ticks = self.current_timer_quantum_ticks.saturating_add(1);
+        if self.current_timer_quantum_ticks < SCHEDULER_TIMER_QUANTUM_TICKS {
+            return None;
+        }
+
         let next_index = self.get_next_ready_index(self.current_index)?;
         if next_index == self.current_index {
             return None;
@@ -1041,7 +1054,7 @@ impl Scheduler {
         if !self.tasks[next_index].state.prepare_to_run() {
             return None;
         }
-        self.current_index = next_index;
+        self.set_current_index(next_index);
         self.context_switch_count = self.context_switch_count.saturating_add(1);
 
         let current_task_id = self.tasks[current_index].get_id();

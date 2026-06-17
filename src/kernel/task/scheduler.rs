@@ -40,6 +40,9 @@ use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use spin::Mutex;
 
 const USER_TASK_PREEMPTION_ENABLED: bool = true;
+// One tick preserves the current deterministic round-robin smoke behavior
+// while leaving the scheduler quantum policy named and visible to diagnostics.
+const SCHEDULER_TIMER_QUANTUM_TICKS: u64 = 1;
 
 pub(super) static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
 static PREEMPTION_STATE: AtomicU8 = AtomicU8::new(PreemptionStateDiagnostics::Enabled.as_raw());
@@ -653,6 +656,7 @@ pub(super) struct Scheduler {
     child_exit_records: Vec<ChildExitRecord>,
     preemption_switch_logged: bool,
     user_resume_logged: bool,
+    current_timer_quantum_ticks: u64,
     context_switch_count: u64,
     timer_preemption_count: u64,
     user_entry_count: u64,
@@ -690,6 +694,7 @@ impl Scheduler {
             child_exit_records: Vec::new(),
             preemption_switch_logged: false,
             user_resume_logged: false,
+            current_timer_quantum_ticks: 0,
             context_switch_count: 0,
             timer_preemption_count: 0,
             user_entry_count: 0,
