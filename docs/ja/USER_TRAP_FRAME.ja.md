@@ -66,6 +66,9 @@ space へ戻します。
 
 total size は 160 bytes です。`rsp` は general register としては別に持たず、`iretq` frame の
 user stack pointer から復元します。
+保存される `rip` と `rsp` field は、この固定 resume ABI の一部なので raw のままです。
+ただし kernel 側でそれらの user address を formatting / publish するときは、先に typed
+`UserVirtualAddress` accessor を使い、最後の diagnostic boundary でだけ raw value に下げます。
 
 ## interrupt save set
 
@@ -105,6 +108,8 @@ timer interrupt bridge も同じ scheduler API を `UserTrapFrameSource::TimerIn
 syscall return frame と timer interrupt frame は source-specific diagnostics を記録する前に同じ
 task-owned recording path を通ります。両方の bridge は stack-resident trap-frame storage address を
 typed `VirtAddr` として渡し、raw pointer value は architecture/shared ABI capture point に限定します。
+scheduler diagnostics は保存済み user RIP/RSP も serial logging 前に typed accessor で分類するため、
+storage smoke は `trap_frame_user_addresses_typed=true` を assert できます。
 
 ## preemption enablement checklist
 

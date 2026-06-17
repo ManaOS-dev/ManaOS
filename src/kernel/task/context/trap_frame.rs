@@ -1,5 +1,6 @@
 //! User trap frame layout.
 
+use crate::kernel::memory::address::{UserVirtualAddress, VirtAddr};
 use core::mem;
 
 const USER_TRAP_FRAME_INSTRUCTION_POINTER_OFFSET: usize = 0;
@@ -75,6 +76,16 @@ pub struct UserTrapFrame {
 }
 
 impl UserTrapFrame {
+    /// Return the user instruction pointer as a typed user virtual address.
+    pub const fn instruction_pointer_address(&self) -> Option<UserVirtualAddress> {
+        UserVirtualAddress::new(VirtAddr::new(self.instruction_pointer))
+    }
+
+    /// Return the user stack pointer as a typed user virtual address.
+    pub const fn stack_pointer_address(&self) -> Option<UserVirtualAddress> {
+        UserVirtualAddress::new(VirtAddr::new(self.stack_pointer))
+    }
+
     /// Return an immutable pointer suitable for architecture restore stubs.
     pub fn as_pointer(&self) -> *const u64 {
         core::ptr::addr_of!(self.instruction_pointer)

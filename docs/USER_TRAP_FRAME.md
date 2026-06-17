@@ -71,6 +71,10 @@ assertions:
 
 The total size is 160 bytes. `rsp` is intentionally not listed as a general
 register because the user stack pointer is restored from the `iretq` frame.
+The stored `rip` and `rsp` fields remain raw because they are part of this
+fixed resume ABI. Kernel readers that need to format or publish those user
+addresses must use the typed `UserVirtualAddress` accessors first, then lower
+the typed values at the final diagnostic boundary.
 
 ## Interrupt Save Set
 
@@ -122,7 +126,9 @@ The timer interrupt bridge uses the same scheduler API with
 interrupt frames share one task-owned recording path before their source-specific
 diagnostics are marked. Both bridges pass a typed `VirtAddr` for the
 stack-resident trap-frame storage address; raw pointer values remain limited to
-the architecture/shared ABI capture point.
+the architecture/shared ABI capture point. Scheduler diagnostics also classify
+the saved user RIP/RSP through typed accessors before serial logging them, so
+storage smoke can assert `trap_frame_user_addresses_typed=true`.
 
 ## Preemption Enablement Checklist
 

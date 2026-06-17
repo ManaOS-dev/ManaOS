@@ -109,12 +109,20 @@ fn run_user_task_until_kernel_return(
         user_task.address_space.level_4_frame().as_u64(),
         user_task.kernel_stack_top.as_u64()
     );
+    let instruction_pointer = user_task
+        .trap_frame
+        .instruction_pointer_address()
+        .expect("user trap frame instruction pointer must be a user virtual address");
+    let stack_pointer = user_task
+        .trap_frame
+        .stack_pointer_address()
+        .expect("user trap frame stack pointer must be a user virtual address");
     crate::log_info!(
         "task",
-        "User trap frame entry prepared: task={} rip={:#x} rsp={:#x} rdi={} rsi={:#x} rdx={:#x}",
+        "User trap frame entry prepared: task={} rip={:#x} rsp={:#x} rdi={} rsi={:#x} rdx={:#x} trap_frame_user_addresses_typed=true",
         task_id,
-        user_task.trap_frame.instruction_pointer,
-        user_task.trap_frame.stack_pointer,
+        instruction_pointer.as_u64(),
+        stack_pointer.as_u64(),
         user_task.trap_frame.rdi,
         user_task.trap_frame.rsi,
         user_task.trap_frame.rdx

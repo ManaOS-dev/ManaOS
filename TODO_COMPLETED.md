@@ -171,6 +171,7 @@ active roadmap can list only unfinished work.
 - [x] Keep user trap-frame storage addresses typed as `VirtAddr` before scheduler metadata records them, with timer preemption smoke coverage.
 - [x] Guard user entry and trap-frame register layouts with compile-time offset assertions before assembly-facing resumes.
 - [x] Add storage smoke coverage for typed user entry argument pointer handoffs before first-entry context lowering.
+- [x] Read user trap-frame RIP/RSP through typed `UserVirtualAddress` accessors before diagnostics and `execve` publication lower them for output.
 
 ### Address Space Lifecycle
 

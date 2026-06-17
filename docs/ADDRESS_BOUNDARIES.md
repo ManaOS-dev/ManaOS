@@ -92,6 +92,9 @@ untyped cross-domain `u64` values:
 - User trap-frame storage addresses are classified as `VirtAddr` before
   `kernel::task::record_current_user_trap_frame(...)`, so scheduler metadata
   does not receive a raw kernel stack address.
+- `UserTrapFrame` keeps its `repr(C)` register fields raw for the architecture
+  restore ABI, but kernel diagnostics and `execve` publication read user RIP
+  and RSP through typed `UserVirtualAddress` accessors before formatting them.
 - Scheduler task snapshots retain the last resume address-space root as
   `PhysicalFrameStart` and the last resume kernel stack top as `VirtAddr`;
   raw numeric values are produced only by console and smoke formatting
@@ -251,6 +254,10 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   architecture/shared ABI capture point. The kernel interrupt and syscall
   bridges convert them to `VirtAddr` before the task scheduler records the
   captured `UserTrapFrame`.
+- User trap-frame RIP and RSP fields remain raw inside the fixed `repr(C)`
+  resume frame. Kernel logging, diagnostics, and `execve` publication use
+  typed `UserVirtualAddress` accessors before lowering those user addresses
+  back to numbers for output.
 - Scheduler task snapshots keep the last resume address-space root as
   `PhysicalFrameStart` and the last resume kernel stack top as `VirtAddr`.
   Console and serial smoke diagnostics lower those values to raw numbers only

@@ -42,7 +42,9 @@
 use alloc::{string::String, vec::Vec};
 
 use crate::kernel::memory::{
-    address::{PageCount, UserCString, UserReadableRange, UserWritableRange, VirtAddr},
+    address::{
+        PageCount, UserCString, UserReadableRange, UserVirtualAddress, UserWritableRange, VirtAddr,
+    },
     user_pointer,
 };
 use crate::kernel::task::{context::UserTrapFrame, UserTrapFrameSource};
@@ -896,11 +898,11 @@ fn sys_execve(
 
     crate::log_info!(
         "syscall",
-        "execve image published -> task={} path={} entry={:#x} stack={:#x} heap_start={:#x} argc={} old_user_pages={} old_page_table_pages={}",
+        "execve image published -> task={} path={} entry={:#x} stack={:#x} heap_start={:#x} argc={} old_user_pages={} old_page_table_pages={} trap_frame_user_addresses_typed=true",
         published.task_id,
         staging.path,
-        published.entry_point,
-        published.stack_pointer,
+        published.entry_point.as_u64(),
+        published.stack_pointer.as_u64(),
         published.heap_start,
         published.argument_count,
         published.reclaimed_old_user_pages,
@@ -919,8 +921,8 @@ struct ExecveImageCandidate {
 
 struct ExecvePublishedImage {
     task_id: u64,
-    entry_point: u64,
-    stack_pointer: u64,
+    entry_point: UserVirtualAddress,
+    stack_pointer: UserVirtualAddress,
     heap_start: u64,
     argument_count: u64,
     trap_frame: UserTrapFrame,
@@ -982,8 +984,14 @@ fn build_and_publish_execve_candidate(
 
     Some(ExecvePublishedImage {
         task_id,
-        entry_point: candidate.trap_frame.instruction_pointer,
-        stack_pointer: candidate.trap_frame.stack_pointer,
+        entry_point: candidate
+            .trap_frame
+            .instruction_pointer_address()
+            .expect("published execve entry point must be a user virtual address"),
+        stack_pointer: candidate
+            .trap_frame
+            .stack_pointer_address()
+            .expect("published execve stack pointer must be a user virtual address"),
         heap_start: candidate.heap_start.as_u64(),
         argument_count: candidate.argument_count,
         trap_frame: candidate.trap_frame,

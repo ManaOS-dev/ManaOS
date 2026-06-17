@@ -729,15 +729,24 @@ impl Scheduler {
             return;
         }
 
+        let instruction_pointer = user_runtime
+            .saved_frame
+            .instruction_pointer_address()
+            .expect("saved user trap frame instruction pointer must be a user virtual address");
+        let stack_pointer = user_runtime
+            .saved_frame
+            .stack_pointer_address()
+            .expect("saved user trap frame stack pointer must be a user virtual address");
+
         match source {
             UserTrapFrameSource::Syscall => crate::log_info!(
                 "task",
-                "User syscall trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rdi={:#x} rsi={:#x} rdx={:#x} r10={:#x} r8={:#x} r9={:#x} trap_frame_storage_typed=true",
+                "User syscall trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rdi={:#x} rsi={:#x} rdx={:#x} r10={:#x} r8={:#x} r9={:#x} trap_frame_storage_typed=true trap_frame_user_addresses_typed=true",
                 task_id,
                 trap_frame_storage_address.as_u64(),
                 trap_frame_on_kernel_stack,
-                user_runtime.saved_frame.instruction_pointer,
-                user_runtime.saved_frame.stack_pointer,
+                instruction_pointer.as_u64(),
+                stack_pointer.as_u64(),
                 user_runtime.saved_frame.rax,
                 user_runtime.saved_frame.rdi,
                 user_runtime.saved_frame.rsi,
@@ -748,12 +757,12 @@ impl Scheduler {
             ),
             UserTrapFrameSource::TimerInterrupt => crate::log_info!(
                 "task",
-                "User timer trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rcx={:#x} r11={:#x} trap_frame_storage_typed=true",
+                "User timer trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rcx={:#x} r11={:#x} trap_frame_storage_typed=true trap_frame_user_addresses_typed=true",
                 task_id,
                 trap_frame_storage_address.as_u64(),
                 trap_frame_on_kernel_stack,
-                user_runtime.saved_frame.instruction_pointer,
-                user_runtime.saved_frame.stack_pointer,
+                instruction_pointer.as_u64(),
+                stack_pointer.as_u64(),
                 user_runtime.saved_frame.rax,
                 user_runtime.saved_frame.rcx,
                 user_runtime.saved_frame.r11
@@ -821,14 +830,20 @@ impl Scheduler {
         user_runtime.last_resume_kernel_stack_top = None;
         current_task.context.clear();
 
+        let instruction_pointer = trap_frame
+            .instruction_pointer_address()
+            .expect("execve trap frame instruction pointer must be a user virtual address");
+        let stack_pointer = trap_frame
+            .stack_pointer_address()
+            .expect("execve trap frame stack pointer must be a user virtual address");
         crate::log_info!(
             "task",
-            "User image replaced by execve: task={} old_address_space={:#x} new_address_space={:#x} entry={:#x} stack={:#x} heap_start={:#x}",
+            "User image replaced by execve: task={} old_address_space={:#x} new_address_space={:#x} entry={:#x} stack={:#x} heap_start={:#x} trap_frame_user_addresses_typed=true",
             task_id,
             old_address_space.level_4_frame().as_u64(),
             address_space.level_4_frame().as_u64(),
-            trap_frame.instruction_pointer,
-            trap_frame.stack_pointer,
+            instruction_pointer.as_u64(),
+            stack_pointer.as_u64(),
             heap_start.as_u64()
         );
 

@@ -61,6 +61,9 @@ kernel ownership boundary では型付き address に変換することです。
   constructor が stack pointer を align した後、private assembly-facing context layout へ下ろします。
 - user trap-frame storage address は `kernel::task::record_current_user_trap_frame(...)`
   の前に `VirtAddr` へ分類し、scheduler metadata が raw kernel stack address を受け取らないようにします。
+- `UserTrapFrame` は architecture restore ABI のために `repr(C)` register field を raw のまま保ちます。
+  ただし kernel diagnostics と `execve` publication は、user RIP/RSP を formatting する前に
+  typed `UserVirtualAddress` accessor で読みます。
 - scheduler task snapshot は last resume address-space root を `PhysicalFrameStart`、last resume kernel stack top を `VirtAddr` として保持し、console / smoke output formatting の境界でだけ raw number へ下ろします。
 - user virtual-memory task snapshot は `brk` heap base、current break、private mapping next-start を `UserVirtualAddress` として保持し、console / smoke output formatting の境界でだけ raw number へ下ろします。
 - `user_stack::allocate_and_map_user_page(...) -> PhysicalFrameStart`。
@@ -160,6 +163,9 @@ user entry と timer-resume の handoff は、選択した user task の kernel 
 syscall / timer trap-frame storage address は architecture/shared ABI の capture point だけ raw のままです。
 kernel interrupt / syscall bridge は captured `UserTrapFrame` を task scheduler に記録する前に
 `VirtAddr` へ変換します。
+user trap-frame の RIP/RSP field は fixed `repr(C)` resume frame の中では raw のままです。
+kernel logging、diagnostics、`execve` publication は typed `UserVirtualAddress` accessor を使ってから、
+output の境界で raw number へ下げます。
 scheduler task snapshot は last resume address-space root を `PhysicalFrameStart`、last resume kernel stack top を `VirtAddr` として保持し、console / serial smoke diagnostics の formatting 時だけ raw number にします。
 user virtual-memory task snapshot は heap base、heap break、private mapping next-start address を `UserVirtualAddress` として保持し、console / serial smoke diagnostics の formatting 時だけ raw number にします。
 user stack allocation の page count は `PageCount` で分類してから frame allocation と stack slot mapping に進みます。

@@ -143,6 +143,8 @@ private mapping overlap / containment helper の page-aligned mapping range boun
 `mmap` / `munmap` smoke coverage、
 user trap-frame storage address の scheduler metadata 記録前 `VirtAddr` boundary 化と
 timer preemption smoke coverage、
+user trap-frame RIP/RSP の diagnostics / `execve` publication 前 `UserVirtualAddress`
+accessor 化、
 per-process page table、
 user address-space reclaim、kernel stack reclaim、
 user pointer validation、mapping permission checks、identity mapping audit、
