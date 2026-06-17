@@ -247,10 +247,12 @@ inside `UserMappingPlacement`; scheduler diagnostics derive raw display values
 from that typed placement. Automatic placement keeps the next search cursor as
 `UserPageStart` before allocation diagnostics lower it for display. Mapping
 record splits classify the right-side start as `UserPageStart` before mutating
-the record table. Mapping records keep their starts as `UserPageStart` and
-their page counts as `PageCount`; successful unmap results also use `PageCount`
-for non-zero page counts. Lifetime and diagnostic totals remain `u64` because
-they can be zero.
+the record table. Internal overlap and containment checks use a private typed
+mapping range with `UserPageStart` start and exclusive-end boundaries before
+lowering addresses for comparisons. Mapping records keep their starts as
+`UserPageStart` and their page counts as `PageCount`; successful unmap results
+also use `PageCount` for non-zero page counts. Lifetime and diagnostic totals
+remain `u64` because they can be zero.
 
 The one-shot user runtime registers the boot-owned frame allocator only while
 user code can issue syscalls, so syscall dispatch can allocate and free user

@@ -47,8 +47,65 @@ struct UserMapping {
 }
 
 impl UserMapping {
-    fn end_exclusive(self) -> Option<u64> {
-        self.start.as_u64().checked_add(self.page_count.byte_len())
+    fn range(self) -> Option<UserMappingRange> {
+        UserMappingRange::new(self.start, self.page_count)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct UserMappingRange {
+    start: UserPageStart,
+    end_exclusive: UserPageStart,
+    page_count: PageCount,
+}
+
+impl UserMappingRange {
+    fn new(start: UserPageStart, page_count: PageCount) -> Option<Self> {
+        let end_address = start.as_u64().checked_add(page_count.byte_len())?;
+        if start.as_u64() < USER_MAPPING_BASE || end_address > USER_MAPPING_END {
+            return None;
+        }
+        let end_exclusive = user_page_start_from_raw(end_address)?;
+        Some(Self {
+            start,
+            end_exclusive,
+            page_count,
+        })
+    }
+
+    fn from_byte_len(start: UserPageStart, byte_len: u64) -> Option<Self> {
+        if byte_len == 0 || !byte_len.is_multiple_of(PAGE_SIZE) {
+            return None;
+        }
+        Self::new(start, PageCount::new(byte_len / PAGE_SIZE)?)
+    }
+
+    const fn start(self) -> UserPageStart {
+        self.start
+    }
+
+    const fn page_count(self) -> PageCount {
+        self.page_count
+    }
+
+    const fn end_exclusive(self) -> UserPageStart {
+        self.end_exclusive
+    }
+
+    const fn start_address(self) -> u64 {
+        self.start.as_u64()
+    }
+
+    const fn end_address(self) -> u64 {
+        self.end_exclusive.as_u64()
+    }
+
+    const fn overlaps(self, other: Self) -> bool {
+        self.start_address() < other.end_address() && other.start_address() < self.end_address()
+    }
+
+    const fn contains(self, other: Self) -> bool {
+        self.start_address() <= other.start_address() && other.end_address() <= self.end_address()
     }
 }
 
@@ -225,26 +282,18 @@ impl UserMappings {
         let page_count = page_count_for_length(length).ok_or(UserMappingError::InvalidRequest)?;
         let byte_len = page_count.byte_len();
         let start = self.start_address_for_placement(plan.placement(), byte_len)?;
-        let start_address = start.as_u64();
-        let end_address = start_address
-            .checked_add(byte_len)
-            .ok_or(UserMappingError::InvalidRequest)?;
-        if start_address < USER_MAPPING_BASE || end_address > USER_MAPPING_END {
-            return Err(UserMappingError::InvalidRequest);
-        }
+        let requested_range =
+            UserMappingRange::new(start, page_count).ok_or(UserMappingError::InvalidRequest)?;
+        let start_address = requested_range.start_address();
         let mut replaced_page_count = 0_u64;
         if matches!(plan.placement(), UserMappingPlacement::FixedReplace(_)) {
-            self.ensure_replace_record_capacity(start_address, end_address)?;
-            replaced_page_count = self.replace_overlapping_pages(
-                address_space,
-                frame_allocator,
-                start_address,
-                end_address,
-            );
+            self.ensure_replace_record_capacity(requested_range)?;
+            replaced_page_count =
+                self.replace_overlapping_pages(address_space, frame_allocator, requested_range);
             if replaced_page_count > 0 {
                 crate::log_info!(
                     "memory",
-                    "User mapping fixed replacement prepared: start={:#x} pages={} records={} active_pages={}",
+                    "User mapping fixed replacement prepared: start={:#x} pages={} records={} active_pages={} mapping_range_typed=true",
                     start_address,
                     replaced_page_count,
                     self.active_records(),
@@ -272,12 +321,11 @@ impl UserMappings {
             source: plan.source(),
         });
         if matches!(plan.placement(), UserMappingPlacement::Any) {
-            self.next_start = user_page_start_from_raw(end_address)
-                .expect("next mapping search start must be page-aligned");
+            self.next_start = requested_range.end_exclusive();
         }
         Ok(UserMappingAllocation {
-            start: start.as_address(),
-            page_count,
+            start: requested_range.start().as_address(),
+            page_count: requested_range.page_count(),
             replaced_page_count,
         })
     }
@@ -295,14 +343,16 @@ impl UserMappings {
     ) -> Option<PageCount> {
         let start = request.start();
         let page_count = request.page_count();
-        let start_address = start.as_u64();
-        let end_address = start_address.checked_add(page_count.byte_len())?;
-        let record_index = self.find_containing_record_index(start_address, end_address)?;
+        let requested_range = UserMappingRange::new(start, page_count)?;
+        let start_address = requested_range.start_address();
+        let end_address = requested_range.end_address();
+        let record_index = self.find_containing_record_index(requested_range)?;
         let record = self.records[record_index].expect("containing record must exist");
-        let record_start = record.start.as_u64();
-        let record_end = record
-            .end_exclusive()
-            .expect("tracked mapping end must not overflow");
+        let record_range = record
+            .range()
+            .expect("containing record range must be valid");
+        let record_start = record_range.start_address();
+        let record_end = record_range.end_address();
         let left_pages = (start_address - record_start) / PAGE_SIZE;
         let right_pages = (record_end - end_address) / PAGE_SIZE;
         let split_record_index = if left_pages > 0 && right_pages > 0 {
@@ -313,8 +363,7 @@ impl UserMappings {
 
         let source = record.source;
         Self::unmap_pages(address_space, frame_allocator, start, page_count);
-        let right_start =
-            user_page_start_from_raw(end_address).expect("right split start must be page-aligned");
+        let right_start = requested_range.end_exclusive();
         self.apply_record_unmap(
             record_index,
             split_record_index,
@@ -325,9 +374,9 @@ impl UserMappings {
         );
         crate::log_info!(
             "memory",
-            "User {} mapping unmapped: start={:#x} pages={} records={} active_pages={} page_count_typed=true split_start_typed=true record_start_typed=true",
+            "User {} mapping unmapped: start={:#x} pages={} records={} active_pages={} page_count_typed=true split_start_typed=true record_start_typed=true unmap_range_typed=true",
             source.as_str(),
-            start.as_u64(),
+            requested_range.start_address(),
             page_count.as_u64(),
             self.active_records(),
             self.active_pages()
@@ -490,12 +539,9 @@ impl UserMappings {
             UserMappingPlacement::FixedReplace(start) => fixed_start_address(start, byte_len),
             UserMappingPlacement::FixedNoReplace(start) => {
                 let start = fixed_start_address(start, byte_len)?;
-                let start_address = start.as_u64();
-                let end_address = start_address + byte_len;
-                if self
-                    .overlapping_record_end(start_address, end_address)
-                    .is_some()
-                {
+                let requested_range = UserMappingRange::from_byte_len(start, byte_len)
+                    .ok_or(UserMappingError::InvalidRequest)?;
+                if self.overlapping_record_end(requested_range).is_some() {
                     return Err(UserMappingError::AddressInUse);
                 }
                 Ok(start)
@@ -505,27 +551,23 @@ impl UserMappings {
 
     fn ensure_replace_record_capacity(
         self,
-        start_address: u64,
-        end_address: u64,
+        requested_range: UserMappingRange,
     ) -> Result<(), UserMappingError> {
         let mut record_count: usize = self
             .active_records()
             .try_into()
             .expect("active mapping record count must fit in usize");
         for mapping in self.records.iter().flatten() {
-            let mapping_start = mapping.start.as_u64();
-            let mapping_end = mapping
-                .end_exclusive()
-                .ok_or(UserMappingError::InvalidRequest)?;
-            if start_address >= mapping_end || mapping_start >= end_address {
+            let mapping_range = mapping.range().ok_or(UserMappingError::InvalidRequest)?;
+            if !requested_range.overlaps(mapping_range) {
                 continue;
             }
 
             record_count -= 1;
-            if mapping_start < start_address {
+            if mapping_range.start_address() < requested_range.start_address() {
                 record_count += 1;
             }
-            if end_address < mapping_end {
+            if requested_range.end_address() < mapping_range.end_address() {
                 record_count += 1;
             }
         }
@@ -541,35 +583,39 @@ impl UserMappings {
         &mut self,
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
-        start_address: u64,
-        end_address: u64,
+        requested_range: UserMappingRange,
     ) -> u64 {
         let mut replaced_pages = 0_u64;
         for record_index in 0..self.records.len() {
             let Some(record) = self.records[record_index] else {
                 continue;
             };
-            let record_start = record.start.as_u64();
-            let record_end = record
-                .end_exclusive()
-                .expect("tracked mapping end must not overflow");
-            if start_address >= record_end || record_start >= end_address {
+            let record_range = record.range().expect("tracked mapping range must be valid");
+            if !requested_range.overlaps(record_range) {
                 continue;
             }
 
-            let overlap_start = record_start.max(start_address);
-            let overlap_end = record_end.min(end_address);
-            let overlap_pages = (overlap_end - overlap_start) / PAGE_SIZE;
-            let overlap_start = user_page_start_from_raw(overlap_start)
+            let record_start = record_range.start_address();
+            let record_end = record_range.end_address();
+            let overlap_start_address = record_start.max(requested_range.start_address());
+            let overlap_end_address = record_end.min(requested_range.end_address());
+            let overlap_pages = (overlap_end_address - overlap_start_address) / PAGE_SIZE;
+            let overlap_start = user_page_start_from_raw(overlap_start_address)
                 .expect("replacement overlap start must be a valid user address");
             let overlap_pages = page_count(overlap_pages);
-            Self::unmap_pages(address_space, frame_allocator, overlap_start, overlap_pages);
-            replaced_pages = replaced_pages.saturating_add(overlap_pages.as_u64());
+            let overlap_range = UserMappingRange::new(overlap_start, overlap_pages)
+                .expect("replacement overlap range must be valid");
+            Self::unmap_pages(
+                address_space,
+                frame_allocator,
+                overlap_range.start(),
+                overlap_range.page_count(),
+            );
+            replaced_pages = replaced_pages.saturating_add(overlap_range.page_count().as_u64());
 
-            let left_pages = (overlap_start.as_u64() - record_start) / PAGE_SIZE;
-            let right_pages = (record_end - overlap_end) / PAGE_SIZE;
-            let right_start = user_page_start_from_raw(overlap_end)
-                .expect("replacement right split start must be page-aligned");
+            let left_pages = (overlap_range.start_address() - record_start) / PAGE_SIZE;
+            let right_pages = (record_end - overlap_range.end_address()) / PAGE_SIZE;
+            let right_start = overlap_range.end_exclusive();
             let split_record_index = if left_pages > 0 && right_pages > 0 {
                 Some(
                     self.next_empty_record_index()
@@ -597,27 +643,22 @@ impl UserMappings {
     ) -> Option<UserPageStart> {
         let mut candidate = preferred_start;
         loop {
-            let end_address = candidate.as_u64().checked_add(byte_len)?;
-            if end_address > USER_MAPPING_END {
-                return None;
-            }
-            let Some(overlap_end) = self.overlapping_record_end(candidate.as_u64(), end_address)
-            else {
+            let candidate_range = UserMappingRange::from_byte_len(candidate, byte_len)?;
+            let Some(overlap_end) = self.overlapping_record_end(candidate_range) else {
                 return Some(candidate);
             };
             candidate = overlap_end;
         }
     }
 
-    fn overlapping_record_end(self, start_address: u64, end_address: u64) -> Option<UserPageStart> {
+    fn overlapping_record_end(self, requested_range: UserMappingRange) -> Option<UserPageStart> {
         self.records
             .iter()
             .filter_map(|record| {
                 let mapping = record.as_ref()?;
-                let mapping_start = mapping.start.as_u64();
-                let mapping_end = mapping.end_exclusive()?;
-                if start_address < mapping_end && mapping_start < end_address {
-                    user_page_start_from_raw(mapping_end)
+                let mapping_range = mapping.range()?;
+                if requested_range.overlaps(mapping_range) {
+                    Some(mapping_range.end_exclusive())
                 } else {
                     None
                 }
@@ -625,15 +666,15 @@ impl UserMappings {
             .max_by_key(|page_start| page_start.as_u64())
     }
 
-    fn find_containing_record_index(self, start_address: u64, end_address: u64) -> Option<usize> {
+    fn find_containing_record_index(self, requested_range: UserMappingRange) -> Option<usize> {
         self.records.iter().position(|record| {
             let Some(mapping) = record else {
                 return false;
             };
-            let Some(mapping_end) = mapping.end_exclusive() else {
+            let Some(mapping_range) = mapping.range() else {
                 return false;
             };
-            mapping.start.as_u64() <= start_address && end_address <= mapping_end
+            mapping_range.contains(requested_range)
         })
     }
 

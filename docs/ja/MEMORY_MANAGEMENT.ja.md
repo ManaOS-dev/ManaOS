@@ -163,6 +163,8 @@ mapping request は fixed requested address を `UserMappingPlacement` 内の `U
 automatic placement の next search cursor も `UserPageStart` として保持し、
 allocation diagnostics の formatting 前まで page-aligned typed value を保ちます。
 record split は record table を更新する前に右側 start を `UserPageStart` として分類します。
+internal overlap / containment check は `UserPageStart` start と exclusive-end boundary を持つ
+private typed mapping range を使い、comparison の直前だけ address を raw number へ下げます。
 mapping record は start を `UserPageStart`、non-zero page count を `PageCount` として保持し、
 successful unmap result も non-zero page count を `PageCount` として保持します。
 lifetime / diagnostic total は 0 になり得るため `u64` counter のままです。

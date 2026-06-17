@@ -111,6 +111,8 @@ untyped cross-domain `u64` values:
   are kept as `UserPageStart` values before allocation diagnostics lower them
   for display. Split record starts created by `munmap` or fixed replacement
   are also kept as `UserPageStart` values when the record table is updated.
+  Internal overlap and containment helpers pass a private typed mapping range
+  with `UserPageStart` start/end boundaries instead of raw start/end pairs.
 - `task::UserMappingRequest` stores the requested `mmap` address only as
   `UserMappingPlacement`. Scheduler diagnostics derive the displayed requested
   address from that typed placement instead of retaining a raw syscall address.
@@ -181,6 +183,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   It keeps mapping record starts and the automatic placement cursor as
   `UserPageStart` so private mapping records and the next search position
   cannot retain unaligned raw virtual addresses.
+  Its internal overlap and containment helpers pass a private typed mapping
+  range with page-aligned start and exclusive-end boundaries before lowering
+  addresses for comparisons.
   When an unmap or fixed replacement splits a record, the right-side record
   start stays classified as `UserPageStart` while `UserMappings` mutates the
   record table.

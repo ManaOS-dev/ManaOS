@@ -157,6 +157,7 @@ active roadmap can list only unfinished work.
 - [x] Keep private mapping record starts typed as `UserPageStart`.
 - [x] Keep frame allocator tracked region starts typed as `PhysAddr` until numeric comparisons are required, with boot smoke coverage.
 - [x] Keep user heap mapped-end helpers typed as `UserPageStart`, with `brk` smoke coverage.
+- [x] Keep private mapping overlap and containment helpers typed as a page-aligned mapping range, with `mmap`/`munmap` smoke coverage.
 
 ### Address Space Lifecycle
 
