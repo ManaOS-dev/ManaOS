@@ -13,6 +13,7 @@
 //!
 //! ## Public API
 //! - [`init`] - Initialize `x86_64` architecture state
+//! - [`SyscallEntryAddress`] - Typed `SYSCALL` entry target address
 //! - [`enable_interrupts`] - Enable CPU interrupts after wiring
 //! - [`disable_interrupts`] - Disable CPU interrupts during backend switching
 //! - [`switch_context`] - Switch between saved task contexts
@@ -30,5 +31,5 @@ pub use context::{enter_user_mode_once, switch_context, switch_to_user_mode_cont
 #[allow(unused_imports)]
 pub use cpu::{
     disable_interrupts, enable_interrupts, has_apic, hlt_loop, init, init_syscall,
-    read_timestamp_counter,
+    read_timestamp_counter, SyscallEntryAddress,
 };

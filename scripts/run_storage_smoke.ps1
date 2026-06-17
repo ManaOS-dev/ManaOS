@@ -94,6 +94,7 @@ $expectedPatterns = @(
     "readback_matches\s+= true",
     "masked\s+= true",
     "out_of_range_entries\s+= 0",
+    "SYSCALL MSR initialized: lstar=0x[0-9a-f]+ syscall_entry_typed=true",
     "IOAPIC routing activated: entries=3 activated=3 readback_matches=true routing_active=true masked=false local_apic_software_enabled=true legacy_pic_masked=true out_of_range_entries=0 timer_low_readback=0x[0-9a-f]+ timer_high_readback=0x[0-9a-f]+ keyboard_low_readback=0x[0-9a-f]+ keyboard_high_readback=0x[0-9a-f]+ mouse_low_readback=0x[0-9a-f]+ mouse_high_readback=0x[0-9a-f]+ apic_eoi_count=0 legacy_eoi_count=0",
     "Local APIC timer calibration started: configured=true armed=true masked=true address=0x[0-9a-f]+ vector=32 divide=16 lvt_timer=0x[0-9a-f]+ divide_config=0x3 initial_count=[1-9][0-9]* current_count=[0-9]+ start_ticks=[0-9]+",
     "Dynamic kernel mapping lifecycle self-check passed: map=true unmap=true virtual_reuse=true physical_reuse=true",

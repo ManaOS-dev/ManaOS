@@ -3,6 +3,7 @@
 use super::{
     global_descriptor_table, interrupt_controller, interrupt_descriptor_table, interval_timer,
 };
+use x86_64::VirtAddr;
 
 const EXTENDED_FEATURE_ENABLE_REGISTER: u32 = 0xc000_0080;
 const SYSTEM_CALL_TARGET_ADDRESS_REGISTER: u32 = 0xc000_0081;
@@ -12,6 +13,28 @@ const SYSTEM_CALL_ENABLE_BIT: u64 = 1;
 const INTERRUPT_FLAG_BIT: u64 = 1 << 9;
 const KERNEL_CODE_SELECTOR: u16 = 0x08;
 
+/// Architecture-owned virtual address for the `SYSCALL` entry target.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SyscallEntryAddress(VirtAddr);
+
+impl SyscallEntryAddress {
+    /// Create a syscall entry address from the kernel's registered entry point.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the function address cannot be represented as `u64`.
+    pub fn from_function(function: unsafe extern "C" fn()) -> Self {
+        let pointer = function as *const ();
+        let address = u64::try_from(pointer.addr()).expect("syscall entry address must fit in u64");
+        Self(VirtAddr::new(address))
+    }
+
+    /// Return the raw virtual address for the final architecture MSR boundary.
+    pub fn as_u64(self) -> u64 {
+        self.0.as_u64()
+    }
+}
+
 /// Check if the CPU supports APIC.
 #[allow(dead_code)]
 pub fn has_apic() -> bool {
@@ -20,7 +43,7 @@ pub fn has_apic() -> bool {
 }
 
 /// `x86_64` specific initialization.
-pub fn init(system_call_handler: u64) {
+pub fn init(system_call_handler: SyscallEntryAddress) {
     crate::log_info!("arch", "Initializing GDT...");
     global_descriptor_table::init();
     crate::log_info!("arch", "Initializing IDT...");
@@ -58,7 +81,7 @@ pub fn init(system_call_handler: u64) {
 }
 
 /// Initialize the `x86_64` `SYSCALL`/`SYSRET` model-specific registers.
-pub fn init_syscall(handler: u64) {
+pub fn init_syscall(handler: SyscallEntryAddress) {
     use x86_64::registers::model_specific::Msr;
 
     let mut extended_feature_enable_register = Msr::new(EXTENDED_FEATURE_ENABLE_REGISTER);
@@ -86,13 +109,18 @@ pub fn init_syscall(handler: u64) {
     // SAFETY: LSTAR is the architectural 64-bit syscall entry target MSR, and
     // `handler` is provided by the kernel composition root.
     unsafe {
-        long_system_call_target_address_register.write(handler);
+        long_system_call_target_address_register.write(handler.as_u64());
     }
     // SAFETY: SFMASK is the architectural syscall flags mask MSR; masking IF
     // disables interrupts on syscall entry.
     unsafe {
         system_call_flag_mask_register.write(INTERRUPT_FLAG_BIT);
     }
+    crate::log_info!(
+        "arch",
+        "SYSCALL MSR initialized: lstar={:#x} syscall_entry_typed=true",
+        handler.as_u64()
+    );
 }
 
 /// Enable CPU interrupts after architecture and driver initialization.

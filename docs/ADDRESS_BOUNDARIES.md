@@ -20,6 +20,8 @@ kernel ownership boundaries:
   register halves only at the device register boundary.
 - Kernel virtual pointers should be created only after a mapping helper proves
   the target range is mapped in the active address space.
+- Architecture entry-point function pointers should be classified before
+  architecture initialization lowers them into CPU register or MSR writes.
 
 ## Implemented Address Boundaries
 
@@ -82,6 +84,10 @@ untyped cross-domain `u64` values:
 - `KernelStackGuardFault` stores guard, writable, and top addresses as
   `VirtAddr` after page-fault ABI values are classified at the kernel interrupt
   boundary.
+- `arch::x86_64::SyscallEntryAddress` represents the virtual entry target
+  programmed into the `SYSCALL` LSTAR MSR. The composition root passes this
+  typed value into architecture initialization, and raw numeric lowering stays
+  inside the final MSR write boundary.
 - User task kernel stack tops are kept as `VirtAddr` across scheduler handoff
   paths and through the task architecture facade. They lower to raw `u64` only
   when that facade invokes the registered architecture installer and at the
@@ -177,8 +183,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 ### Boot And Composition Root
 
 - `src/main.rs`
-  - `arch::init(kernel::interrupt::syscall_entry as *const () as u64)` passes a
-    function address as a raw architecture argument.
+  - The syscall entry function pointer is converted to
+    `arch::x86_64::SyscallEntryAddress` before architecture initialization.
+    The raw LSTAR value is produced only inside `init_syscall(...)`.
   - `run_user_smoke_demo(...)` keeps user entry, user stack, `argv`, and `envp`
     addresses typed until `UserTaskContext` lowers them into the private
     `repr(C)` assembly ABI layout.
@@ -383,6 +390,8 @@ Continue introducing wrappers in small steps:
   device descriptors. This now exists in `kernel::memory::address`.
 - `StorageDataAddress` for the active DMA data buffer passed through generic
   storage parsing. This now exists in `kernel::memory::address`.
+- `SyscallEntryAddress` for the architecture-owned virtual entry point
+  programmed into x86_64 `SYSCALL` LSTAR.
 
 The next implementation steps should focus on the remaining architecture ABI
 boundaries. They should avoid broad mechanical renames until the remaining

@@ -145,6 +145,7 @@ user trap-frame storage address の scheduler metadata 記録前 `VirtAddr` boun
 timer preemption smoke coverage、
 user trap-frame RIP/RSP の diagnostics / `execve` publication 前 `UserVirtualAddress`
 accessor 化、
+x86_64 syscall entry target の LSTAR MSR 書き込み前 `SyscallEntryAddress` boundary 化、
 per-process page table、
 user address-space reclaim、kernel stack reclaim、
 user pointer validation、mapping permission checks、identity mapping audit、

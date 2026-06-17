@@ -56,7 +56,9 @@ fn initialize_scheduler(
 }
 
 fn initialize_architecture_and_drivers() {
-    arch::init(kernel::interrupt::syscall_entry as *const () as u64);
+    let syscall_entry_address =
+        arch::x86_64::SyscallEntryAddress::from_function(kernel::interrupt::syscall_entry);
+    arch::init(syscall_entry_address);
     arch::x86_64::interrupt_descriptor_table::register_page_fault_reporter(
         kernel::interrupt::process_page_fault,
     );
