@@ -140,6 +140,8 @@ internal overlap / containment helper は page-aligned start と exclusive-end b
 として保持します。syscall raw requested address は placement の選択または request rejection にだけ使います。
 `munmap` request は syscall ABI argument を `UserMappingUnmapRequest` へ分類してから scheduler と mapping tracker へ渡します。
 `UserTaskContext` の raw register layout は architecture entry ABI のために private に保ちます。
+compile-time layout assertion が private layout を守り、storage smoke は diagnostics が pointer を
+serial output 用に lower する前の typed entry-argument handoff を assert します。
 
 ### ELF loading
 

@@ -225,7 +225,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   diagnostic output.
 - `task::UserEntryArguments` is constructed from typed user pointers, and
   `UserTaskContext` keeps its raw `u64` register layout private to the
-  `repr(C)` architecture entry ABI.
+  `repr(C)` architecture entry ABI. Compile-time layout assertions guard the
+  private layout, and storage smoke asserts the typed entry-argument handoff
+  before diagnostics lower the pointers for serial output.
 - `kernel::memory::user_pointer::copy_from_user` accepts
   `UserReadableRange`, and `copy_to_user` accepts `UserWritableRange`; syscall
   helpers convert raw ABI arguments first.

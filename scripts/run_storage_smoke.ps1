@@ -115,7 +115,7 @@ $expectedPatterns = @(
     "User task current directory inherited: parent=0 child=.* cwd=/",
     "User program spawned from filesystem: task=.* path=/disk/bin/smoke_demo argc=2",
     "Installed user task kernel stack: task=.* address_space=.* kernel_stack_top_typed=true",
-    "User entry arguments prepared: argc=2",
+    "User entry arguments prepared: argc=2 .*entry_arguments_typed=true",
     "Multi-user smoke tasks spawned",
     "Concurrent user program spawn smoke passed: tasks=5",
     "Multi-user active set prepared: tasks=5",

@@ -60,6 +60,15 @@ storage smoke で走る scheduler invariant check が完了済みです。
 正本は英語版の
 `TODO_COMPLETED.md` と [`PROCESS_LIFECYCLE.md`](../PROCESS_LIFECYCLE.md) です。
 
+### Typed Address Boundaries
+
+typed address boundary では、`PhysicalFrameStart`、`UserVirtualAddress`、`UserPageStart`、
+`FrameCount`、`PageCount` の主要境界、typed `brk` / `munmap` request、kernel stack top handoff、
+permission probe、ELF entry / heap start、private mapping record、trap-frame storage address の
+typed 化が完了済みです。user entry / trap-frame register layout は compile-time offset assertion で
+guard され、first-entry の `argv` / `envp` handoff は storage smoke の
+`entry_arguments_typed=true` assertion で確認します。
+
 ### Immediate Priorities
 
 初期の優先タスクとして、NX permission、font face cache、display command queue、

@@ -303,7 +303,7 @@ fn prepare_user_entry_stack(
     );
     crate::log_info!(
         "task",
-        "User entry arguments prepared: argc={} argv={:#x} envp={:#x}",
+        "User entry arguments prepared: argc={} argv={:#x} envp={:#x} entry_arguments_typed=true",
         prepared_user_stack.argument_count(),
         prepared_user_stack.argument_values_pointer().as_u64(),
         prepared_user_stack.environment_values_pointer().as_u64()

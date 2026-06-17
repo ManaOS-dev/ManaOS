@@ -14,7 +14,12 @@ saved user register layout を定義します。
 - `iretq` frame 用の `rip`、`cs`、`rflags`、`rsp`、`ss`。
 - `rdi`、`rsi`、`rdx` に入る `argc`、`argv`、`envp`。
 
-initial context は最初の user trap frame を作るには十分です。SYSCALL entry path は current task の
+initial context は最初の user trap frame を作るには十分です。first-entry stack path は、
+`UserEntryArguments` が private `UserTaskContext` register fields へ
+lower される直前まで、`argv` と `envp` を `UserVirtualAddress` として保持します。storage smoke は
+その handoff の `entry_arguments_typed=true` diagnostic marker を assert します。
+compile-time layout assertion は、`UserTaskContext` と `UserTrapFrame` の field offset を
+Rust 側と assembly-facing resume contract に合わせ続けます。SYSCALL entry path は current task の
 guarded kernel stack へ切り替え、runtime `UserTrapFrame` を capture し、returning syscall frame を
 current user task に保存します。x86_64 timer interrupt entry も Ring 3 timer frame の complete
 general-purpose register snapshot を capture し、current user task に記録します。

@@ -13,9 +13,15 @@ restores user registers with:
 - `argc`, `argv`, and `envp` loaded into `rdi`, `rsi`, and `rdx`.
 
 The initial context is sufficient to create the first user trap frame. The
-SYSCALL entry path switches onto the current task's guarded kernel stack,
-captures a runtime `UserTrapFrame`, and stores returning syscall frames on the
-current user task. The x86_64 timer interrupt entry also captures a complete
+first-entry stack path keeps `argv` and `envp` as `UserVirtualAddress` values
+until `UserEntryArguments` is lowered into the private `UserTaskContext`
+register fields; storage smoke asserts the `entry_arguments_typed=true`
+diagnostic marker for that handoff. Compile-time layout assertions keep both
+`UserTaskContext` and `UserTrapFrame` field offsets aligned with the Rust and
+assembly-facing resume contracts. The SYSCALL entry path switches onto the
+current task's guarded kernel stack, captures a runtime `UserTrapFrame`, and
+stores returning syscall frames on the current user task. The x86_64 timer
+interrupt entry also captures a complete
 general-purpose register snapshot for Ring 3 timer frames and records it on the
 current user task. The syscall and timer bridges classify the trap-frame
 storage address as `VirtAddr` before handing the captured frame to
