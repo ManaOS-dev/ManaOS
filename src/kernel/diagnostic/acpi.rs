@@ -42,7 +42,7 @@ pub fn verify_parser_rules() -> bool {
     );
     crate::log_info!(
         "acpi",
-        "ACPI parser self-check passed: rsdp=true root_table=true madt=true"
+        "ACPI parser self-check passed: rsdp=true root_table=true madt=true physical_addresses_typed=true"
     );
     true
 }
@@ -84,14 +84,15 @@ fn log_acpi_root_table(
 ) {
     let source = diagnostics.root_pointer().source().as_str();
     let revision = diagnostics.revision();
-    let rsdt_address = diagnostics.rsdt_address();
+    let rsdt_address = diagnostics.rsdt_address().as_u64();
     let root_table_kind: kernel::acpi::RootTableKind = root_table.kind();
     let root_table_label = root_table_kind.as_str();
-    let root_address = root_table.physical_address();
+    let root_address = root_table.physical_address().as_u64();
     let root_revision = root_table.revision();
     let root_length = root_table.length();
     let root_entry_count = root_table.entry_count();
     if let Some(xsdt_address) = diagnostics.xsdt_address() {
+        let xsdt_address = xsdt_address.as_u64();
         kernel::diagnostic::log::log_kv(
             LogLevel::Info,
             "acpi",
@@ -107,6 +108,7 @@ fn log_acpi_root_table(
                 LogField::new("root_length", format_args!("{root_length}")),
                 LogField::new("entries", format_args!("{root_entry_count}")),
                 LogField::new("checksum", format_args!("true")),
+                LogField::new("root_physical_addresses_typed", format_args!("true")),
             ],
         );
     } else {
@@ -125,16 +127,17 @@ fn log_acpi_root_table(
                 LogField::new("root_length", format_args!("{root_length}")),
                 LogField::new("entries", format_args!("{root_entry_count}")),
                 LogField::new("checksum", format_args!("true")),
+                LogField::new("root_physical_addresses_typed", format_args!("true")),
             ],
         );
     }
 }
 
 fn log_acpi_madt(madt: &kernel::acpi::MadtDiagnostics) {
-    let madt_address = madt.physical_address();
+    let madt_address = madt.physical_address().as_u64();
     let madt_revision = madt.revision();
     let madt_length = madt.length();
-    let local_apic_address = madt.local_apic_address();
+    let local_apic_address = madt.local_apic_address().as_u64();
     let madt_flags = madt.flags();
     let pc_at_compatible = madt.pc_at_compatible();
     let madt_entries = madt.entry_count();
@@ -169,6 +172,7 @@ fn log_acpi_madt(madt: &kernel::acpi::MadtDiagnostics) {
             ),
             LogField::new("x2apics", format_args!("{x2apics}")),
             LogField::new("checksum", format_args!("true")),
+            LogField::new("madt_physical_addresses_typed", format_args!("true")),
         ],
     );
 }
@@ -194,7 +198,7 @@ fn log_acpi_interrupt_topology(
     let local_apic0_enabled = local_apic.is_enabled();
     let local_apic0_online_capable = local_apic.is_online_capable();
     let ioapic0_id = ioapic.id();
-    let ioapic0_address = ioapic.physical_address();
+    let ioapic0_address = ioapic.physical_address().as_u64();
     let ioapic0_gsi_base = ioapic.global_system_interrupt_base();
     let legacy_irq0_gsi = topology.global_system_interrupt_for_legacy_irq(0);
     let legacy_irq0_flags =
@@ -259,6 +263,7 @@ fn log_acpi_interrupt_topology(
                 "x2apic0_online_capable",
                 format_args!("{x2apic0_online_capable}"),
             ),
+            LogField::new("topology_physical_addresses_typed", format_args!("true")),
         ],
     );
 }

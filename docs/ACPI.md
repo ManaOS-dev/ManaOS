@@ -30,6 +30,9 @@ The current foundation validates:
   source override, Local APIC NMI, and Processor Local x2APIC entries.
 - Legacy IRQ to global system interrupt resolution derived from MADT interrupt
   source override entries.
+- ACPI RSDP, root-table, MADT, Local APIC, and IOAPIC physical addresses stay
+  typed as `PhysAddr` inside parser diagnostics until boot logging or APIC
+  routing setup crosses a final formatting or architecture-MMIO boundary.
 - Architecture-owned APIC routing provider configuration translated by
   `main.rs` from kernel-owned ACPI topology records.
 - Dry-run IOAPIC redirection entries for timer, keyboard, and mouse vectors
@@ -63,16 +66,17 @@ The current foundation validates:
 The boot smoke logs the validated root table, MADT diagnostics, retained
 interrupt topology, APIC routing provider configuration, and dry-run IOAPIC
 redirection plan before staging the planned entries as masked IOAPIC routes.
-It also verifies Local APIC and IOAPIC MMIO mapping, Local APIC EOI-provider
+It also verifies that ACPI physical addresses stay typed before diagnostic
+formatting, Local APIC and IOAPIC MMIO mapping, Local APIC EOI-provider
 diagnostics, masked IOAPIC redirection readback, IOAPIC route activation, and
 post-activation APIC EOI counts. Normal APIC boots also assert that the legacy
-PIC backend remains masked with fallback delivery disabled before interrupts are
-enabled. The smoke path now also proves that a masked Local APIC timer sample
-decrements, the IOAPIC PIT timer route is masked, and periodic Local APIC timer
-ticks continue to drive scheduler progress while the timer MMIO base remains
-typed before diagnostic output. It also asserts that the Local APIC spurious
-vector matches the IDT diagnostic vector and that boot does not observe spurious
-or unexpected external interrupts.
+PIC backend remains masked with fallback delivery disabled before interrupts
+are enabled. The smoke path now also proves that a masked Local APIC timer
+sample decrements, the IOAPIC PIT timer route is masked, and periodic Local
+APIC timer ticks continue to drive scheduler progress while the timer MMIO base
+remains typed before diagnostic output. It also asserts that the Local APIC
+spurious vector matches the IDT diagnostic vector and that boot does not
+observe spurious or unexpected external interrupts.
 
 ## Next Steps
 

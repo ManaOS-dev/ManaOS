@@ -29,14 +29,18 @@ fn configure_apic_routing_provider(
     frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
 ) {
     let local_apic_configuration = arch::x86_64::interrupt_controller::LocalApicConfiguration::new(
-        arch::x86_64::interrupt_controller::ApicMmioAddress::new(madt.local_apic_address()),
+        arch::x86_64::interrupt_controller::ApicMmioAddress::new(
+            madt.local_apic_address().as_u64(),
+        ),
         u32::from(local_apic.apic_id()),
         local_apic.is_enabled(),
         local_apic.is_online_capable(),
     );
     let ioapic_configuration = arch::x86_64::interrupt_controller::IoApicConfiguration::new(
         ioapic.id(),
-        arch::x86_64::interrupt_controller::ApicMmioAddress::new(ioapic.physical_address()),
+        arch::x86_64::interrupt_controller::ApicMmioAddress::new(
+            ioapic.physical_address().as_u64(),
+        ),
         ioapic.global_system_interrupt_base(),
     );
     let mut routing_configuration =

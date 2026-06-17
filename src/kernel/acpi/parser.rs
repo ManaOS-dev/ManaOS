@@ -1,5 +1,7 @@
 //! ACPI root pointer and root table diagnostics types.
 
+use crate::kernel::memory::address::PhysAddr;
+
 mod parsing;
 
 pub use parsing::{inspect_root_pointer, verify_parser_rules};
@@ -62,13 +64,13 @@ impl RootPointerSource {
 /// Physical location of an ACPI Root System Description Pointer.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RootPointer {
-    physical_address: u64,
+    physical_address: PhysAddr,
     source: RootPointerSource,
 }
 
 impl RootPointer {
     /// Create an ACPI root pointer location from a UEFI configuration table.
-    pub const fn new(physical_address: u64, source: RootPointerSource) -> Self {
+    pub const fn new(physical_address: PhysAddr, source: RootPointerSource) -> Self {
         Self {
             physical_address,
             source,
@@ -76,7 +78,7 @@ impl RootPointer {
     }
 
     /// Return the physical address of the RSDP.
-    pub const fn physical_address(self) -> u64 {
+    pub const fn physical_address(self) -> PhysAddr {
         self.physical_address
     }
 
@@ -123,7 +125,7 @@ impl RootTableKind {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RootTableDiagnostics {
     kind: RootTableKind,
-    physical_address: u64,
+    physical_address: PhysAddr,
     length: u32,
     revision: u8,
     entry_count: u64,
@@ -132,7 +134,7 @@ pub struct RootTableDiagnostics {
 impl RootTableDiagnostics {
     const fn new(
         kind: RootTableKind,
-        physical_address: u64,
+        physical_address: PhysAddr,
         length: u32,
         revision: u8,
         entry_count: u64,
@@ -152,7 +154,7 @@ impl RootTableDiagnostics {
     }
 
     /// Return the physical address of the root table.
-    pub const fn physical_address(self) -> u64 {
+    pub const fn physical_address(self) -> PhysAddr {
         self.physical_address
     }
 
@@ -221,14 +223,14 @@ impl MadtLocalApic {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MadtIoApic {
     id: u8,
-    physical_address: u64,
+    physical_address: PhysAddr,
     global_system_interrupt_base: u32,
 }
 
 impl MadtIoApic {
-    const EMPTY: Self = Self::new(0, 0, 0);
+    const EMPTY: Self = Self::new(0, PhysAddr::new(0), 0);
 
-    const fn new(id: u8, physical_address: u64, global_system_interrupt_base: u32) -> Self {
+    const fn new(id: u8, physical_address: PhysAddr, global_system_interrupt_base: u32) -> Self {
         Self {
             id,
             physical_address,
@@ -242,7 +244,7 @@ impl MadtIoApic {
     }
 
     /// Return the IOAPIC MMIO physical address.
-    pub const fn physical_address(self) -> u64 {
+    pub const fn physical_address(self) -> PhysAddr {
         self.physical_address
     }
 
@@ -559,10 +561,10 @@ impl MadtInterruptTopology {
 /// Validated ACPI Multiple APIC Description Table diagnostics.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MadtDiagnostics {
-    physical_address: u64,
+    physical_address: PhysAddr,
     length: u32,
     revision: u8,
-    local_apic_address: u64,
+    local_apic_address: PhysAddr,
     flags: u32,
     pc_at_compatible: bool,
     entry_count: u64,
@@ -577,7 +579,7 @@ pub struct MadtDiagnostics {
 
 impl MadtDiagnostics {
     /// Return the MADT physical address.
-    pub const fn physical_address(self) -> u64 {
+    pub const fn physical_address(self) -> PhysAddr {
         self.physical_address
     }
 
@@ -592,7 +594,7 @@ impl MadtDiagnostics {
     }
 
     /// Return the Local APIC MMIO physical address selected by MADT entries.
-    pub const fn local_apic_address(self) -> u64 {
+    pub const fn local_apic_address(self) -> PhysAddr {
         self.local_apic_address
     }
 
@@ -652,8 +654,8 @@ impl MadtDiagnostics {
 pub struct Diagnostics {
     root_pointer: RootPointer,
     revision: u8,
-    rsdt_address: u64,
-    xsdt_address: Option<u64>,
+    rsdt_address: PhysAddr,
+    xsdt_address: Option<PhysAddr>,
     root_table: RootTableDiagnostics,
     madt: MadtDiagnostics,
 }
@@ -670,12 +672,12 @@ impl Diagnostics {
     }
 
     /// Return the 32-bit RSDT physical address from the RSDP.
-    pub const fn rsdt_address(self) -> u64 {
+    pub const fn rsdt_address(self) -> PhysAddr {
         self.rsdt_address
     }
 
     /// Return the 64-bit XSDT physical address when present.
-    pub const fn xsdt_address(self) -> Option<u64> {
+    pub const fn xsdt_address(self) -> Option<PhysAddr> {
         self.xsdt_address
     }
 

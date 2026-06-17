@@ -138,6 +138,11 @@ untyped cross-domain `u64` values:
 - `PhysicalFrameAllocator::add_region(...)` and `reserve_region*` accept
   `PhysAddr` physical starts and `FrameCount` frame counts before normalizing
   frame ranges.
+- ACPI root-pointer, root-table, MADT, Local APIC, and IOAPIC diagnostics
+  retain physical addresses as `PhysAddr` after firmware or ACPI byte fields
+  are parsed. Boot diagnostics lower them only for serial output, and APIC
+  routing setup lowers them only when constructing architecture-owned
+  `ApicMmioAddress` values.
 - `AhciDmaBuffers` stores `DmaPhysicalAddress` fields internally, and
   `dma::split_address(...)` accepts `DmaPhysicalAddress`. Storage smoke asserts
   that command-list, received-FIS, command-table, and data-buffer setup stays
@@ -363,6 +368,8 @@ Continue introducing wrappers in small steps:
 
 - `PhysAddr` for physical byte addresses. This now exists in
   `kernel::memory::address`.
+- `PhysAddr` for ACPI table and interrupt-controller physical addresses before
+  serial diagnostics or architecture-specific APIC MMIO wrappers consume them.
 - `VirtAddr` for virtual byte addresses. This now exists in
   `kernel::memory::address`.
 - `PhysicalFrameStart` for 4 KiB-aligned physical frame starts.

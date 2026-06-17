@@ -177,6 +177,7 @@ active roadmap can list only unfinished work.
 - [x] Keep APIC MMIO physical bases typed as `ApicMmioAddress` before Local APIC, IOAPIC, and Local APIC timer register access lowers them to pointer-sized addresses.
 - [x] Keep Local APIC timer calibration and active status snapshots typed as `ApicMmioAddress` before boot diagnostics lower them for serial output.
 - [x] Carry page-fault diagnostics through a typed shared `PageFaultReport` before kernel diagnostics lower fault and instruction addresses for output.
+- [x] Keep ACPI root-table, MADT, Local APIC, and IOAPIC physical address diagnostics typed as `PhysAddr` before serial output or APIC MMIO configuration.
 
 ### Address Space Lifecycle
 

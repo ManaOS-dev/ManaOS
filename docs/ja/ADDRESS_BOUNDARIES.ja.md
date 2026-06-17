@@ -89,6 +89,10 @@ kernel ownership boundary では型付き address に変換することです。
   `ApicMmioAddress` として保持します。private atomic slot は publication boundary としてだけ
   raw のまま残し、boot diagnostics は serial output の直前だけ typed value を `u64` へ下ろします。
 - `PhysicalFrameAllocator::add_region(...)` と `reserve_region*` の `PhysAddr` physical start と `FrameCount` frame count。
+- ACPI root pointer、root table、MADT、Local APIC、IOAPIC diagnostics は、
+  firmware / ACPI byte field から parse した後の physical address を `PhysAddr` として保持します。
+  boot diagnostics は serial output 直前だけ raw に下ろし、APIC routing setup は architecture-owned
+  `ApicMmioAddress` を構築する直前だけ raw に下ろします。
 - `AhciDmaBuffers` 内部の `DmaPhysicalAddress`。storage smoke は command-list、
   received-FIS、command-table、data-buffer setup が final register split 直前まで
   typed DMA address boundary に留まることを assert します。
@@ -229,6 +233,8 @@ storage smoke はこの typed DMA setup boundary を assert します。
 今後も小さい差分で以下を使い分けます。
 
 - `PhysAddr`: physical byte address。
+- `PhysAddr`: serial diagnostics または architecture-specific APIC MMIO wrapper に渡す前の
+  ACPI table / interrupt-controller physical address。
 - `VirtAddr`: virtual byte address。
 - `PhysicalFrameStart`: 4 KiB aligned physical frame start。
 - `FrameCount`: frame allocator API に渡す non-zero physical frame count。

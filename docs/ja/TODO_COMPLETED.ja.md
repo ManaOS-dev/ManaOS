@@ -150,6 +150,7 @@ x86_64 timer interrupt entry stub の IDT gate 書き込み前 `InterruptEntryAd
 APIC MMIO physical base の Local APIC / IOAPIC / Local APIC timer register access 前 `ApicMmioAddress` boundary 化、
 Local APIC timer calibration / active status snapshot の serial output 前 `ApicMmioAddress` boundary 化、
 page-fault diagnostics の kernel diagnostics 前 `shared::PageFaultReport` boundary 化、
+ACPI root table / MADT / Local APIC / IOAPIC physical address diagnostics の serial output / APIC MMIO configuration 前 `PhysAddr` boundary 化、
 per-process page table、
 user address-space reclaim、kernel stack reclaim、
 user pointer validation、mapping permission checks、identity mapping audit、

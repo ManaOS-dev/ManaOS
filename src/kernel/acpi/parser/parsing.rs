@@ -15,6 +15,7 @@ use super::{
     ROOT_POINTER_V1_LENGTH, ROOT_POINTER_V2_MIN_LENGTH, SYSTEM_DESCRIPTION_TABLE_HEADER_LENGTH,
     XSDT_ENTRY_BYTES,
 };
+use crate::kernel::memory::address::PhysAddr;
 use core::slice;
 
 impl Diagnostics {
@@ -37,8 +38,8 @@ impl Diagnostics {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ParsedRootPointer {
     revision: u8,
-    rsdt_address: u64,
-    xsdt_address: Option<u64>,
+    rsdt_address: PhysAddr,
+    xsdt_address: Option<PhysAddr>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -75,7 +76,7 @@ impl ParsedRootPointer {
         }
     }
 
-    const fn root_table_address(self) -> u64 {
+    const fn root_table_address(self) -> PhysAddr {
         match self.xsdt_address {
             Some(address) => address,
             None => self.rsdt_address,
@@ -112,7 +113,7 @@ pub unsafe fn inspect_root_pointer(root_pointer: RootPointer) -> Option<Diagnost
 
 /// Run parser self-checks over fixed ACPI byte fixtures.
 pub fn verify_parser_rules() -> bool {
-    let root_pointer = RootPointer::new(0x1000, RootPointerSource::UefiAcpi2);
+    let root_pointer = RootPointer::new(PhysAddr::new(0x1000), RootPointerSource::UefiAcpi2);
     let root_pointer_bytes = valid_root_pointer_fixture();
     let root_table_bytes = valid_xsdt_fixture();
     let madt_bytes = valid_madt_fixture();
@@ -126,7 +127,7 @@ pub fn verify_parser_rules() -> bool {
     ) else {
         return false;
     };
-    let Some(madt) = parse_madt_bytes(0x4000, &madt_bytes) else {
+    let Some(madt) = parse_madt_bytes(PhysAddr::new(0x4000), &madt_bytes) else {
         return false;
     };
     let diagnostics = Diagnostics::new(root_pointer, parsed_root_pointer, root_table, &madt);
@@ -144,12 +145,12 @@ pub fn verify_parser_rules() -> bool {
         return false;
     };
     diagnostics.revision() == 2
-        && diagnostics.rsdt_address() == 0x3000
-        && diagnostics.xsdt_address() == Some(0x2000)
+        && diagnostics.rsdt_address() == PhysAddr::new(0x3000)
+        && diagnostics.xsdt_address() == Some(PhysAddr::new(0x2000))
         && diagnostics.root_table().kind() == RootTableKind::Xsdt
         && diagnostics.root_table().entry_count() == 1
-        && diagnostics.madt().physical_address() == 0x4000
-        && diagnostics.madt().local_apic_address() == 0xfee0_1000
+        && diagnostics.madt().physical_address() == PhysAddr::new(0x4000)
+        && diagnostics.madt().local_apic_address() == PhysAddr::new(0xfee0_1000)
         && diagnostics.madt().flags() == MADT_PC_AT_COMPATIBLE_FLAG
         && diagnostics.madt().pc_at_compatible()
         && diagnostics.madt().entry_count() == 5
@@ -171,7 +172,7 @@ pub fn verify_parser_rules() -> bool {
         && local_apic.is_enabled()
         && !local_apic.is_online_capable()
         && ioapic.id() == 1
-        && ioapic.physical_address() == 0xfec0_0000
+        && ioapic.physical_address() == PhysAddr::new(0xfec0_0000)
         && ioapic.global_system_interrupt_base() == 0
         && interrupt_source_override.bus() == 0
         && interrupt_source_override.source_irq() == 0
@@ -184,7 +185,7 @@ pub fn verify_parser_rules() -> bool {
         && local_apic_nmi.lint() == 1
 }
 
-unsafe fn read_root_pointer_bytes(physical_address: u64) -> Option<&'static [u8]> {
+unsafe fn read_root_pointer_bytes(physical_address: PhysAddr) -> Option<&'static [u8]> {
     let initial_bytes = mapped_bytes(physical_address, ROOT_POINTER_V1_LENGTH)?;
     if initial_bytes.get(15).copied()? < 2 {
         return Some(initial_bytes);
@@ -199,7 +200,7 @@ unsafe fn read_root_pointer_bytes(physical_address: u64) -> Option<&'static [u8]
     mapped_bytes(physical_address, length)
 }
 
-unsafe fn read_system_description_table_bytes(physical_address: u64) -> Option<&'static [u8]> {
+unsafe fn read_system_description_table_bytes(physical_address: PhysAddr) -> Option<&'static [u8]> {
     let header_bytes = mapped_bytes(physical_address, SYSTEM_DESCRIPTION_TABLE_HEADER_LENGTH)?;
     let length = usize::try_from(read_u32(header_bytes, 4)).ok()?;
     if !(SYSTEM_DESCRIPTION_TABLE_HEADER_LENGTH..=MAX_SYSTEM_DESCRIPTION_TABLE_LENGTH)
@@ -211,12 +212,12 @@ unsafe fn read_system_description_table_bytes(physical_address: u64) -> Option<&
     mapped_bytes(physical_address, length)
 }
 
-unsafe fn mapped_bytes(physical_address: u64, byte_len: usize) -> Option<&'static [u8]> {
-    if physical_address == 0 || byte_len == 0 {
+unsafe fn mapped_bytes(physical_address: PhysAddr, byte_len: usize) -> Option<&'static [u8]> {
+    if physical_address.as_u64() == 0 || byte_len == 0 {
         return None;
     }
 
-    let virtual_address = usize::try_from(physical_address).ok()?;
+    let virtual_address = physical_address.try_as_usize().ok()?;
     let pointer = virtual_address as *const u8;
     if pointer.is_null() {
         return None;
@@ -236,7 +237,7 @@ fn parse_root_pointer_bytes(bytes: &[u8]) -> Option<ParsedRootPointer> {
     }
 
     let revision = bytes[15];
-    let rsdt_address = u64::from(read_u32(bytes, 16));
+    let rsdt_address = PhysAddr::new(u64::from(read_u32(bytes, 16)));
     if revision < 2 {
         return Some(ParsedRootPointer {
             revision,
@@ -256,17 +257,17 @@ fn parse_root_pointer_bytes(bytes: &[u8]) -> Option<ParsedRootPointer> {
         return None;
     }
 
-    let xsdt_address = read_u64(bytes, 24);
+    let xsdt_address = PhysAddr::new(read_u64(bytes, 24));
     Some(ParsedRootPointer {
         revision,
         rsdt_address,
-        xsdt_address: (xsdt_address != 0).then_some(xsdt_address),
+        xsdt_address: (xsdt_address.as_u64() != 0).then_some(xsdt_address),
     })
 }
 
 fn parse_root_table_bytes(
     kind: RootTableKind,
-    physical_address: u64,
+    physical_address: PhysAddr,
     bytes: &[u8],
 ) -> Option<RootTableDiagnostics> {
     if bytes.len() < SYSTEM_DESCRIPTION_TABLE_HEADER_LENGTH {
@@ -307,7 +308,7 @@ unsafe fn inspect_madt(
     for entry_index in 0..entry_count {
         let table_address =
             root_table_entry_address(root_table.kind(), root_table_bytes, entry_index)?;
-        if table_address == 0 {
+        if table_address.as_u64() == 0 {
             continue;
         }
         // SAFETY: The caller guarantees ACPI SDT physical ranges referenced by
@@ -324,16 +325,20 @@ unsafe fn inspect_madt(
     None
 }
 
-fn root_table_entry_address(kind: RootTableKind, bytes: &[u8], entry_index: usize) -> Option<u64> {
+fn root_table_entry_address(
+    kind: RootTableKind,
+    bytes: &[u8],
+    entry_index: usize,
+) -> Option<PhysAddr> {
     let offset = SYSTEM_DESCRIPTION_TABLE_HEADER_LENGTH
         .checked_add(entry_index.checked_mul(kind.entry_size())?)?;
     match kind {
-        RootTableKind::Rsdt => Some(u64::from(read_u32(bytes, offset))),
-        RootTableKind::Xsdt => Some(read_u64(bytes, offset)),
+        RootTableKind::Rsdt => Some(PhysAddr::new(u64::from(read_u32(bytes, offset)))),
+        RootTableKind::Xsdt => Some(PhysAddr::new(read_u64(bytes, offset))),
     }
 }
 
-fn parse_madt_bytes(physical_address: u64, bytes: &[u8]) -> Option<MadtDiagnostics> {
+fn parse_madt_bytes(physical_address: PhysAddr, bytes: &[u8]) -> Option<MadtDiagnostics> {
     if bytes.len() < MADT_FIXED_HEADER_LENGTH || &bytes[0..4] != MADT_SIGNATURE {
         return None;
     }
@@ -345,7 +350,8 @@ fn parse_madt_bytes(physical_address: u64, bytes: &[u8]) -> Option<MadtDiagnosti
         return None;
     }
 
-    let mut local_apic_address = u64::from(read_u32(bytes, MADT_LOCAL_APIC_ADDRESS_OFFSET));
+    let mut local_apic_address =
+        PhysAddr::new(u64::from(read_u32(bytes, MADT_LOCAL_APIC_ADDRESS_OFFSET)));
     let flags = read_u32(bytes, MADT_FLAGS_OFFSET);
     let mut counts = MadtEntryCounts::new();
     let mut topology = MadtInterruptTopology::new();
@@ -396,7 +402,7 @@ fn parse_madt_entry(
     offset: usize,
     entry_type: u8,
     entry_length: usize,
-    local_apic_address: &mut u64,
+    local_apic_address: &mut PhysAddr,
     counts: &mut MadtEntryCounts,
     topology: &mut MadtInterruptTopology,
 ) -> Option<()> {
@@ -418,7 +424,7 @@ fn parse_madt_entry(
             }
             topology.push_ioapic(MadtIoApic::new(
                 bytes[offset + 2],
-                u64::from(read_u32(bytes, offset + 4)),
+                PhysAddr::new(u64::from(read_u32(bytes, offset + 4))),
                 read_u32(bytes, offset + 8),
             ));
             counts.ioapics += 1;
@@ -450,7 +456,7 @@ fn parse_madt_entry(
             if entry_length < MADT_LOCAL_APIC_ADDRESS_OVERRIDE_ENTRY_LENGTH {
                 return None;
             }
-            *local_apic_address = read_u64(bytes, offset + 4);
+            *local_apic_address = PhysAddr::new(read_u64(bytes, offset + 4));
             counts.local_apic_address_overrides += 1;
         }
         MADT_X2APIC_ENTRY_TYPE => {

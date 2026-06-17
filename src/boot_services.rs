@@ -87,7 +87,10 @@ fn acpi_root_pointer_from_entry(
     source: kernel::acpi::RootPointerSource,
 ) -> Option<kernel::acpi::RootPointer> {
     let physical_address = u64::try_from(entry.address.addr()).ok()?;
-    (physical_address != 0).then_some(kernel::acpi::RootPointer::new(physical_address, source))
+    (physical_address != 0).then_some(kernel::acpi::RootPointer::new(
+        kernel::memory::address::PhysAddr::new(physical_address),
+        source,
+    ))
 }
 
 /// Return a compact framebuffer pixel-format label.
