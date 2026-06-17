@@ -345,3 +345,4 @@ active roadmap can list only unfinished work.
 - [x] Add troubleshooting notes for missing QEMU.
 - [x] Add docs for reading serial output during manual QEMU runs.
 - [x] Add docs for choosing between `just run` and `just storage-smoke`.
+- [x] Keep root `Cargo.toml` dependency comments in English.

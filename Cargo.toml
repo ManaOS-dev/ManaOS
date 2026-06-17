@@ -14,23 +14,23 @@ test = false
 bench = false
 
 [dependencies]
-# UEFI（アロケータ・ロガーは自前で用意するため default-features = false）
+# UEFI support; allocator and logger are provided by ManaOS.
 uefi = { version = "0.37", default-features = false, features = ["alloc"] }
-# ログインターフェース
+# Logging interface.
 log = "0.4"
-# スピンロック（no_std用Mutex）
+# Spin-based mutex for no_std code.
 spin = "0.12"
-# COM1シリアルポート
+# COM1 serial port driver.
 uart_16550 = "0.6"
-# ヒープアロケータ
+# Heap allocator.
 linked_list_allocator = "0.10"
-# ページテーブル・アドレス型など
+# Page table and address types.
 x86_64 = "0.15"
-# フォントラスタライザ
+# Font rasterizer.
 ab_glyph = { version = "0.2", default-features = false, features = ["libm"] }
-# 割り込みコントローラ
+# Interrupt controller.
 pic8259 = "0.11"
-# キーボードデコーダ
+# Keyboard decoder.
 pc-keyboard = "0.9"
 
 [features]
