@@ -44,7 +44,7 @@ pub enum IntervalTimerKind {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct LocalApicTimerCalibrationStatus {
     flags: u8,
-    physical_address: u64,
+    physical_address: ApicMmioAddress,
     start_ticks: u64,
     current_ticks: u64,
     lvt_timer: u32,
@@ -81,7 +81,7 @@ impl LocalApicTimerCalibrationStatus {
     }
 
     /// Return the Local APIC MMIO physical address used by the sample.
-    pub const fn physical_address(self) -> u64 {
+    pub const fn physical_address(self) -> ApicMmioAddress {
         self.physical_address
     }
 
@@ -147,7 +147,7 @@ impl LocalApicTimerCalibrationStatus {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct LocalApicTimerActiveStatus {
     flags: u8,
-    physical_address: u64,
+    physical_address: ApicMmioAddress,
     activation_ticks: u64,
     current_ticks: u64,
     lvt_timer: u32,
@@ -180,7 +180,7 @@ impl LocalApicTimerActiveStatus {
     }
 
     /// Return the Local APIC MMIO physical address.
-    pub const fn physical_address(self) -> u64 {
+    pub const fn physical_address(self) -> ApicMmioAddress {
         self.physical_address
     }
 
@@ -356,7 +356,7 @@ pub unsafe fn inspect_masked_local_apic_timer_calibration(
 
     Some(LocalApicTimerCalibrationStatus {
         flags,
-        physical_address: base_address.as_u64(),
+        physical_address: base_address,
         start_ticks,
         current_ticks,
         lvt_timer,
@@ -392,7 +392,7 @@ pub unsafe fn activate_local_apic_timer_from_calibration(
         reload_count != 0,
         "Local APIC timer reload count must be non-zero"
     );
-    let base_address = ApicMmioAddress::new(calibration.physical_address());
+    let base_address = calibration.physical_address();
     let registers = LocalApicTimerRegisters::new(base_address);
     // SAFETY: The caller guarantees that interrupts are disabled and the Local
     // APIC timer registers are exclusively programmed during activation.
@@ -461,7 +461,7 @@ pub unsafe fn inspect_active_local_apic_timer(
 
     Some(LocalApicTimerActiveStatus {
         flags,
-        physical_address: base_address.as_u64(),
+        physical_address: base_address,
         activation_ticks,
         current_ticks,
         lvt_timer,

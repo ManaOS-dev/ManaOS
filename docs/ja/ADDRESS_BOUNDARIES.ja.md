@@ -85,6 +85,9 @@ kernel ownership boundary では型付き address に変換することです。
 - APIC routing configuration は Local APIC / IOAPIC MMIO physical base を
   `ApicMmioAddress` として保持し、Local APIC / IOAPIC / Local APIC timer register
   wrapper が pointer-sized MMIO address へ下ろす直前まで raw に戻しません。
+- Local APIC timer の calibration / active status snapshot は、timer MMIO base を
+  `ApicMmioAddress` として保持します。private atomic slot は publication boundary としてだけ
+  raw のまま残し、boot diagnostics は serial output の直前だけ typed value を `u64` へ下ろします。
 - `PhysicalFrameAllocator::add_region(...)` と `reserve_region*` の `PhysAddr` physical start と `FrameCount` frame count。
 - `AhciDmaBuffers` 内部の `DmaPhysicalAddress`。storage smoke は command-list、
   received-FIS、command-table、data-buffer setup が final register split 直前まで
@@ -250,6 +253,8 @@ storage smoke はこの typed DMA setup boundary を assert します。
 - `StorageDataAddress`: generic storage parsing に渡す active DMA data buffer。
 - `ApicMmioAddress`: architecture register access が pointer-sized address へ下ろす前の
   APIC-family MMIO physical base。
+- `ApicMmioAddress`: boot diagnostics が serial output 用に下ろす前の Local APIC timer
+  calibration / active status snapshot。
 - `SyscallEntryAddress`: x86_64 `SYSCALL` LSTAR に program する architecture-owned virtual entry point。
 - `InterruptEntryAddress`: x86_64 IDT gate に program する architecture-owned interrupt entry point。
 - `PageFaultReport` / `PageFaultAddress` / `PageFaultErrorBits` /

@@ -175,6 +175,7 @@ active roadmap can list only unfinished work.
 - [x] Pass the x86_64 syscall entry target through a typed `SyscallEntryAddress` before lowering it into the LSTAR MSR.
 - [x] Classify the x86_64 timer interrupt entry stub through a typed `InterruptEntryAddress` before lowering it into the IDT gate.
 - [x] Keep APIC MMIO physical bases typed as `ApicMmioAddress` before Local APIC, IOAPIC, and Local APIC timer register access lowers them to pointer-sized addresses.
+- [x] Keep Local APIC timer calibration and active status snapshots typed as `ApicMmioAddress` before boot diagnostics lower them for serial output.
 - [x] Carry page-fault diagnostics through a typed shared `PageFaultReport` before kernel diagnostics lower fault and instruction addresses for output.
 
 ### Address Space Lifecycle

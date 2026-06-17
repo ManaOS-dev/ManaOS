@@ -17,11 +17,11 @@ pub(crate) fn start_local_apic_timer_calibration() {
     .expect("Local APIC timer calibration requires APIC provider data");
     crate::log_info!(
         "arch",
-        "Local APIC timer calibration started: configured={} armed={} masked={} address={:#x} vector={} divide={} lvt_timer={:#x} divide_config={:#x} initial_count={} current_count={} start_ticks={}",
+        "Local APIC timer calibration started: configured={} armed={} masked={} address={:#x} apic_mmio_address_typed=true vector={} divide={} lvt_timer={:#x} divide_config={:#x} initial_count={} current_count={} start_ticks={}",
         status.is_configured(),
         status.is_armed(),
         status.is_masked(),
-        status.physical_address(),
+        status.physical_address().as_u64(),
         status.vector(),
         status.divide_denominator(),
         status.lvt_timer(),
@@ -84,12 +84,12 @@ pub(crate) fn activate_local_apic_timer_ticks() {
     );
     crate::log_info!(
         "arch",
-        "Local APIC timer activated: configured={} running={} masked={} periodic={} address={:#x} vector={} divide={} activation_ticks={} current_ticks={} initial_count={} current_count={} calibration_counts_per_tick={} lvt_timer={:#x} divide_config={:#x}",
+        "Local APIC timer activated: configured={} running={} masked={} periodic={} address={:#x} apic_mmio_address_typed=true vector={} divide={} activation_ticks={} current_ticks={} initial_count={} current_count={} calibration_counts_per_tick={} lvt_timer={:#x} divide_config={:#x}",
         active_status.is_configured(),
         active_status.is_running(),
         active_status.is_masked(),
         active_status.is_periodic(),
-        active_status.physical_address(),
+        active_status.physical_address().as_u64(),
         active_status.vector(),
         active_status.divide_denominator(),
         active_status.activation_ticks(),
@@ -158,13 +158,13 @@ fn verify_local_apic_timer_calibration(
     );
     crate::log_info!(
         "arch",
-        "Local APIC timer calibration verified: configured={} armed={} masked={} decremented={} expired={} address={:#x} vector={} divide={} start_ticks={} current_ticks={} elapsed_ticks={} initial_count={} current_count={} elapsed_counts={} counts_per_tick={} lvt_timer={:#x} divide_config={:#x}",
+        "Local APIC timer calibration verified: configured={} armed={} masked={} decremented={} expired={} address={:#x} apic_mmio_address_typed=true vector={} divide={} start_ticks={} current_ticks={} elapsed_ticks={} initial_count={} current_count={} elapsed_counts={} counts_per_tick={} lvt_timer={:#x} divide_config={:#x}",
         status.is_configured(),
         status.is_armed(),
         status.is_masked(),
         status.has_decremented(),
         status.has_expired(),
-        status.physical_address(),
+        status.physical_address().as_u64(),
         status.vector(),
         status.divide_denominator(),
         status.start_ticks(),
@@ -221,13 +221,13 @@ fn log_active_local_apic_timer_status(
 ) {
     crate::log_info!(
         "arch",
-        "{}: configured={} running={} masked={} periodic={} address={:#x} vector={} divide={} activation_ticks={} current_ticks={} elapsed_ticks={} initial_count={} current_count={} calibration_counts_per_tick={} lvt_timer={:#x} divide_config={:#x}",
+        "{}: configured={} running={} masked={} periodic={} address={:#x} apic_mmio_address_typed=true vector={} divide={} activation_ticks={} current_ticks={} elapsed_ticks={} initial_count={} current_count={} calibration_counts_per_tick={} lvt_timer={:#x} divide_config={:#x}",
         message,
         status.is_configured(),
         status.is_running(),
         status.is_masked(),
         status.is_periodic(),
-        status.physical_address(),
+        status.physical_address().as_u64(),
         status.vector(),
         status.divide_denominator(),
         status.activation_ticks(),

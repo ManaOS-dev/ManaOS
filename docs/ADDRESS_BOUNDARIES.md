@@ -131,6 +131,10 @@ untyped cross-domain `u64` values:
 - APIC routing configuration stores Local APIC and IOAPIC MMIO physical bases
   as `ApicMmioAddress` before Local APIC, IOAPIC, and Local APIC timer
   register wrappers lower them to pointer-sized MMIO addresses.
+- Local APIC timer calibration and active status snapshots retain the timer
+  MMIO base as `ApicMmioAddress`. The private atomic slots remain raw only as
+  publication boundaries, and boot diagnostics lower the typed value to `u64`
+  only for serial output.
 - `PhysicalFrameAllocator::add_region(...)` and `reserve_region*` accept
   `PhysAddr` physical starts and `FrameCount` frame counts before normalizing
   frame ranges.
@@ -405,6 +409,8 @@ Continue introducing wrappers in small steps:
   storage parsing. This now exists in `kernel::memory::address`.
 - `ApicMmioAddress` for APIC-family MMIO physical bases before architecture
   register access lowers them to pointer-sized addresses.
+- `ApicMmioAddress` for Local APIC timer calibration and active status
+  snapshots before boot diagnostics lower them for serial output.
 - `SyscallEntryAddress` for the architecture-owned virtual entry point
   programmed into x86_64 `SYSCALL` LSTAR.
 - `InterruptEntryAddress` for architecture-owned interrupt entry points
