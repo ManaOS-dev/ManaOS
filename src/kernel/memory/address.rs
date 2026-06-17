@@ -4,6 +4,13 @@ const PAGE_SIZE: u64 = 4096;
 const KERNEL_DYNAMIC_MAPPING_START: u64 = 0xffff_8000_0000_0000;
 const USER_SPACE_END: u64 = 0x0000_8000_0000_0000;
 
+/// Failure returned when a typed address cannot lower to a host-width integer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AddressConversionError {
+    /// The address does not fit in `usize` on the current target.
+    DoesNotFitUsize,
+}
+
 /// A raw physical byte address kept distinct from virtual addresses.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PhysAddr(u64);
@@ -19,13 +26,19 @@ impl PhysAddr {
         self.0
     }
 
+    /// Try to return the raw physical address as a `usize`.
+    pub fn try_as_usize(self) -> Result<usize, AddressConversionError> {
+        usize::try_from(self.0).map_err(|_| AddressConversionError::DoesNotFitUsize)
+    }
+
     /// Return the raw physical address as a `usize`.
     ///
     /// # Panics
     ///
     /// Panics if the physical address does not fit in `usize`.
     pub fn as_usize(self) -> usize {
-        usize::try_from(self.0).expect("physical address must fit in usize")
+        self.try_as_usize()
+            .expect("physical address must fit in usize")
     }
 
     /// Return a physical address advanced by `offset` bytes.
@@ -57,6 +70,11 @@ impl DmaPhysicalAddress {
         self.0.as_u64()
     }
 
+    /// Try to return the raw DMA physical address as a `usize`.
+    pub fn try_as_usize(self) -> Result<usize, AddressConversionError> {
+        self.0.try_as_usize()
+    }
+
     /// Return the raw DMA physical address as a `usize`.
     ///
     /// # Panics
@@ -82,6 +100,11 @@ impl StorageDataAddress {
         self.0.as_u64()
     }
 
+    /// Try to return the raw storage data-buffer address as a `usize`.
+    pub fn try_as_usize(self) -> Result<usize, AddressConversionError> {
+        self.0.try_as_usize()
+    }
+
     /// Return the raw storage data-buffer address as a `usize`.
     ///
     /// # Panics
@@ -105,6 +128,11 @@ impl VirtAddr {
     /// Return the raw virtual address as a `u64`.
     pub const fn as_u64(self) -> u64 {
         self.0
+    }
+
+    /// Try to return the raw virtual address as a `usize`.
+    pub fn try_as_usize(self) -> Result<usize, AddressConversionError> {
+        usize::try_from(self.0).map_err(|_| AddressConversionError::DoesNotFitUsize)
     }
 
     /// Return a virtual address advanced by `offset` bytes.
@@ -136,13 +164,19 @@ impl KernelVirtualAddress {
         self.0.as_u64()
     }
 
+    /// Try to return the raw kernel virtual address as a `usize`.
+    pub fn try_as_usize(self) -> Result<usize, AddressConversionError> {
+        self.0.try_as_usize()
+    }
+
     /// Return the kernel virtual address as a mutable byte pointer.
     ///
     /// # Panics
     ///
     /// Panics if the kernel virtual address does not fit in `usize`.
     pub fn as_mut_ptr(self) -> *mut u8 {
-        usize::try_from(self.as_u64()).expect("kernel virtual address must fit in usize") as *mut u8
+        self.try_as_usize()
+            .expect("kernel virtual address must fit in usize") as *mut u8
     }
 }
 
@@ -269,6 +303,11 @@ impl PhysicalFrameStart {
         self.0.as_u64()
     }
 
+    /// Try to return the raw physical address as a `usize`.
+    pub fn try_as_usize(self) -> Result<usize, AddressConversionError> {
+        self.0.try_as_usize()
+    }
+
     /// Return this frame start as a physical byte address.
     pub const fn as_address(self) -> PhysAddr {
         self.0
@@ -378,18 +417,24 @@ impl UserVirtualAddress {
         self.0.as_u64()
     }
 
+    /// Try to return the raw virtual address as a `usize`.
+    pub fn try_as_usize(self) -> Result<usize, AddressConversionError> {
+        self.0.try_as_usize()
+    }
+
     /// Return this user virtual address as a virtual byte address.
     pub const fn as_address(self) -> VirtAddr {
         self.0
     }
 
-    /// Return the raw virtual address as a `usize`.
+    /// Try to return the raw virtual address as a `usize`.
     ///
     /// # Panics
     ///
     /// Panics if the user virtual address does not fit in `usize`.
     pub fn as_usize(self) -> usize {
-        usize::try_from(self.0.as_u64()).expect("user virtual address must fit in usize")
+        self.try_as_usize()
+            .expect("user virtual address must fit in usize")
     }
 
     /// Return a user virtual address advanced by `offset` bytes.
@@ -439,6 +484,11 @@ impl UserPageStart {
     /// Return the raw virtual address as a `u64`.
     pub const fn as_u64(self) -> u64 {
         self.0.as_u64()
+    }
+
+    /// Return the raw virtual address as a `usize`.
+    pub fn try_as_usize(self) -> Result<usize, AddressConversionError> {
+        self.0.try_as_usize()
     }
 
     /// Return a user page start address advanced by `offset` bytes.
@@ -565,6 +615,43 @@ pub fn verify_typed_user_copy_ranges() -> bool {
         })
         && zero_pointer_rejected
         && zero_length_rejected
+}
+
+/// Verify typed address-to-`usize` conversion helper contracts.
+pub fn verify_checked_address_conversions() -> bool {
+    let page_size = usize::try_from(PAGE_SIZE).expect("test page size must fit in usize");
+    let physical = PhysAddr::new(PAGE_SIZE);
+    let dma = DmaPhysicalAddress::new(physical);
+    let storage = StorageDataAddress::new(dma);
+    let virtual_address = VirtAddr::new(PAGE_SIZE);
+    let kernel = KernelVirtualAddress::new(virtual_address);
+    let frame_start =
+        PhysicalFrameStart::new(physical).expect("test physical frame start must be valid");
+    let user =
+        UserVirtualAddress::new(virtual_address).expect("test user virtual address must be valid");
+    let user_page = UserPageStart::new(user).expect("test user page start must be valid");
+
+    physical.try_as_usize() == Ok(page_size)
+        && dma.try_as_usize() == Ok(page_size)
+        && storage.try_as_usize() == Ok(page_size)
+        && virtual_address.try_as_usize() == Ok(page_size)
+        && kernel.try_as_usize() == Ok(page_size)
+        && frame_start.try_as_usize() == Ok(page_size)
+        && user.try_as_usize() == Ok(page_size)
+        && user_page.try_as_usize() == Ok(page_size)
+        && over_usize_address_is_rejected()
+}
+
+fn over_usize_address_is_rejected() -> bool {
+    let Some(address) = u64::try_from(usize::MAX)
+        .ok()
+        .and_then(|max_address| max_address.checked_add(1))
+    else {
+        return true;
+    };
+
+    PhysAddr::new(address).try_as_usize() == Err(AddressConversionError::DoesNotFitUsize)
+        && VirtAddr::new(address).try_as_usize() == Err(AddressConversionError::DoesNotFitUsize)
 }
 
 /// Verify the typed physical frame count construction contract.

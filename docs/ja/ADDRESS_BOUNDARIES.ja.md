@@ -27,6 +27,8 @@ kernel ownership boundary では型付き address に変換することです。
 
 - `kernel::memory::address::PhysAddr`: physical byte address。
 - `kernel::memory::address::VirtAddr`: internal arithmetic 用 virtual byte address。
+- address wrapper は final pointer / slice boundary 前に checked `try_as_usize()` lowering を公開します。
+  これにより call site は panic-only の `as_usize()` ではなく、明示的な error path を選べます。
 - `PhysicalFrameStart` / `FrameCount` / `PhysicalFrameRange`: allocatable 4 KiB frame start、non-zero frame count、contiguous frame ownership。
 - `DmaPhysicalAddress`: AHCI descriptor、FIS buffer、command table、PRDT へ program できる physical address。
 - `UserVirtualAddress` / `UserVirtualRange`: syscall copy validation 前の non-null user virtual address と byte range。

@@ -127,6 +127,7 @@ pub fn verify_memory_address_wrapper_rules() -> bool {
     let user_range_page_bounds_ok =
         kernel::memory::address::verify_typed_user_virtual_range_page_bounds();
     let user_copy_ranges_ok = kernel::memory::address::verify_typed_user_copy_ranges();
+    let checked_conversions_ok = kernel::memory::address::verify_checked_address_conversions();
     let frame_count_ok = kernel::memory::address::verify_typed_frame_count();
     let page_count_ok = kernel::memory::address::verify_typed_page_count();
     let passed = user_virtual_address_ok
@@ -134,22 +135,24 @@ pub fn verify_memory_address_wrapper_rules() -> bool {
         && user_virtual_range_ok
         && user_range_page_bounds_ok
         && user_copy_ranges_ok
+        && checked_conversions_ok
         && frame_count_ok
         && page_count_ok;
     if passed {
         crate::log_info!(
             "memory",
-            "Memory address wrapper self-checks passed: user_virtual_address=true user_page_start=true user_virtual_range=true user_range_page_bounds=true user_copy_ranges=true frame_count=true page_count=true"
+            "Memory address wrapper self-checks passed: user_virtual_address=true user_page_start=true user_virtual_range=true user_range_page_bounds=true user_copy_ranges=true checked_conversions=true frame_count=true page_count=true"
         );
     } else {
         crate::log_error!(
             "memory",
-            "Memory address wrapper self-checks failed: user_virtual_address={} user_page_start={} user_virtual_range={} user_range_page_bounds={} user_copy_ranges={} frame_count={} page_count={}",
+            "Memory address wrapper self-checks failed: user_virtual_address={} user_page_start={} user_virtual_range={} user_range_page_bounds={} user_copy_ranges={} checked_conversions={} frame_count={} page_count={}",
             user_virtual_address_ok,
             user_page_start_ok,
             user_virtual_range_ok,
             user_range_page_bounds_ok,
             user_copy_ranges_ok,
+            checked_conversions_ok,
             frame_count_ok,
             page_count_ok
         );

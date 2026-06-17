@@ -49,7 +49,7 @@ $expectedPatterns = @(
     "Frame allocator self-checks passed: .*typed_frame_start=true",
     "Memory address wrapper self-checks passed: user_virtual_address=true",
     "Memory address wrapper self-checks passed: .*user_page_start=true",
-    "Memory address wrapper self-checks passed: .*user_virtual_range=true user_range_page_bounds=true user_copy_ranges=true",
+    "Memory address wrapper self-checks passed: .*user_virtual_range=true user_range_page_bounds=true user_copy_ranges=true checked_conversions=true",
     "Memory address wrapper self-checks passed: .*frame_count=true",
     "Memory address wrapper self-checks passed: .*page_count=true",
     "Kernel virtual range allocator self-checks passed: non_overlapping_reuse=true exhaustion_rejection=true",

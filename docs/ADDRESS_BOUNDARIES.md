@@ -29,6 +29,9 @@ untyped cross-domain `u64` values:
 - `kernel::memory::address::PhysAddr` represents raw physical byte addresses.
 - `kernel::memory::address::VirtAddr` represents raw virtual byte addresses
   for internal arithmetic that must not mix with physical addresses.
+- Address wrappers expose checked `try_as_usize()` lowering before the final
+  pointer or slice boundary, so call sites can choose an explicit error path
+  instead of only panic-on-overflow `as_usize()` helpers.
 - `PhysicalFrameStart`, `FrameCount`, and `PhysicalFrameRange` represent
   allocatable 4 KiB frame starts, non-zero frame counts, and contiguous frame
   ownership.
