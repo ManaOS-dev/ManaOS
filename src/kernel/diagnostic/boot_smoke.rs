@@ -197,16 +197,19 @@ pub fn verify_dynamic_kernel_mapping_lifecycle(
 pub fn verify_user_address_space_template(
     frame_allocator: &mut kernel::memory::frame_allocator::PhysicalFrameAllocator,
 ) {
+    let kernel_probe_address = u64::try_from(verify_kernel_filesystem as *const () as usize)
+        .map(kernel::memory::address::VirtAddr::new)
+        .expect("kernel probe pointer must fit in u64");
     assert!(
         kernel::memory::address_space::verify_user_address_space_template(
             frame_allocator,
-            verify_kernel_filesystem as *const () as usize,
+            kernel_probe_address,
         ),
         "user address-space template smoke must pass"
     );
     crate::log_info!(
         "memory",
-        "User address-space template self-check passed: kernel_shared=true user_window_empty=true"
+        "User address-space template self-check passed: kernel_shared=true user_window_empty=true kernel_probe_typed=true"
     );
 }
 

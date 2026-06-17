@@ -152,6 +152,7 @@ active roadmap can list only unfinished work.
 - [x] Keep user pointer page-table permission probes typed as `UserReadableRange` or `UserWritableRange` before raw slice creation.
 - [x] Keep user pointer permission page walks typed as `UserPageStart` boundaries before page-table probes consume them, with storage smoke coverage.
 - [x] Classify syscall copy pointer/length pairs through `UserReadableRange`, `UserWritableRange`, and `UserCString` constructors before lower copy helpers consume them.
+- [x] Keep user address-space template self-check kernel probes typed as `VirtAddr` before memory APIs inspect shared kernel mappings.
 - [x] Keep user address-space permission self-check probe addresses typed as `VirtAddr` and `UserVirtualAddress`.
 - [x] Keep scheduler-owned `mmap` requested addresses typed as `UserMappingPlacement` before diagnostics formatting.
 - [x] Keep ELF entry points typed as `UserVirtualAddress` immediately after header validation.

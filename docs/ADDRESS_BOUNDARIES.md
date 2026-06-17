@@ -52,6 +52,9 @@ untyped cross-domain `u64` values:
 - User address-space permission self-checks accept `VirtAddr` for kernel probe
   addresses and `UserVirtualAddress` for representative user addresses before
   forming copy-direction probe ranges.
+- User address-space template self-checks accept the representative kernel
+  probe address as `VirtAddr`, so the memory API does not receive a raw virtual
+  pointer.
 - `UserReadRequest` stores pending `read` destinations as `UserWritableRange`
   after syscall ABI pointer classification, so scheduler wait state does not
   retain a raw user pointer.
@@ -270,6 +273,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - Per-process address-space permission self-checks keep the kernel probe as
   `VirtAddr` and user probes as `UserVirtualAddress`; raw `usize` lowering is
   limited to final diagnostics and kernel slice construction.
+- User address-space template self-checks keep the representative kernel probe
+  as `VirtAddr`; the boot smoke call site performs the architecture pointer
+  lowering and checked numeric conversion before entering the memory API.
 
 ### ELF Loading
 

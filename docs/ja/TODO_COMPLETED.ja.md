@@ -123,6 +123,7 @@ user pointer page-table permission probe の `UserReadableRange` / `UserWritable
 user pointer permission page walk の `UserPageStart` boundary 化、
 syscall copy pointer / length pair の `UserReadableRange` / `UserWritableRange` / `UserCString`
 constructor boundary 化、
+user address-space template self-check kernel probe の `VirtAddr` boundary 化、
 user address-space permission self-check probe address の `VirtAddr` / `UserVirtualAddress` boundary 化、
 scheduler-owned `mmap` requested address の `UserMappingPlacement` boundary 化、
 ELF entry point の `UserVirtualAddress` boundary 化、

@@ -97,7 +97,7 @@ $expectedPatterns = @(
     "IOAPIC routing activated: entries=3 activated=3 readback_matches=true routing_active=true masked=false local_apic_software_enabled=true legacy_pic_masked=true out_of_range_entries=0 timer_low_readback=0x[0-9a-f]+ timer_high_readback=0x[0-9a-f]+ keyboard_low_readback=0x[0-9a-f]+ keyboard_high_readback=0x[0-9a-f]+ mouse_low_readback=0x[0-9a-f]+ mouse_high_readback=0x[0-9a-f]+ apic_eoi_count=0 legacy_eoi_count=0",
     "Local APIC timer calibration started: configured=true armed=true masked=true address=0x[0-9a-f]+ vector=32 divide=16 lvt_timer=0x[0-9a-f]+ divide_config=0x3 initial_count=[1-9][0-9]* current_count=[0-9]+ start_ticks=[0-9]+",
     "Dynamic kernel mapping lifecycle self-check passed: map=true unmap=true virtual_reuse=true physical_reuse=true",
-    "User address-space template self-check passed: kernel_shared=true user_window_empty=true",
+    "User address-space template self-check passed: kernel_shared=true user_window_empty=true kernel_probe_typed=true",
     "User address-space reclaim self-check passed: user_pages=1 page_table_pages=4",
     "Kernel stack guard diagnostics verified: .*guard_fault_address_typed=true",
     "User program spawn errno smoke passed: missing=-2 relative=-22 directory=-21 device=-95 invalid_image=-22 oom=-12",

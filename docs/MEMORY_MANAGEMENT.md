@@ -50,6 +50,9 @@ The current physical frame allocator relies on these properties:
   4 KiB user-page alignment is established before page tables are mutated.
 - User permission probes derive `UserPageStart` first/last page boundaries from
   `UserVirtualRange` before walking active or per-process page tables.
+- User address-space template self-checks accept the representative kernel
+  probe as `VirtAddr` before checking that fresh user PML4 roots share kernel
+  mappings without making them user-accessible.
 - Syscall buffer helpers classify raw pointer/length ABI arguments into
   `UserReadableRange`, `UserWritableRange`, or `UserCString` before copy
   direction reaches page-table permission probes or string scanning.
@@ -274,6 +277,9 @@ before lowering to raw numbers for `x86_64` page-table translation.
 The syscall copy helper layer now constructs readable, writable, or C-string
 candidate ranges through direction-specific constructors, so the raw ABI
 pointer/length pair is classified before it can reach the lower copy helpers.
+The address-space template self-check receives its representative kernel probe
+as `VirtAddr`, leaving the boot smoke call site as the only place that lowers
+the function pointer to a numeric address.
 
 ## User Address Spaces
 

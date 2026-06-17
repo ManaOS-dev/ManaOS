@@ -346,11 +346,11 @@ pub fn destroy_user_address_space(
 /// Verify that a fresh user address-space template isolates user mappings.
 pub fn verify_user_address_space_template(
     frame_allocator: &mut PhysicalFrameAllocator,
-    kernel_pointer: usize,
+    kernel_probe_address: VirtAddr,
 ) -> bool {
     let address_space = create_user_address_space(frame_allocator);
     let kernel_mapping_present = address_space
-        .mapping_flags_for_address(VirtAddr::new(kernel_pointer as u64))
+        .mapping_flags_for_address(kernel_probe_address)
         .is_some_and(|flags| {
             flags.contains(PageTableFlags::PRESENT)
                 && !flags.contains(PageTableFlags::USER_ACCESSIBLE)
