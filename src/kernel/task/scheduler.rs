@@ -25,7 +25,7 @@ use crate::kernel::memory::address_space::{self, UserAddressSpace, UserAddressSp
 use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
 use crate::kernel::memory::user_heap::UserHeap;
 use crate::kernel::memory::user_mapping::{
-    UserMappingError, UserMappingPlacement, UserMappingPlan, UserMappingSource,
+    UserMappingError, UserMappingLength, UserMappingPlacement, UserMappingPlan, UserMappingSource,
     UserMappingUnmapRequest, UserMappings,
 };
 use crate::kernel::memory::virtual_allocator::{
@@ -50,7 +50,7 @@ static USER_RETURN_PREEMPTION_WINDOW_CLOSE_COUNT: AtomicU64 = AtomicU64::new(0);
 pub struct UserMappingRequest {
     placement: UserMappingPlacement,
     source: UserMappingSource,
-    length: u64,
+    length: UserMappingLength,
     writable: bool,
     protection: u64,
     flags: u64,
@@ -93,7 +93,7 @@ impl UserMappingRequest {
     pub const fn new(
         placement: UserMappingPlacement,
         source: UserMappingSource,
-        length: u64,
+        length: UserMappingLength,
         writable: bool,
         protection: u64,
         flags: u64,
@@ -129,6 +129,11 @@ impl UserMappingRequest {
 
     /// Return the requested mapping length in bytes.
     pub const fn length(self) -> u64 {
+        self.length.byte_len()
+    }
+
+    /// Return the typed requested mapping length.
+    pub const fn mapping_length(self) -> UserMappingLength {
         self.length
     }
 

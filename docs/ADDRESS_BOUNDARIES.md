@@ -60,6 +60,9 @@ untyped cross-domain `u64` values:
 - `UserMappingUnmapRequest` represents `munmap` requests after syscall ABI
   address classification, so scheduler and mapping code do not receive raw
   unmap start addresses.
+- `UserMappingLength` represents private `mmap` byte lengths after syscall ABI
+  validation, so scheduler and mapping code do not receive raw length values
+  when deriving page counts.
 - `KernelStackGuardFault` stores guard, writable, and top addresses as
   `VirtAddr` after page-fault ABI values are classified at the kernel interrupt
   boundary.
@@ -186,9 +189,10 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   -> AllocatedUserStack` accepts `PageCount`, maps into a specific user address
   space, and returns a typed user stack range with base, top, physical backing
   frames, and page count.
-- `kernel::memory::user_mapping::UserMappings` converts syscall byte lengths
-  into `PageCount` after ABI validation, then uses typed page counts for mapping
-  records, successful allocations, typed unmap requests, and unmap results.
+- `kernel::memory::user_mapping::UserMappingLength` converts syscall byte
+  lengths into `PageCount` after ABI validation. `UserMappings` then uses typed
+  page counts for mapping records, successful allocations, typed unmap
+  requests, and unmap results.
   It keeps mapping record starts and the automatic placement cursor as
   `UserPageStart` so private mapping records and the next search position
   cannot retain unaligned raw virtual addresses.
@@ -201,6 +205,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - The scheduler-owned `mmap` request keeps fixed requested addresses as
   `UserPageStart` inside `UserMappingPlacement`; the syscall raw requested
   address is used only to choose that placement or reject the request.
+- The scheduler-owned `mmap` request keeps the requested byte length as
+  `UserMappingLength`; raw syscall length values are used only to construct
+  that typed request or reject the request.
 - `kernel::memory::user_heap::UserHeap` accepts `UserHeapBreakRequest` after
   `sys_brk` classifies the raw ABI value as either a current-break query or a
   validated user virtual address.
@@ -319,6 +326,8 @@ Continue introducing wrappers in small steps:
   destinations after raw syscall pointer classification.
 - `UserCString` for readable syscall string candidates before NUL validation.
 - `UserMappingUnmapRequest` for private `munmap` requests after syscall ABI
+  classification.
+- `UserMappingLength` for private `mmap` lengths after syscall ABI
   classification.
 - `VirtAddr` for scheduler-owned user task kernel stack top handoffs before
   architecture and `SYSCALL` entry boundaries.

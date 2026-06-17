@@ -128,11 +128,39 @@ impl UserMappingSource {
     }
 }
 
+/// Non-empty syscall mapping length with its rounded page count.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UserMappingLength {
+    byte_len: u64,
+    page_count: PageCount,
+}
+
+impl UserMappingLength {
+    /// Convert a raw syscall `mmap` length into a typed mapping length.
+    pub fn from_syscall_argument(byte_len: u64) -> Option<Self> {
+        let page_count = page_count_for_length(byte_len)?;
+        Some(Self {
+            byte_len,
+            page_count,
+        })
+    }
+
+    /// Return the raw requested byte length for diagnostics and page preload.
+    pub const fn byte_len(self) -> u64 {
+        self.byte_len
+    }
+
+    /// Return the rounded 4 KiB page count covered by this length.
+    pub const fn page_count(self) -> PageCount {
+        self.page_count
+    }
+}
+
 /// Mapping parameters shared by anonymous and file-private mappings.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserMappingPlan {
     placement: UserMappingPlacement,
-    length: u64,
+    length: UserMappingLength,
     writable: bool,
     source: UserMappingSource,
 }
@@ -141,7 +169,7 @@ impl UserMappingPlan {
     /// Create mapping parameters for one private user mapping.
     pub const fn new(
         placement: UserMappingPlacement,
-        length: u64,
+        length: UserMappingLength,
         writable: bool,
         source: UserMappingSource,
     ) -> Self {
@@ -160,7 +188,12 @@ impl UserMappingPlan {
 
     /// Return the requested mapping length in bytes.
     pub const fn length(self) -> u64 {
-        self.length
+        self.length.byte_len()
+    }
+
+    /// Return the rounded page count for the requested mapping length.
+    pub const fn page_count(self) -> PageCount {
+        self.length.page_count()
     }
 
     /// Return whether user code may write the mapped pages.
@@ -279,7 +312,7 @@ impl UserMappings {
         mut initialize_page: impl FnMut(u64, &mut [u8]) -> Result<(), UserMappingError>,
     ) -> Result<UserMappingAllocation, UserMappingError> {
         let length = plan.length();
-        let page_count = page_count_for_length(length).ok_or(UserMappingError::InvalidRequest)?;
+        let page_count = plan.page_count();
         let byte_len = page_count.byte_len();
         let start = self.start_address_for_placement(plan.placement(), byte_len)?;
         let requested_range =

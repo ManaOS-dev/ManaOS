@@ -11,7 +11,8 @@ use crate::kernel::memory::{
     address::{UserPageStart, UserVirtualAddress, VirtAddr},
     user_heap::UserHeapBreakRequest,
     user_mapping::{
-        UserMappingError, UserMappingPlacement, UserMappingSource, UserMappingUnmapRequest,
+        UserMappingError, UserMappingLength, UserMappingPlacement, UserMappingSource,
+        UserMappingUnmapRequest,
     },
 };
 /// Handle a user heap break syscall.
@@ -116,7 +117,10 @@ pub(super) fn sys_mmap(
     let Some(placement) = mapping_placement(requested_address, flags) else {
         return ERROR_INVALID_ARGUMENT;
     };
-    if !is_supported_mapping_request(length, protection, flags) {
+    let Some(mapping_length) = UserMappingLength::from_syscall_argument(length) else {
+        return ERROR_INVALID_ARGUMENT;
+    };
+    if !is_supported_mapping_request(protection, flags) {
         return ERROR_INVALID_ARGUMENT;
     }
     let mapping_source = match mapping_source_from_arguments(file_descriptor, offset, flags) {
@@ -128,7 +132,7 @@ pub(super) fn sys_mmap(
     let request = crate::kernel::task::UserMappingRequest::new(
         placement,
         mapping_source.user_mapping_source(),
-        length,
+        mapping_length,
         writable,
         protection,
         flags,
@@ -169,7 +173,7 @@ pub(super) fn sys_mmap(
                     file_descriptor,
                     offset,
                     start_address,
-                    length,
+                    mapping_length.byte_len(),
                     file_bytes_read
                 );
             }
@@ -204,14 +208,13 @@ pub(super) fn sys_munmap(start_address: u64, length: u64) -> u64 {
     }
 }
 
-fn is_supported_mapping_request(length: u64, protection: u64, flags: u64) -> bool {
+fn is_supported_mapping_request(protection: u64, flags: u64) -> bool {
     let supported_protection = contract::PROT_READ | contract::PROT_WRITE | contract::PROT_EXEC;
     let supported_flags = contract::MAP_PRIVATE
         | contract::MAP_FIXED
         | contract::MAP_ANONYMOUS
         | contract::MAP_FIXED_NOREPLACE;
-    length != 0
-        && (protection & !supported_protection) == 0
+    (protection & !supported_protection) == 0
         && (protection & contract::PROT_EXEC) == 0
         && (protection & (contract::PROT_READ | contract::PROT_WRITE)) != 0
         && (flags & !supported_flags) == 0

@@ -165,9 +165,10 @@ address space.
 User stack allocation also accepts `PageCount`, so spawn and execve callers
 classify the stack size as pages before frame allocation and stack slot mapping.
 
-Private user mappings convert syscall byte lengths into `PageCount` after ABI
-validation, then keep successful allocation and unmap page counts typed until
-scheduler diagnostics fold them into aggregate counters.
+Private user mappings convert syscall byte lengths into `UserMappingLength`
+after ABI validation. The typed length carries the rounded `PageCount`, then
+successful allocation and unmap page counts stay typed until scheduler
+diagnostics fold them into aggregate counters.
 
 MMIO identity mapping converts byte ranges into `PageCount` before paging
 helpers walk 4 KiB pages. APIC smoke logs report the returned typed page count
@@ -245,14 +246,16 @@ needed, and returns removed physical frames to the `UserMapping` owner pool.
 Mapping requests keep fixed requested addresses as `UserPageStart` values
 inside `UserMappingPlacement`; scheduler diagnostics derive raw display values
 from that typed placement. Automatic placement keeps the next search cursor as
-`UserPageStart` before allocation diagnostics lower it for display. Mapping
-record splits classify the right-side start as `UserPageStart` before mutating
-the record table. Internal overlap and containment checks use a private typed
-mapping range with `UserPageStart` start and exclusive-end boundaries before
-lowering addresses for comparisons. Mapping records keep their starts as
-`UserPageStart` and their page counts as `PageCount`; successful unmap results
-also use `PageCount` for non-zero page counts. Lifetime and diagnostic totals
-remain `u64` because they can be zero.
+`UserPageStart` before allocation diagnostics lower it for display. The
+requested mapping length stays inside `UserMappingLength` while the scheduler
+and mapping table derive page counts. Mapping record splits classify the
+right-side start as `UserPageStart` before mutating the record table. Internal
+overlap and containment checks use a private typed mapping range with
+`UserPageStart` start and exclusive-end boundaries before lowering addresses
+for comparisons. Mapping records keep their starts as `UserPageStart` and their
+page counts as `PageCount`; successful unmap results also use `PageCount` for
+non-zero page counts. Lifetime and diagnostic totals remain `u64` because they
+can be zero.
 
 The one-shot user runtime registers the boot-owned frame allocator only while
 user code can issue syscalls, so syscall dispatch can allocate and free user

@@ -55,7 +55,7 @@ impl Scheduler {
             frame_allocator,
             UserMappingPlan::new(
                 request.placement(),
-                request.length(),
+                request.mapping_length(),
                 request.writable(),
                 request.source(),
             ),
@@ -81,7 +81,7 @@ impl Scheduler {
         }
         crate::log_info!(
             "syscall",
-            "mmap -> task={} requested={:#x} start={:#x} length={} pages={} protection={:#x} flags={:#x} placement={} source={} active_pages={} file_private_records={} page_count_typed=true mapping_request_typed=true mapping_start_typed=true mapping_range_typed=true",
+            "mmap -> task={} requested={:#x} start={:#x} length={} pages={} protection={:#x} flags={:#x} placement={} source={} active_pages={} file_private_records={} page_count_typed=true mapping_request_typed=true mapping_length_typed=true mapping_start_typed=true mapping_range_typed=true",
             task_id,
             request.requested_address_for_diagnostics(),
             allocation.start().as_u64(),
