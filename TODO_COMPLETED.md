@@ -153,6 +153,7 @@ active roadmap can list only unfinished work.
 - [x] Keep ELF heap starts typed as `UserPageStart` while accumulating load-segment ends.
 - [x] Keep private `mmap` automatic placement search starts typed as `UserPageStart`.
 - [x] Keep private mapping split record starts typed as `UserPageStart` during `munmap` and fixed replacement.
+- [x] Keep private mapping record starts typed as `UserPageStart`.
 
 ### Address Space Lifecycle
 

@@ -41,7 +41,7 @@ impl UserMappingAllocation {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct UserMapping {
-    start: UserVirtualAddress,
+    start: UserPageStart,
     page_count: PageCount,
     source: UserMappingSource,
 }
@@ -267,7 +267,7 @@ impl UserMappings {
         )?;
 
         self.records[record_index] = Some(UserMapping {
-            start: start.as_address(),
+            start,
             page_count,
             source: plan.source(),
         });
@@ -325,7 +325,7 @@ impl UserMappings {
         );
         crate::log_info!(
             "memory",
-            "User {} mapping unmapped: start={:#x} pages={} records={} active_pages={} page_count_typed=true split_start_typed=true",
+            "User {} mapping unmapped: start={:#x} pages={} records={} active_pages={} page_count_typed=true split_start_typed=true record_start_typed=true",
             source.as_str(),
             start.as_u64(),
             page_count.as_u64(),
@@ -657,7 +657,7 @@ impl UserMappings {
             }
             (0, _) => {
                 self.records[record_index] = Some(UserMapping {
-                    start: right_start.as_address(),
+                    start: right_start,
                     page_count: page_count(right_pages),
                     source: record.source,
                 });
@@ -671,7 +671,7 @@ impl UserMappings {
                     source: record.source,
                 });
                 self.records[split_record_index] = Some(UserMapping {
-                    start: right_start.as_address(),
+                    start: right_start,
                     page_count: page_count(right_pages),
                     source: record.source,
                 });
