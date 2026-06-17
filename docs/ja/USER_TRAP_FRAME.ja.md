@@ -110,6 +110,10 @@ task-owned recording path を通ります。両方の bridge は stack-resident 
 typed `VirtAddr` として渡し、raw pointer value は architecture/shared ABI capture point に限定します。
 scheduler diagnostics は保存済み user RIP/RSP も serial logging 前に typed accessor で分類するため、
 storage smoke は `trap_frame_user_addresses_typed=true` を assert できます。
+timer interrupt bridge は shared timer frame の storage / RIP / RSP value も typed shared wrapper
+経由で読みます。kernel timer handling は scheduler-owned `UserTrapFrame` を作る前、または
+timer-frame diagnostics を formatting する前に、storage address を `VirtAddr`、user RIP/RSP を
+`UserVirtualAddress` として分類します。
 
 ## preemption enablement checklist
 

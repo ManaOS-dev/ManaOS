@@ -12,6 +12,7 @@
 //! - [`PageFaultReport`] - Page-fault diagnostic record
 //! - [`TimerInterruptFrame`] - Complete timer interrupt register snapshot
 //! - [`verify_typed_page_fault_report`] - Page-fault report wrapper self-check
+//! - [`verify_typed_timer_interrupt_frame`] - Timer frame wrapper self-check
 
 mod page_fault_report;
 mod timer_interrupt_frame;
@@ -20,7 +21,10 @@ pub use page_fault_report::{
     verify_typed_page_fault_report, PageFaultAddress, PageFaultErrorBits,
     PageFaultInstructionPointer, PageFaultReport,
 };
-pub use timer_interrupt_frame::TimerInterruptFrame;
+pub use timer_interrupt_frame::{
+    verify_typed_timer_interrupt_frame, TimerFrameInstructionPointer, TimerFrameStackPointer,
+    TimerFrameStorageAddress, TimerInterruptFrame,
+};
 
 /// Number of scheduler timer ticks produced each second.
 ///

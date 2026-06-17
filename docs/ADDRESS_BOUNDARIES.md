@@ -90,6 +90,11 @@ untyped cross-domain `u64` values:
   registered reporter callback. The architecture layer classifies the raw CR2
   and exception-frame values before dispatch, and `kernel::interrupt`
   converts the virtual address fields into `VirtAddr` before diagnostics.
+- `shared::TimerInterruptFrame` keeps the fixed timer interrupt ABI fields raw
+  while exposing typed shared wrappers for the stack storage address,
+  interrupted instruction pointer, and interrupted stack pointer. Kernel timer
+  handling converts those wrappers into `VirtAddr` or `UserVirtualAddress`
+  before recording scheduler metadata or serial diagnostics.
 - `arch::x86_64::SyscallEntryAddress` represents the virtual entry target
   programmed into the `SYSCALL` LSTAR MSR. The composition root passes this
   typed value into architecture initialization, and raw numeric lowering stays
@@ -285,6 +290,10 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   architecture/shared ABI capture point. The kernel interrupt and syscall
   bridges convert them to `VirtAddr` before the task scheduler records the
   captured `UserTrapFrame`.
+- Timer interrupt frame RIP/RSP values are read through shared timer-frame
+  wrappers, then classified as `UserVirtualAddress` before kernel diagnostics
+  or scheduler-owned `UserTrapFrame` construction lower them again for the
+  private resume ABI.
 - User trap-frame RIP and RSP fields remain raw inside the fixed `repr(C)`
   resume frame. Kernel logging, diagnostics, and `execve` publication use
   typed `UserVirtualAddress` accessors before lowering those user addresses
@@ -429,6 +438,10 @@ Continue introducing wrappers in small steps:
 - `PageFaultReport`, `PageFaultAddress`, `PageFaultErrorBits`, and
   `PageFaultInstructionPointer` for the shared page-fault callback boundary
   before kernel diagnostics classify those virtual addresses as `VirtAddr`.
+- `TimerInterruptFrame`, `TimerFrameStorageAddress`,
+  `TimerFrameInstructionPointer`, and `TimerFrameStackPointer` for the shared
+  timer interrupt callback boundary before kernel timer handling classifies
+  those addresses as `VirtAddr` or `UserVirtualAddress`.
 
 The next implementation steps should focus on the remaining architecture ABI
 boundaries. They should avoid broad mechanical renames until the remaining

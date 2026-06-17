@@ -30,6 +30,22 @@ pub fn verify_page_fault_report_rules() {
     );
 }
 
+/// Verify the shared timer interrupt frame boundary.
+///
+/// # Panics
+///
+/// Panics if the timer interrupt frame wrapper self-check fails.
+pub fn verify_timer_interrupt_frame_rules() {
+    assert!(
+        crate::shared::verify_typed_timer_interrupt_frame(),
+        "timer interrupt frame wrapper smoke must pass"
+    );
+    crate::log_info!(
+        "task",
+        "Timer interrupt frame self-check passed: timer_frame_typed=true frame_storage_typed=true instruction_pointer_typed=true stack_pointer_typed=true"
+    );
+}
+
 /// Verify the in-kernel filesystem smoke paths.
 pub fn verify_kernel_filesystem() {
     crate::log_info!("fs", "Standard output is connected to /dev/console.");

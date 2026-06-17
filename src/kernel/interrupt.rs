@@ -18,10 +18,13 @@
 //! - [`syscall_entry`] - Ring 3 syscall entry
 
 use crate::kernel::{
-    memory::address::VirtAddr,
+    memory::address::{UserVirtualAddress, VirtAddr},
     task::{context::UserTrapFrame, UserTrapFrameSource},
 };
-use crate::shared::{PageFaultErrorBits, PageFaultReport, TimerInterruptFrame};
+use crate::shared::{
+    PageFaultErrorBits, PageFaultReport, TimerFrameInstructionPointer, TimerFrameStackPointer,
+    TimerFrameStorageAddress, TimerInterruptFrame,
+};
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 static SYSCALL_KERNEL_STACK_TOP: AtomicU64 = AtomicU64::new(0);
@@ -35,7 +38,7 @@ pub fn process_timer_tick(frame: &TimerInterruptFrame) {
     if interrupted_user_mode {
         crate::kernel::task::record_current_user_trap_frame(
             timer_frame_to_user_trap_frame(frame),
-            VirtAddr::new(frame.frame_storage_address),
+            timer_frame_storage_address(frame),
             UserTrapFrameSource::TimerInterrupt,
         );
         report_user_timer_frame_once(frame);
@@ -120,12 +123,14 @@ fn report_user_timer_frame_once(frame: &TimerInterruptFrame) {
         return;
     }
 
+    let instruction_pointer = timer_frame_user_instruction_pointer(frame);
+    let stack_pointer = timer_frame_user_stack_pointer(frame);
     crate::log_info!(
         "task",
-        "User timer interrupt frame observed: task={} rip={:#x} rsp={:#x} cs={:#x} ss={:#x} rflags={:#x}",
+        "User timer interrupt frame observed: task={} rip={:#x} rsp={:#x} cs={:#x} ss={:#x} rflags={:#x} timer_frame_addresses_typed=true",
         TaskIdentifierDisplay(crate::kernel::task::get_current_task_id()),
-        frame.instruction_pointer,
-        frame.stack_pointer,
+        instruction_pointer.as_u64(),
+        stack_pointer.as_u64(),
         frame.code_segment,
         frame.stack_segment,
         frame.cpu_flags
@@ -133,11 +138,13 @@ fn report_user_timer_frame_once(frame: &TimerInterruptFrame) {
 }
 
 fn timer_frame_to_user_trap_frame(frame: &TimerInterruptFrame) -> UserTrapFrame {
+    let instruction_pointer = timer_frame_user_instruction_pointer(frame);
+    let stack_pointer = timer_frame_user_stack_pointer(frame);
     UserTrapFrame {
-        instruction_pointer: frame.instruction_pointer,
+        instruction_pointer: instruction_pointer.as_u64(),
         code_segment: frame.code_segment,
         cpu_flags: frame.cpu_flags,
-        stack_pointer: frame.stack_pointer,
+        stack_pointer: stack_pointer.as_u64(),
         stack_segment: frame.stack_segment,
         rax: frame.rax,
         rbx: frame.rbx,
@@ -155,6 +162,23 @@ fn timer_frame_to_user_trap_frame(frame: &TimerInterruptFrame) -> UserTrapFrame 
         r14: frame.r14,
         r15: frame.r15,
     }
+}
+
+fn timer_frame_storage_address(frame: &TimerInterruptFrame) -> VirtAddr {
+    let address: TimerFrameStorageAddress = frame.frame_storage_address();
+    VirtAddr::new(address.as_u64())
+}
+
+fn timer_frame_user_instruction_pointer(frame: &TimerInterruptFrame) -> UserVirtualAddress {
+    let address: TimerFrameInstructionPointer = frame.instruction_pointer();
+    UserVirtualAddress::new(VirtAddr::new(address.as_u64()))
+        .expect("user timer interrupt instruction pointer must be a user virtual address")
+}
+
+fn timer_frame_user_stack_pointer(frame: &TimerInterruptFrame) -> UserVirtualAddress {
+    let address: TimerFrameStackPointer = frame.stack_pointer();
+    UserVirtualAddress::new(VirtAddr::new(address.as_u64()))
+        .expect("user timer interrupt stack pointer must be a user virtual address")
 }
 
 #[derive(Clone, Copy)]

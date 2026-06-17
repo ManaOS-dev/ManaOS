@@ -188,6 +188,9 @@ user entry と timer-resume の handoff は、選択した user task の kernel 
 syscall / timer trap-frame storage address は architecture/shared ABI の capture point だけ raw のままです。
 kernel interrupt / syscall bridge は captured `UserTrapFrame` を task scheduler に記録する前に
 `VirtAddr` へ変換します。
+timer interrupt frame の RIP/RSP value は shared timer-frame wrapper 経由で読み、kernel diagnostics
+または scheduler-owned `UserTrapFrame` construction が private resume ABI へ下げる前に
+`UserVirtualAddress` として分類します。
 user trap-frame の RIP/RSP field は fixed `repr(C)` resume frame の中では raw のままです。
 kernel logging、diagnostics、`execve` publication は typed `UserVirtualAddress` accessor を使ってから、
 output の境界で raw number へ下げます。

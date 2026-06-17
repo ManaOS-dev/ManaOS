@@ -129,6 +129,11 @@ stack-resident trap-frame storage address; raw pointer values remain limited to
 the architecture/shared ABI capture point. Scheduler diagnostics also classify
 the saved user RIP/RSP through typed accessors before serial logging them, so
 storage smoke can assert `trap_frame_user_addresses_typed=true`.
+The timer interrupt bridge reads the shared timer frame's storage, RIP, and
+RSP values through typed shared wrappers first. Kernel timer handling then
+classifies the storage address as `VirtAddr` and the user RIP/RSP values as
+`UserVirtualAddress` before constructing the scheduler-owned `UserTrapFrame` or
+formatting timer-frame diagnostics.
 
 ## Preemption Enablement Checklist
 

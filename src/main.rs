@@ -232,6 +232,7 @@ fn main() -> Status {
     initialize_scheduler(&mut frame_allocator);
     kernel::diagnostic::boot_smoke::verify_kernel_stack_guard_fault_diagnostics();
     kernel::diagnostic::boot_smoke::verify_page_fault_report_rules();
+    kernel::diagnostic::boot_smoke::verify_timer_interrupt_frame_rules();
 
     kernel::diagnostic::log::section("Interrupts");
     initialize_architecture_and_drivers();
