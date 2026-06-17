@@ -48,6 +48,9 @@ physical frame allocator は、以下の前提に依存します。
   `UserVirtualRange` から first / last page boundary を `UserPageStart` として導出します。
 - user address-space template self-check は代表 kernel probe を `VirtAddr` として受け取り、
   fresh user PML4 root が kernel mapping を user-accessible にせず共有していることを確認します。
+- 保存済み kernel address-space root は private atomic storage slot の中でだけ raw です。
+  すべての reader は CR3 switch や address-space template smoke check に使う前に
+  `PhysicalFrameStart` へ分類し直します。
 - syscall buffer helper は raw pointer / length ABI argument を
   `UserReadableRange`、`UserWritableRange`、または `UserCString` へ分類してから、
   copy direction を page-table permission probe や string scan に渡します。
@@ -199,7 +202,8 @@ scheduler の user-entry / timer-resume path は、選択した user task kernel
 ELF loading と user stack allocation は active CR3 ではなく explicit `UserAddressSpace` へ map します。
 one-shot user lifecycle は Ring 3 entry 前に task address space へ切り替え、`SYS_EXIT` 後に kernel
 address space へ戻します。finished user task は private user-window page table を破棄し、user stack、
-user ELF、user heap、page-table frame を reusable allocator へ返します。
+user ELF、user heap、page-table frame を reusable allocator へ返します。kernel address space へ
+戻すときは、保存済み root を typed `PhysicalFrameStart` helper 経由で読み直してから CR3 に書き込みます。
 
 ## replacement checklist の読み方
 

@@ -53,6 +53,9 @@ The current physical frame allocator relies on these properties:
 - User address-space template self-checks accept the representative kernel
   probe as `VirtAddr` before checking that fresh user PML4 roots share kernel
   mappings without making them user-accessible.
+- The saved kernel address-space root is raw only inside the private atomic
+  storage slot. Every reader reclassifies it as `PhysicalFrameStart` before
+  using it for CR3 switching or address-space template smoke checks.
 - Syscall buffer helpers classify raw pointer/length ABI arguments into
   `UserReadableRange`, `UserWritableRange`, or `UserCString` before copy
   direction reaches page-table permission probes or string scanning.
@@ -306,7 +309,8 @@ by the scheduler, so lifecycle cleanup drains a task-specific exit record before
 asking the scheduler for one aggregate resource-reclaim pass over the matching
 address space and kernel stack resources. The one-shot exit return stack now
 uses an explicit set/take return window so stale return stack pointers cannot be
-reused across lifecycle runs.
+reused across lifecycle runs. Restoring the kernel address space reloads the
+saved root through a typed `PhysicalFrameStart` helper before writing CR3.
 
 ## Replacement Checklist
 

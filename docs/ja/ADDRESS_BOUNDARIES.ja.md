@@ -45,6 +45,9 @@ kernel ownership boundary では型付き address に変換することです。
   `UserVirtualAddress` として受け取り、その後 copy-direction probe range を作ります。
 - user address-space template self-check は代表 kernel probe address を `VirtAddr`
   として受け取り、memory API が raw virtual pointer を受け取らないようにします。
+- 保存済み kernel address-space root は private atomic storage boundary の中でだけ raw です。
+  読み手は CR3 switch や address-space template smoke check に渡す前に、
+  すぐ `PhysicalFrameStart` へ分類し直します。
 - `UserReadRequest`: syscall ABI pointer classification 後の pending `read` destination を `UserWritableRange` として保持し、scheduler wait state が raw user pointer を保持しないようにします。
 - blocking `waitpid`: syscall ABI pointer classification 後の deferred status-write destination を `UserWritableRange` として保持し、scheduler wait completion が raw user pointer を保持しないようにします。
 - `UserHeapBreakRequest`: syscall ABI address classification 後の `brk` request。scheduler と heap code は raw break address を受け取りません。
@@ -146,6 +149,9 @@ construction の境界に限定します。
 user address-space template self-check は代表 kernel probe を `VirtAddr` として保持します。
 boot smoke call site だけが architecture pointer lowering と checked numeric conversion を行ってから
 memory API に渡します。
+保存済み kernel address-space root は private `AtomicU64` boundary を通るためにだけ raw integer として保持します。
+kernel address-space switch と template smoke check は、それを `PhysicalFrameStart` として
+読み直してから page-table helper へ渡します。
 `brk` request は `sys_brk` で raw ABI value を current-break query または validated user virtual address に分類してから `UserHeap` へ渡します。
 heap growth / shrink helper は aligned mapped-end boundary を `UserPageStart` として保持し、
 comparison や diagnostics の直前だけ raw number へ下げます。

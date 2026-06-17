@@ -281,6 +281,14 @@ pub fn initialize_kernel_address_space(level_4_frame: PhysicalFrameStart) {
     KERNEL_LEVEL_4_FRAME.store(level_4_frame.as_u64(), Ordering::Release);
 }
 
+fn get_kernel_level_4_frame() -> Option<PhysicalFrameStart> {
+    let raw_frame = KERNEL_LEVEL_4_FRAME.load(Ordering::Acquire);
+    if raw_frame == 0 {
+        return None;
+    }
+    PhysicalFrameStart::new(PhysAddr::new(raw_frame))
+}
+
 /// Create a user address space with shared kernel mappings and empty user slots.
 ///
 /// # Panics
@@ -315,9 +323,8 @@ pub fn switch_to_user_address_space(address_space: UserAddressSpace) {
 ///
 /// Panics if paging has not recorded the kernel address-space root.
 pub fn switch_to_kernel_address_space() {
-    let raw_frame = KERNEL_LEVEL_4_FRAME.load(Ordering::Acquire);
-    let level_4_frame = PhysicalFrameStart::new(PhysAddr::new(raw_frame))
-        .expect("kernel address space must be initialized");
+    let level_4_frame =
+        get_kernel_level_4_frame().expect("kernel address space must be initialized");
     switch_to_level_4(level_4_frame);
 }
 
@@ -349,6 +356,7 @@ pub fn verify_user_address_space_template(
     kernel_probe_address: VirtAddr,
 ) -> bool {
     let address_space = create_user_address_space(frame_allocator);
+    let kernel_root_recorded = get_kernel_level_4_frame().is_some();
     let kernel_mapping_present = address_space
         .mapping_flags_for_address(kernel_probe_address)
         .is_some_and(|flags| {
@@ -361,6 +369,7 @@ pub fn verify_user_address_space_template(
 
     kernel_mapping_present
         && process_user_window_empty
+        && kernel_root_recorded
         && reclaim.user_pages() == 0
         && reclaim.page_table_pages() == 1
 }

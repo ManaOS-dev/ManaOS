@@ -127,6 +127,8 @@ syscall copy pointer / length pair の `UserReadableRange` / `UserWritableRange`
 constructor boundary 化、
 user address-space template self-check kernel probe の `VirtAddr` boundary 化、
 user address-space permission self-check probe address の `VirtAddr` / `UserVirtualAddress` boundary 化、
+saved kernel address-space root の CR3 switch 前 `PhysicalFrameStart` boundary 化と
+address-space template smoke coverage、
 scheduler-owned `mmap` requested address の `UserMappingPlacement` boundary 化、
 ELF entry point の `UserVirtualAddress` boundary 化、
 ELF heap start の `UserPageStart` boundary 化、

@@ -212,7 +212,7 @@ pub fn verify_user_address_space_template(
     );
     crate::log_info!(
         "memory",
-        "User address-space template self-check passed: kernel_shared=true user_window_empty=true kernel_probe_typed=true"
+        "User address-space template self-check passed: kernel_shared=true user_window_empty=true kernel_probe_typed=true kernel_root_typed=true"
     );
 }
 
