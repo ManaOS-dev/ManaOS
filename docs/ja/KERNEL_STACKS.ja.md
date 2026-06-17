@@ -65,6 +65,8 @@ policy:
 
 - すべての schedulable task は kernel stack owner record を持ちます。
 - kernel task は自分の `TaskContext` の kernel stack で entry します。
+  `TaskContext::from_stack(...)` は選択済み stack top を `VirtAddr` として受け取り、
+  private assembly-facing context record を埋める境界でだけ raw value へ下ろします。
 - user task は syscall / interrupt handling 用の kernel stack を持ちます。
 - user task は ELF / stack mapping 用の separate address space を所有します。
 - user task に入る前、または resume する前に、scheduler はその task の kernel stack top を

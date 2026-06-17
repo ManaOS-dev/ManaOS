@@ -54,6 +54,8 @@ kernel ownership boundary では型付き address に変換することです。
 - `UserMappingLength`: syscall ABI validation 後の private `mmap` byte length。scheduler と mapping code は page count を導出するための raw length value を受け取りません。
 - `KernelStackGuardFault`: `kernel::interrupt` が raw page-fault address を分類した後の guard / writable / top `VirtAddr`。
 - user task kernel stack top は scheduler handoff path と task architecture facade では `VirtAddr` として保持し、facade が registered architecture installer を呼ぶ境界と `SYSCALL` entry stack-top atomic の境界でだけ raw `u64` へ下ろします。
+- kernel task stack top は `TaskContext::from_stack(...)` に `VirtAddr` として渡し、
+  constructor が stack pointer を align した後、private assembly-facing context layout へ下ろします。
 - user trap-frame storage address は `kernel::task::record_current_user_trap_frame(...)`
   の前に `VirtAddr` へ分類し、scheduler metadata が raw kernel stack address を受け取らないようにします。
 - scheduler task snapshot は last resume address-space root を `PhysicalFrameStart`、last resume kernel stack top を `VirtAddr` として保持し、console / smoke output formatting の境界でだけ raw number へ下ろします。

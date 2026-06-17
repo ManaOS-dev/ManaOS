@@ -2,6 +2,8 @@
 
 use core::mem;
 
+use crate::kernel::memory::address::VirtAddr;
+
 /// A kernel task entry point.
 pub type TaskEntry = extern "C" fn() -> !;
 
@@ -61,7 +63,10 @@ impl TaskContext {
     ///
     /// `stack_top` must point one byte past a writable kernel stack that remains
     /// owned by the task for the full lifetime of this context.
-    pub unsafe fn from_stack(stack_top: usize, entry: TaskEntry) -> Self {
+    pub unsafe fn from_stack(stack_top: VirtAddr, entry: TaskEntry) -> Self {
+        let stack_top = stack_top
+            .try_as_usize()
+            .expect("kernel task stack top must fit in usize");
         let aligned_stack_top = stack_top & !0x0f;
         let stack_pointer = aligned_stack_top - 16;
         let entry_slot = stack_pointer as *mut usize;

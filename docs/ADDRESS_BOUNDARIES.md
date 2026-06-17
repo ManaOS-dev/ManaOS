@@ -82,6 +82,9 @@ untyped cross-domain `u64` values:
   paths and through the task architecture facade. They lower to raw `u64` only
   when that facade invokes the registered architecture installer and at the
   `SYSCALL` entry stack-top atomic boundary.
+- Kernel task stack tops are passed into `TaskContext::from_stack(...)` as
+  `VirtAddr` and lower to the private assembly-facing context layout only
+  after the constructor has aligned the stack pointer.
 - User trap-frame storage addresses are classified as `VirtAddr` before
   `kernel::task::record_current_user_trap_frame(...)`, so scheduler metadata
   does not receive a raw kernel stack address.

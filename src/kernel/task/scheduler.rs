@@ -493,7 +493,7 @@ impl Task {
     ) -> Self {
         let kernel_stack = KernelStack::new_default(frame_allocator, kernel_stack_range_allocator);
         let stack_top = kernel_stack.top();
-        debug_assert!(kernel_stack.base() < stack_top);
+        debug_assert!(kernel_stack.base().as_u64() < stack_top.as_u64());
         debug_assert!(kernel_stack.byte_len() >= 16);
         debug_assert_eq!(
             kernel_stack.reserved_page_count(),
@@ -520,7 +520,7 @@ impl Task {
         kernel_stack_range_allocator: &mut KernelVirtualRangeAllocator,
     ) -> Self {
         let kernel_stack = KernelStack::new_default(frame_allocator, kernel_stack_range_allocator);
-        debug_assert!(kernel_stack.base() < kernel_stack.top());
+        debug_assert!(kernel_stack.base().as_u64() < kernel_stack.top().as_u64());
         debug_assert!(kernel_stack.byte_len() >= 16);
         debug_assert_eq!(
             kernel_stack.reserved_page_count(),
@@ -769,7 +769,7 @@ impl Scheduler {
         self.tasks.push(task);
         crate::log_info!(
             "task",
-            "Kernel task stack prepared: task={} bytes={} guard_virtual={:#x} writable_virtual={:#x} virtual_top={:#x} reserved_pages={} writable_pages={} guard_unmapped=true writable_mapped=true",
+            "Kernel task stack prepared: task={} bytes={} guard_virtual={:#x} writable_virtual={:#x} virtual_top={:#x} reserved_pages={} writable_pages={} guard_unmapped=true writable_mapped=true kernel_stack_top_typed=true context_stack_top_typed=true",
             task_identifier.as_u64(),
             kernel_stack_bytes,
             kernel_stack_guard_page_virtual_start.as_u64(),

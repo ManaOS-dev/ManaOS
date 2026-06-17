@@ -238,14 +238,13 @@ impl KernelStack {
     }
 
     /// Return the lowest mapped writable virtual address in this stack.
-    pub(super) fn base(&self) -> usize {
-        usize::try_from(self.writable_virtual_start().as_u64())
-            .expect("kernel stack base must fit in usize")
+    pub(super) fn base(&self) -> VirtAddr {
+        self.writable_virtual_start()
     }
 
     /// Return one byte past the highest mapped writable address in this stack.
-    pub(super) fn top(&self) -> usize {
-        usize::try_from(self.virtual_top().as_u64()).expect("kernel stack top must fit in usize")
+    pub(super) fn top(&self) -> VirtAddr {
+        self.virtual_top()
     }
 
     /// Return the writable stack size in bytes.

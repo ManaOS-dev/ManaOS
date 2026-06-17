@@ -165,6 +165,7 @@ active roadmap can list only unfinished work.
 - [x] Keep user heap mapped-end helpers typed as `UserPageStart`, with `brk` smoke coverage.
 - [x] Add checked `try_as_usize()` conversion helpers for typed addresses, with boot smoke coverage.
 - [x] Keep MMIO identity-mapping page starts typed as `PhysicalFrameStart`, with APIC MMIO smoke coverage.
+- [x] Keep kernel task stack-top context construction typed as `VirtAddr`, with kernel task stack smoke coverage.
 - [x] Keep private mapping overlap and containment helpers typed as a page-aligned mapping range, with `mmap`/`munmap` smoke coverage.
 - [x] Keep user trap-frame storage addresses typed as `VirtAddr` before scheduler metadata records them, with timer preemption smoke coverage.
 - [x] Guard user entry and trap-frame register layouts with compile-time offset assertions before assembly-facing resumes.

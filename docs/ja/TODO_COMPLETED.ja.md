@@ -136,6 +136,7 @@ frame allocator tracked region start の `PhysAddr` boundary 化と boot smoke c
 user heap mapped-end helper の `UserPageStart` boundary 化と `brk` smoke coverage、
 typed address の checked `try_as_usize()` conversion helper と boot smoke coverage、
 MMIO identity-mapping page start の `PhysicalFrameStart` boundary 化と APIC MMIO smoke coverage、
+kernel task stack-top context construction の `VirtAddr` boundary 化と kernel task stack smoke coverage、
 private mapping overlap / containment helper の page-aligned mapping range boundary 化と
 `mmap` / `munmap` smoke coverage、
 user trap-frame storage address の scheduler metadata 記録前 `VirtAddr` boundary 化と

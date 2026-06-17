@@ -88,6 +88,8 @@ Policy:
 
 - Every schedulable task gets a kernel stack owner record.
 - Kernel tasks enter with their own kernel stack in `TaskContext`.
+  `TaskContext::from_stack(...)` accepts the selected stack top as `VirtAddr`
+  and lowers it only while filling the private assembly-facing context record.
 - User tasks get a kernel stack used for syscall and interrupt handling.
 - User tasks now own separate address spaces for ELF and stack mappings. The
   smoke path still uses separate user stack virtual slots until fixed stack
