@@ -203,8 +203,26 @@ impl LoadSegmentRange {
         self.memory_range.start()
     }
 
-    fn end_exclusive(self) -> u64 {
-        self.memory_range.end_exclusive()
+    fn heap_start_after_segment(self) -> Result<UserPageStart, LoadError> {
+        let aligned_address = self
+            .memory_range
+            .end_exclusive()
+            .checked_add(PAGE_SIZE - 1)
+            .map(|address| address & !(PAGE_SIZE - 1))
+            .ok_or(LoadError::SegmentAddressOverflow)?;
+        let address = UserVirtualAddress::new(VirtAddr::new(aligned_address))
+            .ok_or(LoadError::SegmentAddressOutOfRange)?;
+        UserPageStart::new(address).ok_or(LoadError::SegmentAddressOutOfRange)
+    }
+
+    fn contains(self, address: UserVirtualAddress) -> bool {
+        let address = address.as_u64();
+        address >= self.memory_range.start().as_u64() && address < self.memory_range.end_exclusive()
+    }
+
+    fn file_backed_range_fits(self) -> bool {
+        self.file_backed_range
+            .is_none_or(|range| range.end_exclusive() <= self.memory_range.end_exclusive())
     }
 }
 
@@ -248,17 +266,23 @@ fn load_user_elf(
         }
         validate_load_segment(image, program_header)?;
         let segment_range = LoadSegmentRange::from_program_header(program_header)?;
-        let segment_heap_start = align_up_to_user_page(segment_range.end_exclusive())?;
+        let segment_heap_start = segment_range.heap_start_after_segment()?;
         heap_start = Some(max_user_page_start(heap_start, segment_heap_start));
         if executable_segment_contains_entry(program_header, entry_point) {
             entry_segment_found = true;
         }
         load_segments = load_segments.saturating_add(1);
-        map_load_segment(address_space, frame_allocator, image, program_header)?;
+        map_load_segment(
+            address_space,
+            frame_allocator,
+            image,
+            program_header,
+            segment_range,
+        )?;
         crate::log_info!(
             "elf",
-            "ELF segment mapped: vaddr={:#x} memsz={} filesz={} flags={:#x} perms={} file_backed_range_typed=true",
-            program_header.virtual_address(),
+            "ELF segment mapped: vaddr={:#x} memsz={} filesz={} flags={:#x} perms={} segment_range_typed=true page_range_typed=true file_backed_range_typed=true",
+            segment_range.start().as_u64(),
             program_header.memory_size(),
             program_header.file_size(),
             program_header.flags(),
@@ -279,16 +303,6 @@ fn load_user_elf(
     })
 }
 
-fn align_up_to_user_page(address: u64) -> Result<UserPageStart, LoadError> {
-    let aligned_address = address
-        .checked_add(PAGE_SIZE - 1)
-        .map(|address| address & !(PAGE_SIZE - 1))
-        .ok_or(LoadError::SegmentAddressOverflow)?;
-    let address = UserVirtualAddress::new(VirtAddr::new(aligned_address))
-        .ok_or(LoadError::SegmentAddressOutOfRange)?;
-    UserPageStart::new(address).ok_or(LoadError::SegmentAddressOutOfRange)
-}
-
 fn max_user_page_start(current: Option<UserPageStart>, candidate: UserPageStart) -> UserPageStart {
     match current {
         Some(current) if current.as_u64() >= candidate.as_u64() => current,
@@ -305,13 +319,12 @@ fn map_load_segment(
     frame_allocator: &mut PhysicalFrameAllocator,
     image: &[u8],
     program_header: ProgramHeader,
+    segment_range: LoadSegmentRange,
 ) -> Result<(), LoadError> {
     if program_header.memory_size() == 0 {
         return Ok(());
     }
-    validate_load_segment(image, program_header)?;
 
-    let segment_range = LoadSegmentRange::from_program_header(program_header)?;
     let file_end = program_header
         .offset()
         .checked_add(program_header.file_size())
@@ -372,10 +385,7 @@ fn validate_load_segment(image: &[u8], program_header: ProgramHeader) -> Result<
     if usize::try_from(file_end).map_or(true, |end| end > image.len()) {
         return Err(LoadError::SegmentFileOutOfBounds);
     }
-    if segment_range
-        .file_backed_range
-        .is_some_and(|range| range.end_exclusive() > segment_range.end_exclusive())
-    {
+    if !segment_range.file_backed_range_fits() {
         return Err(LoadError::SegmentFileLargerThanMemory);
     }
 
@@ -409,8 +419,7 @@ fn executable_segment_contains_entry(
     let Ok(segment_range) = LoadSegmentRange::from_program_header(program_header) else {
         return false;
     };
-    let entry_point = entry_point.as_u64();
-    entry_point >= segment_range.start().as_u64() && entry_point < segment_range.end_exclusive()
+    segment_range.contains(entry_point)
 }
 
 fn copy_segment_page(
@@ -505,7 +514,7 @@ fn load_user_elf_metadata(image: &[u8]) -> Result<LoadedElf, LoadError> {
         }
         validate_load_segment(image, program_header)?;
         let segment_range = LoadSegmentRange::from_program_header(program_header)?;
-        let segment_heap_start = align_up_to_user_page(segment_range.end_exclusive())?;
+        let segment_heap_start = segment_range.heap_start_after_segment()?;
         heap_start = Some(max_user_page_start(heap_start, segment_heap_start));
         if executable_segment_contains_entry(program_header, entry_point) {
             entry_segment_found = true;

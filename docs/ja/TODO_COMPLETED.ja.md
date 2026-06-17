@@ -64,8 +64,8 @@ storage smoke で走る scheduler invariant check が完了済みです。
 
 typed address boundary では、`PhysicalFrameStart`、`UserVirtualAddress`、`UserPageStart`、
 `FrameCount`、`PageCount` の主要境界、typed `brk` / `munmap` request、kernel stack top handoff、
-permission probe、ELF entry / heap start、private mapping record、AHCI DMA setup address、
-trap-frame storage address の
+permission probe、ELF entry / heap start、ELF load segment memory/page range、
+private mapping record、AHCI DMA setup address、trap-frame storage address の
 typed 化が完了済みです。user entry / trap-frame register layout は compile-time offset assertion で
 guard され、first-entry の `argv` / `envp` handoff は storage smoke の
 `entry_arguments_typed=true` assertion で確認します。
@@ -117,6 +117,7 @@ user virtual-memory scheduler snapshot の `UserVirtualAddress` boundary 化、
 pending user `read` destination の `UserWritableRange` boundary 化、
 blocking `waitpid` status destination の `UserWritableRange` boundary 化、
 ELF load-segment file-backed payload range の `UserVirtualRange` boundary 化、
+ELF load-segment memory/page range の `UserVirtualRange` / `UserPageStart` boundary 化、
 user pointer page-table permission probe の `UserReadableRange` / `UserWritableRange` boundary 化、
 user address-space permission self-check probe address の `VirtAddr` / `UserVirtualAddress` boundary 化、
 scheduler-owned `mmap` requested address の `UserMappingPlacement` boundary 化、

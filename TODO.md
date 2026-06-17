@@ -15,7 +15,6 @@ reviewable unit before implementing it.
 - [ ] Replace remaining raw virtual address parameters with `VirtAddr` beyond `UserVirtualAddress` construction and typed kernel stack-top handoffs.
 - [ ] Add remaining typed page-aligned address wrappers where alignment is required by construction beyond user page starts.
 - [ ] Replace raw `u64` address values in task metadata where feasible.
-- [ ] Replace raw `u64` address values in ELF segment mapping boundaries.
 - [ ] Replace remaining raw `u64` address values in syscall memory helpers beyond typed `brk` and `munmap` requests.
 - [ ] Add conversion helpers with explicit checked failure modes.
 - [ ] Add docs for when raw numeric addresses are still allowed.

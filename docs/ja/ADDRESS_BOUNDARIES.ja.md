@@ -79,6 +79,9 @@ kernel ownership boundary では型付き address に変換することです。
 - ELF heap start は各 load segment end を user page へ align した後、
   `UserPageStart` として集計します。`LoadedElf` は final heap start を
   `UserVirtualAddress` として公開します。
+- ELF load segment の memory range は `UserVirtualRange` へ変換し、mapping / page-copy
+  helper が使う first/last mapped page は `UserPageStart` へ変換します。storage smoke は
+  segment、page、file-backed range の typed marker を assert します。
 - `UserAddressSpace`: task-owned user PML4 root。
 - `paging::map_kernel_writable_no_execute_range(...)`: reserved virtual range と owned physical frame range を mapped kernel pages にする境界。
 - `paging::unmap_kernel_range_and_free_frames(...)`: kernel virtual mapping を外し、owner check 後に physical frame を返す境界。
@@ -155,6 +158,8 @@ ELF loader は `LoadedElf::heap_start()` を導出する間、最大の page-ali
 `UserPageStart` として保持します。
 ELF load segment の file-backed payload range は page-copy 計算の直前まで
 `UserVirtualRange` として保持します。raw offset は checked file/page overlap arithmetic の局所変数へ閉じます。
+ELF load segment の page walk は `LoadSegmentRange` から得た `UserPageStart` boundary を受け取り、
+validation 後の raw segment virtual address を mapping helper へ渡し直しません。
 
 ### Storage と AHCI DMA
 

@@ -127,6 +127,10 @@ untyped cross-domain `u64` values:
 - ELF heap starts are accumulated as `UserPageStart` values after each load
   segment end is aligned to a user page. `LoadedElf` exposes the final heap
   start as `UserVirtualAddress`.
+- ELF load-segment memory ranges are converted to `UserVirtualRange`, and their
+  first/last mapped pages are converted to `UserPageStart` before mapping or
+  page-copy helpers consume them. Storage smoke asserts the segment, page, and
+  file-backed range markers.
 - `UserAddressSpace` represents a task-owned user PML4 root and is passed to
   ELF and user stack mapping helpers instead of relying on the active CR3.
 - `paging::map_kernel_writable_no_execute_range(...)` is the boundary that
@@ -266,6 +270,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - ELF load-segment file-backed payload ranges remain `UserVirtualRange` values
   before page-copy calculations. Raw offsets are local to checked file/page
   overlap arithmetic.
+- ELF load-segment page walks receive `UserPageStart` boundaries from
+  `LoadSegmentRange`; raw segment virtual addresses are not passed back into
+  the mapping helper after validation.
 
 ### Storage And AHCI DMA
 
