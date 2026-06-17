@@ -145,6 +145,8 @@ user trap-frame storage address の scheduler metadata 記録前 `VirtAddr` boun
 timer preemption smoke coverage、
 shared timer interrupt frame storage / RIP / RSP の kernel timer diagnostics / scheduler
 trap-frame recording 前 typed wrapper boundary 化と storage smoke coverage、
+returnable user-mode kernel return stack pointer の private atomic storage 前 `VirtAddr`
+boundary 化と boot smoke coverage、
 user trap-frame RIP/RSP の diagnostics / `execve` publication 前 `UserVirtualAddress`
 accessor 化、
 `execve` published heap-start diagnostics の serial formatting 前 `UserVirtualAddress`

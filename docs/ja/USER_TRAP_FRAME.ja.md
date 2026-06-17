@@ -35,6 +35,9 @@ scheduler は timer path から Ring 3 task を preempt し、別の schedulable
 interrupt context から preempted user task を resume できます。user task は `UserAddressSpace`
 root も持つため、lifecycle path は Ring 3 entry 前に CR3 を切り替え、`SYS_EXIT` 後に kernel address
 space へ戻します。
+returnable lifecycle entry は assembly ABI には raw `usize` を見せ続けますが、
+`kernel::task::process_lifecycle` は保存する kernel return stack pointer を `VirtAddr` として分類してから
+private return-stack atomic へ publish し、architecture stop path へ返す前にも再分類します。
 
 ## full trap frame layout
 

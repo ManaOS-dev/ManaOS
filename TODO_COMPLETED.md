@@ -170,6 +170,7 @@ active roadmap can list only unfinished work.
 - [x] Keep private mapping overlap and containment helpers typed as a page-aligned mapping range, with `mmap`/`munmap` smoke coverage.
 - [x] Keep user trap-frame storage addresses typed as `VirtAddr` before scheduler metadata records them, with timer preemption smoke coverage.
 - [x] Read shared timer interrupt frame storage, RIP, and RSP through typed wrappers before kernel timer diagnostics and scheduler trap-frame recording, with storage smoke coverage.
+- [x] Classify returnable user-mode kernel return stack pointers as `VirtAddr` before private atomic storage, with boot smoke coverage.
 - [x] Guard user entry and trap-frame register layouts with compile-time offset assertions before assembly-facing resumes.
 - [x] Add storage smoke coverage for typed user entry argument pointer handoffs before first-entry context lowering.
 - [x] Read user trap-frame RIP/RSP through typed `UserVirtualAddress` accessors before diagnostics and `execve` publication lower them for output.

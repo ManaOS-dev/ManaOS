@@ -68,6 +68,10 @@ kernel ownership boundary では型付き address に変換することです。
 - `arch::x86_64::interrupt_descriptor_table` は assembly timer interrupt entry target を
   `InterruptEntryAddress` として分類してから IDT gate へ下ろします。
 - user task kernel stack top は scheduler handoff path と task architecture facade では `VirtAddr` として保持し、facade が registered architecture installer を呼ぶ境界と `SYSCALL` entry stack-top atomic の境界でだけ raw `u64` へ下ろします。
+- returnable user-mode entry の kernel return stack pointer は、assembly の
+  `set_user_return_stack` / `get_user_return_stack` ABI boundary と private atomic storage
+  slot の中でだけ raw です。`kernel::task::process_lifecycle` は保存前に `VirtAddr`
+  へ分類し、architecture stop path へ返す前にも再分類します。
 - kernel task stack top は `TaskContext::from_stack(...)` に `VirtAddr` として渡し、
   constructor が stack pointer を align した後、private assembly-facing context layout へ下ろします。
 - user trap-frame storage address は `kernel::task::record_current_user_trap_frame(...)`
@@ -185,6 +189,7 @@ comparison や diagnostics の直前だけ raw number へ下げます。
 kernel stack guard-fault lookup は `kernel::interrupt` が `shared::PageFaultReport` を受け取り、
 page-fault virtual address を `VirtAddr` へ分類してから scheduler boundary へ渡します。
 user entry と timer-resume の handoff は、選択した user task の kernel stack top を task architecture facade まで `VirtAddr` として保持します。facade 内の architecture provider call と `SYSCALL` entry stack-top atomic が残る raw lowering point です。
+returnable user-mode entry path は assembly から kernel return stack pointer を raw ABI `usize` として受け取り、すぐ `VirtAddr` に分類します。private atomic slot には raw integer だけを保存し、architecture stop path に返す前に読み出し値を再分類します。
 syscall / timer trap-frame storage address は architecture/shared ABI の capture point だけ raw のままです。
 kernel interrupt / syscall bridge は captured `UserTrapFrame` を task scheduler に記録する前に
 `VirtAddr` へ変換します。

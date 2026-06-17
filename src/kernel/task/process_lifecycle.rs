@@ -1,8 +1,10 @@
 //! User process lifecycle transitions.
 
-use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicU64, Ordering};
 
-static USER_RETURN_STACK: AtomicUsize = AtomicUsize::new(0);
+use crate::kernel::memory::address::VirtAddr;
+
+static USER_RETURN_STACK: AtomicU64 = AtomicU64::new(0);
 static USER_RETURN_WINDOW_TASK_ID: AtomicU64 = AtomicU64::new(0);
 static USER_RETURN_STACK_SET_COUNT: AtomicU64 = AtomicU64::new(0);
 static USER_RETURN_STACK_TAKE_COUNT: AtomicU64 = AtomicU64::new(0);
@@ -249,8 +251,10 @@ fn assert_user_return_window_consumed() {
 /// Save the kernel return stack used by returnable user task entries.
 #[no_mangle]
 pub extern "C" fn set_user_return_stack(stack_pointer: usize) {
+    let stack_pointer = user_return_stack_from_abi(stack_pointer);
     assert_ne!(
-        stack_pointer, 0,
+        stack_pointer.as_u64(),
+        0,
         "user return stack pointer must be non-zero"
     );
     assert_ne!(
@@ -259,7 +263,7 @@ pub extern "C" fn set_user_return_stack(stack_pointer: usize) {
         "user return window must be active before storing its stack"
     );
     assert_eq!(
-        USER_RETURN_STACK.swap(stack_pointer, Ordering::AcqRel),
+        USER_RETURN_STACK.swap(stack_pointer.as_u64(), Ordering::AcqRel),
         0,
         "user return stack must be stored exactly once per entry"
     );
@@ -269,9 +273,10 @@ pub extern "C" fn set_user_return_stack(stack_pointer: usize) {
 /// Return the kernel stack pointer restored after a user stop syscall.
 #[no_mangle]
 pub extern "C" fn get_user_return_stack() -> usize {
-    let stack_pointer = USER_RETURN_STACK.swap(0, Ordering::AcqRel);
+    let stack_pointer = user_return_stack_from_storage(USER_RETURN_STACK.swap(0, Ordering::AcqRel));
     assert_ne!(
-        stack_pointer, 0,
+        stack_pointer.as_u64(),
+        0,
         "user return stack must be available before returning to lifecycle code"
     );
     assert_ne!(
@@ -280,7 +285,7 @@ pub extern "C" fn get_user_return_stack() -> usize {
         "user return window must be active before returning to lifecycle code"
     );
     USER_RETURN_STACK_TAKE_COUNT.fetch_add(1, Ordering::AcqRel);
-    stack_pointer
+    user_return_stack_to_abi(stack_pointer)
 }
 
 /// Return the number of returnable user stacks stored by the entry path.
@@ -291,4 +296,31 @@ pub(super) fn user_return_stack_set_count() -> u64 {
 /// Return the number of returnable user stacks consumed after user stop syscalls.
 pub(super) fn user_return_stack_take_count() -> u64 {
     USER_RETURN_STACK_TAKE_COUNT.load(Ordering::Acquire)
+}
+
+/// Verify user-return stack ABI conversion rules.
+pub(crate) fn verify_typed_user_return_stack_address() -> bool {
+    const REPRESENTATIVE_STACK: usize = 0xffff_8000_0000_4000;
+    let representative_stack =
+        u64::try_from(REPRESENTATIVE_STACK).expect("representative stack must fit in u64");
+    let stack_pointer = user_return_stack_from_abi(REPRESENTATIVE_STACK);
+    stack_pointer.as_u64() == representative_stack
+        && user_return_stack_from_storage(stack_pointer.as_u64()) == stack_pointer
+        && user_return_stack_to_abi(stack_pointer) == REPRESENTATIVE_STACK
+}
+
+fn user_return_stack_from_abi(stack_pointer: usize) -> VirtAddr {
+    let stack_pointer =
+        u64::try_from(stack_pointer).expect("user return stack pointer must fit in u64");
+    user_return_stack_from_storage(stack_pointer)
+}
+
+fn user_return_stack_from_storage(stack_pointer: u64) -> VirtAddr {
+    VirtAddr::new(stack_pointer)
+}
+
+fn user_return_stack_to_abi(stack_pointer: VirtAddr) -> usize {
+    stack_pointer
+        .try_as_usize()
+        .expect("user return stack pointer must fit in usize")
 }

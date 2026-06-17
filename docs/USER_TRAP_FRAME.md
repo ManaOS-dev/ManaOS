@@ -39,6 +39,11 @@ path, run another schedulable task, and resume the preempted user task through
 the saved timer interrupt context. User tasks also carry a `UserAddressSpace`
 root; the lifecycle path switches CR3 before Ring 3 entry and restores the
 kernel address space after `SYS_EXIT`.
+The returnable lifecycle entry still exposes raw `usize` values to the
+assembly ABI, but `kernel::task::process_lifecycle` classifies the saved
+kernel return stack pointer as `VirtAddr` before publishing it through the
+private return-stack atomic and reclassifies it before returning to the
+architecture stop path.
 
 ## Full Trap Frame Layout
 

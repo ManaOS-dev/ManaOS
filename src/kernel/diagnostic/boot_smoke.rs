@@ -46,6 +46,22 @@ pub fn verify_timer_interrupt_frame_rules() {
     );
 }
 
+/// Verify the user-return stack address boundary.
+///
+/// # Panics
+///
+/// Panics if the user-return stack pointer conversion self-check fails.
+pub fn verify_user_return_stack_address_rules() {
+    assert!(
+        kernel::task::process_lifecycle::verify_typed_user_return_stack_address(),
+        "user-return stack pointer wrapper smoke must pass"
+    );
+    crate::log_info!(
+        "task",
+        "User return stack address self-check passed: user_return_stack_address_typed=true user_return_stack_storage_private=true"
+    );
+}
+
 /// Verify the in-kernel filesystem smoke paths.
 pub fn verify_kernel_filesystem() {
     crate::log_info!("fs", "Standard output is connected to /dev/console.");

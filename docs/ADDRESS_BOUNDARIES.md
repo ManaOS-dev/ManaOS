@@ -106,6 +106,11 @@ untyped cross-domain `u64` values:
   paths and through the task architecture facade. They lower to raw `u64` only
   when that facade invokes the registered architecture installer and at the
   `SYSCALL` entry stack-top atomic boundary.
+- The returnable user-mode entry stack pointer remains raw only at the
+  assembly `set_user_return_stack` / `get_user_return_stack` ABI boundary and
+  inside the private atomic storage slot. `kernel::task::process_lifecycle`
+  classifies the value as `VirtAddr` before storing it or lowering it back to
+  the ABI return type.
 - Kernel task stack tops are passed into `TaskContext::from_stack(...)` as
   `VirtAddr` and lower to the private assembly-facing context layout only
   after the constructor has aligned the stack pointer.
@@ -286,6 +291,10 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   kernel stack top as `VirtAddr` through the task architecture facade; the
   registered architecture provider invocation inside that facade and the
   `SYSCALL` entry stack-top atomic are the remaining raw lowering points.
+- The returnable user-mode entry path receives the kernel return stack pointer
+  from assembly as a raw ABI `usize`, immediately classifies it as `VirtAddr`,
+  stores only the raw integer in a private atomic slot, and reclassifies the
+  loaded value before returning it to the architecture stop path.
 - Syscall and timer trap-frame storage addresses are raw only at the
   architecture/shared ABI capture point. The kernel interrupt and syscall
   bridges convert them to `VirtAddr` before the task scheduler records the
