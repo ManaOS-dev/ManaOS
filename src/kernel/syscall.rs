@@ -898,12 +898,12 @@ fn sys_execve(
 
     crate::log_info!(
         "syscall",
-        "execve image published -> task={} path={} entry={:#x} stack={:#x} heap_start={:#x} argc={} old_user_pages={} old_page_table_pages={} trap_frame_user_addresses_typed=true",
+        "execve image published -> task={} path={} entry={:#x} stack={:#x} heap_start={:#x} argc={} old_user_pages={} old_page_table_pages={} trap_frame_user_addresses_typed=true heap_start_typed=true",
         published.task_id,
         staging.path,
         published.entry_point.as_u64(),
         published.stack_pointer.as_u64(),
-        published.heap_start,
+        published.heap_start.as_u64(),
         published.argument_count,
         published.reclaimed_old_user_pages,
         published.reclaimed_old_page_table_pages
@@ -923,7 +923,7 @@ struct ExecvePublishedImage {
     task_id: u64,
     entry_point: UserVirtualAddress,
     stack_pointer: UserVirtualAddress,
-    heap_start: u64,
+    heap_start: UserVirtualAddress,
     argument_count: u64,
     trap_frame: UserTrapFrame,
     reclaimed_old_user_pages: u64,
@@ -992,7 +992,7 @@ fn build_and_publish_execve_candidate(
             .trap_frame
             .stack_pointer_address()
             .expect("published execve stack pointer must be a user virtual address"),
-        heap_start: candidate.heap_start.as_u64(),
+        heap_start: candidate.heap_start,
         argument_count: candidate.argument_count,
         trap_frame: candidate.trap_frame,
         reclaimed_old_user_pages: reclaim.user_pages(),

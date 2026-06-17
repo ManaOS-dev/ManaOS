@@ -172,6 +172,7 @@ active roadmap can list only unfinished work.
 - [x] Guard user entry and trap-frame register layouts with compile-time offset assertions before assembly-facing resumes.
 - [x] Add storage smoke coverage for typed user entry argument pointer handoffs before first-entry context lowering.
 - [x] Read user trap-frame RIP/RSP through typed `UserVirtualAddress` accessors before diagnostics and `execve` publication lower them for output.
+- [x] Keep the `execve` published heap-start diagnostic boundary typed as `UserVirtualAddress` until serial formatting, with storage smoke coverage.
 - [x] Pass the x86_64 syscall entry target through a typed `SyscallEntryAddress` before lowering it into the LSTAR MSR.
 - [x] Classify the x86_64 timer interrupt entry stub through a typed `InterruptEntryAddress` before lowering it into the IDT gate.
 - [x] Keep APIC MMIO physical bases typed as `ApicMmioAddress` before Local APIC, IOAPIC, and Local APIC timer register access lowers them to pointer-sized addresses.

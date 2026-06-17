@@ -110,6 +110,8 @@ untyped cross-domain `u64` values:
 - `UserTrapFrame` keeps its `repr(C)` register fields raw for the architecture
   restore ABI, but kernel diagnostics and `execve` publication read user RIP
   and RSP through typed `UserVirtualAddress` accessors before formatting them.
+- `execve` image publication keeps the replacement heap start as
+  `UserVirtualAddress` until serial diagnostics need the numeric address.
 - Scheduler task snapshots retain the last resume address-space root as
   `PhysicalFrameStart` and the last resume kernel stack top as `VirtAddr`;
   raw numeric values are produced only by console and smoke formatting
@@ -287,6 +289,8 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   resume frame. Kernel logging, diagnostics, and `execve` publication use
   typed `UserVirtualAddress` accessors before lowering those user addresses
   back to numbers for output.
+- `execve` image publication also keeps the replacement heap start as
+  `UserVirtualAddress` until serial diagnostics need the numeric address.
 - Scheduler task snapshots keep the last resume address-space root as
   `PhysicalFrameStart` and the last resume kernel stack top as `VirtAddr`.
   Console and serial smoke diagnostics lower those values to raw numbers only

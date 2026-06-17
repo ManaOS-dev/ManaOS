@@ -191,6 +191,8 @@ kernel interrupt / syscall bridge は captured `UserTrapFrame` を task schedule
 user trap-frame の RIP/RSP field は fixed `repr(C)` resume frame の中では raw のままです。
 kernel logging、diagnostics、`execve` publication は typed `UserVirtualAddress` accessor を使ってから、
 output の境界で raw number へ下げます。
+`execve` image publication は replacement heap start も `UserVirtualAddress` のまま保持し、
+serial diagnostics が numeric address を必要とする直前だけ raw number へ下げます。
 scheduler task snapshot は last resume address-space root を `PhysicalFrameStart`、last resume kernel stack top を `VirtAddr` として保持し、console / serial smoke diagnostics の formatting 時だけ raw number にします。
 user virtual-memory task snapshot は heap base、heap break、private mapping next-start address を `UserVirtualAddress` として保持し、console / serial smoke diagnostics の formatting 時だけ raw number にします。
 user stack allocation の page count は `PageCount` で分類してから frame allocation と stack slot mapping に進みます。
