@@ -297,7 +297,7 @@ pub(in crate::kernel::task) fn complete_pending_user_waitpid_status(task_id: u64
 /// Save a captured user trap frame for the currently running user task.
 pub fn record_current_user_trap_frame(
     trap_frame: UserTrapFrame,
-    trap_frame_storage_address: u64,
+    trap_frame_storage_address: VirtAddr,
     source: UserTrapFrameSource,
 ) {
     let mut scheduler = SCHEDULER.lock();

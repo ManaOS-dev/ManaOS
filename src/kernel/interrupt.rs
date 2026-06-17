@@ -35,7 +35,7 @@ pub fn process_timer_tick(frame: &TimerInterruptFrame) {
     if interrupted_user_mode {
         crate::kernel::task::record_current_user_trap_frame(
             timer_frame_to_user_trap_frame(frame),
-            frame.frame_storage_address,
+            VirtAddr::new(frame.frame_storage_address),
             UserTrapFrameSource::TimerInterrupt,
         );
         report_user_timer_frame_once(frame);

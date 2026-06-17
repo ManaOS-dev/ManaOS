@@ -17,7 +17,10 @@ SYSCALL entry path switches onto the current task's guarded kernel stack,
 captures a runtime `UserTrapFrame`, and stores returning syscall frames on the
 current user task. The x86_64 timer interrupt entry also captures a complete
 general-purpose register snapshot for Ring 3 timer frames and records it on the
-current user task. Scheduler task snapshots and the `tasks` command expose
+current user task. The syscall and timer bridges classify the trap-frame
+storage address as `VirtAddr` before handing the captured frame to
+`kernel::task`, keeping scheduler metadata off raw kernel stack addresses.
+Scheduler task snapshots and the `tasks` command expose
 whether syscall and timer interrupt frames have been recorded, the saved
 `UserTrapFrame` byte size, the number of runtime frames recorded through the
 single scheduler path, the last restored frame byte size, and the number of
@@ -111,7 +114,9 @@ user task metadata through `kernel::task::record_current_user_trap_frame` with
 The timer interrupt bridge uses the same scheduler API with
 `UserTrapFrameSource::TimerInterrupt`, so syscall return frames and timer
 interrupt frames share one task-owned recording path before their source-specific
-diagnostics are marked.
+diagnostics are marked. Both bridges pass a typed `VirtAddr` for the
+stack-resident trap-frame storage address; raw pointer values remain limited to
+the architecture/shared ABI capture point.
 
 ## Preemption Enablement Checklist
 

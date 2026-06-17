@@ -704,14 +704,13 @@ impl Scheduler {
     pub(in crate::kernel::task::scheduler) fn record_current_user_trap_frame(
         &mut self,
         trap_frame: UserTrapFrame,
-        trap_frame_storage_address: u64,
+        trap_frame_storage_address: VirtAddr,
         source: UserTrapFrameSource,
     ) {
         let current_task = &mut self.tasks[self.current_index];
         let task_id = current_task.get_id();
         let trap_frame_byte_len = u64::try_from(core::mem::size_of::<UserTrapFrame>())
             .expect("user trap frame size must fit in u64");
-        let trap_frame_storage_address = VirtAddr::new(trap_frame_storage_address);
         let trap_frame_on_kernel_stack = current_task
             .contains_kernel_stack_writable_range(trap_frame_storage_address, trap_frame_byte_len);
         let TaskKind::User(user_runtime) = &mut current_task.kind else {
@@ -732,7 +731,7 @@ impl Scheduler {
         match source {
             UserTrapFrameSource::Syscall => crate::log_info!(
                 "task",
-                "User syscall trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rdi={:#x} rsi={:#x} rdx={:#x} r10={:#x} r8={:#x} r9={:#x}",
+                "User syscall trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rdi={:#x} rsi={:#x} rdx={:#x} r10={:#x} r8={:#x} r9={:#x} trap_frame_storage_typed=true",
                 task_id,
                 trap_frame_storage_address.as_u64(),
                 trap_frame_on_kernel_stack,
@@ -748,7 +747,7 @@ impl Scheduler {
             ),
             UserTrapFrameSource::TimerInterrupt => crate::log_info!(
                 "task",
-                "User timer trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rcx={:#x} r11={:#x}",
+                "User timer trap frame saved: task={} frame_storage={:#x} on_kernel_stack={} rip={:#x} rsp={:#x} rax={:#x} rcx={:#x} r11={:#x} trap_frame_storage_typed=true",
                 task_id,
                 trap_frame_storage_address.as_u64(),
                 trap_frame_on_kernel_stack,

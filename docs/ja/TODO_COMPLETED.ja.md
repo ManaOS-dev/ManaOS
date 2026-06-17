@@ -118,6 +118,8 @@ frame allocator tracked region start の `PhysAddr` boundary 化と boot smoke c
 user heap mapped-end helper の `UserPageStart` boundary 化と `brk` smoke coverage、
 private mapping overlap / containment helper の page-aligned mapping range boundary 化と
 `mmap` / `munmap` smoke coverage、
+user trap-frame storage address の scheduler metadata 記録前 `VirtAddr` boundary 化と
+timer preemption smoke coverage、
 per-process page table、
 user address-space reclaim、kernel stack reclaim、
 user pointer validation、mapping permission checks、identity mapping audit、

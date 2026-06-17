@@ -66,6 +66,9 @@ untyped cross-domain `u64` values:
 - User task kernel stack tops are kept as `VirtAddr` across scheduler handoff
   paths and lower to raw `u64` only at the registered architecture installer
   and `SYSCALL` entry stack-top atomic boundary.
+- User trap-frame storage addresses are classified as `VirtAddr` before
+  `kernel::task::record_current_user_trap_frame(...)`, so scheduler metadata
+  does not receive a raw kernel stack address.
 - Scheduler task snapshots retain the last resume address-space root as
   `PhysicalFrameStart` and the last resume kernel stack top as `VirtAddr`;
   raw numeric values are produced only by console and smoke formatting
@@ -208,6 +211,10 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - Scheduler user-entry and timer-resume handoffs keep the selected user task
   kernel stack top as `VirtAddr`; architecture provider calls and the `SYSCALL`
   entry stack-top atomic are the remaining raw lowering points.
+- Syscall and timer trap-frame storage addresses are raw only at the
+  architecture/shared ABI capture point. The kernel interrupt and syscall
+  bridges convert them to `VirtAddr` before the task scheduler records the
+  captured `UserTrapFrame`.
 - Scheduler task snapshots keep the last resume address-space root as
   `PhysicalFrameStart` and the last resume kernel stack top as `VirtAddr`.
   Console and serial smoke diagnostics lower those values to raw numbers only

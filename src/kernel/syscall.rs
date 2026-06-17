@@ -42,7 +42,9 @@
 use alloc::{string::String, vec::Vec};
 
 use crate::kernel::memory::{
-    address::{PageCount, UserCString, UserReadableRange, UserVirtualRange, UserWritableRange},
+    address::{
+        PageCount, UserCString, UserReadableRange, UserVirtualRange, UserWritableRange, VirtAddr,
+    },
     user_pointer,
 };
 use crate::kernel::task::{context::UserTrapFrame, UserTrapFrameSource};
@@ -405,8 +407,9 @@ pub unsafe extern "C" fn syscall_dispatch_from_trap_frame(trap_frame: *mut UserT
         "syscall trap frame pointer must be non-null"
     );
 
-    let trap_frame_storage_address =
-        u64::try_from(trap_frame.addr()).expect("syscall trap frame pointer must fit in u64");
+    let trap_frame_storage_address = VirtAddr::new(
+        u64::try_from(trap_frame.addr()).expect("syscall trap frame pointer must fit in u64"),
+    );
     // SAFETY: The architecture syscall entry passes a non-null pointer to the
     // stack-resident trap frame it just populated.
     let trap_frame = unsafe { &mut *trap_frame };

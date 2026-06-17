@@ -18,6 +18,8 @@ initial context は最初の user trap frame を作るには十分です。SYSCA
 guarded kernel stack へ切り替え、runtime `UserTrapFrame` を capture し、returning syscall frame を
 current user task に保存します。x86_64 timer interrupt entry も Ring 3 timer frame の complete
 general-purpose register snapshot を capture し、current user task に記録します。
+syscall / timer bridge は captured frame を `kernel::task` へ渡す前に trap-frame storage address を
+`VirtAddr` として分類し、scheduler metadata が raw kernel stack address を受け取らないようにします。
 Scheduler task snapshot と `tasks` command は syscall / timer interrupt frame が記録済みかどうか、
 保存済み `UserTrapFrame` の byte size、単一 scheduler path で記録された runtime frame 数、最後に復元した
 frame の byte size、保存済み runtime frame からの restore 回数を公開します。storage smoke は、すべての
@@ -96,7 +98,8 @@ user selector を埋め、`UserTrapFrameSource::Syscall` 付きの
 
 timer interrupt bridge も同じ scheduler API を `UserTrapFrameSource::TimerInterrupt` 付きで使うため、
 syscall return frame と timer interrupt frame は source-specific diagnostics を記録する前に同じ
-task-owned recording path を通ります。
+task-owned recording path を通ります。両方の bridge は stack-resident trap-frame storage address を
+typed `VirtAddr` として渡し、raw pointer value は architecture/shared ABI capture point に限定します。
 
 ## preemption enablement checklist
 

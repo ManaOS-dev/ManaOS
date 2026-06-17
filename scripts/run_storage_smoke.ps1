@@ -120,7 +120,7 @@ $expectedPatterns = @(
     "Concurrent user program spawn smoke passed: tasks=5",
     "Multi-user active set prepared: tasks=5",
     "Preempted user exit continuation smoke passed: first_exit=.* remaining_active=true timer_preemptions=[1-9][0-9]* last_preemption_reason=timer last_resume_path=(lifecycle_entry|timer_entry|timer_resume)",
-    "User timer trap frame saved",
+    "User timer trap frame saved: .*trap_frame_storage_typed=true",
     "User task preempted by timer",
     "User task entered from preempted user timer context",
     "User task entered from timer context: .*kernel_stack_top_typed=true",
