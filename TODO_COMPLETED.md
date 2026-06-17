@@ -148,6 +148,7 @@ active roadmap can list only unfinished work.
 - [x] Keep blocking `waitpid` status destinations typed as `UserWritableRange` before scheduler wait-completion retention.
 - [x] Keep ELF load-segment file-backed payload ranges typed as `UserVirtualRange` before page-copy calculations.
 - [x] Keep user pointer page-table permission probes typed as `UserReadableRange` or `UserWritableRange` before raw slice creation.
+- [x] Keep user address-space permission self-check probe addresses typed as `VirtAddr` and `UserVirtualAddress`.
 - [x] Keep scheduler-owned `mmap` requested addresses typed as `UserMappingPlacement` before diagnostics formatting.
 - [x] Keep ELF entry points typed as `UserVirtualAddress` immediately after header validation.
 - [x] Keep ELF heap starts typed as `UserPageStart` while accumulating load-segment ends.

@@ -43,6 +43,9 @@ untyped cross-domain `u64` values:
 - User data page-table permission probes accept `UserReadableRange` and
   `UserWritableRange` before final raw slice creation. Raw `usize` pointers are
   limited to the final kernel slice/read boundary and diagnostic ABI inputs.
+- User address-space permission self-checks accept `VirtAddr` for kernel probe
+  addresses and `UserVirtualAddress` for representative user addresses before
+  forming copy-direction probe ranges.
 - `UserReadRequest` stores pending `read` destinations as `UserWritableRange`
   after syscall ABI pointer classification, so scheduler wait state does not
   retain a raw user pointer.
@@ -221,6 +224,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - User data permission checks in `paging` and per-process `UserAddressSpace`
   consume `UserReadableRange` or `UserWritableRange`; they no longer accept raw
   pointer/length pairs after syscall pointer classification has succeeded.
+- Per-process address-space permission self-checks keep the kernel probe as
+  `VirtAddr` and user probes as `UserVirtualAddress`; raw `usize` lowering is
+  limited to final diagnostics and kernel slice construction.
 
 ### ELF Loading
 

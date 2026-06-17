@@ -378,6 +378,11 @@ impl UserVirtualAddress {
         self.0.as_u64()
     }
 
+    /// Return this user virtual address as a virtual byte address.
+    pub const fn as_address(self) -> VirtAddr {
+        self.0
+    }
+
     /// Return the raw virtual address as a `usize`.
     ///
     /// # Panics
@@ -461,6 +466,7 @@ pub fn verify_typed_user_virtual_address() -> bool {
 
     valid_user_address.is_some_and(|address| {
         address.as_u64() == PAGE_SIZE
+            && address.as_address() == VirtAddr::new(PAGE_SIZE)
             && address
                 .align_down_to_page()
                 .is_some_and(|page_start| page_start.as_u64() == PAGE_SIZE)

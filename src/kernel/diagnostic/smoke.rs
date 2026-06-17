@@ -7,7 +7,7 @@ pub use scheduler_diagnostics::{
     verify_scheduler_task_snapshots,
 };
 
-use crate::kernel::memory::address::PageCount;
+use crate::kernel::memory::address::{PageCount, VirtAddr};
 
 /// Number of active user processes spawned by the storage smoke lifecycle.
 pub const USER_SMOKE_PARENT_TASK_COUNT: usize = 5;
@@ -55,7 +55,7 @@ fn spawn_user_smoke_task(
         user_entry_vectors,
         user_stack_pages,
     )
-    .with_kernel_probe_address(run_user_smoke_demo as *const () as usize);
+    .with_kernel_probe_address(VirtAddr::new(run_user_smoke_demo as *const () as u64));
     crate::kernel::process::spawn_user_program(frame_allocator, request)
         .expect("user smoke program must spawn from /disk/bin")
 }

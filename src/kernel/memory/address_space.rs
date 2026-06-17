@@ -145,13 +145,11 @@ impl UserAddressSpace {
     /// Verify representative kernel and user mapping permissions in this space.
     pub fn verify_kernel_user_mapping_permissions(
         self,
-        kernel_pointer: usize,
-        user_stack_pointer: usize,
-        user_entry_pointer: usize,
+        kernel_pointer: VirtAddr,
+        user_stack_pointer: UserVirtualAddress,
+        user_entry_pointer: UserVirtualAddress,
     ) -> bool {
-        let Some(kernel_flags) =
-            self.mapping_flags_for_address(VirtAddr::new(kernel_pointer as u64))
-        else {
+        let Some(kernel_flags) = self.mapping_flags_for_address(kernel_pointer) else {
             return false;
         };
         if !kernel_flags.contains(PageTableFlags::PRESENT)
@@ -161,7 +159,7 @@ impl UserAddressSpace {
         }
 
         let Some(user_stack_flags) =
-            self.mapping_flags_for_address(VirtAddr::new(user_stack_pointer as u64))
+            self.mapping_flags_for_address(user_stack_pointer.as_address())
         else {
             return false;
         };
@@ -173,7 +171,7 @@ impl UserAddressSpace {
         }
 
         let Some(user_entry_flags) =
-            self.mapping_flags_for_address(VirtAddr::new(user_entry_pointer as u64))
+            self.mapping_flags_for_address(user_entry_pointer.as_address())
         else {
             return false;
         };
@@ -185,8 +183,8 @@ impl UserAddressSpace {
     /// Verify syscall user-data pointer permission enforcement in this space.
     pub fn verify_syscall_user_data_permissions(
         self,
-        user_stack_pointer: usize,
-        user_entry_pointer: usize,
+        user_stack_pointer: UserVirtualAddress,
+        user_entry_pointer: UserVirtualAddress,
     ) -> bool {
         let Some(user_stack_read_range) = readable_single_byte_range(user_stack_pointer) else {
             return false;
@@ -259,20 +257,18 @@ impl UserAddressSpace {
     }
 }
 
-fn readable_single_byte_range(user_pointer: usize) -> Option<UserReadableRange> {
-    let range = user_single_byte_range(user_pointer)?;
+fn readable_single_byte_range(user_address: UserVirtualAddress) -> Option<UserReadableRange> {
+    let range = user_single_byte_range(user_address)?;
     Some(UserReadableRange::new(range))
 }
 
-fn writable_single_byte_range(user_pointer: usize) -> Option<UserWritableRange> {
-    let range = user_single_byte_range(user_pointer)?;
+fn writable_single_byte_range(user_address: UserVirtualAddress) -> Option<UserWritableRange> {
+    let range = user_single_byte_range(user_address)?;
     Some(UserWritableRange::new(range))
 }
 
-fn user_single_byte_range(user_pointer: usize) -> Option<UserVirtualRange> {
-    let pointer = u64::try_from(user_pointer).ok()?;
-    let start = UserVirtualAddress::new(VirtAddr::new(pointer))?;
-    UserVirtualRange::new(start, 1)
+fn user_single_byte_range(user_address: UserVirtualAddress) -> Option<UserVirtualRange> {
+    UserVirtualRange::new(user_address, 1)
 }
 
 /// Record the kernel address-space root after paging is initialized.

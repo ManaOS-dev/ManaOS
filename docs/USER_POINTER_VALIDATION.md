@@ -25,6 +25,9 @@ The implementation entry point is `kernel::memory::user_pointer`.
 - Page-table permission probes consume those copy-direction wrappers. Raw
   `usize` pointers are used only when creating the final kernel slice or reading
   one already-classified user byte.
+- User address-space permission self-checks keep representative kernel probes as
+  `VirtAddr` and representative user probes as `UserVirtualAddress` before
+  forming the single-byte readable or writable ranges used by the probe.
 - NUL-terminated path arguments are additionally wrapped as `UserCString`
   before `copy_cstr_from_user` scans readable bytes for the terminator.
 - Syscalls return Linux-like `-EFAULT` (`ERROR_BAD_ADDRESS`) when pointer

@@ -20,7 +20,7 @@ use crate::kernel::{
     elf::{self, LoadedElf},
     filesystem::{self, FileDescriptor, FileSystemError, FileType},
     memory::{
-        address::{PageCount, UserVirtualAddress},
+        address::{PageCount, UserVirtualAddress, VirtAddr},
         address_space::{self, UserAddressSpace},
         frame_allocator::PhysicalFrameAllocator,
         user_stack::{self, AllocatedUserStack, PreparedUserStack},
@@ -46,7 +46,7 @@ pub struct UserProgramSpawnRequest<'a> {
     path: &'a str,
     entry_vectors: UserProgramEntryVectors<'a>,
     user_stack_pages: PageCount,
-    kernel_probe_address: Option<usize>,
+    kernel_probe_address: Option<VirtAddr>,
 }
 
 impl<'a> UserProgramSpawnRequest<'a> {
@@ -65,7 +65,7 @@ impl<'a> UserProgramSpawnRequest<'a> {
     }
 
     /// Add a kernel address used for address-space permission self-checks.
-    pub const fn with_kernel_probe_address(mut self, kernel_probe_address: usize) -> Self {
+    pub const fn with_kernel_probe_address(mut self, kernel_probe_address: VirtAddr) -> Self {
         self.kernel_probe_address = Some(kernel_probe_address);
         self
     }
@@ -259,7 +259,7 @@ fn verify_user_program_mappings(
     user_address_space: UserAddressSpace,
     user_stack: AllocatedUserStack,
     user_entry_point: UserVirtualAddress,
-    kernel_probe_address: Option<usize>,
+    kernel_probe_address: Option<VirtAddr>,
 ) {
     let user_stack_probe = user_stack
         .top()
@@ -269,25 +269,25 @@ fn verify_user_program_mappings(
         assert!(
             user_address_space.verify_kernel_user_mapping_permissions(
                 kernel_probe_address,
-                user_stack_probe.as_usize(),
-                user_entry_point.as_usize(),
+                user_stack_probe,
+                user_entry_point,
             ),
             "kernel and user mapping permission smoke must pass"
         );
         crate::log_info!(
             "memory",
-            "Kernel/user mapping permission self-check passed: pml4={:#x}",
+            "Kernel/user mapping permission self-check passed: pml4={:#x} permission_addresses_typed=true",
             user_address_space.level_4_frame().as_u64()
         );
     }
     assert!(
-        user_address_space.verify_syscall_user_data_permissions(
-            user_stack_probe.as_usize(),
-            user_entry_point.as_usize(),
-        ),
+        user_address_space.verify_syscall_user_data_permissions(user_stack_probe, user_entry_point),
         "syscall user data permission smoke must pass"
     );
-    crate::log_info!("memory", "Syscall user data permission self-check passed.");
+    crate::log_info!(
+        "memory",
+        "Syscall user data permission self-check passed: permission_addresses_typed=true"
+    );
 }
 
 fn prepare_user_entry_stack(
