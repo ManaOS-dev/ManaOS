@@ -112,13 +112,15 @@ impl UserHeap {
             return self.current_break;
         }
 
-        let mapped_end = align_up_to_page(requested_break.as_u64());
-        if mapped_end > self.mapped_end.as_u64()
+        let Some(mapped_end) = align_up_to_user_page(requested_break) else {
+            return self.current_break;
+        };
+        if mapped_end.as_u64() > self.mapped_end.as_u64()
             && !self.map_new_pages(address_space, frame_allocator, mapped_end)
         {
             return self.current_break;
         }
-        if mapped_end < self.mapped_end.as_u64() {
+        if mapped_end.as_u64() < self.mapped_end.as_u64() {
             self.unmap_old_pages(address_space, frame_allocator, mapped_end);
         }
 
@@ -130,11 +132,11 @@ impl UserHeap {
         &mut self,
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
-        mapped_end: u64,
+        mapped_end: UserPageStart,
     ) -> bool {
         let mut page_start =
             UserPageStart::new(self.mapped_end).expect("user heap mapped end must be page-aligned");
-        while page_start.as_u64() < mapped_end {
+        while page_start.as_u64() < mapped_end.as_u64() {
             let Some(physical_address) =
                 frame_allocator.allocate_frame_for(FrameRangeOwner::UserHeap)
             else {
@@ -167,12 +169,12 @@ impl UserHeap {
         &mut self,
         address_space: UserAddressSpace,
         frame_allocator: &mut PhysicalFrameAllocator,
-        mapped_end: u64,
+        mapped_end: UserPageStart,
     ) {
         let mut page_start =
             UserPageStart::new(self.mapped_end).expect("user heap mapped end must be page-aligned");
         let mut unmapped_pages = 0_u64;
-        while page_start.as_u64() > mapped_end {
+        while page_start.as_u64() > mapped_end.as_u64() {
             page_start = page_start
                 .checked_sub(PAGE_SIZE)
                 .expect("user heap unmapping address underflowed");
@@ -196,6 +198,8 @@ impl UserHeap {
     }
 }
 
-fn align_up_to_page(address: u64) -> u64 {
-    (address + PAGE_SIZE - 1) & !(PAGE_SIZE - 1)
+fn align_up_to_user_page(address: UserVirtualAddress) -> Option<UserPageStart> {
+    let aligned_address = address.as_u64().checked_add(PAGE_SIZE - 1)? & !(PAGE_SIZE - 1);
+    let aligned_address = UserVirtualAddress::new(VirtAddr::new(aligned_address))?;
+    UserPageStart::new(aligned_address)
 }

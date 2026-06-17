@@ -24,7 +24,7 @@ impl Scheduler {
             .process_break(address_space, frame_allocator, request);
         crate::log_info!(
             "syscall",
-            "brk -> task={} requested={:#x} heap_base={:#x} previous={:#x} next={:#x} mapped_end={:#x} mapped_pages={} brk_request_typed=true",
+            "brk -> task={} requested={:#x} heap_base={:#x} previous={:#x} next={:#x} mapped_end={:#x} mapped_pages={} brk_request_typed=true heap_mapped_end_typed=true",
             task_id,
             request.as_u64(),
             user_runtime.heap.base().as_u64(),

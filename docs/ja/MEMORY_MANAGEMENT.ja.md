@@ -146,7 +146,9 @@ dynamic kernel mapping には generic unmap path があります。
 `UserHeapBreakRequest` へ分類してから scheduler と heap code へ渡します。ELF loader が最高位
 `PT_LOAD` segment の後ろに page-aligned heap start を報告し、scheduler が current heap break を
 各 user task runtime に保存します。heap growth は writable non-executable user heap page を map し、
-shrink は不要になった heap page を unmap して `UserHeap` owner pool へ返します。
+growth / shrink helper は mapped-end boundary を `UserPageStart` として保持します。comparison と
+diagnostics の直前だけ raw number に下げます。shrink は不要になった heap page を unmap して
+`UserHeap` owner pool へ返します。
 
 private `mmap` は syscall-time user memory の2つ目の path です。現在の ABI は以下を扱います。
 

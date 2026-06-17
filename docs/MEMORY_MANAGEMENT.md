@@ -225,10 +225,11 @@ classifies the raw ABI argument into `UserHeapBreakRequest` before scheduler and
 heap code can process it. The ELF loader reports a page-aligned heap start after
 the highest `PT_LOAD` segment, the scheduler stores the current heap break in
 each user task runtime, and `kernel::memory::user_heap` maps writable
-non-executable user heap pages as the break grows. Shrinking the break unmaps
-no-longer-covered heap pages and returns their physical frames to the `UserHeap`
-owner pool, while page-table frames remain owned by the address space until
-process cleanup.
+non-executable user heap pages as the break grows. The heap maps and unmaps
+through a `UserPageStart` mapped-end boundary, lowering it to raw numbers only
+for comparisons and diagnostics. Shrinking the break unmaps no-longer-covered
+heap pages and returns their physical frames to the `UserHeap` owner pool,
+while page-table frames remain owned by the address space until process cleanup.
 
 Private `mmap` is the second syscall-time user memory path. The current ABI
 supports automatic anonymous mappings with `addr = 0`, non-overlapping fixed
