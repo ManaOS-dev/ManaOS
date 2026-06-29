@@ -180,6 +180,41 @@ impl KernelVirtualAddress {
     }
 }
 
+/// A 4 KiB-aligned kernel virtual page start address.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct KernelPageStart(VirtAddr);
+
+impl KernelPageStart {
+    /// Create a kernel page start address if `address` is 4 KiB-aligned.
+    pub const fn new(address: VirtAddr) -> Option<Self> {
+        if address.as_u64().is_multiple_of(PAGE_SIZE)
+            && address.as_u64() >= KERNEL_DYNAMIC_MAPPING_START
+        {
+            Some(Self(address))
+        } else {
+            None
+        }
+    }
+
+    /// Return this page start as a kernel virtual address.
+    pub const fn as_address(self) -> VirtAddr {
+        self.0
+    }
+
+    /// Return the raw virtual address as a `u64`.
+    pub const fn as_u64(self) -> u64 {
+        self.0.as_u64()
+    }
+
+    /// Return a kernel page start address advanced by `offset` bytes.
+    pub const fn checked_add(self, offset: u64) -> Option<Self> {
+        let Some(address) = self.0.checked_add(offset) else {
+            return None;
+        };
+        Self::new(address)
+    }
+}
+
 /// A non-zero count of 4 KiB pages.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PageCount(u64);
@@ -543,6 +578,22 @@ pub fn verify_typed_user_page_start() -> bool {
         })
     }) && unaligned_address.is_some_and(|address| UserPageStart::new(address).is_none())
         && low_address.is_some_and(|address| address.align_down_to_page().is_none())
+}
+
+/// Verify the typed kernel page start construction contract.
+pub fn verify_typed_kernel_page_start() -> bool {
+    let valid_address = VirtAddr::new(KERNEL_DYNAMIC_MAPPING_START);
+    let unaligned_address = VirtAddr::new(KERNEL_DYNAMIC_MAPPING_START + 1);
+    let low_address = VirtAddr::new(PAGE_SIZE);
+
+    KernelPageStart::new(valid_address).is_some_and(|page_start| {
+        page_start.as_address() == valid_address
+            && page_start.as_u64() == KERNEL_DYNAMIC_MAPPING_START
+            && page_start.checked_add(PAGE_SIZE).is_some_and(|next_page| {
+                next_page.as_u64() == KERNEL_DYNAMIC_MAPPING_START + PAGE_SIZE
+            })
+    }) && KernelPageStart::new(unaligned_address).is_none()
+        && KernelPageStart::new(low_address).is_none()
 }
 
 /// Verify the typed user virtual range and copy-direction wrapper contracts.

@@ -9,7 +9,7 @@ pub fn verify_kernel_stack_guard_fault_diagnostics() {
         .expect("kernel stack guard diagnostics must classify a scheduler-owned stack");
     crate::log_info!(
         "fault",
-        "Kernel stack guard diagnostics verified: owner={} task={} guard={:#x} writable_start={:#x} stack_top={:#x} guard_fault_address_typed=true",
+        "Kernel stack guard diagnostics verified: owner={} task={} guard={:#x} writable_start={:#x} stack_top={:#x} guard_fault_address_typed=true kernel_stack_page_starts_typed=true",
         diagnostic.owner().as_str(),
         diagnostic.task_identifier(),
         diagnostic.guard_page_start().as_u64(),
@@ -167,6 +167,7 @@ pub fn verify_frame_allocator_rules() -> bool {
 pub fn verify_memory_address_wrapper_rules() -> bool {
     let user_virtual_address_ok = kernel::memory::address::verify_typed_user_virtual_address();
     let user_page_start_ok = kernel::memory::address::verify_typed_user_page_start();
+    let kernel_page_start_ok = kernel::memory::address::verify_typed_kernel_page_start();
     let user_virtual_range_ok = kernel::memory::address::verify_typed_user_virtual_range();
     let user_range_page_bounds_ok =
         kernel::memory::address::verify_typed_user_virtual_range_page_bounds();
@@ -176,6 +177,7 @@ pub fn verify_memory_address_wrapper_rules() -> bool {
     let page_count_ok = kernel::memory::address::verify_typed_page_count();
     let passed = user_virtual_address_ok
         && user_page_start_ok
+        && kernel_page_start_ok
         && user_virtual_range_ok
         && user_range_page_bounds_ok
         && user_copy_ranges_ok
@@ -185,14 +187,15 @@ pub fn verify_memory_address_wrapper_rules() -> bool {
     if passed {
         crate::log_info!(
             "memory",
-            "Memory address wrapper self-checks passed: user_virtual_address=true user_page_start=true user_virtual_range=true user_range_page_bounds=true user_copy_ranges=true checked_conversions=true frame_count=true page_count=true"
+            "Memory address wrapper self-checks passed: user_virtual_address=true user_page_start=true kernel_page_start=true user_virtual_range=true user_range_page_bounds=true user_copy_ranges=true checked_conversions=true frame_count=true page_count=true"
         );
     } else {
         crate::log_error!(
             "memory",
-            "Memory address wrapper self-checks failed: user_virtual_address={} user_page_start={} user_virtual_range={} user_range_page_bounds={} user_copy_ranges={} checked_conversions={} frame_count={} page_count={}",
+            "Memory address wrapper self-checks failed: user_virtual_address={} user_page_start={} kernel_page_start={} user_virtual_range={} user_range_page_bounds={} user_copy_ranges={} checked_conversions={} frame_count={} page_count={}",
             user_virtual_address_ok,
             user_page_start_ok,
+            kernel_page_start_ok,
             user_virtual_range_ok,
             user_range_page_bounds_ok,
             user_copy_ranges_ok,

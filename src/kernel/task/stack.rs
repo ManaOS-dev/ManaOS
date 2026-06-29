@@ -1,7 +1,7 @@
 //! Kernel task stack owner metadata.
 
 use crate::kernel::memory::address::{
-    FrameCount, KernelVirtualRange, PageCount, PhysicalFrameRange, VirtAddr,
+    FrameCount, KernelPageStart, KernelVirtualRange, PageCount, PhysicalFrameRange, VirtAddr,
 };
 use crate::kernel::memory::frame_allocator::{FrameRangeOwner, PhysicalFrameAllocator};
 use crate::kernel::memory::paging;
@@ -37,8 +37,8 @@ impl KernelStackFaultOwner {
 pub struct KernelStackGuardFault {
     task_identifier: u64,
     owner: KernelStackFaultOwner,
-    guard_page_start: VirtAddr,
-    writable_start: VirtAddr,
+    guard_page_start: KernelPageStart,
+    writable_start: KernelPageStart,
     stack_top: VirtAddr,
 }
 
@@ -47,8 +47,8 @@ impl KernelStackGuardFault {
     pub(super) const fn new(
         task_identifier: u64,
         owner: KernelStackFaultOwner,
-        guard_page_start: VirtAddr,
-        writable_start: VirtAddr,
+        guard_page_start: KernelPageStart,
+        writable_start: KernelPageStart,
         stack_top: VirtAddr,
     ) -> Self {
         Self {
@@ -71,12 +71,12 @@ impl KernelStackGuardFault {
     }
 
     /// Return the start address of the unmapped guard page.
-    pub const fn guard_page_start(self) -> VirtAddr {
+    pub const fn guard_page_start(self) -> KernelPageStart {
         self.guard_page_start
     }
 
     /// Return the first mapped writable stack address.
-    pub const fn writable_start(self) -> VirtAddr {
+    pub const fn writable_start(self) -> KernelPageStart {
         self.writable_start
     }
 
@@ -107,27 +107,27 @@ impl KernelStackVirtualReservation {
         })
     }
 
-    fn guard_page_start(&self) -> VirtAddr {
-        self.range.start()
+    fn guard_page_start(&self) -> KernelPageStart {
+        KernelPageStart::new(self.range.start())
+            .expect("kernel stack guard page start must be page-aligned")
     }
 
     fn guard_range(&self) -> KernelVirtualRange {
         KernelVirtualRange::new(
-            self.guard_page_start(),
+            self.guard_page_start().as_address(),
             page_count(KERNEL_STACK_GUARD_PAGES),
         )
         .expect("kernel stack guard range must be valid")
     }
 
-    fn writable_start(&self) -> VirtAddr {
-        self.range
-            .start()
-            .checked_add(PAGE_SIZE as u64)
+    fn writable_start(&self) -> KernelPageStart {
+        self.guard_page_start()
+            .checked_add(PAGE_SIZE_U64)
             .expect("kernel stack writable range must follow the guard page")
     }
 
     fn writable_range(&self) -> KernelVirtualRange {
-        KernelVirtualRange::new(self.writable_start(), self.writable_page_count)
+        KernelVirtualRange::new(self.writable_start().as_address(), self.writable_page_count)
             .expect("kernel stack writable range must be valid")
     }
 
@@ -239,7 +239,7 @@ impl KernelStack {
 
     /// Return the lowest mapped writable virtual address in this stack.
     pub(super) fn base(&self) -> VirtAddr {
-        self.writable_virtual_start()
+        self.writable_virtual_start().as_address()
     }
 
     /// Return one byte past the highest mapped writable address in this stack.
@@ -254,7 +254,7 @@ impl KernelStack {
     }
 
     /// Return the reserved guard page virtual start address.
-    pub(super) fn guard_page_virtual_start(&self) -> VirtAddr {
+    pub(super) fn guard_page_virtual_start(&self) -> KernelPageStart {
         self.virtual_reservation.guard_page_start()
     }
 
@@ -281,7 +281,7 @@ impl KernelStack {
     }
 
     /// Return the first virtual address reserved for future writable stack mapping.
-    pub(super) fn writable_virtual_start(&self) -> VirtAddr {
+    pub(super) fn writable_virtual_start(&self) -> KernelPageStart {
         self.virtual_reservation.writable_start()
     }
 

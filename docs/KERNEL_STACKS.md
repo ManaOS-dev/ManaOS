@@ -100,10 +100,14 @@ Policy:
   task snapshots so smoke can assert every finished user task had a nonzero
   resume handoff, address-space root, and kernel stack top.
 - The scheduler keeps the selected kernel stack top as `VirtAddr` through the
-  user-entry and timer-resume handoff paths. The task architecture facade also
-  accepts that value as `VirtAddr` and lowers it to raw `u64` only when
-  invoking the registered architecture stack installer. The separate `SYSCALL`
+  user-entry and timer-resume handoff paths. The task architecture facade and
+  registered architecture stack-installer callback also accept that value as
+  `VirtAddr`; `main.rs` adapts it into the x86_64-owned
+  `PrivilegeStackTopAddress` before the TSS write. The separate `SYSCALL`
   entry stack-top atomic remains an ABI-facing raw lowering boundary.
+- Scheduler-owned stack guard and writable starts are represented as
+  `KernelPageStart`, so their 4 KiB alignment is preserved in metadata before
+  diagnostics lower them for display.
 - On x86_64, installing the user task kernel stack means updating TSS
   `privilege_stack_table[0]` through an architecture-owned API registered from
   `main.rs`.

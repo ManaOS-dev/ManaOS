@@ -82,9 +82,11 @@ untyped cross-domain `u64` values:
 - `UserMappingLength` represents private `mmap` byte lengths after syscall ABI
   validation, so scheduler and mapping code do not receive raw length values
   when deriving page counts.
-- `KernelStackGuardFault` stores guard, writable, and top addresses as
-  `VirtAddr` after page-fault ABI values are classified at the kernel interrupt
-  boundary.
+- `KernelPageStart` represents 4 KiB-aligned higher-half kernel virtual page
+  starts used by scheduler-owned kernel stack guard and writable boundaries.
+- `KernelStackGuardFault` stores guard and writable boundaries as
+  `KernelPageStart` and the stack top as `VirtAddr` after page-fault ABI
+  values are classified at the kernel interrupt boundary.
 - `shared::PageFaultReport` carries the faulting virtual address, error bits,
   and instruction pointer from the architecture exception path through the
   registered reporter callback. The architecture layer classifies the raw CR2
@@ -287,8 +289,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   reserved stack slots.
 - Kernel stack guard-fault lookup accepts `VirtAddr` after `kernel::interrupt`
   receives a `shared::PageFaultReport` and classifies the page-fault virtual
-  address. Diagnostic formatting lowers those typed virtual addresses back to
-  raw numbers only at log output.
+  address. Scheduler-owned stack guard and writable starts stay classified as
+  `KernelPageStart`; diagnostic formatting lowers those typed virtual
+  addresses back to raw numbers only at log output.
 - Scheduler user-entry and timer-resume handoffs keep the selected user task
   kernel stack top as `VirtAddr` through the task architecture facade and the
   registered architecture installer callback. The composition root adapts that
@@ -411,6 +414,8 @@ Continue introducing wrappers in small steps:
 - `KernelVirtualRange` for non-empty page-aligned higher-half virtual ranges
   reserved by the kernel dynamic mapping allocator. This now exists in
   `kernel::memory::address`.
+- `KernelPageStart` for page-aligned higher-half virtual page starts such as
+  scheduler-owned kernel stack guard and writable boundaries.
 - `UserAddressSpace` for user page-table roots. This now exists in
   `kernel::memory::address_space`.
 - `UserVirtualAddress` for non-null user pointers and ELF virtual addresses.

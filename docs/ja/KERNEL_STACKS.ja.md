@@ -74,9 +74,12 @@ policy:
   scheduler はこの handoff を retained task snapshot に記録し、smoke は各 finished user task の
   nonzero resume handoff、address-space root、kernel stack top を確認します。
 - scheduler は user-entry / timer-resume handoff path の中では、選択した kernel stack top を
-  `VirtAddr` として保持します。task architecture facade も `VirtAddr` のまま受け取り、
-  registered architecture stack installer を呼ぶ瞬間だけ raw `u64` へ下ろします。別経路の
-  `SYSCALL` entry stack top atomic は ABI-facing raw lowering boundary のままです。
+  `VirtAddr` として保持します。task architecture facade と registered architecture stack-installer
+  callback も `VirtAddr` として受け取り、`main.rs` が final TSS write の前に
+  x86_64-owned `PrivilegeStackTopAddress` へ適合させます。別経路の `SYSCALL` entry
+  stack top atomic は ABI-facing raw lowering boundary のままです。
+- scheduler-owned stack guard / writable start は `KernelPageStart` として保持し、
+  diagnostics が表示用に下ろす前に 4 KiB alignment を metadata 上で表現します。
 - x86_64 では、TSS `privilege_stack_table[0]` を architecture-owned API 経由で更新します。
 - Ring 3 interrupt entry は install 済み TSS privilege stack を使うため、timer interrupt は
   current task の guarded kernel stack に入ります。

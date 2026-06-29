@@ -19,7 +19,7 @@ use super::stack::{KernelStack, KernelStackFaultOwner, KernelStackGuardFault, Ke
 use super::state::TaskState;
 use crate::kernel::filesystem::{FileDescriptorTable, SpawnDescriptorInheritanceSnapshot};
 use crate::kernel::memory::address::{
-    PhysicalFrameStart, UserVirtualAddress, UserWritableRange, VirtAddr,
+    KernelPageStart, PhysicalFrameStart, UserVirtualAddress, UserWritableRange, VirtAddr,
 };
 use crate::kernel::memory::address_space::{self, UserAddressSpace, UserAddressSpaceReclaim};
 use crate::kernel::memory::frame_allocator::PhysicalFrameAllocator;
@@ -553,13 +553,13 @@ impl Task {
         self.kernel_stack.as_ref().map(KernelStack::virtual_top)
     }
 
-    fn kernel_stack_guard_page_virtual_start(&self) -> Option<VirtAddr> {
+    fn kernel_stack_guard_page_virtual_start(&self) -> Option<KernelPageStart> {
         self.kernel_stack
             .as_ref()
             .map(KernelStack::guard_page_virtual_start)
     }
 
-    fn kernel_stack_writable_virtual_start(&self) -> Option<VirtAddr> {
+    fn kernel_stack_writable_virtual_start(&self) -> Option<KernelPageStart> {
         self.kernel_stack
             .as_ref()
             .map(KernelStack::writable_virtual_start)

@@ -51,6 +51,9 @@ physical frame allocator は、以下の前提に依存します。
 - 保存済み kernel address-space root は private atomic storage slot の中でだけ raw です。
   すべての reader は CR3 switch や address-space template smoke check に使う前に
   `PhysicalFrameStart` へ分類し直します。
+- scheduler-owned kernel stack metadata は guard-page / writable-page start を
+  `KernelPageStart` として保持し、guard-fault diagnostics が serial / console output 用に
+  下ろす前に page alignment を表現します。
 - syscall buffer helper は raw pointer / length ABI argument を
   `UserReadableRange`、`UserWritableRange`、または `UserCString` へ分類してから、
   copy direction を page-table permission probe や string scan に渡します。
@@ -197,7 +200,8 @@ creation は active kernel template を copy し、linked user program range と
 覆う PML4 entries `128..256` を clear します。
 scheduler の user-entry / timer-resume path は、選択した user task kernel stack top を
 `kernel::task::architecture::install_kernel_stack(...)` まで `VirtAddr` として保持します。
-この facade が architecture-owned stack installer を呼ぶ瞬間だけ raw `u64` へ下ろします。
+この facade は typed value を registered stack-installer callback へ渡し、`main.rs` が
+final TSS write の前に x86_64-owned `PrivilegeStackTopAddress` へ適合させます。
 
 ELF loading と user stack allocation は active CR3 ではなく explicit `UserAddressSpace` へ map します。
 one-shot user lifecycle は Ring 3 entry 前に task address space へ切り替え、`SYS_EXIT` 後に kernel

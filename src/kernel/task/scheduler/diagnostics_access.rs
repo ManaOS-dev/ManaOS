@@ -217,7 +217,7 @@ impl Scheduler {
             .tasks
             .iter()
             .find_map(Task::kernel_stack_guard_page_virtual_start)?;
-        self.get_kernel_stack_guard_fault(sample_guard_address)
+        self.get_kernel_stack_guard_fault(sample_guard_address.as_address())
     }
 }
 

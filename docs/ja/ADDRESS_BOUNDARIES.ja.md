@@ -57,7 +57,10 @@ kernel ownership boundary では型付き address に変換することです。
   として保持します。
 - `UserMappingUnmapRequest`: syscall ABI address classification 後の `munmap` request。scheduler と mapping code は raw unmap start address を受け取りません。
 - `UserMappingLength`: syscall ABI validation 後の private `mmap` byte length。scheduler と mapping code は page count を導出するための raw length value を受け取りません。
-- `KernelStackGuardFault`: `kernel::interrupt` が raw page-fault address を分類した後の guard / writable / top `VirtAddr`。
+- `KernelPageStart`: scheduler-owned kernel stack guard / writable boundary に使う
+  4 KiB aligned higher-half kernel virtual page start。
+- `KernelStackGuardFault`: `kernel::interrupt` が raw page-fault address を分類した後、
+  guard / writable boundary を `KernelPageStart`、stack top を `VirtAddr` として保持します。
 - `shared::PageFaultReport`: architecture exception path から registered reporter callback まで
   page fault の fault address、error bits、instruction pointer を保持します。architecture layer は
   raw CR2 と exception-frame value を dispatch 前に分類し、`kernel::interrupt` は
@@ -105,6 +108,7 @@ kernel ownership boundary では型付き address に変換することです。
 - `KernelVirtualAddress`: identity-mapped kernel virtual address。
 - `PageCount`: virtual range reservation、user stack allocation、private user mapping tracking、paging helper byte range mapping 前の non-zero 4 KiB page count。
 - `KernelVirtualRange`: future dynamic mapping 用 higher-half kernel virtual range。
+- `KernelPageStart`: scheduler-owned kernel stack guard / writable boundary 用の page-aligned higher-half kernel virtual address。
 - `KernelVirtualRangeAllocator::new(...)` と `allocate_pages(...)` は `PageCount` を受け取ります。
 - `process::UserProgramSpawnRequest::new(...)` と `user_stack::allocate_user_stack(...)` は user stack page mapping 前に `PageCount` を受け取ります。
 - `UserMappings` は private mapping record start を `UserPageStart`、record count を `PageCount`
@@ -188,6 +192,8 @@ heap growth / shrink helper は aligned mapped-end boundary を `UserPageStart` 
 comparison や diagnostics の直前だけ raw number へ下げます。
 kernel stack guard-fault lookup は `kernel::interrupt` が `shared::PageFaultReport` を受け取り、
 page-fault virtual address を `VirtAddr` へ分類してから scheduler boundary へ渡します。
+scheduler-owned stack guard / writable start は `KernelPageStart` として保持し、
+diagnostic formatting の直前だけ raw number へ下ろします。
 user entry と timer-resume の handoff は、選択した user task の kernel stack top を task architecture facade と registered architecture installer callback まで `VirtAddr` として保持します。composition root がその値を x86_64-owned `PrivilegeStackTopAddress` へ適合させ、`SYSCALL` entry stack-top atomic が残る private raw lowering point です。
 returnable user-mode entry path は assembly から kernel return stack pointer を raw ABI `usize` として受け取り、すぐ `VirtAddr` に分類します。private atomic slot には raw integer だけを保存し、architecture stop path に返す前に読み出し値を再分類します。
 syscall / timer trap-frame storage address は architecture/shared ABI の capture point だけ raw のままです。
@@ -253,6 +259,7 @@ storage smoke はこの typed DMA setup boundary を assert します。
 - `KernelVirtualAddress`: mapped kernel virtual address。
 - `PageCount`: kernel virtual range allocator API、user stack API、user mapping API、paging helper API に渡す non-zero 4 KiB page count。
 - `KernelVirtualRange`: reserved higher-half kernel virtual range。
+- `KernelPageStart`: scheduler-owned kernel stack guard / writable boundary 用の page-aligned higher-half kernel virtual page start。
 - `UserAddressSpace`: user page-table root。
 - `UserVirtualAddress`: non-null user pointer / ELF virtual address。
 - `UserVirtualRange`: non-empty validated user pointer range。

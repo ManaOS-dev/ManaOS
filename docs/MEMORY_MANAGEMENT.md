@@ -283,6 +283,9 @@ pointer/length pair is classified before it can reach the lower copy helpers.
 The address-space template self-check receives its representative kernel probe
 as `VirtAddr`, leaving the boot smoke call site as the only place that lowers
 the function pointer to a numeric address.
+Scheduler-owned kernel stack metadata keeps guard-page and writable-page starts
+as `KernelPageStart`, so their page alignment is represented before guard-fault
+diagnostics lower them for serial or console output.
 
 ## User Address Spaces
 
@@ -294,8 +297,9 @@ mappings remain shared and non-user-accessible so kernel code can run after a
 CR3 switch while Ring 3 cannot access kernel pages.
 Scheduler user-entry and timer-resume paths keep the selected user task kernel
 stack top as `VirtAddr` through `kernel::task::architecture::install_kernel_stack(...)`.
-That facade lowers to raw `u64` only when invoking the registered
-architecture-owned stack installer.
+That facade passes the typed value through the registered stack-installer
+callback; `main.rs` adapts it into the x86_64-owned
+`PrivilegeStackTopAddress` before the TSS write.
 
 ELF loading and user stack allocation now map pages into an explicit
 `UserAddressSpace` instead of the active CR3. Initial stack strings and pointer
