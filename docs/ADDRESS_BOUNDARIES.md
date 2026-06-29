@@ -129,11 +129,11 @@ untyped cross-domain `u64` values:
   `UserVirtualAddress` until serial diagnostics need the numeric address.
 - Scheduler task snapshots retain the last resume address-space root as
   `PhysicalFrameStart` and the last resume kernel stack top as `VirtAddr`;
-  raw numeric values are produced only by console and smoke formatting
-  accessors.
+  the snapshot API exposes typed accessors, and raw numeric values are produced
+  only by console and smoke formatting code.
 - User virtual-memory task snapshots retain the `brk` heap base, current break,
   and next private mapping search start as `UserVirtualAddress`; raw numeric
-  values are produced only by console and smoke formatting accessors.
+  values are produced only by console and smoke formatting code.
 - `user_stack::allocate_and_map_user_page(...) -> PhysicalFrameStart` now
   returns a typed physical frame start instead of a raw physical `u64`.
 - `user_stack::map_user_range(...)` now accepts `UserVirtualAddress` and
@@ -321,12 +321,13 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   `UserVirtualAddress` until serial diagnostics need the numeric address.
 - Scheduler task snapshots keep the last resume address-space root as
   `PhysicalFrameStart` and the last resume kernel stack top as `VirtAddr`.
-  Console and serial smoke diagnostics lower those values to raw numbers only
-  when formatting diagnostic output.
+  Snapshot consumers use typed accessors, and console and serial smoke
+  diagnostics lower those values to raw numbers only when formatting diagnostic
+  output.
 - User virtual-memory task snapshots keep heap base, heap break, and private
   mapping next-start addresses as `UserVirtualAddress`. Console and serial
-  smoke diagnostics lower those values to raw numbers only when formatting
-  diagnostic output.
+  smoke diagnostics consume the typed accessors and lower those values to raw
+  numbers only when formatting diagnostic output.
 - `task::UserEntryArguments` is constructed from typed user pointers, and
   `UserTaskContext` keeps its raw `u64` register layout private to the
   `repr(C)` architecture entry ABI. Compile-time layout assertions guard the

@@ -156,6 +156,7 @@ user trap-frame RIP/RSP の diagnostics / `execve` publication 前 `UserVirtualA
 accessor 化、
 `execve` published heap-start diagnostics の serial formatting 前 `UserVirtualAddress`
 boundary 化と storage smoke coverage、
+scheduler / user virtual-memory task snapshot API の raw address accessor removal、
 x86_64 syscall entry target の LSTAR MSR 書き込み前 `SyscallEntryAddress` boundary 化、
 x86_64 timer interrupt entry stub の IDT gate 書き込み前 `InterruptEntryAddress` boundary 化、
 APIC MMIO physical base の Local APIC / IOAPIC / Local APIC timer register access 前 `ApicMmioAddress` boundary 化、

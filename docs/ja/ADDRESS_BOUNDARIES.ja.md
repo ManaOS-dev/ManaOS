@@ -82,8 +82,8 @@ kernel ownership boundary では型付き address に変換することです。
 - `UserTrapFrame` は architecture restore ABI のために `repr(C)` register field を raw のまま保ちます。
   ただし kernel diagnostics と `execve` publication は、user RIP/RSP を formatting する前に
   typed `UserVirtualAddress` accessor で読みます。
-- scheduler task snapshot は last resume address-space root を `PhysicalFrameStart`、last resume kernel stack top を `VirtAddr` として保持し、console / smoke output formatting の境界でだけ raw number へ下ろします。
-- user virtual-memory task snapshot は `brk` heap base、current break、private mapping next-start を `UserVirtualAddress` として保持し、console / smoke output formatting の境界でだけ raw number へ下ろします。
+- scheduler task snapshot は last resume address-space root を `PhysicalFrameStart`、last resume kernel stack top を `VirtAddr` として保持し、snapshot API は typed accessor だけを公開します。console / smoke output formatting の境界でだけ raw number へ下ろします。
+- user virtual-memory task snapshot は `brk` heap base、current break、private mapping next-start を `UserVirtualAddress` として保持し、snapshot API は typed accessor だけを公開します。console / smoke output formatting の境界でだけ raw number へ下ろします。
 - `user_stack::allocate_and_map_user_page(...) -> PhysicalFrameStart`。
 - `user_stack::map_user_range(...)` の internal user virtual / physical frame boundary。
 - `paging::map_kernel_mmio_range(...)` の MMIO physical base `PhysAddr` と mapped page coverage の `PageCount`。
@@ -210,8 +210,8 @@ kernel logging、diagnostics、`execve` publication は typed `UserVirtualAddres
 output の境界で raw number へ下げます。
 `execve` image publication は replacement heap start も `UserVirtualAddress` のまま保持し、
 serial diagnostics が numeric address を必要とする直前だけ raw number へ下げます。
-scheduler task snapshot は last resume address-space root を `PhysicalFrameStart`、last resume kernel stack top を `VirtAddr` として保持し、console / serial smoke diagnostics の formatting 時だけ raw number にします。
-user virtual-memory task snapshot は heap base、heap break、private mapping next-start address を `UserVirtualAddress` として保持し、console / serial smoke diagnostics の formatting 時だけ raw number にします。
+scheduler task snapshot は last resume address-space root を `PhysicalFrameStart`、last resume kernel stack top を `VirtAddr` として保持し、snapshot API は typed accessor だけを公開します。console / serial smoke diagnostics の formatting 時だけ raw number にします。
+user virtual-memory task snapshot は heap base、heap break、private mapping next-start address を `UserVirtualAddress` として保持し、snapshot API は typed accessor だけを公開します。console / serial smoke diagnostics の formatting 時だけ raw number にします。
 user stack allocation の page count は `PageCount` で分類してから frame allocation と stack slot mapping に進みます。
 private user mapping は syscall byte length を ABI validation 後に `PageCount` へ変換し、mapping record、successful allocation、unmap result で typed page count を使います。
 その syscall byte length は `UserMappingLength` として scheduler-owned `mmap` request に保持し、raw length は request construction / rejection に閉じます。

@@ -747,16 +747,6 @@ fn record_resume_handoff_snapshot(
         0,
         "finished user task snapshots must retain their last resume kernel stack top"
     );
-    assert_eq!(
-        snapshot.last_resume_address_space_root(),
-        address_space_root.as_u64(),
-        "raw resume address-space root diagnostics must lower from the typed snapshot"
-    );
-    assert_eq!(
-        snapshot.last_resume_kernel_stack_top(),
-        kernel_stack_top.as_u64(),
-        "raw resume kernel stack diagnostics must lower from the typed snapshot"
-    );
     counters.resume_handoff_snapshots = counters.resume_handoff_snapshots.saturating_add(1);
     counters.resume_address_space_root_snapshots = counters
         .resume_address_space_root_snapshots
@@ -1034,11 +1024,28 @@ fn log_scheduler_task_snapshot_address_counters(counters: SchedulerTaskSnapshotC
         format_args!("Scheduler task snapshot address diagnostics verified"),
         &[
             LogField::new(
+                "resume_snapshot_address_accessors_typed",
+                format_args!(
+                    "{}",
+                    counters.resume_address_space_root_snapshots
+                        == counters.resume_handoff_snapshots
+                        && counters.resume_kernel_stack_snapshots
+                            == counters.resume_handoff_snapshots
+                ),
+            ),
+            LogField::new(
                 "typed_user_vm_address_snapshots",
                 format_args!("{}", counters.typed_user_vm_address_snapshots),
             ),
             LogField::new(
                 "user_vm_snapshot_addresses_typed",
+                format_args!(
+                    "{}",
+                    counters.typed_user_vm_address_snapshots == counters.user_vm_snapshots
+                ),
+            ),
+            LogField::new(
+                "user_vm_snapshot_address_accessors_typed",
                 format_args!(
                     "{}",
                     counters.typed_user_vm_address_snapshots == counters.user_vm_snapshots
@@ -1058,23 +1065,13 @@ fn verify_user_task_snapshot(
     let heap_base = user_virtual_memory.heap_base_address();
     let heap_break = user_virtual_memory.heap_break_address();
     let mapping_next_start = user_virtual_memory.mapping_next_start_address();
-    assert_eq!(
-        user_virtual_memory.heap_base(),
-        heap_base.as_u64(),
-        "raw heap base diagnostics must lower from the typed snapshot"
-    );
-    assert_eq!(
-        user_virtual_memory.heap_break(),
-        heap_break.as_u64(),
-        "raw heap break diagnostics must lower from the typed snapshot"
-    );
-    assert_eq!(
-        user_virtual_memory.mapping_next_start(),
-        mapping_next_start.as_u64(),
-        "raw private mapping next-start diagnostics must lower from the typed snapshot"
-    );
     counters.typed_user_vm_address_snapshots =
         counters.typed_user_vm_address_snapshots.saturating_add(1);
+    assert_eq!(
+        heap_break.as_u64(),
+        heap_base.as_u64(),
+        "execve must reset user heap break to the typed heap base before task exit"
+    );
     assert_eq!(
         user_virtual_memory.heap_mapped_pages(),
         0,

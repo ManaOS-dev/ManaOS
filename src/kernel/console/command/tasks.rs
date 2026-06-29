@@ -4,6 +4,7 @@ use super::output::{CommandEffect, CommandError, CommandOutput};
 use alloc::format;
 use alloc::string::ToString;
 
+use crate::kernel::memory::address::{PhysicalFrameStart, VirtAddr};
 use crate::kernel::task::{
     SchedulerTaskSnapshot, UserImageDiagnosticsSnapshot, UserVirtualMemorySnapshot,
 };
@@ -118,8 +119,12 @@ fn push_task_snapshot(output: &mut CommandOutput, snapshot: &SchedulerTaskSnapsh
         snapshot.address_space_owned(),
         snapshot.kernel_stack_owned(),
         snapshot.resume_handoff_count(),
-        snapshot.last_resume_address_space_root(),
-        snapshot.last_resume_kernel_stack_top(),
+        snapshot
+            .last_resume_address_space_root_frame()
+            .map_or(0, PhysicalFrameStart::as_u64),
+        snapshot
+            .last_resume_kernel_stack_top_address()
+            .map_or(0, VirtAddr::as_u64),
         snapshot.saved_user_trap_frame_bytes(),
         snapshot.runtime_trap_frame_record_count(),
         snapshot.restored_user_trap_frame_bytes(),
@@ -179,10 +184,10 @@ fn push_user_virtual_memory(
     output.push(format!(
         "task_vm: id={} heap_base={:#x} heap_break={:#x} heap_pages={} mmap_next={:#x} mmap_pages={} mmap_records={} mmap_file_records={}",
         task_id,
-        user_virtual_memory.heap_base(),
-        user_virtual_memory.heap_break(),
+        user_virtual_memory.heap_base_address().as_u64(),
+        user_virtual_memory.heap_break_address().as_u64(),
         user_virtual_memory.heap_mapped_pages(),
-        user_virtual_memory.mapping_next_start(),
+        user_virtual_memory.mapping_next_start_address().as_u64(),
         user_virtual_memory.mapping_active_pages(),
         user_virtual_memory.mapping_active_records(),
         user_virtual_memory.mapping_file_private_records()

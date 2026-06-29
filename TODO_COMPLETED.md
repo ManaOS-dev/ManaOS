@@ -146,6 +146,7 @@ active roadmap can list only unfinished work.
 - [x] Keep scheduler-owned kernel stack guard and writable starts typed as `KernelPageStart`, with storage smoke coverage.
 - [x] Keep scheduler resume handoff diagnostic snapshots typed as `PhysicalFrameStart` and `VirtAddr` before console and smoke output formatting.
 - [x] Keep user virtual-memory scheduler diagnostics snapshots typed as `UserVirtualAddress` before console and smoke output formatting.
+- [x] Remove raw address accessors from scheduler and user virtual-memory task snapshots so console and smoke diagnostics lower typed task metadata only at formatting boundaries.
 - [x] Keep pending user `read` destinations typed as `UserWritableRange` before scheduler wait-state retention.
 - [x] Keep blocking `waitpid` status destinations typed as `UserWritableRange` before scheduler wait-completion retention.
 - [x] Keep ELF load-segment file-backed payload ranges typed as `UserVirtualRange` before page-copy calculations.

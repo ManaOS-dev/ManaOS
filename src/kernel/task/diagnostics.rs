@@ -426,19 +426,9 @@ impl UserVirtualMemorySnapshot {
         }
     }
 
-    /// Return the first virtual address managed by `brk`.
-    pub const fn heap_base(self) -> u64 {
-        self.heap.base.as_u64()
-    }
-
     /// Return the typed first virtual address managed by `brk`.
     pub const fn heap_base_address(self) -> UserVirtualAddress {
         self.heap.base
-    }
-
-    /// Return the current user heap break.
-    pub const fn heap_break(self) -> u64 {
-        self.heap.current_break.as_u64()
     }
 
     /// Return the typed current user heap break.
@@ -449,11 +439,6 @@ impl UserVirtualMemorySnapshot {
     /// Return the number of heap pages currently tracked by the user runtime.
     pub const fn heap_mapped_pages(self) -> u64 {
         self.heap.mapped_pages
-    }
-
-    /// Return the next private mapping address candidate.
-    pub const fn mapping_next_start(self) -> u64 {
-        self.mapping_active.next_start.as_u64()
     }
 
     /// Return the typed next private mapping address candidate.
@@ -741,25 +726,9 @@ impl SchedulerTaskSnapshot {
         self.status.runtime.resume_handoff_count
     }
 
-    /// Return the last user address-space root selected before entry or resume.
-    pub const fn last_resume_address_space_root(&self) -> u64 {
-        match self.status.runtime.last_resume_address_space_root {
-            Some(address_space_root) => address_space_root.as_u64(),
-            None => 0,
-        }
-    }
-
     /// Return the typed last user address-space root selected before entry or resume.
     pub const fn last_resume_address_space_root_frame(&self) -> Option<PhysicalFrameStart> {
         self.status.runtime.last_resume_address_space_root
-    }
-
-    /// Return the last kernel stack top selected before user entry or resume.
-    pub const fn last_resume_kernel_stack_top(&self) -> u64 {
-        match self.status.runtime.last_resume_kernel_stack_top {
-            Some(kernel_stack_top) => kernel_stack_top.as_u64(),
-            None => 0,
-        }
     }
 
     /// Return the typed last kernel stack top selected before user entry or resume.
