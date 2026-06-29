@@ -11,7 +11,7 @@ pub type UserModeSwitchFunction = unsafe fn(*mut u64, *const u64);
 /// Architecture function that restores a user trap frame and returns after `SYS_EXIT`.
 pub type ReturnableUserModeEntryFunction = unsafe fn(*const u64);
 /// Architecture function that installs the Ring 0 stack for user-mode traps.
-pub type KernelStackInstallFunction = fn(u64);
+pub type KernelStackInstallFunction = fn(VirtAddr);
 
 static CONTEXT_SWITCH_FUNCTION: AtomicUsize = AtomicUsize::new(0);
 static USER_MODE_SWITCH_FUNCTION: AtomicUsize = AtomicUsize::new(0);
@@ -138,5 +138,5 @@ pub fn install_kernel_stack(stack_top: VirtAddr) {
     // SAFETY: The stored value came from register_kernel_stack_installer and
     // zero was handled above as the unregistered state.
     let function: KernelStackInstallFunction = unsafe { core::mem::transmute(function) };
-    function(stack_top.as_u64());
+    function(stack_top);
 }

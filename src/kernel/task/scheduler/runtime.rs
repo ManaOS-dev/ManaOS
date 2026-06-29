@@ -1220,7 +1220,7 @@ impl Scheduler {
         if !self.user_resume_logged {
             crate::log_info!(
                 "task",
-                "User task resumed from timer context: task={} kernel_stack_top={:#x} kernel_stack_top_typed=true architecture_stack_installer_typed=true",
+                "User task resumed from timer context: task={} kernel_stack_top={:#x} kernel_stack_top_typed=true architecture_stack_installer_typed=true privilege_stack_top_typed=true",
                 next_task_id,
                 kernel_stack_top.as_u64()
             );

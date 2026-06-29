@@ -67,7 +67,7 @@ kernel ownership boundary では型付き address に変換することです。
   final MSR write boundary の中だけに閉じます。
 - `arch::x86_64::interrupt_descriptor_table` は assembly timer interrupt entry target を
   `InterruptEntryAddress` として分類してから IDT gate へ下ろします。
-- user task kernel stack top は scheduler handoff path と task architecture facade では `VirtAddr` として保持し、facade が registered architecture installer を呼ぶ境界と `SYSCALL` entry stack-top atomic の境界でだけ raw `u64` へ下ろします。
+- user task kernel stack top は scheduler handoff path、task architecture facade、registered architecture installer callback まで `VirtAddr` として保持します。composition root は final TSS write の前に kernel `VirtAddr` を x86_64-owned `PrivilegeStackTopAddress` へ変換します。`SYSCALL` entry stack-top atomic は private raw storage boundary として残ります。
 - returnable user-mode entry の kernel return stack pointer は、assembly の
   `set_user_return_stack` / `get_user_return_stack` ABI boundary と private atomic storage
   slot の中でだけ raw です。`kernel::task::process_lifecycle` は保存前に `VirtAddr`
@@ -188,7 +188,7 @@ heap growth / shrink helper は aligned mapped-end boundary を `UserPageStart` 
 comparison や diagnostics の直前だけ raw number へ下げます。
 kernel stack guard-fault lookup は `kernel::interrupt` が `shared::PageFaultReport` を受け取り、
 page-fault virtual address を `VirtAddr` へ分類してから scheduler boundary へ渡します。
-user entry と timer-resume の handoff は、選択した user task の kernel stack top を task architecture facade まで `VirtAddr` として保持します。facade 内の architecture provider call と `SYSCALL` entry stack-top atomic が残る raw lowering point です。
+user entry と timer-resume の handoff は、選択した user task の kernel stack top を task architecture facade と registered architecture installer callback まで `VirtAddr` として保持します。composition root がその値を x86_64-owned `PrivilegeStackTopAddress` へ適合させ、`SYSCALL` entry stack-top atomic が残る private raw lowering point です。
 returnable user-mode entry path は assembly から kernel return stack pointer を raw ABI `usize` として受け取り、すぐ `VirtAddr` に分類します。private atomic slot には raw integer だけを保存し、architecture stop path に返す前に読み出し値を再分類します。
 syscall / timer trap-frame storage address は architecture/shared ABI の capture point だけ raw のままです。
 kernel interrupt / syscall bridge は captured `UserTrapFrame` を task scheduler に記録する前に
@@ -273,6 +273,7 @@ storage smoke はこの typed DMA setup boundary を assert します。
   calibration / active status snapshot。
 - `SyscallEntryAddress`: x86_64 `SYSCALL` LSTAR に program する architecture-owned virtual entry point。
 - `InterruptEntryAddress`: x86_64 IDT gate に program する architecture-owned interrupt entry point。
+- `PrivilegeStackTopAddress`: user-mode privilege transition 前に x86_64 TSS へ program する architecture-owned Ring 0 stack top。
 - `PageFaultReport` / `PageFaultAddress` / `PageFaultErrorBits` /
   `PageFaultInstructionPointer`: kernel diagnostics が virtual address を `VirtAddr` として分類する前の
   shared page-fault callback boundary。

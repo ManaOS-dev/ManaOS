@@ -19,6 +19,21 @@ static TSS: LazyLock<MutableTaskStateSegment> = LazyLock::new(MutableTaskStateSe
 static DEFAULT_PRIVILEGE_STACK: BootStack = BootStack::new();
 static DEFAULT_DOUBLE_FAULT_STACK: BootStack = BootStack::new();
 
+/// Architecture-owned virtual address for the Ring 0 privilege stack top.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PrivilegeStackTopAddress(VirtAddr);
+
+impl PrivilegeStackTopAddress {
+    /// Create a privilege stack-top address from the composition root boundary.
+    pub fn new(address: u64) -> Self {
+        Self(VirtAddr::new(address))
+    }
+
+    fn as_arch_address(self) -> VirtAddr {
+        self.0
+    }
+}
+
 struct BootStack {
     bytes: UnsafeCell<[u8; DEFAULT_STACK_SIZE]>,
 }
@@ -132,8 +147,8 @@ pub fn init() {
 }
 
 /// Install the Ring 0 stack used by the next Ring 3 privilege transition.
-pub fn set_privilege_stack_top(stack_top: u64) {
-    TSS.set_privilege_stack_top(VirtAddr::new(stack_top));
+pub fn set_privilege_stack_top(stack_top: PrivilegeStackTopAddress) {
+    TSS.set_privilege_stack_top(stack_top.as_arch_address());
 }
 
 /// Return the user data segment selector.

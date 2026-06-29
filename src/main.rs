@@ -55,6 +55,12 @@ fn initialize_scheduler(
     crate::log_info!("task", "Scheduler initialized. current_task={}", task_id);
 }
 
+fn install_architecture_privilege_stack_top(stack_top: kernel::memory::address::VirtAddr) {
+    let stack_top =
+        arch::x86_64::global_descriptor_table::PrivilegeStackTopAddress::new(stack_top.as_u64());
+    arch::x86_64::global_descriptor_table::set_privilege_stack_top(stack_top);
+}
+
 fn initialize_architecture_and_drivers() {
     let syscall_entry_address =
         arch::x86_64::SyscallEntryAddress::from_function(kernel::interrupt::syscall_entry);
@@ -74,7 +80,7 @@ fn initialize_architecture_and_drivers() {
         arch::x86_64::enter_user_mode_once,
     );
     kernel::task::architecture::register_kernel_stack_installer(
-        arch::x86_64::global_descriptor_table::set_privilege_stack_top,
+        install_architecture_privilege_stack_top,
     );
     kernel::task::user_mode::register_selectors(kernel::task::user_mode::UserModeSelectors {
         data: arch::x86_64::global_descriptor_table::USER_DATA_SELECTOR,

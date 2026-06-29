@@ -390,7 +390,7 @@ pub fn process_timer_tick(interrupted_user_mode: bool) {
             install_user_task_kernel_stack(kernel_stack_top);
             crate::log_info!(
                 "task",
-                "User task entered from timer context: task={} address_space={:#x} kernel_stack_top={:#x} kernel_stack_top_typed=true architecture_stack_installer_typed=true",
+                "User task entered from timer context: task={} address_space={:#x} kernel_stack_top={:#x} kernel_stack_top_typed=true architecture_stack_installer_typed=true privilege_stack_top_typed=true",
                 task_id,
                 address_space.level_4_frame().as_u64(),
                 kernel_stack_top.as_u64()

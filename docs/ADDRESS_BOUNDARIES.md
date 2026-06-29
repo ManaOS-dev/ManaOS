@@ -103,9 +103,11 @@ untyped cross-domain `u64` values:
   interrupt entry target as an `InterruptEntryAddress` before lowering it into
   the IDT gate.
 - User task kernel stack tops are kept as `VirtAddr` across scheduler handoff
-  paths and through the task architecture facade. They lower to raw `u64` only
-  when that facade invokes the registered architecture installer and at the
-  `SYSCALL` entry stack-top atomic boundary.
+  paths, through the task architecture facade, and through the registered
+  architecture installer callback. The composition root converts the kernel
+  `VirtAddr` into the x86_64-owned `PrivilegeStackTopAddress` before the final
+  TSS write. The `SYSCALL` entry stack-top atomic remains a private raw storage
+  boundary.
 - The returnable user-mode entry stack pointer remains raw only at the
   assembly `set_user_return_stack` / `get_user_return_stack` ABI boundary and
   inside the private atomic storage slot. `kernel::task::process_lifecycle`
@@ -288,9 +290,10 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   address. Diagnostic formatting lowers those typed virtual addresses back to
   raw numbers only at log output.
 - Scheduler user-entry and timer-resume handoffs keep the selected user task
-  kernel stack top as `VirtAddr` through the task architecture facade; the
-  registered architecture provider invocation inside that facade and the
-  `SYSCALL` entry stack-top atomic are the remaining raw lowering points.
+  kernel stack top as `VirtAddr` through the task architecture facade and the
+  registered architecture installer callback. The composition root adapts that
+  value into the x86_64-owned `PrivilegeStackTopAddress`; the `SYSCALL` entry
+  stack-top atomic is the remaining private raw lowering point.
 - The returnable user-mode entry path receives the kernel return stack pointer
   from assembly as a raw ABI `usize`, immediately classifies it as `VirtAddr`,
   stores only the raw integer in a private atomic slot, and reclassifies the
@@ -444,6 +447,8 @@ Continue introducing wrappers in small steps:
   programmed into x86_64 `SYSCALL` LSTAR.
 - `InterruptEntryAddress` for architecture-owned interrupt entry points
   programmed into x86_64 IDT gates.
+- `PrivilegeStackTopAddress` for architecture-owned Ring 0 stack tops
+  programmed into the x86_64 TSS before user-mode privilege transitions.
 - `PageFaultReport`, `PageFaultAddress`, `PageFaultErrorBits`, and
   `PageFaultInstructionPointer` for the shared page-fault callback boundary
   before kernel diagnostics classify those virtual addresses as `VirtAddr`.
