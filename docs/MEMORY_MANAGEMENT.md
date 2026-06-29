@@ -48,6 +48,8 @@ The current physical frame allocator relies on these properties:
   wrappers.
 - `UserPageStart` is required by user page mapping and unmapping APIs, so
   4 KiB user-page alignment is established before page tables are mutated.
+- `KernelVirtualRange` starts are required to be `KernelPageStart`, so dynamic
+  kernel virtual reservations cannot retain unaligned higher-half starts.
 - User permission probes derive `UserPageStart` first/last page boundaries from
   `UserVirtualRange` before walking active or per-process page tables.
 - User address-space template self-checks accept the representative kernel
@@ -169,8 +171,9 @@ address ranges intended for dynamic mappings. It reserves virtual addresses;
 page-table mapping, unmapping, and physical frame ownership remain separate
 responsibilities.
 
-The allocator accepts `PageCount` for managed-range construction and individual
-allocations, so callers classify raw page counts before reserving virtual
+The allocator accepts `KernelPageStart` for the managed higher-half start and
+`PageCount` for managed-range construction and individual allocations, so
+callers classify raw page starts and page counts before reserving virtual
 address space.
 
 User stack allocation also accepts `PageCount`, so spawn and execve callers

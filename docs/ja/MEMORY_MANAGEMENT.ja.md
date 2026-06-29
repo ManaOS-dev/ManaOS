@@ -44,6 +44,8 @@ physical frame allocator は、以下の前提に依存します。
   raw address field は user address wrapper に入る前に分類してから渡します。
 - user page mapping/unmapping API は `UserPageStart` を要求するため、page table を変更する前に
   4 KiB user-page alignment を確定します。
+- `KernelVirtualRange` start は `KernelPageStart` 必須のため、dynamic kernel virtual reservation は
+  unaligned higher-half start を保持しません。
 - user permission probe は active / per-process page table を歩く前に、
   `UserVirtualRange` から first / last page boundary を `UserPageStart` として導出します。
 - user address-space template self-check は代表 kernel probe を `VirtAddr` として受け取り、
@@ -131,8 +133,9 @@ kernel には dynamic mapping 用の reusable higher-half virtual address range 
 これは virtual address を予約するだけで、page-table mapping、unmapping、physical frame ownership は
 別責務です。
 
-allocator は managed range construction と個別 allocation に `PageCount` を受け取るため、
-caller は virtual address space を予約する前に raw page count を分類します。
+allocator は managed higher-half start に `KernelPageStart`、managed range construction と
+個別 allocation に `PageCount` を受け取るため、caller は virtual address space を予約する前に
+raw page start と raw page count を分類します。
 user stack allocation も `PageCount` を受け取るため、spawn / execve caller は stack size を
 page count として分類してから frame allocation と stack slot mapping に進みます。
 private user mapping は syscall byte length を ABI validation 後に `UserMappingLength` へ変換します。

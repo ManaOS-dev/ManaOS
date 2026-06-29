@@ -15,7 +15,7 @@
 //! - [`verify_kernel_virtual_range_allocation`] - Boot-time allocation self-check
 //! - [`verify_kernel_virtual_range_exhaustion`] - Boot-time exhaustion self-check
 
-use super::address::{KernelVirtualRange, PageCount, VirtAddr};
+use super::address::{KernelPageStart, KernelVirtualRange, PageCount, VirtAddr};
 
 const PAGE_SIZE: u64 = 4096;
 const DYNAMIC_MAPPING_START: u64 = 0xffff_8000_0000_0000;
@@ -24,19 +24,19 @@ const MAX_FREE_RANGES: usize = 128;
 
 #[derive(Clone, Copy)]
 struct VirtualFreeRange {
-    start: VirtAddr,
+    start: KernelPageStart,
     page_count: u64,
 }
 
 impl VirtualFreeRange {
     const fn empty() -> Self {
         Self {
-            start: VirtAddr::new(0),
+            start: empty_kernel_page_start(),
             page_count: 0,
         }
     }
 
-    fn end_exclusive(self) -> Option<VirtAddr> {
+    fn end_exclusive(self) -> Option<KernelPageStart> {
         let byte_len = self.page_count.checked_mul(PAGE_SIZE)?;
         self.start.checked_add(byte_len)
     }
@@ -44,7 +44,7 @@ impl VirtualFreeRange {
 
 /// A reusable allocator for reserved kernel virtual page ranges.
 pub struct KernelVirtualRangeAllocator {
-    managed_start: VirtAddr,
+    managed_start: KernelPageStart,
     managed_page_count: PageCount,
     free_ranges: [VirtualFreeRange; MAX_FREE_RANGES],
     free_count: usize,
@@ -53,7 +53,7 @@ pub struct KernelVirtualRangeAllocator {
 impl KernelVirtualRangeAllocator {
     /// Create a kernel virtual range allocator from a page-aligned start and
     /// total page count.
-    pub const fn new(start: VirtAddr, page_count: PageCount) -> Option<Self> {
+    pub const fn new(start: KernelPageStart, page_count: PageCount) -> Option<Self> {
         let Some(_) = KernelVirtualRange::new(start, page_count) else {
             return None;
         };
@@ -197,7 +197,7 @@ impl KernelVirtualRangeAllocator {
 pub fn new_dynamic_mapping_allocator() -> KernelVirtualRangeAllocator {
     let page_count = PageCount::new(DYNAMIC_MAPPING_PAGE_COUNT)
         .expect("dynamic mapping page count must be valid");
-    KernelVirtualRangeAllocator::new(VirtAddr::new(DYNAMIC_MAPPING_START), page_count)
+    KernelVirtualRangeAllocator::new(kernel_page_start(DYNAMIC_MAPPING_START), page_count)
         .expect("kernel dynamic mapping virtual range must be valid")
 }
 
@@ -220,7 +220,7 @@ pub fn verify_kernel_virtual_range_allocation() -> bool {
     first_range.start().as_u64() == DYNAMIC_MAPPING_START
         && first_range.page_count() == 1
         && first_range.byte_len() == PAGE_SIZE
-        && first_range.end_exclusive() == second_range.start()
+        && first_range.end_exclusive() == second_range.start().as_address()
         && second_range.page_count() == 2
         && second_range.byte_len() == PAGE_SIZE * 2
         && reused_range == first_range
@@ -230,7 +230,7 @@ pub fn verify_kernel_virtual_range_allocation() -> bool {
 /// Verify that invalid and exhausted kernel virtual allocations are rejected.
 pub fn verify_kernel_virtual_range_exhaustion() -> bool {
     let Some(mut allocator) =
-        KernelVirtualRangeAllocator::new(VirtAddr::new(DYNAMIC_MAPPING_START), page_count(2))
+        KernelVirtualRangeAllocator::new(kernel_page_start(DYNAMIC_MAPPING_START), page_count(2))
     else {
         return false;
     };
@@ -240,10 +240,9 @@ pub fn verify_kernel_virtual_range_exhaustion() -> bool {
     let second_page_allocated = allocator.allocate_pages(page_count(1)).is_some();
     let exhausted_rejected = allocator.allocate_pages(page_count(1)).is_none();
     let misaligned_rejected =
-        KernelVirtualRangeAllocator::new(VirtAddr::new(DYNAMIC_MAPPING_START + 1), page_count(1))
-            .is_none();
+        KernelPageStart::new(VirtAddr::new(DYNAMIC_MAPPING_START + 1)).is_none();
     let outside_range_rejected = match KernelVirtualRange::new(
-        VirtAddr::new(DYNAMIC_MAPPING_START - PAGE_SIZE),
+        kernel_page_start(DYNAMIC_MAPPING_START + PAGE_SIZE * 2),
         page_count(1),
     ) {
         Some(range) => !allocator.free_pages(range),
@@ -261,4 +260,12 @@ pub fn verify_kernel_virtual_range_exhaustion() -> bool {
 
 const fn page_count(count: u64) -> PageCount {
     PageCount::new(count).expect("virtual allocator page count must be valid")
+}
+
+const fn kernel_page_start(address: u64) -> KernelPageStart {
+    KernelPageStart::new(VirtAddr::new(address)).expect("kernel page start must be valid")
+}
+
+const fn empty_kernel_page_start() -> KernelPageStart {
+    kernel_page_start(DYNAMIC_MAPPING_START)
 }

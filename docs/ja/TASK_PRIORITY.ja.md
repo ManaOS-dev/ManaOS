@@ -66,8 +66,8 @@ scheduler invariant も同じ文書に整理済みです。Phase 1 の current l
 
 1. `PhysicalFrameStart` construction 以外に残る memory API の狭い範囲で raw physical address parameter を `PhysAddr` に置き換える。
 2. `UserVirtualAddress` construction 以外に残る memory API の狭い範囲で raw virtual address parameter を `VirtAddr` に置き換える。
-3. user page mapping API と scheduler-owned kernel stack guard / writable start 以外に残る
-   page-aligned wrapper を続ける。
+3. user page mapping API、dynamic kernel virtual range start、scheduler-owned kernel stack
+   guard / writable start 以外に残る page-aligned wrapper を続ける。
 
 現在の smoke-owned experimental user shell の entry / exit path を QEMU で観察する手順は
 [`MANUAL_QEMU_VALIDATION.ja.md`](MANUAL_QEMU_VALIDATION.ja.md) に整理済みです。

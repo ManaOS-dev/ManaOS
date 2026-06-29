@@ -243,19 +243,13 @@ impl PageCount {
 /// A reserved kernel virtual range for future dynamic mappings.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct KernelVirtualRange {
-    start: VirtAddr,
+    start: KernelPageStart,
     page_count: PageCount,
 }
 
 impl KernelVirtualRange {
     /// Create a non-empty 4 KiB-aligned kernel virtual range.
-    pub const fn new(start: VirtAddr, page_count: PageCount) -> Option<Self> {
-        if !start.as_u64().is_multiple_of(PAGE_SIZE)
-            || start.as_u64() < KERNEL_DYNAMIC_MAPPING_START
-        {
-            return None;
-        }
-
+    pub const fn new(start: KernelPageStart, page_count: PageCount) -> Option<Self> {
         let Some(_) = start.as_u64().checked_add(page_count.byte_len()) else {
             return None;
         };
@@ -264,7 +258,7 @@ impl KernelVirtualRange {
     }
 
     /// Return the first virtual address in the range.
-    pub const fn start(self) -> VirtAddr {
+    pub const fn start(self) -> KernelPageStart {
         self.start
     }
 
@@ -286,6 +280,7 @@ impl KernelVirtualRange {
     /// valid ranges.
     pub const fn end_exclusive(self) -> VirtAddr {
         self.start
+            .as_address()
             .checked_add(self.byte_len())
             .expect("kernel virtual range end overflowed")
     }

@@ -165,19 +165,20 @@ pub fn map_kernel_writable_no_execute_range(
         let offset = index
             .checked_mul(PAGE_SIZE)
             .expect("kernel mapping offset overflowed");
-        let virtual_address = virtual_start
+        let virtual_page_start = virtual_start
             .checked_add(offset)
             .expect("kernel virtual mapping address overflowed");
         let physical_address = physical_start
             .checked_add(offset)
             .expect("kernel physical mapping address overflowed");
-        let page = Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_address.as_u64()));
+        let page =
+            Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_page_start.as_u64()));
         let frame = PhysFrame::containing_address(X86PhysAddr::new(physical_address.as_u64()));
 
         if let TranslateResult::Mapped { .. } = mapper.translate(page.start_address()) {
             panic!(
                 "kernel virtual page is already mapped: {:#x}",
-                virtual_address.as_u64()
+                virtual_page_start.as_u64()
             );
         }
 
@@ -197,7 +198,7 @@ pub fn map_kernel_writable_no_execute_range(
         }
     }
 
-    KernelVirtualAddress::new(virtual_start)
+    KernelVirtualAddress::new(virtual_start.as_address())
 }
 
 /// Unmap a kernel virtual range and return its physical frames to the allocator.
@@ -223,11 +224,12 @@ pub fn unmap_kernel_range_and_free_frames(
         let offset = index
             .checked_mul(PAGE_SIZE)
             .expect("kernel unmapping offset overflowed");
-        let virtual_address = virtual_range
+        let virtual_page_start = virtual_range
             .start()
             .checked_add(offset)
             .expect("kernel virtual unmapping address overflowed");
-        let page = Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_address.as_u64()));
+        let page =
+            Page::<Size4KiB>::containing_address(X86VirtAddr::new(virtual_page_start.as_u64()));
         let (frame, flush) = mapper
             .unmap(page)
             .expect("failed to unmap kernel dynamic page");
@@ -292,10 +294,10 @@ pub fn is_kernel_range_mapped_writable_no_execute(range: KernelVirtualRange) -> 
         let offset = index
             .checked_mul(PAGE_SIZE)
             .expect("kernel range verification offset overflowed");
-        let Some(address) = range.start().checked_add(offset) else {
+        let Some(page_start) = range.start().checked_add(offset) else {
             return false;
         };
-        let Some(flags) = mapping_flags_for_address(address) else {
+        let Some(flags) = mapping_flags_for_address(page_start.as_address()) else {
             return false;
         };
         if !flags.contains(
@@ -315,10 +317,10 @@ pub fn is_kernel_range_unmapped(range: KernelVirtualRange) -> bool {
         let offset = index
             .checked_mul(PAGE_SIZE)
             .expect("kernel range verification offset overflowed");
-        let Some(address) = range.start().checked_add(offset) else {
+        let Some(page_start) = range.start().checked_add(offset) else {
             return false;
         };
-        if mapping_flags_for_address(address).is_some() {
+        if mapping_flags_for_address(page_start.as_address()).is_some() {
             return false;
         }
     }

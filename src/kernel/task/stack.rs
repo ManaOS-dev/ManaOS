@@ -108,13 +108,12 @@ impl KernelStackVirtualReservation {
     }
 
     fn guard_page_start(&self) -> KernelPageStart {
-        KernelPageStart::new(self.range.start())
-            .expect("kernel stack guard page start must be page-aligned")
+        self.range.start()
     }
 
     fn guard_range(&self) -> KernelVirtualRange {
         KernelVirtualRange::new(
-            self.guard_page_start().as_address(),
+            self.guard_page_start(),
             page_count(KERNEL_STACK_GUARD_PAGES),
         )
         .expect("kernel stack guard range must be valid")
@@ -127,7 +126,7 @@ impl KernelStackVirtualReservation {
     }
 
     fn writable_range(&self) -> KernelVirtualRange {
-        KernelVirtualRange::new(self.writable_start().as_address(), self.writable_page_count)
+        KernelVirtualRange::new(self.writable_start(), self.writable_page_count)
             .expect("kernel stack writable range must be valid")
     }
 

@@ -66,8 +66,8 @@ typed address boundary では、`PhysicalFrameStart`、`UserVirtualAddress`、`U
 `FrameCount`、`PageCount` の主要境界、typed `brk` / `munmap` request、kernel stack top handoff、
 permission probe / page-walk boundary、ELF entry / heap start、ELF load segment memory/page range、
 private `mmap` length、private mapping record、AHCI DMA setup address、trap-frame storage address の
-typed 化が完了済みです。scheduler-owned kernel stack guard / writable start は
-`KernelPageStart`、user task kernel stack top handoff は task architecture facade と
+typed 化が完了済みです。dynamic kernel virtual range start と scheduler-owned kernel stack guard /
+writable start は `KernelPageStart`、user task kernel stack top handoff は task architecture facade と
 registered architecture callback まで `VirtAddr` を保ち、`main.rs` が
 x86_64-owned `PrivilegeStackTopAddress` へ適合させます。
 user entry / trap-frame register layout は compile-time offset assertion で
@@ -141,6 +141,7 @@ user heap mapped-end helper の `UserPageStart` boundary 化と `brk` smoke cove
 typed address の checked `try_as_usize()` conversion helper と boot smoke coverage、
 MMIO identity-mapping page start の `PhysicalFrameStart` boundary 化と APIC MMIO smoke coverage、
 kernel task stack-top context construction の `VirtAddr` boundary 化と kernel task stack smoke coverage、
+dynamic kernel virtual range start の `KernelPageStart` boundary 化と storage smoke coverage、
 scheduler-owned kernel stack guard / writable start の `KernelPageStart` boundary 化と
 storage smoke coverage、
 private mapping overlap / containment helper の page-aligned mapping range boundary 化と
