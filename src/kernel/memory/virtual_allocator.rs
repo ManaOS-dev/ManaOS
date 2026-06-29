@@ -134,7 +134,7 @@ impl KernelVirtualRangeAllocator {
         }
         self.free_ranges[insert_index] = VirtualFreeRange {
             start: range.start(),
-            page_count: range.page_count(),
+            page_count: range.page_count().as_u64(),
         };
         self.free_count += 1;
         self.merge_adjacent_free_ranges();
@@ -218,10 +218,10 @@ pub fn verify_kernel_virtual_range_allocation() -> bool {
     };
 
     first_range.start().as_u64() == DYNAMIC_MAPPING_START
-        && first_range.page_count() == 1
+        && first_range.page_count() == page_count(1)
         && first_range.byte_len() == PAGE_SIZE
         && first_range.end_exclusive() == second_range.start().as_address()
-        && second_range.page_count() == 2
+        && second_range.page_count() == page_count(2)
         && second_range.byte_len() == PAGE_SIZE * 2
         && reused_range == first_range
         && allocator.remaining_pages() == DYNAMIC_MAPPING_PAGE_COUNT - 3

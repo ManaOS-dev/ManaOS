@@ -139,7 +139,7 @@ impl KernelStackVirtualReservation {
     }
 
     fn reserved_page_count(&self) -> u64 {
-        self.range.page_count()
+        self.range.page_count().as_u64()
     }
 
     fn writable_page_count(&self) -> u64 {

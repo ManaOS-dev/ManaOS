@@ -136,6 +136,7 @@ active roadmap can list only unfinished work.
 - [x] Add `FrameCount` for frame allocator APIs.
 - [x] Add `PageCount` for kernel virtual range allocator APIs.
 - [x] Keep dynamic kernel virtual range starts typed as `KernelPageStart`, with storage smoke coverage.
+- [x] Keep dynamic kernel virtual range page counts typed as `PageCount`, with storage smoke coverage.
 - [x] Add `PageCount` for user stack APIs.
 - [x] Add `PageCount` for user mapping APIs.
 - [x] Add `PageCount` for paging helper APIs.

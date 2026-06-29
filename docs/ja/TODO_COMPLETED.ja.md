@@ -142,6 +142,7 @@ typed address の checked `try_as_usize()` conversion helper と boot smoke cove
 MMIO identity-mapping page start の `PhysicalFrameStart` boundary 化と APIC MMIO smoke coverage、
 kernel task stack-top context construction の `VirtAddr` boundary 化と kernel task stack smoke coverage、
 dynamic kernel virtual range start の `KernelPageStart` boundary 化と storage smoke coverage、
+dynamic kernel virtual range page count の `PageCount` boundary 化と storage smoke coverage、
 scheduler-owned kernel stack guard / writable start の `KernelPageStart` boundary 化と
 storage smoke coverage、
 private mapping overlap / containment helper の page-aligned mapping range boundary 化と

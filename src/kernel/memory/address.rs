@@ -262,9 +262,9 @@ impl KernelVirtualRange {
         self.start
     }
 
-    /// Return the number of 4 KiB pages in the range.
-    pub const fn page_count(self) -> u64 {
-        self.page_count.as_u64()
+    /// Return the typed number of 4 KiB pages in the range.
+    pub const fn page_count(self) -> PageCount {
+        self.page_count
     }
 
     /// Return the byte length of the range.

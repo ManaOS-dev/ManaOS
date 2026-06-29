@@ -144,8 +144,8 @@ pub fn map_kernel_writable_no_execute_range(
     physical_range: PhysicalFrameRange,
 ) -> KernelVirtualAddress {
     assert_eq!(
-        virtual_range.page_count(),
-        physical_range.page_count(),
+        virtual_range.page_count().as_u64(),
+        physical_range.frame_count().as_u64(),
         "kernel virtual mapping page count must match physical frame count"
     );
 
@@ -161,7 +161,7 @@ pub fn map_kernel_writable_no_execute_range(
     // SAFETY: The active address space uses an identity physical memory offset.
     let mut mapper = unsafe { OffsetPageTable::new(level_4_table, X86VirtAddr::new(0)) };
 
-    for index in 0..virtual_range.page_count() {
+    for index in 0..virtual_range.page_count().as_u64() {
         let offset = index
             .checked_mul(PAGE_SIZE)
             .expect("kernel mapping offset overflowed");
@@ -220,7 +220,7 @@ pub fn unmap_kernel_range_and_free_frames(
     // SAFETY: The active address space uses an identity physical memory offset.
     let mut mapper = unsafe { OffsetPageTable::new(level_4_table, X86VirtAddr::new(0)) };
 
-    for index in 0..virtual_range.page_count() {
+    for index in 0..virtual_range.page_count().as_u64() {
         let offset = index
             .checked_mul(PAGE_SIZE)
             .expect("kernel unmapping offset overflowed");
@@ -290,7 +290,7 @@ pub fn verify_kernel_dynamic_mapping_lifecycle(
 
 /// Return whether every page in the kernel range is writable and non-executable.
 pub fn is_kernel_range_mapped_writable_no_execute(range: KernelVirtualRange) -> bool {
-    for index in 0..range.page_count() {
+    for index in 0..range.page_count().as_u64() {
         let offset = index
             .checked_mul(PAGE_SIZE)
             .expect("kernel range verification offset overflowed");
@@ -313,7 +313,7 @@ pub fn is_kernel_range_mapped_writable_no_execute(range: KernelVirtualRange) -> 
 
 /// Return whether every page in the kernel range is currently unmapped.
 pub fn is_kernel_range_unmapped(range: KernelVirtualRange) -> bool {
-    for index in 0..range.page_count() {
+    for index in 0..range.page_count().as_u64() {
         let offset = index
             .checked_mul(PAGE_SIZE)
             .expect("kernel range verification offset overflowed");

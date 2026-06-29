@@ -108,7 +108,7 @@ kernel ownership boundary では型付き address に変換することです。
 - `KernelVirtualAddress`: identity-mapped kernel virtual address。
 - `PageCount`: virtual range reservation、user stack allocation、private user mapping tracking、paging helper byte range mapping 前の non-zero 4 KiB page count。
 - `KernelVirtualRange`: future dynamic mapping 用 higher-half kernel virtual range。start は
-  `KernelPageStart` として保持します。
+  `KernelPageStart`、page count は `PageCount` として保持します。
 - `KernelPageStart`: dynamic kernel virtual range start と scheduler-owned kernel stack guard /
   writable boundary 用の page-aligned higher-half kernel virtual address。
 - `KernelVirtualRangeAllocator::new(...)` は `KernelPageStart` と `PageCount`、
@@ -261,7 +261,7 @@ storage smoke はこの typed DMA setup boundary を assert します。
 - `FramebufferPhysicalRange`: active framebuffer physical range。
 - `KernelVirtualAddress`: mapped kernel virtual address。
 - `PageCount`: kernel virtual range allocator API、user stack API、user mapping API、paging helper API に渡す non-zero 4 KiB page count。
-- `KernelVirtualRange`: start を `KernelPageStart` として保持する reserved higher-half kernel virtual range。
+- `KernelVirtualRange`: start を `KernelPageStart`、page count を `PageCount` として保持する reserved higher-half kernel virtual range。
 - `KernelPageStart`: dynamic kernel virtual range start と scheduler-owned kernel stack guard /
   writable boundary 用の page-aligned higher-half kernel virtual page start。
 - `UserAddressSpace`: user page-table root。

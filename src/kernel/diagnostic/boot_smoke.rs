@@ -217,7 +217,7 @@ pub fn verify_kernel_virtual_range_allocator_rules() {
     if non_overlapping_reuse_ok && exhaustion_rejection_ok {
         crate::log_info!(
             "memory",
-            "Kernel virtual range allocator self-checks passed: non_overlapping_reuse=true exhaustion_rejection=true kernel_range_start_typed=true"
+            "Kernel virtual range allocator self-checks passed: non_overlapping_reuse=true exhaustion_rejection=true kernel_range_start_typed=true kernel_range_page_count_typed=true"
         );
     } else {
         crate::log_error!(

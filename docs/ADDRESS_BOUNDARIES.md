@@ -176,7 +176,8 @@ untyped cross-domain `u64` values:
   paging helper byte ranges.
 - `KernelVirtualRange` represents reserved higher-half kernel virtual ranges
   for future dynamic mappings without implying that pages are already mapped.
-  The range start is stored as `KernelPageStart`.
+  The range start is stored as `KernelPageStart`, and the range length stays
+  typed as `PageCount` until loop or diagnostic boundaries need a raw count.
 - `KernelVirtualRangeAllocator::new(...)` accepts `KernelPageStart` and
   `PageCount`, and `allocate_pages(...)` accepts `PageCount` before reserving
   higher-half kernel virtual ranges.
@@ -251,7 +252,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   address types at mapper boundaries.
 - `KernelVirtualRangeAllocator` accepts `KernelPageStart` for the managed
   virtual start and `PageCount` for managed virtual range sizing and
-  individual higher-half virtual reservations.
+  individual higher-half virtual reservations. `KernelVirtualRange` preserves
+  both values as typed accessors before page-table walkers lower the count for
+  loops.
 - UEFI memory-map descriptors still expose raw physical starts because they are
   firmware ABI records; paging wraps those starts before internal identity-map
   calculations.
@@ -418,7 +421,7 @@ Continue introducing wrappers in small steps:
   range allocator, user stack, user mapping, and paging helper APIs.
 - `KernelVirtualRange` for non-empty page-aligned higher-half virtual ranges
   reserved by the kernel dynamic mapping allocator. Its start is now
-  `KernelPageStart`.
+  `KernelPageStart`, and its page count is now exposed as `PageCount`.
 - `KernelPageStart` for page-aligned higher-half virtual page starts such as
   dynamic kernel virtual range starts and scheduler-owned kernel stack guard
   and writable boundaries.
