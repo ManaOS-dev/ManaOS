@@ -204,15 +204,11 @@ impl LoadSegmentRange {
     }
 
     fn heap_start_after_segment(self) -> Result<UserPageStart, LoadError> {
-        let aligned_address = self
-            .memory_range
-            .end_exclusive()
-            .checked_add(PAGE_SIZE - 1)
-            .map(VirtAddr::align_down_to_page)
-            .ok_or(LoadError::SegmentAddressOverflow)?;
-        let address =
-            UserVirtualAddress::new(aligned_address).ok_or(LoadError::SegmentAddressOutOfRange)?;
-        UserPageStart::new(address).ok_or(LoadError::SegmentAddressOutOfRange)
+        let end_address = UserVirtualAddress::new(self.memory_range.end_exclusive())
+            .ok_or(LoadError::SegmentAddressOutOfRange)?;
+        end_address
+            .align_up_to_page()
+            .ok_or(LoadError::SegmentAddressOutOfRange)
     }
 
     fn contains(self, address: UserVirtualAddress) -> bool {
@@ -283,7 +279,7 @@ fn load_user_elf(
         )?;
         crate::log_info!(
             "elf",
-            "ELF segment mapped: vaddr={:#x} memsz={} filesz={} flags={:#x} perms={} segment_range_typed=true page_range_typed=true file_backed_range_typed=true",
+            "ELF segment mapped: vaddr={:#x} memsz={} filesz={} flags={:#x} perms={} segment_range_typed=true page_range_typed=true segment_heap_start_typed=true file_backed_range_typed=true",
             segment_range.start().as_u64(),
             program_header.memory_size(),
             program_header.file_size(),

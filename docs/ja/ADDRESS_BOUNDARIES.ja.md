@@ -239,7 +239,9 @@ segment だけを local typed `UserVirtualRange` へ変換して mapping と cop
 ELF entry point は header validation 後に `UserVirtualAddress` として保持し、
 entry segment membership check でも typed value を使います。
 ELF loader は `LoadedElf::heap_start()` を導出する間、最大の page-aligned segment end を
-`UserPageStart` として保持します。
+`UserPageStart` として保持します。validated segment exclusive end は
+`UserVirtualAddress` として分類してから `UserVirtualAddress::align_up_to_page()` で
+heap-start boundary へ丸めます。
 ELF load segment の file-backed payload range は page-copy 計算の直前まで
 `UserVirtualRange` として保持します。raw offset は checked file/page overlap arithmetic の局所変数へ閉じます。
 ELF load segment の page walk は `LoadSegmentRange` から得た `UserPageStart` boundary を受け取り、

@@ -244,8 +244,9 @@ page and record high-water marks, and file-private mapping calls.
 `brk` is the first syscall-time user heap growth path. The syscall boundary
 classifies the raw ABI argument into `UserHeapBreakRequest` before scheduler and
 heap code can process it. The ELF loader reports a page-aligned heap start after
-the highest `PT_LOAD` segment, the scheduler stores the current heap break in
-each user task runtime, and `kernel::memory::user_heap` maps writable
+the highest `PT_LOAD` segment by rounding validated segment ends through
+`UserVirtualAddress::align_up_to_page()`. The scheduler stores the current heap
+break in each user task runtime, and `kernel::memory::user_heap` maps writable
 non-executable user heap pages as the break grows. The heap maps and unmaps
 through a `UserPageStart` mapped-end boundary, lowering it to raw numbers only
 for comparisons and diagnostics. The runtime mapped-end state is stored as

@@ -165,8 +165,9 @@ dynamic kernel mapping には generic unmap path があります。
 
 `brk` は syscall-time user heap growth の最初の path です。syscall boundary は raw ABI argument を
 `UserHeapBreakRequest` へ分類してから scheduler と heap code へ渡します。ELF loader が最高位
-`PT_LOAD` segment の後ろに page-aligned heap start を報告し、scheduler が current heap break を
-各 user task runtime に保存します。heap growth は writable non-executable user heap page を map し、
+`PT_LOAD` segment の後ろに page-aligned heap start を報告します。この heap start は validated
+segment end を `UserVirtualAddress::align_up_to_page()` で丸めて導出します。scheduler が
+current heap break を各 user task runtime に保存します。heap growth は writable non-executable user heap page を map し、
 growth / shrink helper は mapped-end boundary を `UserPageStart` として保持します。comparison と
 diagnostics の直前だけ raw number に下げます。runtime mapped-end state も `UserPageStart` として
 保持するため、unaligned heap extent を保持できません。break growth は requested user address を

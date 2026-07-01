@@ -135,6 +135,7 @@ address-space template smoke coverage、
 scheduler-owned `mmap` requested address の `UserMappingPlacement` boundary 化、
 ELF entry point の `UserVirtualAddress` boundary 化、
 ELF heap start の `UserPageStart` boundary 化、
+ELF segment heap-start align-up の `UserVirtualAddress::align_up_to_page()` boundary 化と storage smoke coverage、
 private `mmap` automatic placement search start の `UserPageStart` boundary 化、
 private mapping split record start と private mapping record start の `UserPageStart` boundary 化、
 frame allocator tracked region start の `PhysAddr` boundary 化と boot smoke coverage、

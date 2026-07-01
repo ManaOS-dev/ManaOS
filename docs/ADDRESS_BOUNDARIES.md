@@ -389,7 +389,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   point as `UserVirtualAddress` after header validation; the raw ELF header
   field is not retained across segment membership checks.
 - The ELF loader keeps the maximum page-aligned segment end as `UserPageStart`
-  while deriving `LoadedElf::heap_start()`.
+  while deriving `LoadedElf::heap_start()`. Each validated segment exclusive
+  end is classified as `UserVirtualAddress` and rounded through
+  `UserVirtualAddress::align_up_to_page()` before heap-start accumulation.
 - `kernel::elf::load_user_program(address_space, ...)` maps loadable segments
   into the supplied user address-space root.
 - `ProgramHeader::virtual_address() -> u64` remains raw because it exposes a
