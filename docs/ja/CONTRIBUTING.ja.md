@@ -30,6 +30,19 @@ ManaOS プロジェクトへの参加を歓迎します！ManaOS は「開発者
 - 各ブランチはレビュー可能な 1 つの作業単位に絞ってください。
 - マージ後は作業ブランチを削除してください。
 
+## 🔀 Pull Request レビューとマージポリシー
+
+- 外部コントリビュータの変更は、メンテナがブランチ上で仕上げを手伝う場合でも
+  Pull Request 経由で取り込みます。
+- ブランチに iterative な fixup commit が含まれる場合、メンテナは contributor PR を
+  squash merge できます。最終コミットメッセージまたは co-author metadata で
+  contributor credit を残してください。
+- 最終的に `master` へ入るコミットは、project commit format の
+  `type(scope): summary` に従います。
+- maintainer direct-branch workflow に合わせるためだけに、contributor に history
+  rewrite を求めないでください。check が通った後、`master` の reviewability を保つ
+  目的であれば、merge 時にメンテナが squash できます。
+
 ---
 
 ## 🇯🇵 日本語でのコミュニケーションについて

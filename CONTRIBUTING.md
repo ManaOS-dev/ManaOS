@@ -32,6 +32,19 @@ after local verification.
 - Keep each branch focused on one reviewable unit.
 - Delete task branches after they are merged.
 
+## 🔀 Pull Request Review And Merge Policy
+
+- External contributor changes enter through pull requests, even when a
+  maintainer helps finish the branch.
+- Maintainers may squash contributor pull requests when the branch contains
+  iterative fixup commits. Preserve contributor credit in the final commit
+  message or co-author metadata.
+- The final merged commit should follow the project commit format:
+  `type(scope): summary`.
+- Do not ask contributors to rewrite history only to match the maintainer
+  direct-branch workflow. After checks pass, maintainers can squash at merge
+  time when that keeps `master` easier to review.
+
 ---
 
 ## 🇯🇵 日本語版 (Japanese Version)
