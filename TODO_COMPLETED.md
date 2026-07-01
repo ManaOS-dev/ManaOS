@@ -169,7 +169,7 @@ active roadmap can list only unfinished work.
 - [x] Keep private mapping record starts typed as `UserPageStart`.
 - [x] Keep frame allocator tracked region starts typed as `PhysAddr` until numeric comparisons are required, with boot smoke coverage.
 - [x] Keep AHCI DMA setup addresses typed as `DmaPhysicalAddress` until device-register splitting, with storage smoke coverage.
-- [x] Keep user heap mapped-end helpers typed as `UserPageStart`, with `brk` smoke coverage.
+- [x] Keep user heap mapped-end helpers and runtime state typed as `UserPageStart`, with `brk` smoke coverage.
 - [x] Add checked `try_as_usize()` conversion helpers for typed addresses, with boot smoke coverage.
 - [x] Keep MMIO identity-mapping page starts typed as `PhysicalFrameStart`, with APIC MMIO smoke coverage.
 - [x] Keep kernel task stack-top context construction typed as `VirtAddr`, with kernel task stack smoke coverage.

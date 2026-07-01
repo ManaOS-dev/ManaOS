@@ -79,7 +79,8 @@ untyped cross-domain `u64` values:
   classification, so scheduler and heap code do not receive raw break
   addresses.
 - `UserHeap` keeps the page-aligned mapped extent as `UserPageStart` while
-  growing and shrinking heap-backed mappings.
+  growing and shrinking heap-backed mappings. The runtime mapped-end state
+  therefore cannot retain an unaligned user virtual address.
 - `UserMappingUnmapRequest` represents `munmap` requests after syscall ABI
   address classification, so scheduler and mapping code do not receive raw
   unmap start addresses.

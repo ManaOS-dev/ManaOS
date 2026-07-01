@@ -194,6 +194,7 @@ kernel address-space switch と template smoke check は、それを `PhysicalFr
 読み直してから page-table helper へ渡します。
 `brk` request は `sys_brk` で raw ABI value を current-break query または validated user virtual address に分類してから `UserHeap` へ渡します。
 heap growth / shrink helper は aligned mapped-end boundary を `UserPageStart` として保持し、
+runtime mapped-end state も unaligned user virtual address を保持できません。
 comparison や diagnostics の直前だけ raw number へ下げます。
 kernel stack guard-fault lookup は `kernel::interrupt` が `shared::PageFaultReport` を受け取り、
 page-fault virtual address を `VirtAddr` へ分類してから scheduler boundary へ渡します。
