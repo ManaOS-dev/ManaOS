@@ -36,6 +36,8 @@ kernel ownership boundary では型付き address に変換することです。
 - `UserVirtualAddress` / `UserVirtualRange`: syscall copy validation 前の non-null user virtual address と byte range。
 - `UserVirtualAddress::checked_sub()` は backward arithmetic を `VirtAddr` のまま行い、
   non-null user address として再検証してから返します。
+- `UserVirtualRange::new()` は exclusive range end を `VirtAddr` で計算し、
+  最後の user-space ceiling comparison でだけ raw value に下げます。
 - `UserReadableRange` / `UserWritableRange` / `UserCString`: copy direction と string policy。
 - syscall copy helper は raw pointer / length ABI pair を、page-table permission probe や
   string scan の前に `UserReadableRange`、`UserWritableRange`、または `UserCString`
@@ -278,6 +280,7 @@ storage smoke はこの typed DMA setup boundary を assert します。
 - `UserVirtualAddress`: non-null user pointer / ELF virtual address。
 - `UserVirtualAddress::checked_sub()`: syscall range helper / stack-layout code が結果を使う前の backward user address arithmetic。
 - `UserVirtualRange`: non-empty validated user pointer range。exclusive end も `VirtAddr` として保持します。
+- `UserVirtualRange::new()`: non-empty user pointer range construction 中の typed exclusive-end arithmetic。
 - `UserReadableRange` / `UserWritableRange`: syscall copy direction。
 - `UserReadRequest`: raw syscall pointer classification 後に scheduler が保持する pending `read` destination。
 - `UserWritableRange`: raw syscall pointer classification 後に scheduler が保持する blocking `waitpid` status destination。

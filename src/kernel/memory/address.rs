@@ -665,6 +665,24 @@ pub fn verify_typed_user_virtual_range() -> bool {
         })
 }
 
+/// Verify typed user virtual range constructor boundary checks.
+pub fn verify_typed_user_virtual_range_constructor() -> bool {
+    let start = UserVirtualAddress::new(VirtAddr::new(PAGE_SIZE))
+        .expect("test user virtual range start must be valid");
+    let ceiling_start = UserVirtualAddress::new(VirtAddr::new(USER_SPACE_END - 1))
+        .expect("last user byte address must be valid");
+    let Ok(exact_ceiling_len) = usize::try_from(USER_SPACE_END - PAGE_SIZE) else {
+        return false;
+    };
+
+    UserVirtualRange::new(start, 8).is_some_and(|range| {
+        range.start() == start && range.end_exclusive() == VirtAddr::new(PAGE_SIZE + 8)
+    }) && UserVirtualRange::new(start, 0).is_none()
+        && UserVirtualRange::new(start, exact_ceiling_len)
+            .is_some_and(|range| range.end_exclusive() == VirtAddr::new(USER_SPACE_END))
+        && UserVirtualRange::new(ceiling_start, 2).is_none()
+}
+
 /// Verify typed user virtual range exclusive-end helper contracts.
 pub fn verify_typed_user_virtual_range_end() -> bool {
     let start = UserVirtualAddress::new(VirtAddr::new(PAGE_SIZE))
@@ -820,8 +838,8 @@ impl UserVirtualRange {
         }
 
         let byte_len_u64 = u64::try_from(byte_len).ok()?;
-        let end = start.as_u64().checked_add(byte_len_u64)?;
-        if end > USER_SPACE_END {
+        let end = start.as_address().checked_add(byte_len_u64)?;
+        if end.as_u64() > USER_SPACE_END {
             return None;
         }
 

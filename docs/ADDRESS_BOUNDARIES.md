@@ -46,6 +46,8 @@ untyped cross-domain `u64` values:
   addresses and byte ranges before syscall copy validation.
 - `UserVirtualAddress::checked_sub()` keeps backward arithmetic in `VirtAddr`
   and revalidates the result before returning a non-null user address.
+- `UserVirtualRange::new()` computes the exclusive range end with `VirtAddr`;
+  it lowers only for the final user-space ceiling comparison.
 - `UserVirtualRange::end_exclusive()` keeps the exclusive range end as
   `VirtAddr`, so range consumers lower range ends only at comparison and
   page-table translation boundaries.
@@ -457,6 +459,8 @@ Continue introducing wrappers in small steps:
 - `UserVirtualAddress::checked_sub()` for backward user address arithmetic
   before syscall range helpers and stack-layout code observe the result.
 - `UserVirtualRange` for non-empty validated user pointer ranges.
+- `UserVirtualRange::new()` for typed exclusive-end arithmetic while
+  constructing non-empty user pointer ranges.
 - `UserReadableRange` and `UserWritableRange` for syscall copy direction before
   page-table permission checks.
 - `UserReadRequest` for scheduler-retained pending `read` destinations after

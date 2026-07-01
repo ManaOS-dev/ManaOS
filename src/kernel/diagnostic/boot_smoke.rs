@@ -172,6 +172,8 @@ pub fn verify_memory_address_wrapper_rules() -> bool {
     let user_page_align_up_ok = kernel::memory::address::verify_typed_user_page_align_up();
     let kernel_page_start_ok = kernel::memory::address::verify_typed_kernel_page_start();
     let user_virtual_range_ok = kernel::memory::address::verify_typed_user_virtual_range();
+    let user_range_constructor_typed_ok =
+        kernel::memory::address::verify_typed_user_virtual_range_constructor();
     let user_range_end_typed_ok = kernel::memory::address::verify_typed_user_virtual_range_end();
     let user_range_page_bounds_ok =
         kernel::memory::address::verify_typed_user_virtual_range_page_bounds();
@@ -187,6 +189,7 @@ pub fn verify_memory_address_wrapper_rules() -> bool {
         && user_page_align_up_ok
         && kernel_page_start_ok
         && user_virtual_range_ok
+        && user_range_constructor_typed_ok
         && user_range_end_typed_ok
         && user_range_page_bounds_ok
         && user_copy_ranges_ok
@@ -197,18 +200,19 @@ pub fn verify_memory_address_wrapper_rules() -> bool {
     if passed {
         crate::log_info!(
             "memory",
-            "Memory address wrapper self-checks passed: user_virtual_address=true user_virtual_checked_sub_typed=true user_page_start=true user_page_align_up_typed=true kernel_page_start=true user_virtual_range=true user_range_end_typed=true user_range_page_bounds=true user_copy_ranges=true checked_conversions=true frame_count=true physical_frame_range_count_typed=true page_count=true"
+            "Memory address wrapper self-checks passed: user_virtual_address=true user_virtual_checked_sub_typed=true user_page_start=true user_page_align_up_typed=true kernel_page_start=true user_virtual_range=true user_range_constructor_typed=true user_range_end_typed=true user_range_page_bounds=true user_copy_ranges=true checked_conversions=true frame_count=true physical_frame_range_count_typed=true page_count=true"
         );
     } else {
         crate::log_error!(
             "memory",
-            "Memory address wrapper self-checks failed: user_virtual_address={} user_virtual_checked_sub_typed={} user_page_start={} user_page_align_up_typed={} kernel_page_start={} user_virtual_range={} user_range_end_typed={} user_range_page_bounds={} user_copy_ranges={} checked_conversions={} frame_count={} physical_frame_range_count={} page_count={}",
+            "Memory address wrapper self-checks failed: user_virtual_address={} user_virtual_checked_sub_typed={} user_page_start={} user_page_align_up_typed={} kernel_page_start={} user_virtual_range={} user_range_constructor_typed={} user_range_end_typed={} user_range_page_bounds={} user_copy_ranges={} checked_conversions={} frame_count={} physical_frame_range_count={} page_count={}",
             user_virtual_address_ok,
             user_virtual_checked_sub_ok,
             user_page_start_ok,
             user_page_align_up_ok,
             kernel_page_start_ok,
             user_virtual_range_ok,
+            user_range_constructor_typed_ok,
             user_range_end_typed_ok,
             user_range_page_bounds_ok,
             user_copy_ranges_ok,

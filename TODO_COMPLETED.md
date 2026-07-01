@@ -174,6 +174,7 @@ active roadmap can list only unfinished work.
 - [x] Keep user heap mapped-end helpers and runtime state typed as `UserPageStart`, with `brk` smoke coverage.
 - [x] Keep user heap break align-up typed as `UserVirtualAddress::align_up_to_page()`, with boot smoke coverage.
 - [x] Keep user virtual checked subtraction typed through `VirtAddr`, with boot smoke coverage.
+- [x] Keep user virtual range constructor end arithmetic typed through `VirtAddr`, with boot smoke coverage.
 - [x] Add checked `try_as_usize()` conversion helpers for typed addresses, with boot smoke coverage.
 - [x] Keep MMIO identity-mapping page starts typed as `PhysicalFrameStart`, with APIC MMIO smoke coverage.
 - [x] Keep kernel task stack-top context construction typed as `VirtAddr`, with kernel task stack smoke coverage.
