@@ -1,5 +1,7 @@
-# rust-toolchain.toml
 [toolchain]
 channel = "nightly"
-targets = ["x86_64-unknown-uefi"]
+targets = [
+  "x86_64-unknown-uefi",
+  "x86_64-unknown-none",
+]
 components = ["rust-src"]
