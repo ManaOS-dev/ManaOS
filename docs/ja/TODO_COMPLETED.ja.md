@@ -65,7 +65,7 @@ storage smoke で走る scheduler invariant check が完了済みです。
 typed address boundary では、`PhysicalFrameStart`、`UserVirtualAddress`、`UserPageStart`、
 `FrameCount`、`PageCount` の主要境界、typed `brk` / `munmap` request、kernel stack top handoff、
 permission probe / page-walk boundary、ELF entry / heap start、ELF load segment memory/page range、
-private `mmap` length、private mapping record、AHCI DMA setup address、trap-frame storage address の
+private `mmap` / `munmap` length、private mapping record、AHCI DMA setup address、trap-frame storage address の
 typed 化が完了済みです。dynamic kernel virtual range start と scheduler-owned kernel stack guard /
 writable start は `KernelPageStart`、user task kernel stack top handoff は task architecture facade と
 registered architecture callback まで `VirtAddr` を保ち、`main.rs` が
@@ -123,6 +123,7 @@ blocking `waitpid` status destination の `UserWritableRange` boundary 化、
 ELF load-segment file-backed payload range の `UserVirtualRange` boundary 化、
 ELF load-segment memory/page range の `UserVirtualRange` / `UserPageStart` boundary 化、
 private `mmap` syscall length の `UserMappingLength` boundary 化、
+private `munmap` syscall length の `UserMappingLength` boundary 化と storage smoke coverage、
 user pointer page-table permission probe の `UserReadableRange` / `UserWritableRange` boundary 化、
 user pointer permission page walk の `UserPageStart` boundary 化、
 syscall copy pointer / length pair の `UserReadableRange` / `UserWritableRange` / `UserCString`

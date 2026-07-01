@@ -128,7 +128,7 @@ impl UserMappingSource {
     }
 }
 
-/// Non-empty syscall mapping length with its rounded page count.
+/// Non-empty private mapping syscall length with its rounded page count.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserMappingLength {
     byte_len: u64,
@@ -136,7 +136,7 @@ pub struct UserMappingLength {
 }
 
 impl UserMappingLength {
-    /// Convert a raw syscall `mmap` length into a typed mapping length.
+    /// Convert a raw syscall mapping length into a typed mapping length.
     pub fn from_syscall_argument(byte_len: u64) -> Option<Self> {
         let page_count = page_count_for_length(byte_len)?;
         Some(Self {
@@ -211,21 +211,16 @@ impl UserMappingPlan {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UserMappingUnmapRequest {
     start: UserPageStart,
-    length: u64,
-    page_count: PageCount,
+    length: UserMappingLength,
 }
 
 impl UserMappingUnmapRequest {
     /// Convert raw syscall `munmap` arguments into a private unmapping request.
     pub fn from_syscall_arguments(start_address: u64, length: u64) -> Option<Self> {
         let start = user_page_start_from_raw(start_address)?;
-        let page_count = page_count_for_length(length)?;
+        let length = UserMappingLength::from_syscall_argument(length)?;
 
-        Some(Self {
-            start,
-            length,
-            page_count,
-        })
+        Some(Self { start, length })
     }
 
     /// Return the first page in the unmapping request.
@@ -235,12 +230,12 @@ impl UserMappingUnmapRequest {
 
     /// Return the raw requested byte length for diagnostics.
     pub const fn length(self) -> u64 {
-        self.length
+        self.length.byte_len()
     }
 
     /// Return the rounded 4 KiB page count covered by this request.
     pub const fn page_count(self) -> PageCount {
-        self.page_count
+        self.length.page_count()
     }
 }
 

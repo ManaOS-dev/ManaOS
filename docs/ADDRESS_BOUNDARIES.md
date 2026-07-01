@@ -86,10 +86,11 @@ untyped cross-domain `u64` values:
   `UserPageStart`.
 - `UserMappingUnmapRequest` represents `munmap` requests after syscall ABI
   address classification, so scheduler and mapping code do not receive raw
-  unmap start addresses.
-- `UserMappingLength` represents private `mmap` byte lengths after syscall ABI
-  validation, so scheduler and mapping code do not receive raw length values
-  when deriving page counts.
+  unmap start addresses. It retains the requested byte length as
+  `UserMappingLength` before deriving page counts.
+- `UserMappingLength` represents private `mmap` and `munmap` byte lengths after
+  syscall ABI validation, so scheduler and mapping code do not receive raw
+  length values when deriving page counts.
 - `KernelPageStart` represents 4 KiB-aligned higher-half kernel virtual page
   starts used by dynamic kernel virtual ranges and scheduler-owned kernel stack
   guard and writable boundaries.
@@ -277,7 +278,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - `kernel::memory::user_mapping::UserMappingLength` converts syscall byte
   lengths into `PageCount` after ABI validation. `UserMappings` then uses typed
   page counts for mapping records, successful allocations, typed unmap
-  requests, and unmap results.
+  requests, and unmap results. `UserMappingUnmapRequest` stores the requested
+  byte length as `UserMappingLength` before `UserMappings::unmap_range(...)`
+  derives the removed page count.
   It keeps mapping record starts and the automatic placement cursor as
   `UserPageStart` so private mapping records and the next search position
   cannot retain unaligned raw virtual addresses.
@@ -293,6 +296,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - The scheduler-owned `mmap` request keeps the requested byte length as
   `UserMappingLength`; raw syscall length values are used only to construct
   that typed request or reject the request.
+- The scheduler-owned `munmap` request also keeps the requested byte length as
+  `UserMappingLength`, so unmap page-count derivation consumes the same typed
+  length wrapper as mapping allocation.
 - `kernel::memory::user_heap::UserHeap` accepts `UserHeapBreakRequest` after
   `sys_brk` classifies the raw ABI value as either a current-break query or a
   validated user virtual address.
@@ -456,7 +462,7 @@ Continue introducing wrappers in small steps:
 - `UserCString` for readable syscall string candidates before NUL validation.
 - `UserMappingUnmapRequest` for private `munmap` requests after syscall ABI
   classification.
-- `UserMappingLength` for private `mmap` lengths after syscall ABI
+- `UserMappingLength` for private `mmap` and `munmap` lengths after syscall ABI
   classification.
 - `VirtAddr` for scheduler-owned user task kernel stack top handoffs through
   the task architecture facade before architecture and `SYSCALL` entry raw

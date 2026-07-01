@@ -56,8 +56,8 @@ kernel ownership boundary では型付き address に変換することです。
 - `UserHeap`: heap-backed mapping の grow/shrink 中、page-aligned mapped extent を `UserPageStart`
   として保持します。break growth は requested user address を
   `UserVirtualAddress::align_up_to_page()` で丸めてから `UserPageStart` を受け取ります。
-- `UserMappingUnmapRequest`: syscall ABI address classification 後の `munmap` request。scheduler と mapping code は raw unmap start address を受け取りません。
-- `UserMappingLength`: syscall ABI validation 後の private `mmap` byte length。scheduler と mapping code は page count を導出するための raw length value を受け取りません。
+- `UserMappingUnmapRequest`: syscall ABI address classification 後の `munmap` request。scheduler と mapping code は raw unmap start address を受け取りません。requested byte length も `UserMappingLength` として保持します。
+- `UserMappingLength`: syscall ABI validation 後の private `mmap` / `munmap` byte length。scheduler と mapping code は page count を導出するための raw length value を受け取りません。
 - `KernelPageStart`: dynamic kernel virtual range と scheduler-owned kernel stack guard /
   writable boundary に使う 4 KiB aligned higher-half kernel virtual page start。
 - `KernelStackGuardFault`: `kernel::interrupt` が raw page-fault address を分類した後、
@@ -220,7 +220,7 @@ scheduler task snapshot は last resume address-space root を `PhysicalFrameSta
 user virtual-memory task snapshot は heap base、heap break、private mapping next-start address を `UserVirtualAddress` として保持し、snapshot API は typed accessor だけを公開します。console / serial smoke diagnostics の formatting 時だけ raw number にします。
 user stack allocation の page count は `PageCount` で分類してから frame allocation と stack slot mapping に進みます。
 private user mapping は syscall byte length を ABI validation 後に `PageCount` へ変換し、mapping record、successful allocation、unmap result で typed page count を使います。
-その syscall byte length は `UserMappingLength` として scheduler-owned `mmap` request に保持し、raw length は request construction / rejection に閉じます。
+その syscall byte length は `UserMappingLength` として scheduler-owned `mmap` / `munmap` request に保持し、raw length は request construction / rejection に閉じます。
 mapping record start と automatic placement cursor は `UserPageStart` のまま保持するため、private mapping record と次の private mapping search は unaligned raw virtual address を保持しません。
 internal overlap / containment helper は page-aligned start と exclusive-end boundary を持つ private typed mapping range を渡し、comparison の直前だけ address を raw number へ下げます。
 `munmap` または fixed replacement が record を分割するとき、右側 record start は record table 更新中も
@@ -280,7 +280,7 @@ storage smoke はこの typed DMA setup boundary を assert します。
 - `UserWritableRange`: raw syscall pointer classification 後に scheduler が保持する blocking `waitpid` status destination。
 - `UserCString`: NUL validation 前の syscall string candidate。
 - `UserMappingUnmapRequest`: syscall ABI classification 後の private `munmap` request。
-- `UserMappingLength`: syscall ABI classification 後の private `mmap` length。
+- `UserMappingLength`: syscall ABI classification 後の private `mmap` / `munmap` length。
 - `VirtAddr`: task architecture facade / `SYSCALL` entry raw boundary 前の scheduler-owned user task kernel stack top handoff。
 - `PhysicalFrameStart` / `VirtAddr`: console / smoke output formatting 前の scheduler resume handoff diagnostic snapshot。
 - `UserVirtualAddress`: console / smoke output formatting 前の user virtual-memory scheduler snapshot。

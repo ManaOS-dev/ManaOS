@@ -185,10 +185,10 @@ loops.
 User stack allocation also accepts `PageCount`, so spawn and execve callers
 classify the stack size as pages before frame allocation and stack slot mapping.
 
-Private user mappings convert syscall byte lengths into `UserMappingLength`
-after ABI validation. The typed length carries the rounded `PageCount`, then
-successful allocation and unmap page counts stay typed until scheduler
-diagnostics fold them into aggregate counters.
+Private user mappings convert `mmap` and `munmap` syscall byte lengths into
+`UserMappingLength` after ABI validation. The typed length carries the rounded
+`PageCount`, then successful allocation and unmap page counts stay typed until
+scheduler diagnostics fold them into aggregate counters.
 
 MMIO identity mapping converts byte ranges into `PageCount` before paging
 helpers walk 4 KiB pages. APIC smoke logs report the returned typed page count
@@ -272,10 +272,10 @@ Mapping requests keep fixed requested addresses as `UserPageStart` values
 inside `UserMappingPlacement`; scheduler diagnostics derive raw display values
 from that typed placement. Automatic placement keeps the next search cursor as
 `UserPageStart` before allocation diagnostics lower it for display. The
-requested mapping length stays inside `UserMappingLength` while the scheduler
-and mapping table derive page counts. Mapping record splits classify the
-right-side start as `UserPageStart` before mutating the record table. Internal
-overlap and containment checks use a private typed mapping range with
+requested mapping and unmapping lengths stay inside `UserMappingLength` while
+the scheduler and mapping table derive page counts. Mapping record splits
+classify the right-side start as `UserPageStart` before mutating the record
+table. Internal overlap and containment checks use a private typed mapping range with
 `UserPageStart` start and exclusive-end boundaries before lowering addresses
 for comparisons. Mapping records keep their starts as `UserPageStart` and their
 page counts as `PageCount`; successful unmap results also use `PageCount` for

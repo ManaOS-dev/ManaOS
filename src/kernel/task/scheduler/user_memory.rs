@@ -124,7 +124,7 @@ impl Scheduler {
             .max(user_runtime.mappings.active_records());
         crate::log_info!(
             "syscall",
-            "munmap -> task={} start={:#x} length={} pages={} unmapped=true active_pages={} active_records={} unmap_request_typed=true page_count_typed=true unmap_range_typed=true",
+            "munmap -> task={} start={:#x} length={} pages={} unmapped=true active_pages={} active_records={} unmap_request_typed=true unmap_length_typed=true page_count_typed=true unmap_range_typed=true",
             task_id,
             request.start().as_u64(),
             request.length(),

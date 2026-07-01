@@ -143,9 +143,9 @@ raw page start と raw page count を分類します。reserved `KernelVirtualRa
 `PageCount` として保持し、page-table walker が bounded loop を組む直前だけ raw count に下げます。
 user stack allocation も `PageCount` を受け取るため、spawn / execve caller は stack size を
 page count として分類してから frame allocation と stack slot mapping に進みます。
-private user mapping は syscall byte length を ABI validation 後に `UserMappingLength` へ変換します。
-typed length は rounded `PageCount` を保持し、successful allocation と unmap の page count を
-scheduler diagnostics の aggregate counter に畳み込む直前まで typed のまま保ちます。
+private user mapping は `mmap` / `munmap` syscall byte length を ABI validation 後に
+`UserMappingLength` へ変換します。typed length は rounded `PageCount` を保持し、successful
+allocation と unmap の page count を scheduler diagnostics の aggregate counter に畳み込む直前まで typed のまま保ちます。
 MMIO identity mapping は byte range を `PageCount` へ変換してから 4 KiB page を歩きます。
 APIC smoke log は Local APIC と IOAPIC register mapping の returned typed page count を記録します。
 
@@ -186,7 +186,7 @@ mapping request は fixed requested address を `UserMappingPlacement` 内の `U
 として保持し、scheduler diagnostics の raw 表示値は typed placement から導出します。
 automatic placement の next search cursor も `UserPageStart` として保持し、
 allocation diagnostics の formatting 前まで page-aligned typed value を保ちます。
-requested mapping length は `UserMappingLength` 内に保持し、scheduler と mapping table はそこから page count を導出します。
+requested mapping / unmapping length は `UserMappingLength` 内に保持し、scheduler と mapping table はそこから page count を導出します。
 record split は record table を更新する前に右側 start を `UserPageStart` として分類します。
 internal overlap / containment check は `UserPageStart` start と exclusive-end boundary を持つ
 private typed mapping range を使い、comparison の直前だけ address を raw number へ下げます。
