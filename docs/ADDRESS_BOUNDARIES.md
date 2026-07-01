@@ -81,6 +81,9 @@ untyped cross-domain `u64` values:
 - `UserHeap` keeps the page-aligned mapped extent as `UserPageStart` while
   growing and shrinking heap-backed mappings. The runtime mapped-end state
   therefore cannot retain an unaligned user virtual address.
+  Break growth rounds requested user addresses through
+  `UserVirtualAddress::align_up_to_page()` before heap code receives a
+  `UserPageStart`.
 - `UserMappingUnmapRequest` represents `munmap` requests after syscall ABI
   address classification, so scheduler and mapping code do not receive raw
   unmap start addresses.
@@ -294,7 +297,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   `sys_brk` classifies the raw ABI value as either a current-break query or a
   validated user virtual address.
   Its growth and shrink helpers keep the aligned mapped-end boundary as
-  `UserPageStart` before lowering it for comparisons or diagnostics.
+  `UserPageStart` before lowering it for comparisons or diagnostics. Growth
+  obtains that boundary through `UserVirtualAddress::align_up_to_page()` instead
+  of rounding raw integers inside the heap owner.
 - `PreparedUserStack` exposes typed user virtual `stack_pointer`,
   `argument_values_pointer`, and `environment_values_pointer`.
 - Initial user stack argument layout uses a local `UserVirtualAddress` cursor;

@@ -140,6 +140,7 @@ private mapping split record start と private mapping record start の `UserPag
 frame allocator tracked region start の `PhysAddr` boundary 化と boot smoke coverage、
 physical frame range count の `FrameCount` boundary 化と storage smoke coverage、
 user heap mapped-end helper と runtime state の `UserPageStart` boundary 化と `brk` smoke coverage、
+user heap break align-up の `UserVirtualAddress::align_up_to_page()` boundary 化と boot smoke coverage、
 typed address の checked `try_as_usize()` conversion helper と boot smoke coverage、
 MMIO identity-mapping page start の `PhysicalFrameStart` boundary 化と APIC MMIO smoke coverage、
 kernel task stack-top context construction の `VirtAddr` boundary 化と kernel task stack smoke coverage、

@@ -54,7 +54,8 @@ kernel ownership boundary では型付き address に変換することです。
 - blocking `waitpid`: syscall ABI pointer classification 後の deferred status-write destination を `UserWritableRange` として保持し、scheduler wait completion が raw user pointer を保持しないようにします。
 - `UserHeapBreakRequest`: syscall ABI address classification 後の `brk` request。scheduler と heap code は raw break address を受け取りません。
 - `UserHeap`: heap-backed mapping の grow/shrink 中、page-aligned mapped extent を `UserPageStart`
-  として保持します。
+  として保持します。break growth は requested user address を
+  `UserVirtualAddress::align_up_to_page()` で丸めてから `UserPageStart` を受け取ります。
 - `UserMappingUnmapRequest`: syscall ABI address classification 後の `munmap` request。scheduler と mapping code は raw unmap start address を受け取りません。
 - `UserMappingLength`: syscall ABI validation 後の private `mmap` byte length。scheduler と mapping code は page count を導出するための raw length value を受け取りません。
 - `KernelPageStart`: dynamic kernel virtual range と scheduler-owned kernel stack guard /
@@ -194,7 +195,9 @@ kernel address-space switch と template smoke check は、それを `PhysicalFr
 読み直してから page-table helper へ渡します。
 `brk` request は `sys_brk` で raw ABI value を current-break query または validated user virtual address に分類してから `UserHeap` へ渡します。
 heap growth / shrink helper は aligned mapped-end boundary を `UserPageStart` として保持し、
-runtime mapped-end state も unaligned user virtual address を保持できません。
+runtime mapped-end state も unaligned user virtual address を保持できません。growth は
+`UserVirtualAddress::align_up_to_page()` で requested break を page boundary へ丸め、
+heap owner 内で raw integer を直接 round しません。
 comparison や diagnostics の直前だけ raw number へ下げます。
 kernel stack guard-fault lookup は `kernel::interrupt` が `shared::PageFaultReport` を受け取り、
 page-fault virtual address を `VirtAddr` へ分類してから scheduler boundary へ渡します。

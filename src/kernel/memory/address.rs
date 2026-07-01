@@ -486,6 +486,17 @@ impl UserVirtualAddress {
         UserPageStart::new(address)
     }
 
+    /// Return this user virtual address rounded up to a 4 KiB page boundary.
+    pub const fn align_up_to_page(self) -> Option<UserPageStart> {
+        let Some(address) = self.0.checked_add(PAGE_SIZE - 1) else {
+            return None;
+        };
+        let Some(address) = Self::new(address.align_down_to_page()) else {
+            return None;
+        };
+        UserPageStart::new(address)
+    }
+
     /// Return a user virtual address moved backward by `offset` bytes.
     pub const fn checked_sub(self, offset: u64) -> Option<Self> {
         let Some(address) = self.0.as_u64().checked_sub(offset) else {
@@ -576,6 +587,23 @@ pub fn verify_typed_user_page_start() -> bool {
         })
     }) && unaligned_address.is_some_and(|address| UserPageStart::new(address).is_none())
         && low_address.is_some_and(|address| address.align_down_to_page().is_none())
+}
+
+/// Verify the typed user page align-up contract.
+pub fn verify_typed_user_page_align_up() -> bool {
+    let aligned_address = UserVirtualAddress::new(VirtAddr::new(PAGE_SIZE));
+    let unaligned_address = UserVirtualAddress::new(VirtAddr::new(PAGE_SIZE + 1));
+    let ceiling_minus_one = UserVirtualAddress::new(VirtAddr::new(USER_SPACE_END - 1));
+
+    aligned_address.is_some_and(|address| {
+        address
+            .align_up_to_page()
+            .is_some_and(|page| page.as_u64() == PAGE_SIZE)
+    }) && unaligned_address.is_some_and(|address| {
+        address
+            .align_up_to_page()
+            .is_some_and(|page| page.as_u64() == 2 * PAGE_SIZE)
+    }) && ceiling_minus_one.is_some_and(|address| address.align_up_to_page().is_none())
 }
 
 /// Verify the typed kernel page start construction contract.

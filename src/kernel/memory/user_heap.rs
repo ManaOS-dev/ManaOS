@@ -110,7 +110,7 @@ impl UserHeap {
             return self.current_break;
         }
 
-        let Some(mapped_end) = align_up_to_user_page(requested_break) else {
+        let Some(mapped_end) = requested_break.align_up_to_page() else {
             return self.current_break;
         };
         if mapped_end.as_u64() > self.mapped_end.as_u64()
@@ -192,10 +192,4 @@ impl UserHeap {
             unmapped_pages
         );
     }
-}
-
-fn align_up_to_user_page(address: UserVirtualAddress) -> Option<UserPageStart> {
-    let aligned_address = address.as_u64().checked_add(PAGE_SIZE - 1)? & !(PAGE_SIZE - 1);
-    let aligned_address = UserVirtualAddress::new(VirtAddr::new(aligned_address))?;
-    UserPageStart::new(aligned_address)
 }

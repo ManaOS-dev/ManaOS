@@ -169,8 +169,9 @@ dynamic kernel mapping には generic unmap path があります。
 各 user task runtime に保存します。heap growth は writable non-executable user heap page を map し、
 growth / shrink helper は mapped-end boundary を `UserPageStart` として保持します。comparison と
 diagnostics の直前だけ raw number に下げます。runtime mapped-end state も `UserPageStart` として
-保持するため、unaligned heap extent を保持できません。shrink は不要になった heap page を unmap
-して `UserHeap` owner pool へ返します。
+保持するため、unaligned heap extent を保持できません。break growth は requested user address を
+`UserVirtualAddress::align_up_to_page()` で丸めてから heap owner が新しい page を map します。
+shrink は不要になった heap page を unmap して `UserHeap` owner pool へ返します。
 
 private `mmap` は syscall-time user memory の2つ目の path です。現在の ABI は以下を扱います。
 
