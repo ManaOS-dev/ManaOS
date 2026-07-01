@@ -286,6 +286,9 @@ User pointer copy helpers and per-process address-space probes derive
 permission-check page walks from `UserVirtualRange::first_page_start()` and
 `last_page_start()`. The walkers therefore compare `UserPageStart` boundaries
 before lowering to raw numbers for `x86_64` page-table translation.
+`UserVirtualRange::end_exclusive()` also returns `VirtAddr`, so exclusive-end
+arithmetic stays typed until the last-page helper, comparisons, or translation
+boundaries need raw numbers.
 The syscall copy helper layer now constructs readable, writable, or C-string
 candidate ranges through direction-specific constructors, so the raw ABI
 pointer/length pair is classified before it can reach the lower copy helpers.

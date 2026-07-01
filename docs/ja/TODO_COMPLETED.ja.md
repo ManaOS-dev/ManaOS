@@ -127,6 +127,7 @@ user pointer page-table permission probe の `UserReadableRange` / `UserWritable
 user pointer permission page walk の `UserPageStart` boundary 化、
 syscall copy pointer / length pair の `UserReadableRange` / `UserWritableRange` / `UserCString`
 constructor boundary 化、
+user virtual range exclusive end の `VirtAddr` boundary 化、
 user address-space template self-check kernel probe の `VirtAddr` boundary 化、
 user address-space permission self-check probe address の `VirtAddr` / `UserVirtualAddress` boundary 化、
 saved kernel address-space root の CR3 switch 前 `PhysicalFrameStart` boundary 化と

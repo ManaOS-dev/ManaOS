@@ -181,6 +181,8 @@ syscall constructor を使うため、raw pointer / length pair は copy-directi
 越えて漏れません。
 permission check の page walk boundary は `UserVirtualRange` から `UserPageStart` として導出し、
 active / per-process page-table probe が user page start を raw virtual address として扱わないようにします。
+`UserVirtualRange::end_exclusive()` は exclusive end を `VirtAddr` として返すため、
+range-end arithmetic は last-page derivation、comparison、page-table translation が raw value を必要とする直前まで typed のままです。
 per-process address-space permission self-check は kernel probe を `VirtAddr`、user probe を
 `UserVirtualAddress` のまま保持し、raw `usize` への lowering は final diagnostics と kernel slice
 construction の境界に限定します。
@@ -266,7 +268,7 @@ storage smoke はこの typed DMA setup boundary を assert します。
   writable boundary 用の page-aligned higher-half kernel virtual page start。
 - `UserAddressSpace`: user page-table root。
 - `UserVirtualAddress`: non-null user pointer / ELF virtual address。
-- `UserVirtualRange`: non-empty validated user pointer range。
+- `UserVirtualRange`: non-empty validated user pointer range。exclusive end も `VirtAddr` として保持します。
 - `UserReadableRange` / `UserWritableRange`: syscall copy direction。
 - `UserReadRequest`: raw syscall pointer classification 後に scheduler が保持する pending `read` destination。
 - `UserWritableRange`: raw syscall pointer classification 後に scheduler が保持する blocking `waitpid` status destination。

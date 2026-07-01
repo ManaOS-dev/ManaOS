@@ -143,6 +143,14 @@ impl VirtAddr {
         Some(Self(address))
     }
 
+    /// Return a virtual address moved backward by `offset` bytes.
+    pub const fn checked_sub(self, offset: u64) -> Option<Self> {
+        let Some(address) = self.0.checked_sub(offset) else {
+            return None;
+        };
+        Some(Self(address))
+    }
+
     /// Return this virtual address rounded down to a 4 KiB page boundary.
     pub const fn align_down_to_page(self) -> Self {
         Self(self.0 & !(PAGE_SIZE - 1))
@@ -601,7 +609,7 @@ pub fn verify_typed_user_virtual_range() -> bool {
         let writable_range = UserWritableRange::new(range);
         range.start() == start
             && range.byte_len() == 8
-            && range.end_exclusive() == PAGE_SIZE + 8
+            && range.end_exclusive() == VirtAddr::new(PAGE_SIZE + 8)
             && readable_range.as_range() == range
             && writable_range.as_range() == range
     }) && zero_length_rejected
@@ -609,8 +617,27 @@ pub fn verify_typed_user_virtual_range() -> bool {
         && syscall_range.is_some_and(|range| {
             range.start() == start
                 && range.byte_len() == 4
-                && range.end_exclusive() == PAGE_SIZE + 4
+                && range.end_exclusive() == VirtAddr::new(PAGE_SIZE + 4)
         })
+}
+
+/// Verify typed user virtual range exclusive-end helper contracts.
+pub fn verify_typed_user_virtual_range_end() -> bool {
+    let start = UserVirtualAddress::new(VirtAddr::new(PAGE_SIZE))
+        .expect("test user virtual range start must be valid");
+    let Some(byte_len) = usize::try_from(PAGE_SIZE)
+        .ok()
+        .and_then(|page_size| page_size.checked_add(8))
+    else {
+        return false;
+    };
+
+    UserVirtualRange::new(start, byte_len).is_some_and(|range| {
+        range.end_exclusive() == VirtAddr::new((2 * PAGE_SIZE) + 8)
+            && range
+                .last_page_start()
+                .is_some_and(|page_start| page_start.as_u64() == 2 * PAGE_SIZE)
+    })
 }
 
 /// Verify typed user virtual range page-boundary helper contracts.
@@ -652,7 +679,7 @@ pub fn verify_typed_user_copy_ranges() -> bool {
     readable_range.is_some_and(|range| range.as_range().start().as_u64() == valid_start)
         && writable_range.is_some_and(|range| range.as_range().byte_len() == 4)
         && string_range.is_some_and(|range| {
-            range.as_readable_range().as_range().end_exclusive() == valid_start + 4
+            range.as_readable_range().as_range().end_exclusive() == VirtAddr::new(valid_start + 4)
         })
         && zero_pointer_rejected
         && zero_length_rejected
@@ -780,9 +807,9 @@ impl UserVirtualRange {
     ///
     /// Panics if the range end overflows `u64`. Construction prevents this for
     /// valid ranges.
-    pub const fn end_exclusive(self) -> u64 {
+    pub const fn end_exclusive(self) -> VirtAddr {
         self.start
-            .as_u64()
+            .as_address()
             .checked_add(self.byte_len as u64)
             .expect("user virtual range end overflowed")
     }
@@ -794,13 +821,13 @@ impl UserVirtualRange {
 
     /// Return the last user page touched by this range.
     pub const fn last_page_start(self) -> Option<UserPageStart> {
-        let Some(last_byte) = self.end_exclusive().checked_sub(1) else {
+        let Some(last_address) = self.end_exclusive().checked_sub(1) else {
             return None;
         };
-        let Some(last_address) = UserVirtualAddress::new(VirtAddr::new(last_byte)) else {
+        let Some(last_user_address) = UserVirtualAddress::new(last_address) else {
             return None;
         };
-        last_address.align_down_to_page()
+        last_user_address.align_down_to_page()
     }
 }
 

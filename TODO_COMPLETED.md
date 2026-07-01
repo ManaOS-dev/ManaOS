@@ -156,6 +156,7 @@ active roadmap can list only unfinished work.
 - [x] Keep private `mmap` syscall lengths typed as `UserMappingLength` before scheduler and mapping helpers consume them, with storage smoke coverage.
 - [x] Keep user pointer page-table permission probes typed as `UserReadableRange` or `UserWritableRange` before raw slice creation.
 - [x] Keep user pointer permission page walks typed as `UserPageStart` boundaries before page-table probes consume them, with storage smoke coverage.
+- [x] Keep user virtual range exclusive ends typed as `VirtAddr` before range consumers lower them for comparisons.
 - [x] Classify syscall copy pointer/length pairs through `UserReadableRange`, `UserWritableRange`, and `UserCString` constructors before lower copy helpers consume them.
 - [x] Keep user address-space template self-check kernel probes typed as `VirtAddr` before memory APIs inspect shared kernel mappings.
 - [x] Keep the saved kernel address-space root typed as `PhysicalFrameStart` before CR3 switching, with address-space template smoke coverage.

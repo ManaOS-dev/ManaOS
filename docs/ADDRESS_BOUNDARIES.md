@@ -44,6 +44,9 @@ untyped cross-domain `u64` values:
   entries.
 - `UserVirtualAddress` and `UserVirtualRange` represent non-null user virtual
   addresses and byte ranges before syscall copy validation.
+- `UserVirtualRange::end_exclusive()` keeps the exclusive range end as
+  `VirtAddr`, so range consumers lower range ends only at comparison and
+  page-table translation boundaries.
 - `UserReadableRange`, `UserWritableRange`, and `UserCString` represent syscall
   copy direction and string policy before `copy_from_user`, `copy_to_user`, and
   `copy_cstr_from_user`.
@@ -344,6 +347,9 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
 - `UserVirtualRange` derives permission-check page-walk boundaries as
   `UserPageStart` values, so active and per-process user page-table probes do
   not use untyped virtual addresses for user page starts.
+- `UserVirtualRange::end_exclusive()` returns `VirtAddr`, so range-end
+  arithmetic stays typed until last-page derivation, comparison, or page-table
+  translation needs a raw value.
 - Pending keyboard-backed `read` waits retain the validated destination as
   `UserWritableRange` until the task address space is active again, then
   revalidate page-table permissions before copying bytes.

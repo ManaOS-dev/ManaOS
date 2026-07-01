@@ -172,7 +172,7 @@ impl LoadSegmentRange {
             .end_exclusive()
             .checked_sub(1)
             .ok_or(LoadError::SegmentAddressOverflow)?;
-        let last_byte_address = UserVirtualAddress::new(VirtAddr::new(last_byte_address))
+        let last_byte_address = UserVirtualAddress::new(last_byte_address)
             .ok_or(LoadError::SegmentAddressOutOfRange)?;
         let first_page = segment_start
             .align_down_to_page()
@@ -208,21 +208,23 @@ impl LoadSegmentRange {
             .memory_range
             .end_exclusive()
             .checked_add(PAGE_SIZE - 1)
-            .map(|address| address & !(PAGE_SIZE - 1))
+            .map(VirtAddr::align_down_to_page)
             .ok_or(LoadError::SegmentAddressOverflow)?;
-        let address = UserVirtualAddress::new(VirtAddr::new(aligned_address))
-            .ok_or(LoadError::SegmentAddressOutOfRange)?;
+        let address =
+            UserVirtualAddress::new(aligned_address).ok_or(LoadError::SegmentAddressOutOfRange)?;
         UserPageStart::new(address).ok_or(LoadError::SegmentAddressOutOfRange)
     }
 
     fn contains(self, address: UserVirtualAddress) -> bool {
         let address = address.as_u64();
-        address >= self.memory_range.start().as_u64() && address < self.memory_range.end_exclusive()
+        address >= self.memory_range.start().as_u64()
+            && address < self.memory_range.end_exclusive().as_u64()
     }
 
     fn file_backed_range_fits(self) -> bool {
-        self.file_backed_range
-            .is_none_or(|range| range.end_exclusive() <= self.memory_range.end_exclusive())
+        self.file_backed_range.is_none_or(|range| {
+            range.end_exclusive().as_u64() <= self.memory_range.end_exclusive().as_u64()
+        })
     }
 }
 
@@ -438,7 +440,7 @@ fn copy_segment_page(
         page_start
             .checked_add(PAGE_SIZE)
             .ok_or(LoadError::SegmentAddressOverflow)?,
-        file_backed_range.end_exclusive(),
+        file_backed_range.end_exclusive().as_u64(),
     );
     if copy_start >= copy_end {
         return Ok(());
