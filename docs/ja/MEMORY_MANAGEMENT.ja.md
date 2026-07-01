@@ -38,6 +38,8 @@ physical frame allocator は、以下の前提に依存します。
   calculation が必要な箇所だけ raw number に下げます。
 - `FrameCount` construction は zero count と byte-length overflow を拒否してから、frame
   allocator API に contiguous frame count を渡します。
+- `PhysicalFrameRange` は count を `FrameCount` として保持し、heap setup や kernel-stack
+  reclaim は comparison / diagnostics の境界だけ raw count に下げます。
 - `PageCount` construction は zero count と byte-length overflow を拒否してから、kernel
   virtual range allocator API、user stack API、private user mapping API、paging helper API に 4 KiB page count を渡します。
 - `UserVirtualAddress` construction は `VirtAddr` だけを受け取るため、syscall や ELF loader の

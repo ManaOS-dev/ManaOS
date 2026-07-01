@@ -24,7 +24,7 @@ pub const HEAP_PAGES: u64 = (HEAP_SIZE / 4096) as u64;
 /// Panics if `heap_range` is smaller than [`HEAP_SIZE`].
 pub unsafe fn init(heap_range: PhysicalFrameRange) {
     assert!(
-        heap_range.page_count() >= HEAP_PAGES,
+        heap_range.frame_count().as_u64() >= HEAP_PAGES,
         "heap frame range must cover the configured heap pages"
     );
     let heap_bytes = heap_range.byte_len();

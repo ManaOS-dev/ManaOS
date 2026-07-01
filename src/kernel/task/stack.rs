@@ -313,7 +313,7 @@ impl KernelStack {
     ) -> KernelStackReclaim {
         let writable_range = self.virtual_reservation.writable_range();
         let reserved_range = self.virtual_reservation.reserved_range();
-        let writable_pages = self.physical_range.page_count();
+        let writable_pages = self.physical_range.frame_count().as_u64();
         let virtual_pages = self.virtual_reservation.reserved_page_count();
 
         paging::unmap_kernel_range_and_free_frames(

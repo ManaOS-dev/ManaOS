@@ -37,7 +37,8 @@ untyped cross-domain `u64` values:
   instead of only panic-on-overflow `as_usize()` helpers.
 - `PhysicalFrameStart`, `FrameCount`, and `PhysicalFrameRange` represent
   allocatable 4 KiB frame starts, non-zero frame counts, and contiguous frame
-  ownership.
+  ownership. `PhysicalFrameRange` exposes its count as `FrameCount` so callers
+  lower to raw counts only at comparison or diagnostic boundaries.
 - `DmaPhysicalAddress` represents physical addresses that may be programmed
   into AHCI command headers, received-FIS buffers, command tables, and PRDT
   entries.
@@ -240,7 +241,8 @@ per-process page tables, or dynamic kernel mappings become general-purpose.
   a typed 4 KiB-aligned physical frame start.
 - `PhysicalFrameAllocator::allocate_frames(FrameCount) ->
   Option<PhysicalFrameRange>` returns the typed physical start and frame count
-  of a contiguous frame range.
+  of a contiguous frame range. Consumers read the count back as `FrameCount`
+  before lowering it for heap-size checks or reclaim diagnostics.
 - `kernel::memory::heap::init(heap_range: PhysicalFrameRange)` accepts a typed
   physical frame range that is also used as a virtual range while identity
   mapping is active.
@@ -411,8 +413,8 @@ Continue introducing wrappers in small steps:
 - `PhysicalFrameStart` for 4 KiB-aligned physical frame starts.
 - `FrameCount` for non-zero physical frame counts passed into frame allocator
   APIs.
-- `PhysicalFrameRange` for frame start plus frame count. This is now the return
-  type for contiguous physical frame allocations.
+- `PhysicalFrameRange` for frame start plus `FrameCount`. This is now the
+  return type for contiguous physical frame allocations.
 - `FramebufferPhysicalRange` for the active graphics-mode framebuffer physical
   range. This now exists in `kernel::memory::address`.
 - `KernelVirtualAddress` for mapped kernel virtual addresses. This now exists

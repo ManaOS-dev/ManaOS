@@ -134,6 +134,7 @@ active roadmap can list only unfinished work.
 - [x] Make `UserVirtualAddress` construction require `VirtAddr`.
 - [x] Add `UserPageStart` for page-aligned user mapping APIs.
 - [x] Add `FrameCount` for frame allocator APIs.
+- [x] Keep physical frame range counts typed as `FrameCount`, with storage smoke coverage.
 - [x] Add `PageCount` for kernel virtual range allocator APIs.
 - [x] Keep dynamic kernel virtual range starts typed as `KernelPageStart`, with storage smoke coverage.
 - [x] Keep dynamic kernel virtual range page counts typed as `PageCount`, with storage smoke coverage.

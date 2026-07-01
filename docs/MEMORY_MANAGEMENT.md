@@ -40,6 +40,8 @@ The current physical frame allocator relies on these properties:
   them to raw numbers only for ordering and byte-distance calculations.
 - `FrameCount` construction rejects zero counts and byte-length overflow before
   frame allocator APIs accept contiguous frame counts.
+- `PhysicalFrameRange` preserves its count as `FrameCount`; heap setup and
+  kernel-stack reclaim lower it only at comparison or diagnostic boundaries.
 - `PageCount` construction rejects zero counts and byte-length overflow before
   kernel virtual range allocator, user stack, private user mapping, and paging
   helper APIs accept 4 KiB page counts.

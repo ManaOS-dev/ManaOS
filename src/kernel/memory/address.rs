@@ -410,11 +410,6 @@ impl PhysicalFrameRange {
         self.start
     }
 
-    /// Return the number of 4 KiB pages in the range.
-    pub const fn page_count(self) -> u64 {
-        self.frame_count.as_u64()
-    }
-
     /// Return the number of 4 KiB frames in the range.
     pub const fn frame_count(self) -> FrameCount {
         self.frame_count
@@ -710,6 +705,21 @@ pub fn verify_typed_frame_count() -> bool {
         frame_count.as_u64() == 2 && frame_count.byte_len() == 2 * PAGE_SIZE
     }) && zero_count.is_none()
         && overflowing_count.is_none()
+}
+
+/// Verify the typed physical frame range count accessor contract.
+pub fn verify_typed_physical_frame_range_count() -> bool {
+    let Some(frame_start) = PhysicalFrameStart::new(PhysAddr::new(PAGE_SIZE)) else {
+        return false;
+    };
+    let Some(frame_count) = FrameCount::new(2) else {
+        return false;
+    };
+    let Some(frame_range) = PhysicalFrameRange::new(frame_start, frame_count) else {
+        return false;
+    };
+
+    frame_range.frame_count() == frame_count && frame_range.byte_len() == frame_count.byte_len()
 }
 
 /// Verify the typed virtual page count construction contract.

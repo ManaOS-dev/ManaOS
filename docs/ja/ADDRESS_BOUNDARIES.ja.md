@@ -31,7 +31,7 @@ kernel ownership boundary では型付き address に変換することです。
 - `kernel::memory::address::VirtAddr`: internal arithmetic 用 virtual byte address。
 - address wrapper は final pointer / slice boundary 前に checked `try_as_usize()` lowering を公開します。
   これにより call site は panic-only の `as_usize()` ではなく、明示的な error path を選べます。
-- `PhysicalFrameStart` / `FrameCount` / `PhysicalFrameRange`: allocatable 4 KiB frame start、non-zero frame count、contiguous frame ownership。
+- `PhysicalFrameStart` / `FrameCount` / `PhysicalFrameRange`: allocatable 4 KiB frame start、non-zero frame count、contiguous frame ownership。`PhysicalFrameRange` は count を `FrameCount` として公開し、comparison / diagnostics の境界だけ raw count に下げます。
 - `DmaPhysicalAddress`: AHCI descriptor、FIS buffer、command table、PRDT へ program できる physical address。
 - `UserVirtualAddress` / `UserVirtualRange`: syscall copy validation 前の non-null user virtual address と byte range。
 - `UserReadableRange` / `UserWritableRange` / `UserCString`: copy direction と string policy。
@@ -257,7 +257,7 @@ storage smoke はこの typed DMA setup boundary を assert します。
 - `VirtAddr`: virtual byte address。
 - `PhysicalFrameStart`: 4 KiB aligned physical frame start。
 - `FrameCount`: frame allocator API に渡す non-zero physical frame count。
-- `PhysicalFrameRange`: frame start と frame count。
+- `PhysicalFrameRange`: frame start と `FrameCount`。
 - `FramebufferPhysicalRange`: active framebuffer physical range。
 - `KernelVirtualAddress`: mapped kernel virtual address。
 - `PageCount`: kernel virtual range allocator API、user stack API、user mapping API、paging helper API に渡す non-zero 4 KiB page count。
