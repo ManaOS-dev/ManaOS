@@ -568,8 +568,8 @@ fn parse_partition_name(entry: &[u8]) -> ([u8; PARTITION_NAME_CAPACITY], usize) 
     let mut output_length = 0;
     let name = &entry
         [PARTITION_ENTRY_NAME_OFFSET..PARTITION_ENTRY_NAME_OFFSET + PARTITION_ENTRY_NAME_BYTES];
-    for code_unit in name.chunks_exact(2) {
-        let value = u16::from_le_bytes([code_unit[0], code_unit[1]]);
+    for code_unit in name.as_chunks::<2>().0 {
+        let value = u16::from_le_bytes(*code_unit);
         if value == 0 || output_length == output.len() {
             break;
         }

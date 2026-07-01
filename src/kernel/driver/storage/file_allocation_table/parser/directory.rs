@@ -328,7 +328,7 @@ fn inspect_directory_sector(
     listing: &mut FileAllocationTable32DirectoryListing,
 ) -> bool {
     let mut long_file_name = LongFileNameBuilder::new();
-    for entry in sector.chunks_exact(DIRECTORY_ENTRY_SIZE) {
+    for entry in sector.as_chunks::<DIRECTORY_ENTRY_SIZE>().0 {
         match entry[0] {
             DIRECTORY_ENTRY_END_MARKER => return true,
             DIRECTORY_ENTRY_DELETED_MARKER => {
