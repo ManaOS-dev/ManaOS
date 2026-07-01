@@ -146,6 +146,7 @@ user heap break align-up の `UserVirtualAddress::align_up_to_page()` boundary �
 user virtual checked subtraction の `VirtAddr` boundary 化と boot smoke coverage、
 user virtual range constructor end arithmetic の `VirtAddr` boundary 化と boot smoke coverage、
 private mapping range exclusive-end construction の `UserPageStart` boundary 化と storage smoke coverage、
+fixed private mapping placement end validation の `UserPageStart` boundary 化と storage smoke coverage、
 typed address の checked `try_as_usize()` conversion helper と boot smoke coverage、
 MMIO identity-mapping page start の `PhysicalFrameStart` boundary 化と APIC MMIO smoke coverage、
 kernel task stack-top context construction の `VirtAddr` boundary 化と kernel task stack smoke coverage、

@@ -130,6 +130,8 @@ kernel ownership boundary では型付き address に変換することです。
 - `task::UserMappingRequest` は requested `mmap` address を `UserMappingPlacement`
   としてだけ保持します。scheduler diagnostics の requested address 表示は typed placement から導出し、
   raw syscall address を保持しません。
+- fixed private `mmap` placement validation は final mapping-region comparison の前に
+  fixed range end を `UserPageStart` arithmetic で導出します。
 - ELF entry point は header validation 直後に `UserVirtualAddress` へ変換します。
   loader metadata と entry segment membership check は raw ELF header field を再利用せず、
   typed value を使います。
@@ -289,6 +291,7 @@ storage smoke はこの typed DMA setup boundary を assert します。
 - `UserMappingUnmapRequest`: syscall ABI classification 後の private `munmap` request。
 - `UserMappingLength`: syscall ABI classification 後の private `mmap` / `munmap` length。
 - internal private mapping range: `mmap` / `munmap` overlap / containment 用。exclusive end construction も `UserPageStart` arithmetic を使います。
+- fixed private `mmap` placement: mapping-region comparison 前の typed fixed-range end validation。
 - `VirtAddr`: task architecture facade / `SYSCALL` entry raw boundary 前の scheduler-owned user task kernel stack top handoff。
 - `PhysicalFrameStart` / `VirtAddr`: console / smoke output formatting 前の scheduler resume handoff diagnostic snapshot。
 - `UserVirtualAddress`: console / smoke output formatting 前の user virtual-memory scheduler snapshot。

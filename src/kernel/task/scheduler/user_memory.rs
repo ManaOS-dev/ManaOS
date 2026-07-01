@@ -81,7 +81,7 @@ impl Scheduler {
         }
         crate::log_info!(
             "syscall",
-            "mmap -> task={} requested={:#x} start={:#x} length={} pages={} protection={:#x} flags={:#x} placement={} source={} active_pages={} file_private_records={} page_count_typed=true mapping_request_typed=true mapping_length_typed=true mapping_start_typed=true mapping_range_typed=true",
+            "mmap -> task={} requested={:#x} start={:#x} length={} pages={} protection={:#x} flags={:#x} placement={} source={} active_pages={} file_private_records={} page_count_typed=true mapping_request_typed=true mapping_length_typed=true mapping_start_typed=true mapping_range_typed=true fixed_placement_end_typed={}",
             task_id,
             request.requested_address_for_diagnostics(),
             allocation.start().as_u64(),
@@ -92,7 +92,8 @@ impl Scheduler {
             request.placement().as_str(),
             request.source().as_str(),
             user_runtime.mappings.active_pages(),
-            user_runtime.mappings.active_file_private_records()
+            user_runtime.mappings.active_file_private_records(),
+            request.placement().uses_fixed_address()
         );
         Ok(allocation.start().as_u64())
     }

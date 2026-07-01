@@ -258,6 +258,11 @@ impl UserMappingPlacement {
             Self::FixedReplace(_) => "fixed_replace",
         }
     }
+
+    /// Return whether this placement carries a fixed start address.
+    pub const fn uses_fixed_address(self) -> bool {
+        matches!(self, Self::FixedNoReplace(_) | Self::FixedReplace(_))
+    }
 }
 
 /// Reason a private mapping request was rejected.
@@ -776,10 +781,10 @@ fn fixed_start_address(
     byte_len: u64,
 ) -> Result<UserPageStart, UserMappingError> {
     let start_address = start.as_u64();
-    let end_address = start_address
+    let end_address = start
         .checked_add(byte_len)
         .ok_or(UserMappingError::InvalidRequest)?;
-    if start_address < USER_MAPPING_BASE || end_address > USER_MAPPING_END {
+    if start_address < USER_MAPPING_BASE || end_address.as_u64() > USER_MAPPING_END {
         return Err(UserMappingError::InvalidRequest);
     }
     Ok(start)

@@ -211,6 +211,8 @@ untyped cross-domain `u64` values:
 - `task::UserMappingRequest` stores the requested `mmap` address only as
   `UserMappingPlacement`. Scheduler diagnostics derive the displayed requested
   address from that typed placement instead of retaining a raw syscall address.
+- Fixed private `mmap` placement validation derives the fixed range end through
+  `UserPageStart` arithmetic before the final mapping-region comparison.
 - ELF entry points are converted to `UserVirtualAddress` immediately after
   header validation. Loader metadata and entry-segment membership checks use
   that typed value instead of reusing the raw ELF header field.
@@ -476,6 +478,8 @@ Continue introducing wrappers in small steps:
   classification.
 - Internal private mapping ranges for `mmap`/`munmap` overlap and containment,
   including exclusive-end construction through `UserPageStart` arithmetic.
+- Fixed private `mmap` placements for typed fixed-range end validation before
+  mapping-region comparisons.
 - `VirtAddr` for scheduler-owned user task kernel stack top handoffs through
   the task architecture facade before architecture and `SYSCALL` entry raw
   boundaries.
