@@ -34,6 +34,8 @@ kernel ownership boundary では型付き address に変換することです。
 - `PhysicalFrameStart` / `FrameCount` / `PhysicalFrameRange`: allocatable 4 KiB frame start、non-zero frame count、contiguous frame ownership。`PhysicalFrameRange` は count を `FrameCount` として公開し、comparison / diagnostics の境界だけ raw count に下げます。
 - `DmaPhysicalAddress`: AHCI descriptor、FIS buffer、command table、PRDT へ program できる physical address。
 - `UserVirtualAddress` / `UserVirtualRange`: syscall copy validation 前の non-null user virtual address と byte range。
+- `UserVirtualAddress::checked_sub()` は backward arithmetic を `VirtAddr` のまま行い、
+  non-null user address として再検証してから返します。
 - `UserReadableRange` / `UserWritableRange` / `UserCString`: copy direction と string policy。
 - syscall copy helper は raw pointer / length ABI pair を、page-table permission probe や
   string scan の前に `UserReadableRange`、`UserWritableRange`、または `UserCString`
@@ -274,6 +276,7 @@ storage smoke はこの typed DMA setup boundary を assert します。
   writable boundary 用の page-aligned higher-half kernel virtual page start。
 - `UserAddressSpace`: user page-table root。
 - `UserVirtualAddress`: non-null user pointer / ELF virtual address。
+- `UserVirtualAddress::checked_sub()`: syscall range helper / stack-layout code が結果を使う前の backward user address arithmetic。
 - `UserVirtualRange`: non-empty validated user pointer range。exclusive end も `VirtAddr` として保持します。
 - `UserReadableRange` / `UserWritableRange`: syscall copy direction。
 - `UserReadRequest`: raw syscall pointer classification 後に scheduler が保持する pending `read` destination。

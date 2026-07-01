@@ -499,10 +499,10 @@ impl UserVirtualAddress {
 
     /// Return a user virtual address moved backward by `offset` bytes.
     pub const fn checked_sub(self, offset: u64) -> Option<Self> {
-        let Some(address) = self.0.as_u64().checked_sub(offset) else {
+        let Some(address) = self.0.checked_sub(offset) else {
             return None;
         };
-        Self::new(VirtAddr::new(address))
+        Self::new(address)
     }
 }
 
@@ -569,6 +569,22 @@ pub fn verify_typed_user_virtual_address() -> bool {
                 .is_some_and(|next_address| next_address.as_u64() == 2 * PAGE_SIZE)
     }) && zero_user_address.is_none()
         && ceiling_user_address.is_none()
+}
+
+/// Verify the typed user virtual checked-subtraction contract.
+pub fn verify_typed_user_virtual_checked_sub() -> bool {
+    let higher_address = UserVirtualAddress::new(VirtAddr::new(2 * PAGE_SIZE));
+    let first_page_address = UserVirtualAddress::new(VirtAddr::new(PAGE_SIZE));
+
+    higher_address.is_some_and(|address| {
+        address
+            .checked_sub(PAGE_SIZE)
+            .is_some_and(|previous_address| {
+                previous_address.as_address() == VirtAddr::new(PAGE_SIZE)
+                    && previous_address.as_u64() == PAGE_SIZE
+            })
+            && address.checked_sub(2 * PAGE_SIZE).is_none()
+    }) && first_page_address.is_some_and(|address| address.checked_sub(PAGE_SIZE).is_none())
 }
 
 /// Verify the typed user page start construction contract.
