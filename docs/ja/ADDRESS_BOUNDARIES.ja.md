@@ -125,7 +125,8 @@ kernel ownership boundary では型付き address に変換することです。
   automatic placement search cursor と split record start も record update / diagnostics formatting
   前まで `UserPageStart` として保持します。internal overlap / containment helper は
   `UserPageStart` start/end boundary を持つ private typed mapping range を渡し、raw start/end
-  pair を渡しません。
+  pair を渡しません。private mapping range constructor は exclusive end も
+  `UserPageStart` arithmetic で導出します。
 - `task::UserMappingRequest` は requested `mmap` address を `UserMappingPlacement`
   としてだけ保持します。scheduler diagnostics の requested address 表示は typed placement から導出し、
   raw syscall address を保持しません。
@@ -287,6 +288,7 @@ storage smoke はこの typed DMA setup boundary を assert します。
 - `UserCString`: NUL validation 前の syscall string candidate。
 - `UserMappingUnmapRequest`: syscall ABI classification 後の private `munmap` request。
 - `UserMappingLength`: syscall ABI classification 後の private `mmap` / `munmap` length。
+- internal private mapping range: `mmap` / `munmap` overlap / containment 用。exclusive end construction も `UserPageStart` arithmetic を使います。
 - `VirtAddr`: task architecture facade / `SYSCALL` entry raw boundary 前の scheduler-owned user task kernel stack top handoff。
 - `PhysicalFrameStart` / `VirtAddr`: console / smoke output formatting 前の scheduler resume handoff diagnostic snapshot。
 - `UserVirtualAddress`: console / smoke output formatting 前の user virtual-memory scheduler snapshot。

@@ -61,11 +61,10 @@ struct UserMappingRange {
 
 impl UserMappingRange {
     fn new(start: UserPageStart, page_count: PageCount) -> Option<Self> {
-        let end_address = start.as_u64().checked_add(page_count.byte_len())?;
-        if start.as_u64() < USER_MAPPING_BASE || end_address > USER_MAPPING_END {
+        let end_exclusive = start.checked_add(page_count.byte_len())?;
+        if start.as_u64() < USER_MAPPING_BASE || end_exclusive.as_u64() > USER_MAPPING_END {
             return None;
         }
-        let end_exclusive = user_page_start_from_raw(end_address)?;
         Some(Self {
             start,
             end_exclusive,
@@ -321,7 +320,7 @@ impl UserMappings {
             if replaced_page_count > 0 {
                 crate::log_info!(
                     "memory",
-                    "User mapping fixed replacement prepared: start={:#x} pages={} records={} active_pages={} mapping_range_typed=true",
+                    "User mapping fixed replacement prepared: start={:#x} pages={} records={} active_pages={} mapping_range_typed=true mapping_range_end_typed=true",
                     start_address,
                     replaced_page_count,
                     self.active_records(),
@@ -402,7 +401,7 @@ impl UserMappings {
         );
         crate::log_info!(
             "memory",
-            "User {} mapping unmapped: start={:#x} pages={} records={} active_pages={} page_count_typed=true split_start_typed=true record_start_typed=true unmap_range_typed=true",
+            "User {} mapping unmapped: start={:#x} pages={} records={} active_pages={} page_count_typed=true split_start_typed=true record_start_typed=true unmap_range_typed=true mapping_range_end_typed=true",
             source.as_str(),
             requested_range.start_address(),
             page_count.as_u64(),

@@ -205,7 +205,9 @@ untyped cross-domain `u64` values:
   for display. Split record starts created by `munmap` or fixed replacement
   are also kept as `UserPageStart` values when the record table is updated.
   Internal overlap and containment helpers pass a private typed mapping range
-  with `UserPageStart` start/end boundaries instead of raw start/end pairs.
+  with `UserPageStart` start/end boundaries instead of raw start/end pairs,
+  and the private mapping range constructor derives its exclusive end through
+  `UserPageStart` arithmetic.
 - `task::UserMappingRequest` stores the requested `mmap` address only as
   `UserMappingPlacement`. Scheduler diagnostics derive the displayed requested
   address from that typed placement instead of retaining a raw syscall address.
@@ -472,6 +474,8 @@ Continue introducing wrappers in small steps:
   classification.
 - `UserMappingLength` for private `mmap` and `munmap` lengths after syscall ABI
   classification.
+- Internal private mapping ranges for `mmap`/`munmap` overlap and containment,
+  including exclusive-end construction through `UserPageStart` arithmetic.
 - `VirtAddr` for scheduler-owned user task kernel stack top handoffs through
   the task architecture facade before architecture and `SYSCALL` entry raw
   boundaries.
