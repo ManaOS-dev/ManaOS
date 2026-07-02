@@ -27,6 +27,8 @@
 #   +144 r14
 #   +152 r15
 timer_interrupt_handler_entry:
+    # Rust and the x86_64 C ABI require DF=0 before calling Rust code.
+    cld
     sub rsp, 160
     mov qword ptr [rsp + 40], rax
     mov qword ptr [rsp + 48], rbx

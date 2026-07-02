@@ -107,6 +107,11 @@ user selector を埋め、`UserTrapFrameSource::Syscall` 付きの
 `kernel::task::record_current_user_trap_frame` で returning syscall frame を current user task metadata
 に記録します。
 
+assembly-facing entry code は、Rust を呼ぶ前に CPU flag を正規化します。syscall MSR flag mask は
+entry 時に TF、IF、DF を clear し、`syscall_entry` と custom timer interrupt stub も Rust call の
+前に `cld` を実行します。元の user flags は trap frame に保存されたままで、`sysretq` または
+`iretq` で復元されます。
+
 timer interrupt bridge も同じ scheduler API を `UserTrapFrameSource::TimerInterrupt` 付きで使うため、
 syscall return frame と timer interrupt frame は source-specific diagnostics を記録する前に同じ
 task-owned recording path を通ります。両方の bridge は stack-resident trap-frame storage address を

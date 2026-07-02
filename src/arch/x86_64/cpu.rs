@@ -10,7 +10,10 @@ const SYSTEM_CALL_TARGET_ADDRESS_REGISTER: u32 = 0xc000_0081;
 const LONG_SYSTEM_CALL_TARGET_ADDRESS_REGISTER: u32 = 0xc000_0082;
 const SYSTEM_CALL_FLAG_MASK_REGISTER: u32 = 0xc000_0084;
 const SYSTEM_CALL_ENABLE_BIT: u64 = 1;
+const TRAP_FLAG_BIT: u64 = 1 << 8;
 const INTERRUPT_FLAG_BIT: u64 = 1 << 9;
+const DIRECTION_FLAG_BIT: u64 = 1 << 10;
+const SYSCALL_FLAG_MASK: u64 = TRAP_FLAG_BIT | INTERRUPT_FLAG_BIT | DIRECTION_FLAG_BIT;
 const KERNEL_CODE_SELECTOR: u16 = 0x08;
 
 /// Architecture-owned virtual address for the `SYSCALL` entry target.
@@ -111,15 +114,18 @@ pub fn init_syscall(handler: SyscallEntryAddress) {
     unsafe {
         long_system_call_target_address_register.write(handler.as_u64());
     }
-    // SAFETY: SFMASK is the architectural syscall flags mask MSR; masking IF
-    // disables interrupts on syscall entry.
+    // SAFETY: SFMASK is the architectural syscall flags mask MSR. Masking TF
+    // prevents user single-step state from trapping inside the kernel syscall
+    // path, masking IF disables interrupts, and masking DF preserves the Rust
+    // ABI on syscall entry.
     unsafe {
-        system_call_flag_mask_register.write(INTERRUPT_FLAG_BIT);
+        system_call_flag_mask_register.write(SYSCALL_FLAG_MASK);
     }
     crate::log_info!(
         "arch",
-        "SYSCALL MSR initialized: lstar={:#x} syscall_entry_typed=true",
-        handler.as_u64()
+        "SYSCALL MSR initialized: lstar={:#x} syscall_entry_typed=true syscall_flags_normalized=true syscall_flag_mask={:#x}",
+        handler.as_u64(),
+        SYSCALL_FLAG_MASK
     );
 }
 

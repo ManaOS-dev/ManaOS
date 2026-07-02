@@ -267,9 +267,14 @@ impl PageFaultPresence {
 /// # Safety
 ///
 /// Called directly by the CPU on `SYSCALL`; register state is raw.
+///
+/// The syscall MSR flag mask clears TF, IF, and DF before this stub runs, and
+/// the stub also clears DF before calling Rust code. The user's original flags
+/// remain saved in `r11` for `sysretq`.
 #[unsafe(naked)]
 pub unsafe extern "C" fn syscall_entry() {
     core::arch::naked_asm!(
+        "cld",
         "mov qword ptr [rip + {entry_user_stack_pointer}], rsp",
         "mov qword ptr [rip + {entry_syscall_number}], rax",
         "mov rsp, qword ptr [rip + {syscall_kernel_stack_top}]",

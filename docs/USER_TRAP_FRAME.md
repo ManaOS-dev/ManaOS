@@ -126,6 +126,12 @@ fills the user selectors, and records returning syscall frames in the current
 user task metadata through `kernel::task::record_current_user_trap_frame` with
 `UserTrapFrameSource::Syscall`.
 
+Assembly-facing entry code must normalize CPU flags before it calls Rust.
+The syscall MSR flag mask clears TF, IF, and DF on entry, while
+`syscall_entry` and the custom timer interrupt stub also execute `cld` before
+any Rust call. The original user flags remain saved in the trap frame and are
+restored by `sysretq` or `iretq`.
+
 The timer interrupt bridge uses the same scheduler API with
 `UserTrapFrameSource::TimerInterrupt`, so syscall return frames and timer
 interrupt frames share one task-owned recording path before their source-specific
